@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+# chk_mib - fire up every mib in a dir to get it to parse
+#           and check for errors.
+# Max Baker
+# $Id$
+
+my $dir = shift;
+my $mibs = shift || 'rfc';
+
+die "$0 dir mib_dirs\n" unless -d $dir;
+
+open (INDEX, "< $dir/.index") or die "Can't open .index in $dir. run ./mkindex.\n";
+while (<INDEX>){
+    if ($_ =~ /^(.*)\s+(.*)$/){
+        my $mib = $1; my $file = $2;
+        push @{$MIBS{$mib}},"$dir$file";
+    }
+}
+close (INDEX);
+
+foreach my $mib (keys %MIBS){
+    # boot up snmptranslate to make it parse the mib.
+    my $cmd = "snmptranslate -M $dir:$mibs -m $mib";
+    my $check = `$cmd bork 2>&1`;
+    # kill last line (our bogus error)
+    $check =~ s/^.*\Z//m;
+    if ($check !~ /^\s*$/){
+        print "$mib\n";
+        print $check;
+    }
+}
