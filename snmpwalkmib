@@ -7,15 +7,16 @@ use Getopt::Std;
 $|=1;
 
 use vars qw/$ver $comm $dev $descr %seen $no_tree/;
-getopts('c:d:v:zhw',\%args);
+getopts('c:d:v:zhwn',\%args);
 $ver   = $args{v} || '2c';
 $comm  = $args{c} || 'public';
 $dev   = $args{d};
 $descr = $args{z} || 0;
 $no_tree = $args{w} || 0;
+$no_dev  = $args{n} || 0;
 $SNMP::save_descriptions = 1 if $descr;
 
-die &usage if (!defined $dev or $args{h});
+die &usage if (!(defined $dev or $no_dev) or $args{h} or !scalar(@ARGV));
 
 foreach my $mib (@ARGV) {
     print "\n$mib\n";
@@ -39,11 +40,13 @@ foreach my $mib (@ARGV) {
     }
 
     # Connect to Device
-    $sess = new SNMP::Session( 'UseEnums' => 1, RetryNoSuch => 1, DestHost => $dev, 
-                               'Community' => $comm, 'Version' => $ver, 'UseSprintValue' => 1 );
-    my $sysdescr = $sess->get('sysDescr.0');
-    unless (defined $sysdescr){
-        die "Couldn't connect to $dev via snmp.\n";
+    unless ($no_dev){
+        $sess = new SNMP::Session( 'UseEnums' => 1, RetryNoSuch => 1, DestHost => $dev, 
+                                   'Community' => $comm, 'Version' => $ver, 'UseSprintValue' => 1 );
+        my $sysdescr = $sess->get('sysDescr.0');
+        unless (defined $sysdescr){
+            die "Couldn't connect to $dev via snmp.\n";
+        }
     }
  
     SNMP::loadModules($mib);
@@ -133,6 +136,7 @@ sub find_root {
 }
 
 sub snmpwalk {
+        return unless defined $sess;
         my $label = shift;
         my $var = new SNMP::Varbind([$label]);
         my $e = 0; my $last_iid = '';
@@ -169,6 +173,7 @@ Perl interface for Net-SNMP required.
         -v [version]  [2c|1]
     Tree Mode (default)
         -z print descriptions of the objects (parsed from MIB)
+        -n No device (just print tree of MIB file)
     Walk Mode 
         -w no tree (just snmpwalk the mib contents)
 
