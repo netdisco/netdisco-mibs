@@ -4,7 +4,7 @@
 --
 -- December 2002, Srini Kode
 --
--- Copyright (c) 2002-2003 by cisco Systems, Inc.
+-- Copyright (c) 2002-2003, 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -22,10 +22,11 @@ IMPORTS
      cfmFcipEntityInstanceEntry,
      cfmFcipLinkEntry           FROM CISCO-FCIP-MGMT-MIB
      CiscoPort                  FROM CISCO-TC
+     InetPortNumber             FROM INET-ADDRESS-MIB
      InterfaceIndex             FROM IF-MIB;
  
  ciscoFcipMgmtExtMIB MODULE-IDENTITY
-     LAST-UPDATED "200311050000Z"
+     LAST-UPDATED "200505140000Z"
      ORGANIZATION "Cisco Systems Inc."
      CONTACT-INFO 
                 "     Cisco Systems
@@ -39,7 +40,35 @@ IMPORTS
      DESCRIPTION 
          "A MIB module for extending the CISCO-FCIP-MGMT-MIB
           to add objects which provide additional information 
-          about FCIP interfaces not available in other MIBS. "          
+          about FCIP interfaces not available in other MIBS. "
+     REVISION    "200505140000Z"
+     DESCRIPTION 
+          "Added following objects in cfmFcipLinkExtTable.
+              cfmFcipLinkExtIPSec
+           Added cfmFcipLinkExtGroupRev2Sup1.
+
+           Added following object in cfmFcipEntityExtTable.
+              cfmFcipEntityExtTcpLocalPort.
+              cfmFcipEntityExtTcpMaxJitter.
+              cfmFcipEntityExtTcpSACKEnable.
+
+           Added cfmFcipEntityExtGroupSup1.
+
+           Added cfmFcipExtCompliance4.
+          "
+
+     REVISION    "200409230000Z"
+     DESCRIPTION 
+          "Added following objects in cfmFcipLinkExtTable.
+              cfmFcipLinkExtTapeAccelerator,
+              cfmFcipLinkExtFlowCtrlBurstSize. 
+
+           Added cfmFcipLinkMapTable. "      
+     REVISION    "200403100000Z"
+     DESCRIPTION 
+          "Added following objects in cfmFcipEntityExtTable.
+              cfmFcipEntityExtCWMEnable,
+              cfmFcipEntityExtCWMBurstSize. "      
      REVISION    "200311050000Z"
      DESCRIPTION 
           "Removed cfmFcipLinkExtIPCompAlgorithm and renamed
@@ -123,7 +152,12 @@ IMPORTS
         cfmFcipEntityExtTcpSendBufSize   Unsigned32,
         cfmFcipEntityExtTcpMaxBW         Unsigned32,
         cfmFcipEntityExtTcpMinAvailBW    Unsigned32,
-        cfmFcipEntityExtTcpRndTrpTimeEst Unsigned32
+        cfmFcipEntityExtTcpRndTrpTimeEst Unsigned32,
+        cfmFcipEntityExtCWMEnable        TruthValue,
+        cfmFcipEntityExtCWMBurstSize     Unsigned32,
+        cfmFcipEntityExtTcpSACKEnable    TruthValue,
+        cfmFcipEntityExtTcpLocalPort     InetPortNumber,
+        cfmFcipEntityExtTcpMaxJitter     Unsigned32
  }
    
  cfmFcipEntityExtTcpKeepAliveTO   OBJECT-TYPE
@@ -247,6 +281,62 @@ IMPORTS
      DEFVAL {1000} 
      ::= { cfmFcipEntityExtEntry 9 }
 
+cfmFcipEntityExtCWMEnable   OBJECT-TYPE
+     SYNTAX     TruthValue
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "This object is used for enabling/disabling the congestion
+          window monitoring. If the value of this object is true(1),
+          it is enabled. It is disabled if the value is false(2). "
+     REFERENCE
+         "Congestion Window Monitoring (Hughes, Touch, and Heidemann)"
+     DEFVAL {true}
+     ::= { cfmFcipEntityExtEntry 10 }
+
+  cfmFcipEntityExtCWMBurstSize   OBJECT-TYPE
+     SYNTAX     Unsigned32 (10..100)
+     UNITS      "kilobytes"
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "The maximum burst sent after a tcp sender idle
+          period. This object is writeble only if
+          cfmFcipEntityExtCWMEnable is 'true'. "
+     DEFVAL {50}
+     ::= { cfmFcipEntityExtEntry 11 }
+
+
+cfmFcipEntityExtTcpSACKEnable OBJECT-TYPE
+     SYNTAX     TruthValue 
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "Setting the value to 'True', enables the Selective
+          Acknowledgement (SACK) on this link."
+     ::= { cfmFcipEntityExtEntry 12 }
+
+cfmFcipEntityExtTcpLocalPort OBJECT-TYPE
+     SYNTAX     InetPortNumber
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "The local TCP port to which the local FCIP entity will
+         connect if and when it initiates a TCP connection setup
+         for this link."
+     ::= { cfmFcipEntityExtEntry 13 }
+
+cfmFcipEntityExtTcpMaxJitter  OBJECT-TYPE
+     SYNTAX     Unsigned32 (0..65535)
+     UNITS      "milliseconds"
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "The maximum delay variation that is not due to
+          congestion that can be experienced by TCP 
+          connections for all links on this entity."
+     DEFVAL {1}
+     ::= { cfmFcipEntityExtEntry 14 }
 
 
  -- 
@@ -286,7 +376,10 @@ IMPORTS
         cfmFcipLinkExtDataQOSField          Unsigned32,
         cfmFcipLinkExtEthIfIndex            InterfaceIndex,
         cfmFcipLinkExtWriteAccelerator      TruthValue,
-        cfmFcipLinkExtIPComp                INTEGER
+        cfmFcipLinkExtIPComp                INTEGER,
+        cfmFcipLinkExtTapeAccelerator       TruthValue,
+        cfmFcipLinkExtFlowCtrlBufSize       Unsigned32,
+        cfmFcipLinkExtIPSec                 TruthValue
       }
  
  cfmFcipLinkExtPassiveMode     OBJECT-TYPE
@@ -444,7 +537,11 @@ IMPORTS
      SYNTAX	INTEGER {
                            none(1),
                            highCompressionRatio(2),
-                           highThroughput(3)
+                           highThroughput(3),
+                           auto(4),
+                           mode1(5),
+                           mode2(6),
+                           mode3(7)
 			}
      MAX-ACCESS read-create
      STATUS     current
@@ -455,11 +552,115 @@ IMPORTS
 	       performance at the cost of lower throughput.
           'highThroughput'       - indicates better throughput at 
 	       the cost of lower compression performance.
+
+          'auto'                 - indicates that an appropriate
+                                   mode wll be picked based on
+                                   the bandwidth and data.
+          'mode1'                - fast compression mode for high
+                                   bandwidth WAN links with bandwidth
+                                   greater than 30 Mbps.
+          'mode2'                - high compression mode for 
+                                   moderately low bandwidth WAN links, 
+                                   i.e. bandwidth between 15 and 30 
+                                   Mbps. 
+          'mode3'                - high compression mode for 
+                                   low bandwidth WAN links, 
+                                   i.e. banwidth less than 15 Mbps. 
+          
 	      "
      DEFVAL { none }
      ::= { cfmFcipLinkExtEntry 13 }
 
-  
+
+ cfmFcipLinkExtTapeAccelerator   OBJECT-TYPE
+     SYNTAX     TruthValue
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+         "The Tape accelerator allows for enhancing Tape write
+         performance.
+         If 'true', the FCIP Tape accelerator is enabled on this link
+         If 'false' it is disabled."
+     DEFVAL {false}
+     ::= { cfmFcipLinkExtEntry  14}
+
+ cfmFcipLinkExtFlowCtrlBufSize OBJECT-TYPE
+     SYNTAX     Unsigned32 (0..12288)
+     UNITS      "bytes"
+     MAX-ACCESS read-create
+     STATUS     current
+     DESCRIPTION
+              "The flow control buffer size."
+     DEFVAL { 256 }
+     ::= { cfmFcipLinkExtEntry 15 }
+
+cfmFcipLinkExtIPSec  OBJECT-TYPE
+     SYNTAX     TruthValue 
+     MAX-ACCESS read-only
+     STATUS     current
+     DESCRIPTION
+         "Indicates whether the IP Security has been turned on or
+          off on this link."
+     DEFVAL {false}
+
+     ::= { cfmFcipLinkExtEntry 16 }
+
+
+ -- 
+ -- cfmFcipLinkMapTable
+ --
+ -- A mapping table to map the fcipLinkIndex to
+ -- fcipEntityId
+ --
+
+
+ cfmFcipLinkMapTable OBJECT-TYPE
+     SYNTAX     SEQUENCE OF CfmFcipLinkMapEntry
+     MAX-ACCESS not-accessible
+     STATUS     current
+     DESCRIPTION
+ 	   "A table containing FCIP link index to
+            Entity Identifier mapping for a FCIP link."
+     ::= { cfmFcipMgmtExtConfig 3 }
+ 
+ cfmFcipLinkMapEntry OBJECT-TYPE
+     SYNTAX     CfmFcipLinkMapEntry
+     MAX-ACCESS not-accessible
+     STATUS     current
+     DESCRIPTION
+ 	   "A conceptual row of the FCIP link map table
+          mapping the fcip link index to FCIP Entity
+          Identifier. "
+     INDEX { cfmFcipLinkMapIndex }
+     ::= { cfmFcipLinkMapTable 1 }
+ 
+ CfmFcipLinkMapEntry ::=
+     SEQUENCE {
+ 		cfmFcipLinkMapIndex                       Unsigned32,
+ 		cfmFcipMapEntityId                        Unsigned32
+     }
+ 
+ cfmFcipLinkMapIndex  OBJECT-TYPE
+     SYNTAX           Unsigned32
+     MAX-ACCESS       not-accessible
+     STATUS           current
+     DESCRIPTION
+         "An arbitrary integer which uniquely identifies one FCIP link
+          within a FCIP entity. "
+     ::= { cfmFcipLinkMapEntry 1 }
+ 
+
+ cfmFcipMapEntityId   OBJECT-TYPE
+     SYNTAX           Unsigned32
+     MAX-ACCESS       read-only
+     STATUS           current
+     DESCRIPTION
+         "The FCIP entity Identifier corresponding to the instance
+          of cfmFcipLinkMapIndex."
+     ::= { cfmFcipLinkMapEntry 2 }
+
+
+
  -- 
  -- Conformance 
  --
@@ -488,7 +689,8 @@ IMPORTS
  ::= { cfmFcipExtCompliances 1 }
  
  cfmFcipExtCompliance1 MODULE-COMPLIANCE
-     STATUS current
+     STATUS deprecated  -- superceeded by 
+                        -- cfmFcipExtCompliance2
      DESCRIPTION
          "Compliance statement for FCIP Extension MIB. "
      MODULE       -- this module
@@ -510,6 +712,107 @@ IMPORTS
           from the range defined. "               
  ::= { cfmFcipExtCompliances 2 } 
  
+cfmFcipExtCompliance2 MODULE-COMPLIANCE
+     STATUS deprecated -- superceeded by
+                       -- cfmFcipExtCompliance3
+     DESCRIPTION
+         "Compliance statement for FCIP Extension MIB. "
+     MODULE       -- this module
+     MANDATORY-GROUPS {
+         cfmFcipEntityExtGroup,
+         cfmFcipLinkExtGroup,
+         cfmFcipLinkExtGroupRev1,
+         cfmFcipEntityExtCWMGroup
+     }
+      
+     OBJECT cfmFcipLinkExtNumTcpConn
+     SYNTAX Unsigned32 (1..2)
+     DESCRIPTION 
+         "It is compliant to support a value which is 
+          less than the defined values." 
+                   
+     OBJECT cfmFcipLinkExtTimestampTolerance
+     DESCRIPTION 
+         "It is compliant to support only a subset of values
+          from the range defined. "
+          
+     OBJECT cfmFcipEntityExtCWMBurstSize
+     DESCRIPTION
+         "It is compliant to support a value which is 
+          less than the defined values."               
+ ::= { cfmFcipExtCompliances 3 } 
+
+
+cfmFcipExtCompliance3 MODULE-COMPLIANCE
+     STATUS deprecated  -- superceded by
+                        -- cfmFcipExtCompliance4
+     DESCRIPTION
+         "Compliance statement for FCIP Extension MIB. "
+     MODULE       -- this module
+     MANDATORY-GROUPS {
+         cfmFcipEntityExtGroup,
+         cfmFcipLinkExtGroup,
+         cfmFcipLinkExtGroupRev1,
+         cfmFcipEntityExtCWMGroup,
+         cfmFcipLinkExtGroupRev2,
+         cfmFcipLinkExtMapGroup
+
+     }
+
+     OBJECT cfmFcipLinkExtNumTcpConn
+     SYNTAX Unsigned32 (1..2)
+     DESCRIPTION
+         "It is compliant to support a value which is
+          less than the defined values."
+                  
+     OBJECT cfmFcipLinkExtTimestampTolerance
+     DESCRIPTION
+         "It is compliant to support only a subset of values
+          from the range defined. "
+
+     OBJECT cfmFcipEntityExtCWMBurstSize
+     DESCRIPTION
+         "It is compliant to support a value which is
+          less than the defined values."
+ ::= { cfmFcipExtCompliances 4 }
+
+
+cfmFcipExtCompliance4 MODULE-COMPLIANCE
+     STATUS current
+     DESCRIPTION
+         "Compliance statement for FCIP Extension MIB. "
+     MODULE       -- this module
+     MANDATORY-GROUPS {
+         cfmFcipEntityExtGroup,
+         cfmFcipEntityExtGroupSup1,
+         cfmFcipLinkExtGroup,
+         cfmFcipLinkExtGroupRev1,
+         cfmFcipEntityExtCWMGroup,
+         cfmFcipLinkExtGroupRev2,
+         cfmFcipLinkExtGroupRev2Sup1,
+         cfmFcipLinkExtMapGroup
+
+     }
+
+     OBJECT cfmFcipLinkExtNumTcpConn
+     SYNTAX Unsigned32 (1..2)
+     DESCRIPTION
+         "It is compliant to support a value which is
+          less than the defined values."
+
+     OBJECT cfmFcipLinkExtTimestampTolerance
+     DESCRIPTION
+         "It is compliant to support only a subset of values
+          from the range defined. "
+
+     OBJECT cfmFcipEntityExtCWMBurstSize
+     DESCRIPTION
+         "It is compliant to support a value which is
+          less than the defined values."
+
+ ::= { cfmFcipExtCompliances 5 }
+
+
 -- Units of Conformance
 
 cfmFcipEntityExtGroup OBJECT-GROUP
@@ -524,7 +827,7 @@ cfmFcipEntityExtGroup OBJECT-GROUP
                 cfmFcipEntityExtTcpMinAvailBW,
                 cfmFcipEntityExtTcpRndTrpTimeEst
      }
-     STATUS current
+     STATUS current 
      DESCRIPTION
          "A collection of objects providing information about FCIP
           Entity. "
@@ -561,6 +864,60 @@ cfmFcipEntityExtGroup OBJECT-GROUP
           Links. "
  ::= { cfmFcipExtGroups 3 }
 
+cfmFcipEntityExtCWMGroup OBJECT-GROUP
+     OBJECTS { 
+                cfmFcipEntityExtCWMEnable,
+                cfmFcipEntityExtCWMBurstSize,
+                cfmFcipEntityExtTcpSACKEnable,
+                cfmFcipEntityExtTcpLocalPort
+     }
+     STATUS current
+     DESCRIPTION
+         "A collection of objects providing information on Congestion 
+         Window Monitoring of a FCIP Entity. "
+ ::= { cfmFcipExtGroups 4 }
+
+cfmFcipLinkExtGroupRev2 OBJECT-GROUP
+     OBJECTS {
+               cfmFcipLinkExtTapeAccelerator,
+               cfmFcipLinkExtFlowCtrlBufSize
+      }
+     STATUS current 
+     DESCRIPTION
+         "A collection of objects providing information about FCIP
+          Links, especially about the tape acceleration. "
+ ::= { cfmFcipExtGroups 5 }
+
+cfmFcipLinkExtMapGroup OBJECT-GROUP
+     OBJECTS {
+               cfmFcipMapEntityId
+      }
+     STATUS current
+     DESCRIPTION
+         "A collection of objects providing mapping between FCIP
+          Links and their enrity Identifiers "
+ ::= { cfmFcipExtGroups 6 }
+
+cfmFcipEntityExtGroupSup1 OBJECT-GROUP
+     OBJECTS {
+                cfmFcipEntityExtTcpMaxJitter
+     }
+     STATUS current
+     DESCRIPTION
+         "A collection of objects providing information about FCIP
+          Entity. "
+ ::= { cfmFcipExtGroups 7 }
+
+cfmFcipLinkExtGroupRev2Sup1 OBJECT-GROUP
+     OBJECTS {
+               cfmFcipLinkExtIPSec
+      }
+     STATUS current
+     DESCRIPTION
+         "A collection of objects providing information about FCIP
+          Links, especially about the tape acceleration and IP
+          Security. "
+ ::= { cfmFcipExtGroups 8 }
 
  
  END

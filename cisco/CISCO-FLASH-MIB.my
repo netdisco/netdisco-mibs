@@ -25,7 +25,8 @@ IMPORTS
         TruthValue,
         TimeStamp,
         InstancePointer,
-        RowStatus
+        RowStatus,
+        DateAndTime
                 FROM SNMPv2-TC
         PhysicalIndex   
                 FROM ENTITY-MIB
@@ -34,10 +35,12 @@ IMPORTS
         NOTIFICATION-GROUP
                 FROM SNMPv2-CONF
         ciscoMgmt
-                FROM CISCO-SMI;
+                FROM CISCO-SMI
+        InetAddressType, InetAddress
+                FROM INET-ADDRESS-MIB;
 
 ciscoFlashMIB  MODULE-IDENTITY
-        LAST-UPDATED    "200304230000Z"
+        LAST-UPDATED    "200506010000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -53,6 +56,27 @@ ciscoFlashMIB  MODULE-IDENTITY
         DESCRIPTION
                 "This MIB provides for the management of Cisco
                  Flash Devices."
+        REVISION        "200506010000Z"
+        DESCRIPTION
+                 "Added ciscoFlashFileDate to ciscoFlashFileTable 
+
+                  Added ciscoFlashCopyRemotePassword to
+                            ciscoFlashCopyTable.
+
+                  Added following enumerations to
+                  ciscoFlashCopyProtocol -
+                   ftp, scp, sftp. 
+                 " 
+        REVISION        "200501280000Z"
+        DESCRIPTION
+                 "Added a new status copyOperationPending(0)
+                 to object ciscoFlashCopyStatus." 
+        REVISION        "200403180000Z"
+        DESCRIPTION
+                 "The object ciscoFlashCopyServerAddress is
+                  deprecated since it supports only IPv4 address. Two
+                  new objects ciscoFlashCopyServerAddrRev1
+                  ciscoFlashCopyServerAddrType are defined."		
         REVISION        "200304230000Z"
         DESCRIPTION
                  "Added ciscoFlashDeviceNameExtended to support upto 
@@ -295,7 +319,7 @@ CiscoFlashDeviceEntry ::=
                 ciscoFlashDevicePartitions              Unsigned32,
                 ciscoFlashDeviceChipCount               Integer32,
                 ciscoFlashDeviceName                    DisplayString,
-                -- ciscoFlashDeviceName deprecated      
+                -- ciscoFlashDeviceName deprecated	
                 ciscoFlashDeviceDescr                   DisplayString,
                 ciscoFlashDeviceController              DisplayString,
                 ciscoFlashDeviceCard                    InstancePointer,
@@ -1142,7 +1166,8 @@ CiscoFlashFileEntry ::=
                 ciscoFlashFileChecksum          ChecksumString,
                 ciscoFlashFileStatus            INTEGER,
                 ciscoFlashFileName              DisplayString,
-                ciscoFlashFileType              FlashFileType
+                ciscoFlashFileType              FlashFileType,
+                ciscoFlashFileDate              DateAndTime
         }
 
 ciscoFlashFileIndex OBJECT-TYPE
@@ -1232,6 +1257,15 @@ ciscoFlashFileType OBJECT-TYPE
                 "Type of the file."
         ::= { ciscoFlashFileEntry 6 }
 
+ciscoFlashFileDate OBJECT-TYPE
+        SYNTAX     DateAndTime
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                "The time at which this file was created."
+        ::= { ciscoFlashFileEntry 7 }
+
+
 --  End of Flash information
 --  Start of Flash operations
 --     Operations are for
@@ -1297,7 +1331,8 @@ CiscoFlashCopyEntry ::=
                 ciscoFlashCopySerialNumber      Integer32,
                 ciscoFlashCopyCommand           INTEGER,
                 ciscoFlashCopyProtocol          INTEGER,
-                ciscoFlashCopyServerAddress     IpAddress,
+                ciscoFlashCopyServerAddress     IpAddress, 
+                                                    --deprecated
                 ciscoFlashCopySourceName        DisplayString,
                 ciscoFlashCopyDestinationName   DisplayString,
                 ciscoFlashCopyRemoteUserName    DisplayString,
@@ -1305,7 +1340,10 @@ CiscoFlashCopyEntry ::=
                 ciscoFlashCopyNotifyOnCompletion TruthValue,
                 ciscoFlashCopyTime              TimeTicks,
                 ciscoFlashCopyEntryStatus       RowStatus,
-                ciscoFlashCopyVerify            TruthValue
+                ciscoFlashCopyVerify            TruthValue,
+                ciscoFlashCopyServerAddrType    InetAddressType,
+                ciscoFlashCopyServerAddrRev1    InetAddress,
+                ciscoFlashCopyRemotePassword    DisplayString
         }
 
 ciscoFlashCopySerialNumber OBJECT-TYPE
@@ -1394,7 +1432,10 @@ ciscoFlashCopyProtocol OBJECT-TYPE
                 {
                 tftp(1),
                 rcp(2),
-                lex(3)
+                lex(3),
+                ftp(4),
+                scp(5),
+                sftp(6)
                 }
         MAX-ACCESS      read-create
         STATUS  current
@@ -1414,10 +1455,14 @@ ciscoFlashCopyProtocol OBJECT-TYPE
 ciscoFlashCopyServerAddress OBJECT-TYPE
         SYNTAX  IpAddress
         MAX-ACCESS      read-create
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                 "The server address to be used for any copy. Optional.
                 Will default to 'FFFFFFFF'H  (or 255.255.255.255).
+
+		Since this object can just hold only IPv4 Transport
+                type, it is deprecated and replaced by
+                ciscoFlashCopyServerAddrRev1.
                 "
         DEFVAL  { 'FFFFFFFF'H }
         ::= { ciscoFlashCopyEntry 4 }
@@ -1508,6 +1553,7 @@ ciscoFlashCopyRemoteUserName OBJECT-TYPE
 ciscoFlashCopyStatus OBJECT-TYPE
         SYNTAX  INTEGER
                 {  
+                copyOperationPending(0),
                 copyInProgress(1),
                 copyOperationSuccess (2),
                 copyInvalidOperation (3),
@@ -1531,6 +1577,10 @@ ciscoFlashCopyStatus OBJECT-TYPE
         STATUS  current
         DESCRIPTION
                 "The status of the specified copy operation.
+
+                copyOperationPending :
+                        operation request is received and 
+                        pending for validation and process 
 
                 copyInProgress : 
                         specified operation is active
@@ -1654,6 +1704,48 @@ ciscoFlashCopyVerify OBJECT-TYPE
                 "
         DEFVAL  { false }
         ::= { ciscoFlashCopyEntry 12 }
+
+ciscoFlashCopyServerAddrType OBJECT-TYPE
+         SYNTAX          InetAddressType
+         MAX-ACCESS      read-create
+         STATUS          current
+         DESCRIPTION
+                 "This object indicates the transport type of the
+                 address contained in
+                 ciscoFlashCopyServerAddrRev1. Optional.
+                 Will default to '1' (IPv4 address type)."
+         DEFVAL  { ipv4 }
+         ::= { ciscoFlashCopyEntry 13 }
+ 
+ciscoFlashCopyServerAddrRev1 OBJECT-TYPE
+         SYNTAX          InetAddress
+         MAX-ACCESS      read-create
+         STATUS          current
+         DESCRIPTION
+                 "The server address to be used for any copy. Optional.
+                 Will default to 'FFFFFFFF'H  (or 255.255.255.255).
+ 
+                 The Format of this address depends on the value of the
+                 ciscoFlashCopyServerAddrType.
+ 
+                 This object deprecates the old
+                 ciscoFlashCopyServerAddress object.
+                 "
+         DEFVAL  { 'FFFFFFFF'H }
+         ::= { ciscoFlashCopyEntry 14 }
+
+ciscoFlashCopyRemotePassword OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE (1..40))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "Password used by ftp, sftp or scp for copying a file
+                 to/from an ftp/sftp/scp server. This object must be
+                 created when the ciscoFlashCopyProtocol is ftp, sftp or
+                 scp. Reading it returns a zero-length string for
+                 security reasons.
+                "
+        ::= { ciscoFlashCopyEntry 15 }
 
 --
 ciscoFlashPartitioningTable  OBJECT-TYPE
@@ -2318,7 +2410,7 @@ ciscoFlashDeviceInsertedNotif NOTIFICATION-TYPE
                 ciscoFlashDeviceMinPartitionSize,
                 ciscoFlashDeviceName
                 }
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                 "A ciscoFlashDeviceInsertedNotif notification is sent 
                 whenever a removable Flash device is inserted."
@@ -2329,11 +2421,45 @@ ciscoFlashDeviceRemovedNotif NOTIFICATION-TYPE
                 { 
                 ciscoFlashDeviceName
                 }
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                 "A ciscoFlashDeviceRemovedNotif notification is sent 
                 whenever a removable Flash device is removed."
         ::= { ciscoFlashMIBTraps 6 }
+
+ciscoFlashDeviceInsertedNotifRev1 NOTIFICATION-TYPE
+        OBJECTS   
+                { 
+                ciscoFlashDeviceMinPartitionSize,
+                ciscoFlashDeviceNameExtended
+                }
+        STATUS  current
+        DESCRIPTION
+                "A ciscoFlashDeviceInsertedNotif notification is sent 
+                 whenever a removable Flash device is inserted
+
+                 ciscoFlashDeviceInsertedNotifRev1 depcrecates
+                 ciscoFlashDeviceInsertedNotif since it uses
+                 ciscoFlashDeviceName as a varbind which is
+                 deprecated" 
+                 
+        ::= { ciscoFlashMIBTraps 7 }
+
+ciscoFlashDeviceRemovedNotifRev1 NOTIFICATION-TYPE
+        OBJECTS   
+                { 
+                ciscoFlashDeviceNameExtended
+                }
+        STATUS  current
+        DESCRIPTION
+                "A ciscoFlashDeviceRemovedNotif notification is sent 
+                whenever a removable Flash device is removed.
+         
+                ciscoFlashDeviceRemovedNotifRev1 depcrecates
+                ciscoFlashDeviceRemovedNotif since it uses
+                ciscoFlashDeviceName as a varbind which is
+                deprecated"
+        ::= { ciscoFlashMIBTraps 8 }
 
 
 -- Conformance information
@@ -2490,6 +2616,9 @@ ciscoFlashMIBComplianceRev3  MODULE-COMPLIANCE
                         objects for features that may be optional
                         or not available across all systems.
                         An example is the partitioning feature.
+
+                        This compliance is deprecated by
+                        ciscoFlashMIBComplianceRev4.
                         "
 
                 GROUP   ciscoFlashPartitioningOpGroup
@@ -2515,7 +2644,8 @@ ciscoFlashMIBComplianceRev3  MODULE-COMPLIANCE
         ::= { ciscoFlashMIBCompliances 4 }
 
 ciscoFlashMIBComplianceRev4  MODULE-COMPLIANCE
-        STATUS  current
+        STATUS  deprecated
+                   --superceded by ciscoFlashMIBComplianceRev5
         DESCRIPTION
                 "The compliance statement for entities that support
                 the Cisco Flash MIB.
@@ -2556,8 +2686,150 @@ ciscoFlashMIBComplianceRev4  MODULE-COMPLIANCE
                         "This group contains Notifications
                         representing flash operations.
                         "
-
         ::= { ciscoFlashMIBCompliances 5 }
+
+ciscoFlashMIBComplianceRev5  MODULE-COMPLIANCE
+         STATUS  deprecated
+                      --superceded by ciscoFlashMIBComplianceRev6
+         DESCRIPTION
+                 "The compliance statement for entities that support
+                 the Cisco Flash MIB.
+                 "
+         MODULE  -- compliance to this module
+                 MANDATORY-GROUPS  {
+                         ciscoFlashDeviceInfoGroupRev2,
+                         ciscoFlashPartitionInfoGroup,
+                         ciscoFlashFileInfoGroupRev1,
+                         ciscoFlashChipInfoGroup,
+                         ciscoFlashCopyOpGroupRev2
+                 }
+ 
+                 GROUP   ciscoFlashDeviceOptionalInfoGroup 
+                 DESCRIPTION
+                         "The Flash device optional group contains
+                         objects for features that may be optional
+                         or not available across all systems.
+                         An example is the partitioning feature.
+ 
+                         This compliance deprecates
+                         ciscoFlashMIBComplianceRev3.
+                         "
+ 
+                 GROUP   ciscoFlashPartitioningOpGroup
+                 DESCRIPTION
+                         "The Flash partitioning operations group is
+                         optional. It is intended whenever partitioning
+                         is supported.
+                         "
+ 
+                 GROUP   ciscoFlashMiscOpGroup
+                 DESCRIPTION
+                         "The Flash miscellaneous operations group is
+                         optional. It contains operations that are not
+                         essential or not universally supported across
+                         all platforms. 
+                         "
+                 GROUP   ciscoFlashNotifGroupRev1
+                 DESCRIPTION
+                         "This group contains Notifications
+                         representing flash operations.
+                         "
+
+         ::= { ciscoFlashMIBCompliances 6 }
+
+ciscoFlashMIBComplianceRev6  MODULE-COMPLIANCE
+         STATUS  deprecated
+         DESCRIPTION
+                 "The compliance statement for entities that support
+                 the Cisco Flash MIB.
+                 "
+         MODULE  -- compliance to this module
+                 MANDATORY-GROUPS  {
+                         ciscoFlashDeviceInfoGroupRev2,
+                         ciscoFlashPartitionInfoGroup,
+                         ciscoFlashFileInfoGroupRev1,
+                         ciscoFlashChipInfoGroup,
+                         ciscoFlashCopyOpGroupRev2
+                 }
+ 
+                 GROUP   ciscoFlashDeviceOptionalInfoGroupRev1 
+                 DESCRIPTION
+                         "The Flash device optional group contains
+                         objects for features that may be optional
+                         or not available across all systems.
+                         An example is the partitioning feature.
+ 
+                         This compliance deprecates
+                         ciscoFlashMIBComplianceRev5.
+                         " 
+                 GROUP   ciscoFlashPartitioningOpGroup
+                 DESCRIPTION
+                         "The Flash partitioning operations group is
+                         optional. It is intended whenever partitioning
+                         is supported.
+                         "
+                 GROUP   ciscoFlashMiscOpGroup
+                 DESCRIPTION
+                         "The Flash miscellaneous operations group is
+                         optional. It contains operations that are not
+                         essential or not universally supported across
+                         all platforms. 
+                         "
+                 GROUP   ciscoFlashNotifGroupRev2
+                 DESCRIPTION
+                         "This group contains Notifications
+                         representing flash operations.
+                         "
+
+         ::= { ciscoFlashMIBCompliances 7 }
+
+ciscoFlashMIBComplianceRev7  MODULE-COMPLIANCE
+         STATUS  current
+         DESCRIPTION
+                 "The compliance statement for entities that support
+                 the Cisco Flash MIB.
+                 "
+         MODULE  -- compliance to this module
+                 MANDATORY-GROUPS  {
+                         ciscoFlashDeviceInfoGroupRev2,
+                         ciscoFlashPartitionInfoGroup,
+                         ciscoFlashFileInfoGroupRev1,
+                         ciscoFlashFileInfoGroupSupp1,
+                         ciscoFlashChipInfoGroup,
+                         ciscoFlashCopyOpGroupRev2,
+                         ciscoFlashCopyOpGroupRev3
+                 }
+
+                 GROUP   ciscoFlashDeviceOptionalInfoGroupRev1
+                 DESCRIPTION
+                         "The Flash device optional group contains
+                         objects for features that may be optional
+                         or not available across all systems.
+                         An example is the partitioning feature.
+
+                         This compliance deprecates
+                         ciscoFlashMIBComplianceRev5.
+                         "
+                 GROUP   ciscoFlashPartitioningOpGroup
+                 DESCRIPTION
+                         "The Flash partitioning operations group is
+                         optional. It is intended whenever partitioning
+                         is supported.
+                         "
+                 GROUP   ciscoFlashMiscOpGroup
+                 DESCRIPTION
+                         "The Flash miscellaneous operations group is
+                         optional. It contains operations that are not
+                         essential or not universally supported across
+                         all platforms.
+                         "
+                 GROUP   ciscoFlashNotifGroupRev2
+                 DESCRIPTION
+                         "This group contains Notifications
+                         representing flash operations.
+                         "
+
+         ::= { ciscoFlashMIBCompliances 8 }
 
 -- Units of conformance
 
@@ -2753,11 +3025,13 @@ ciscoFlashCopyOpGroupRev1  OBJECT-GROUP
                 ciscoFlashCopyEntryStatus,
                 ciscoFlashCopyVerify
         }
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                 "A collection of objects providing the ability
                 to copy files to and from a Flash partition.
-                "
+                
+                This group is deprecated by new group
+                ciscoFlashCopyOpGroupRev2."
         ::= { ciscoFlashMIBGroups 14 }
 
 ciscoFlashPartitioningOpGroup  OBJECT-GROUP
@@ -2815,9 +3089,73 @@ ciscoFlashNotifGroupRev1  NOTIFICATION-GROUP
                 ciscoFlashDeviceInsertedNotif,
                 ciscoFlashDeviceRemovedNotif
         }
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                 "The set of notification defined by this MIB."
         ::= { ciscoFlashMIBGroups 11 }
 
+ciscoFlashNotifGroupRev2  NOTIFICATION-GROUP
+        NOTIFICATIONS  {
+                ciscoFlashCopyCompletionTrap,
+                ciscoFlashPartitioningCompletionTrap,
+                ciscoFlashMiscOpCompletionTrap,
+                ciscoFlashDeviceInsertedNotifRev1,
+                ciscoFlashDeviceRemovedNotifRev1
+        }
+        STATUS  current
+        DESCRIPTION
+                "The set of notification defined by this MIB."
+        ::= { ciscoFlashMIBGroups 17 }
+
+ciscoFlashCopyOpGroupRev2  OBJECT-GROUP
+         OBJECTS  {
+                 ciscoFlashCopyCommand,
+                 ciscoFlashCopyProtocol,
+                 ciscoFlashCopySourceName,
+                 ciscoFlashCopyDestinationName,
+                 ciscoFlashCopyRemoteUserName,
+                 ciscoFlashCopyStatus,
+                 ciscoFlashCopyNotifyOnCompletion,
+                 ciscoFlashCopyTime,
+                 ciscoFlashCopyEntryStatus,
+                 ciscoFlashCopyVerify,
+                 ciscoFlashCopyServerAddrType,
+                 ciscoFlashCopyServerAddrRev1
+         }
+         STATUS  current
+         DESCRIPTION
+                 "A collection of objects providing the ability
+                 to copy files to and from a Flash partition.
+ 
+                 This Group deprecates ciscoFlashCopyOpGroupRev1.
+                 "
+         ::= { ciscoFlashMIBGroups 16 }
+
+ciscoFlashCopyOpGroupRev3  OBJECT-GROUP
+         OBJECTS  {
+                 ciscoFlashCopyRemotePassword
+         }
+         STATUS  current
+         DESCRIPTION
+                 "A collection of objects providing the ability
+                 to copy files to and from a Flash partition.
+
+                 This Group supplements ciscoFlashCopyOpGroupRev2.
+                 "
+         ::= { ciscoFlashMIBGroups 18 }
+
+
+ciscoFlashFileInfoGroupSupp1  OBJECT-GROUP
+        OBJECTS  {
+                ciscoFlashFileDate
+        }
+        STATUS  current
+        DESCRIPTION
+                "A collection of objects providing Flash
+                file level information in addition to the
+                objects found in ciscoFlashFileInfoGroupRev1.  
+                "
+        ::= { ciscoFlashMIBGroups 19 }
+
 END
+

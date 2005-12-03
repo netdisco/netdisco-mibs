@@ -13,7 +13,7 @@ CISCO-CFS-MIB DEFINITIONS ::= BEGIN
 IMPORTS
     MODULE-IDENTITY,
     OBJECT-TYPE,
-    NOTIFICATION-TYPE               
+    NOTIFICATION-TYPE
        FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     NOTIFICATION-GROUP,
@@ -25,12 +25,12 @@ IMPORTS
        FROM SNMP-FRAMEWORK-MIB
     InetAddressType,
     InetAddress
-       FROM INET-ADDRESS-MIB	
+       FROM INET-ADDRESS-MIB
     ciscoMgmt
        FROM CISCO-SMI;
 
 ciscoCFSMIB MODULE-IDENTITY
-    LAST-UPDATED        "200409150000Z"
+    LAST-UPDATED        "200412240000Z"
     ORGANIZATION        "Cisco Systems, Inc."
     CONTACT-INFO
         "       Cisco Systems
@@ -82,7 +82,7 @@ ciscoCFSMIB MODULE-IDENTITY
          operations. Such modified configuration is referred to as
          'Pending Configuration'. There can only be one 'Pending
          Configuration' in the fabric. Additionally, such 'Pending
-         Configuration' can be maintained within the context of 
+         Configuration' can be maintained within the context of
          additional scope, specific to the respective features.
          The user who initiates the creation of the 'Pending
          Configuration' is its owner. When a 'Pending Configuration'
@@ -94,7 +94,7 @@ ciscoCFSMIB MODULE-IDENTITY
          be performed on the device that has the 'Pending 
          Configuration' with it. This ensures data consistency for
          distribution.
-         
+
          Once the configuration of a feature is ready to be
          distributed to all devices connected to the fabric, a
          'commit' action performed on the local device overwrites
@@ -116,9 +116,9 @@ ciscoCFSMIB MODULE-IDENTITY
          initiated through any of the devices in the fabric. The
          successful 'abort' or 'clear' operation makes the feature
          available for new distribution.
-         
+
          The CFS, in addition to providing the basic distribution 
-         infrastructure to the CFS capable features in a stable 
+         infrastructure to the CFS capable features in a stable
          fabric, also provides infrastructure to handle data 
          distribution when two stable fabrics merge.
 
@@ -132,17 +132,17 @@ ciscoCFSMIB MODULE-IDENTITY
          VSAN                     - Virtual Storage Area Network, 
                                     similar to a VLAN.
                                     
-         CFS feature Scope        - The scope of distribution. 
+         CFS feature Scope        - The scope of distribution.
                                     The scope provides the context 
                                     within which the CFS actions 
                                     are performed on a CFS capable 
                                     feature.
                                     
-         CFS Fabric Merge         - The merging two stable fabrics. 
+         CFS Fabric Merge         - The merging of two stable fabrics.
                                     The CFS provides infrastructure
                                     to handle data distribution for 
                                     CFS distribution enabled features
-                                    when the two stable fabric merge.
+                                    when the two stable fabrics merge.
          
          CFS control and actions : 
          
@@ -173,12 +173,39 @@ ciscoCFSMIB MODULE-IDENTITY
                                     Configuration' that exists in any
                                     of the device in the fabric. Once
                                     'Pending Configuration' that exists
-                                    with one of the devices in the 
+                                    with one of the devices in the
                                     fabric is destroyed, creation of
                                     'Pending Configuration' in the 
                                     local or any other device connected
                                     to the fabric is allowed.
          
+         "
+
+    REVISION  "200412240000Z"
+    DESCRIPTION
+        "Added the cfsDistCtrl object to control 
+         the CFS distribution capability.
+         "
+         
+    REVISION  "200412030000Z"
+    DESCRIPTION
+        "Added the following tables:
+          - cfsMergeMembersTable
+          - cfsPeersTable
+          - cfsFeaturePeersTable
+          - cfsFeatureOpExtTable
+
+         Added the following scalar objects:
+          - cfsStartPeersDiscovery
+          - cfsPeersDiscoveryResult
+          - cfsPeersDiscoveryFailureReason
+
+         Added additional enumerations for:
+          - cfsMergeStatusValue
+          
+         Added notification:
+          - ciscoCFSDiscoveryCompleteNotif
+          
          "
 
     REVISION  "200409150000Z"
@@ -200,7 +227,11 @@ ciscoCFSMIBConformance    OBJECT IDENTIFIER
 cfsFeature                OBJECT IDENTIFIER
                                   ::= { ciscoCFSMIBObjects 1 }
 cfsNotifObjects           OBJECT IDENTIFIER
-                                  ::= { ciscoCFSMIBObjects 2 }   
+                                  ::= { ciscoCFSMIBObjects 2 }
+cfsDiscoveryObjects       OBJECT IDENTIFIER
+                                  ::= { ciscoCFSMIBObjects 3 }
+cfsDistCtrlObjects        OBJECT IDENTIFIER
+                                  ::= { ciscoCFSMIBObjects 4 }
 
 --
 -- Textual Conventions
@@ -212,7 +243,7 @@ CiscoCFSAction ::= TEXTUAL-CONVENTION
         "Actions available for the CFS.
         
             'noop'      - No operation            
-            
+
             'enable'    - CFS Distribution Enable
             
             'disable'   - CFS Distribution Disable
@@ -255,14 +286,14 @@ CiscoCFSFeatureActionResult ::= TEXTUAL-CONVENTION
     STATUS         current
     DESCRIPTION
         "Result of the action performed on a CFS capable feature.
-        
+
             'none'         - No previous action was performed
-            
+
             'success'      - Execution of the action triggered
                              is completed Successfully
-                              
+
             'failed'       - Execution of the action has failed
-            
+
             'inProgress'   - Execution of the action triggered
                              is in progress
          "
@@ -278,9 +309,9 @@ CiscoCFSScopeType ::= TEXTUAL-CONVENTION
     DESCRIPTION
         "A generic value that represents the type of CFS
          feature scope.
-        
+
             'none'         - No scope
-            
+
             'vsanID'       - VSAN scope
          "
     SYNTAX         INTEGER {
@@ -297,14 +328,14 @@ CiscoCFSScopeValue ::= TEXTUAL-CONVENTION
          value. Every usage of the CiscoCFSScopeValue textual
          convention is required to specify the CiscoCFSScopeType
          object which provides the context.
-         
-         The encoding of the CiscoCFSScopeValue object for a 
+
+         The encoding of the CiscoCFSScopeValue object for a
          specific scope type is as below:
 
-         ScopeType    Octes   Contents             Encoding 
-         ---------    -----   --------             --------
-         vsanID       1-4     VSAN id of the VSAN  network-byte order
-         
+         ScopeType    Octets   Contents             Encoding
+         ---------    ------   --------             --------
+         vsanID       1-4      VSAN ID of the VSAN  network-byte order
+
          "
     SYNTAX         OCTET STRING (SIZE (0..255))
 
@@ -314,16 +345,16 @@ cfsFeatureOpTable    OBJECT-TYPE
     STATUS         current
     DESCRIPTION
         "This table lists all the CFS capable features in the local
-         device. 
-         
-         The table provides control, actions, current operating 
+         device.
+
+         The table provides control, actions, current operating
          state information and last action result information for
          CFS capable features.
-         
+
          Each entry in this table represents a CFS capable feature.
          An entry in the table is created by the agent when CFS
-         capable feature registers with CFS infrastructure. The 
-         agent removes the entry from the table when the CFS 
+         capable feature registers with CFS infrastructure. The
+         agent removes the entry from the table when the CFS
          capable de-registers with CFS infrastructure. Management
          application can not create new entry in this table.
          "
@@ -334,7 +365,7 @@ cfsFeatureOpEntry    OBJECT-TYPE
     MAX-ACCESS     not-accessible
     STATUS         current
     DESCRIPTION
-        "A conceptual row in the cfsFeatureOpTable. Each row 
+        "A conceptual row in the cfsFeatureOpTable. Each row
          represents a CFS capable feature in the system.
          "
     INDEX          { cfsFeatureOpName }
@@ -356,7 +387,7 @@ CfsFeatureOpEntry ::=
 }
 
 cfsFeatureOpName     OBJECT-TYPE
-    SYNTAX        SnmpAdminString (SIZE(0..64))
+    SYNTAX        SnmpAdminString (SIZE(0..32))
     MAX-ACCESS    not-accessible
     STATUS        current
     DESCRIPTION
@@ -374,7 +405,7 @@ cfsFeatureOpAction   OBJECT-TYPE
          should successfully enable CFS distribution of a feature
          by issuing an 'enable' action before performing a
          'commit' or 'abort' operation.
-       
+
          The value of this object and the values of corresponding
          instance of cfsFeatureOpScopeType and cfsFeatureOpScopeVal
          are interpreted and applied together as single CFS action
@@ -382,8 +413,11 @@ cfsFeatureOpAction   OBJECT-TYPE
          the context/scope within which the this action is applied.
 
          Setting of this object will fail with 'inconsistentValue',
-         if the value of the corresponding instance of 
-         cfsFeatureOpLastActionResult is 'inProgress'.
+         if the value of the corresponding instance of
+         cfsFeatureOpLastActionResult is 'inProgress'. However, the
+         value of this object can be set to 'clear' regardless of
+         the value of the corresponding instance of 
+         cfsFeatureOpLastActionResult.
 
          Retrieving the value of this object via SNMP will always
          return 'noop'.
@@ -397,8 +431,8 @@ cfsFeatureOpScopeType OBJECT-TYPE
     DESCRIPTION
         "The value of this object  specifies the type of the value
          of the corresponding instance of cfsFeatureOpScopeVal.
-         
-         The agent is not required to retain the modified value of 
+
+         The agent is not required to retain the modified value of
          this object across the agent restart.
          "
     DEFVAL        { none }
@@ -409,14 +443,14 @@ cfsFeatureOpScopeVal OBJECT-TYPE
     MAX-ACCESS    read-write
     STATUS        current
     DESCRIPTION
-        "The CFS feature scope value to be used with 
+        "The CFS feature scope value to be used with
          cfsFeatureOpScopeType.
-         
+
          The value of this object may not be relevant when the value
          of the corresponding instance of cfsFeatureOpAction is SET
          to 'enable' or 'disable'.
-        
-         The agent is not required to retain the modified value of 
+
+         The agent is not required to retain the modified value of
          this  object across the agent restart.
          "
     DEFVAL        { ''H }
@@ -431,7 +465,7 @@ cfsFeatureOpLastAction OBJECT-TYPE
          has been triggered for the feature since the last reboot
          of the system, then retrieving the value of this object
          will return 'noop'.
-         "  
+         "
     ::= { cfsFeatureOpEntry 5 }
 
 cfsFeatureOpLastScopeType OBJECT-TYPE
@@ -465,8 +499,8 @@ cfsFeatureOpLastActionResult  OBJECT-TYPE
     STATUS         current
     DESCRIPTION
         "The result of the execution of the last action (represented
-         by the value of cfsFeatureOpLastAction) for the feature. 
-         When the value of this object is 'actionInProgress', the 
+         by the value of cfsFeatureOpLastAction) for the feature.
+         When the value of this object is 'actionInProgress', the
          value of the corresponding instance of cfsFeatureOpAction
          can not be modified.
          "
@@ -480,7 +514,7 @@ cfsFeatureOpLastFailureReason  OBJECT-TYPE
         "The failure reason description for the failed execution
          of last action performed on this feature.
 
-         If the corresponding instance of 
+         If the corresponding instance of
          cfsFeatureOpLastActionResult has the value
          'actionFailed', then this object contains the reason
          as to why it failed.  Otherwise, the value of this
@@ -494,30 +528,30 @@ cfsFeatureOpShowCfgOption  OBJECT-TYPE
          pendingConfig(2)
     }
     MAX-ACCESS     read-write
-    STATUS         current
+    STATUS         deprecated
     DESCRIPTION
         "This object provides a means for management
          applications to either view the contents of 'Running
          Configuration' or 'Pending Configuration'.
-       
+
          When the value of this object is 'runningConfig', all the
          subsequent configuration retrieval for this feature will be
          from 'Running Configuration' on the local device.
-        
+
          When the value of this object is 'pendingConfig', all the
          subsequent configuration retrieval for this feature will be
-         from 'Pending Configuration' on the local device.        
-         
-         The value of this object is meaningful only when the value 
-         of the corresponding instance of 'cfsFeatureOpStatus' is 
+         from 'Pending Configuration' on the local device.
+
+         The value of this object is meaningful only when the value
+         of the corresponding instance of 'cfsFeatureOpStatus' is
          'enabled'.
-         
-         The agent is not required to retain the modified value of 
+
+         The agent is not required to retain the modified value of
          this  object across the agent restart.
          "
     DEFVAL { runningConfig }
     ::= { cfsFeatureOpEntry 10 }
-    
+
 cfsFeatureOpStatus OBJECT-TYPE
     SYNTAX        CiscoCFSFeatureStatus
     MAX-ACCESS    read-only
@@ -537,9 +571,9 @@ cfsPendingConfOwnerTable    OBJECT-TYPE
          for those features for which 'Pending Configuration'
          exists in one of the devices in the fabric. This table
          provides the 'Pending Configuration' owner (type and name)
-         information and Device address where the 'Pending 
-         Configuration' exists in the fabric. 
-         
+         information and Device address where the 'Pending
+         Configuration' exists in the fabric.
+
          The 'Pending Configuration' owner details are per CFS
          capable feature within a specific scope.
          "
@@ -551,7 +585,7 @@ cfsPendingConfOwnerEntry    OBJECT-TYPE
     STATUS         current
     DESCRIPTION
         "A conceptual row in the 'cfsPendingConfOwnerTable'.
-         Each row represents a CFS capable feature within the 
+         Each row represents a CFS capable feature within the
          context of the combination of scope type and scope value
          in the system.
          "
@@ -569,7 +603,7 @@ CfsPendingConfOwnerEntry ::=
         cfsPendingConfOwnerIDType              BITS,
         cfsPendingConfOwnerID                  SnmpAdminString
 }
-    
+
 cfsPendingConfOwnerScopeType OBJECT-TYPE
     SYNTAX        CiscoCFSScopeType
     MAX-ACCESS    not-accessible
@@ -589,28 +623,32 @@ cfsPendingConfOwnerScopeVal OBJECT-TYPE
          the 'Pending Configuration' for the feature exists.
          "
     ::= { cfsPendingConfOwnerEntry 2 }
-    
+
 cfsPendingConfOwnerAddrType OBJECT-TYPE
     SYNTAX        InetAddressType
     MAX-ACCESS    read-only
     STATUS        current
     DESCRIPTION
-        "The type of the address of the device represented 
-         by the value of the corresponding instance of 
-         cfsPendingConfOwnerAddr.
+        "The type of address of the device in the fabric where the 
+         'Pending Configuration' exists for the feature within this 
+         scope.
          "
     ::= { cfsPendingConfOwnerEntry 3 }
 
 cfsPendingConfOwnerAddr OBJECT-TYPE
-    SYNTAX        InetAddress
+    SYNTAX        InetAddress (SIZE(0..32))
     MAX-ACCESS    read-only
     STATUS        current
     DESCRIPTION
         "The address of the device in the fabric where the 'Pending
          Configuration' exists for the feature within this scope.
+         
+         The type of address of an instance of this object is 
+         determined by the value of the corresponding instance of
+         cfsPendingConfOwnerAddrType.
          "
-    ::= { cfsPendingConfOwnerEntry 4 }    
-    
+    ::= { cfsPendingConfOwnerEntry 4 }
+
 cfsPendingConfOwnerIDType OBJECT-TYPE
     SYNTAX         BITS {
          other(0),
@@ -623,19 +661,19 @@ cfsPendingConfOwnerIDType OBJECT-TYPE
     DESCRIPTION
         "The value of this object indicates the type of the value
          of the corresponding instance of 'cfsPendingConfOwnerID':
-         
-         'other'              - indicates that the value of 
-                                'cfsPendingConfOwnerID' is 
+
+         'other'              - indicates that the value of
+                                'cfsPendingConfOwnerID' is
                                 other than any of the enumerations
                                 defined
-                                 
-         'snmpCommunityName'  - indicates that the value of 
+
+         'snmpCommunityName'  - indicates that the value of
                                 'cfsPendingConfOwnerID' is
                                 'snmpCommunityName' of SNMPv1/
                                 SNMPv2c
-                                 
-         'snmpv3SecurityName' - indicate that the value of  
-                                'cfsPendingConfOwnerID' is 
+
+         'snmpv3SecurityName' - indicate that the value of
+                                'cfsPendingConfOwnerID' is
                                 'securityName' of SNMPv3 user
                                 
          'cliLoginName'       - indicates that the value of 
@@ -668,10 +706,10 @@ cfsMergeStatusTable    OBJECT-TYPE
     MAX-ACCESS     not-accessible
     STATUS         current
     DESCRIPTION    
-        "This tables provides status of the 'Fabric Merge' on 
-         the CFS capable features within the context of the 
+        "This table provides status of the 'Fabric Merge' on
+         the CFS capable features within the context of a
          scope.
-         
+
          This table will have entries only for those features
          for which CFS fabric distribution is enabled and
          'Fabric Merge' is supported.
@@ -722,34 +760,547 @@ cfsMergeStatusScopeVal OBJECT-TYPE
 
 cfsMergeStatusValue OBJECT-TYPE
     SYNTAX        INTEGER {
-                     success(1),
-                     inProgress(2),
-                     failure(3)
+         success(1),
+         inProgress(2),
+         failure(3),
+         waiting(4),
+         other(5)
+    }
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "The result of the last 'Fabric Merge' for the feature
+         within the context of the combination of
+         'cfsMergeStatusScopeType' and 'cfsMergeStatusScopeVal'
+         in the system:
+         
+         'success'              - Fabric Merge successfully 
+                                  completed
+                                  
+         'inProgress'           - Fabric Merge in progress
+         
+         'failure'              - Fabric Merge failed
+         
+         'waiting'              - Waiting for existing Merge
+                                  conflict to be cleared
+             
+         'other'                - None of the other values of
+                                  this enumeration
+
+         The value of this object is 'inProgress' when the local
+         device is part of a fabric that is in the process of
+         merging with another fabric.
+
+         The value of this object is 'waiting' when this local
+         device is waiting for any existing 'Fabric Merge
+         Conflict' to be resolved before it initiates the new
+         instance of 'Fabric Merge'.
+         "
+    ::= { cfsMergeStatusEntry 3 }
+
+cfsMergeMembersTable    OBJECT-TYPE
+    SYNTAX         SEQUENCE OF CfsMergeMembersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "This table provides a list of devices in the local/
+         remote fabric after 'Fabric Merge' on a per CFS capable
+         feature basis within the context of a scope.
+
+         This table will have entries only for those features
+         for which CFS fabric distribution is enabled and
+         'Fabric Merge' is supported.
+         "
+    ::= { cfsFeature 4 }
+
+cfsMergeMembersEntry    OBJECT-TYPE
+    SYNTAX         CfsMergeMembersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "A conceptual row in the 'cfsMergeMembersTable'.
+         Each row represents a device in the local/remote
+         fabric supporting CFS capable feature within the
+         context of a scope in the system.
+         "
+    INDEX          { cfsFeatureOpName,
+                     cfsMergeStatusScopeType,
+                     cfsMergeStatusScopeVal,
+                     cfsMergeMemberAddrType,
+                     cfsMergeMemberAddr }
+    ::= { cfsMergeMembersTable 1}
+
+CfsMergeMembersEntry ::=
+    SEQUENCE {
+        cfsMergeMemberAddrType            InetAddressType,
+        cfsMergeMemberAddr                InetAddress,
+        cfsMergeMemberFabricType          INTEGER,
+        cfsMergeMemberRole                INTEGER
+}
+
+cfsMergeMemberAddrType OBJECT-TYPE
+    SYNTAX        InetAddressType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The type of the address of the device in the fabric
+         which has participated in the 'Fabric Merge' within
+         the context of a CFS feature and scope.
+         "
+    ::= { cfsMergeMembersEntry 1 }
+
+cfsMergeMemberAddr OBJECT-TYPE
+    SYNTAX        InetAddress (SIZE(0..32))
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The address of the device in the fabric which has
+         participated in the 'Fabric Merge' within the context
+         of a CFS feature and scope.
+         
+         The type of address of an instance of this object is 
+         determined by the value of the corresponding instance 
+         of cfsMergeMemberAddrType.
+         "
+    ::= { cfsMergeMembersEntry 2 }
+
+cfsMergeMemberFabricType OBJECT-TYPE
+    SYNTAX        INTEGER {
+                     unknown(1),
+                     local(2),
+                     remote(3)
                   }
     MAX-ACCESS    read-only
     STATUS        current
     DESCRIPTION
-        "The result of the last 'Fabric Merge' occured for the 
-         feature within the context of the combination of 
-         'cfsMergeStatusScopeType' and 'cfsMergeStatusScopeVal'
-         in the system.
+        "The type of the fabric to which the device belongs to,
+         during/after the 'Fabric Merge'.
+         
+         The fabric to which the local device is attached to is 
+         referred to as 'local fabric'. The fabric which attempted
+         to merge with the local fabric is referred to as 'remote
+         fabric'.
+
+         When the value of the corresponding instance of
+         cfsMergeStatusValue is 'successful' or 'waiting', all
+         the devices will be in a single 'CFS fabric' and belong
+         to the 'local' fabric.
+
+         When the value of the corresponding instance of
+         cfsMergeStatusValue is 'failure' or 'inProgress', the
+         devices in the other fabric which attempted 'Fabric Merge'
+         are marked as 'remote'.
          "
-    ::= { cfsMergeStatusEntry 3 }
+    ::= { cfsMergeMembersEntry 3 }
+
+cfsMergeMemberRole OBJECT-TYPE
+    SYNTAX        INTEGER {
+                     unknown(1),
+                     master(2),
+                     peer(3)
+                  }
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "The role of the device during the 'Fabric Merge'.
+         In case of a successful fabric merge/stable fabric
+         only one device can be a 'master'. In case of a
+         fabric merge failure, there can be multiple 'master'
+         devices, corresponding to each of the fabric fragments.
+         All other devices which are not 'master' assume the role
+         of a 'peer'.
+
+         The algorithm for the selection of the 'Merge Master'
+         device within a stable fabric is platform specific.
+         "
+    ::= { cfsMergeMembersEntry 4 }
+
+cfsStartPeersDiscovery  OBJECT-TYPE
+    SYNTAX        INTEGER {
+                     startDiscovery(1),
+                     noOp(2)
+                  }
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This object specifies whether a discovery cycle
+         should be started by the CFS to discover all the
+         'peers' in the fabric.
+
+         When the value of this object is set to 'startDiscovery',
+         the discovery of the CFS capable devices in the fabric
+         is started by the CFS. On successful completion of the
+         discovery, the entries in the 'cfsPeersTable' will be
+         populated.
+
+         When the value of cfsPeersDiscoveryResult is
+         'inProgress', setting the value of this object to
+         'startDiscovery' results in an error.
+
+         No action is taken if this object is set to 'noOp'.
+         The value of this object when read is always 'noOp'.
+         "
+        ::= { cfsDiscoveryObjects 1 }
+
+cfsPeersDiscoveryResult  OBJECT-TYPE
+    SYNTAX        INTEGER {
+                     notInitiated(1),
+                     inProgress(2),
+                     successful(3),
+                     failed(4)
+                  }
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "This object represents the result of the last discovery
+         command issued by way of setting the value of
+         cfsStartPeersDiscovery to 'startDiscovery'.
+         
+         When the CFS discovery was never initiated using the 
+         cfsStartPeersDiscovery, the value of this object is 
+         'notInitiated'. 
+         
+         When the value of this object is 'notInitiated', the 
+         management station needs initiate the discovery cycle by 
+         setting the value of cfsStartPeersDiscovery to 
+         'startDiscovery'.
+         
+         If the value of this object is 'successful', then the 
+         cfsPeersTable is appropriately populated.
+         "
+        ::= { cfsDiscoveryObjects 2 }
+        
+cfsPeersDiscoveryFailureReason  OBJECT-TYPE
+    SYNTAX         SnmpAdminString
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The failure reason description for the last failed CFS
+         peers discovery. 
+
+         If the value of cfsPeersDiscoveryResult object has the
+         value 'failed', then the value of this object contains
+         the reason as to why it failed. Otherwise, the value
+         of this object is a zero-length string.
+         "
+    ::= { cfsDiscoveryObjects 3 }        
+
+cfsPeersTable    OBJECT-TYPE
+    SYNTAX         SEQUENCE OF CfsPeersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "This table provides list of devices in a stable fabric. 
+         This table is populated with the entries only when the
+         CFS discovery cycle is successfully completed.
+         "
+    ::= { cfsFeature 5 }
+
+cfsPeersEntry    OBJECT-TYPE
+    SYNTAX         CfsPeersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "A conceptual row in the 'cfsPeersTable'. Each row
+         represents a device in a stable fabric supporting
+         CFS capability.
+         "
+    INDEX          { cfsPeerAddrType,
+                     cfsPeerAddr }
+    ::= { cfsPeersTable 1}
+
+CfsPeersEntry ::=
+    SEQUENCE {
+        cfsPeerAddrType                   InetAddressType,
+        cfsPeerAddr                       InetAddress
+}
+
+cfsPeerAddrType OBJECT-TYPE
+    SYNTAX        InetAddressType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The type of the address of the CFS capable device
+         in the fabric.
+         "
+    ::= { cfsPeersEntry 1 }
+
+cfsPeerAddr OBJECT-TYPE
+    SYNTAX        InetAddress (SIZE(0..32))
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "The address of a CFS capable device in the fabric.
+          
+         The type of address of an instance of this object is 
+         determined by the value of the corresponding instance of
+         cfsPeerAddrType.
+         "
+    ::= { cfsPeersEntry 2 }
+
+cfsFeaturePeersTable    OBJECT-TYPE
+    SYNTAX         SEQUENCE OF CfsFeaturePeersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "This table provides list of devices in a stable
+         fabric on per CFS capable feature basis.
+         "
+    ::= { cfsFeature 6 }
+
+cfsFeaturePeersEntry    OBJECT-TYPE
+    SYNTAX         CfsFeaturePeersEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "A conceptual row in the 'cfsMergeMembersTable'.
+         Each row represents a device in a stable fabric
+         supporting CFS capable feature within the context
+         of a scope in the system.
+         "
+    INDEX          { cfsFeatureOpName,
+                     cfsFeaturePeersScopeType,
+                     cfsFeaturePeersScopeVal,
+                     cfsFeaturePeersAddrType,
+                     cfsFeaturePeersAddr }
+    ::= { cfsFeaturePeersTable 1}
+
+CfsFeaturePeersEntry ::=
+    SEQUENCE {
+        cfsFeaturePeersScopeType           CiscoCFSScopeType,
+        cfsFeaturePeersScopeVal            CiscoCFSScopeValue,
+        cfsFeaturePeersAddrType            InetAddressType,
+        cfsFeaturePeersAddr                InetAddress
+}
+
+cfsFeaturePeersScopeType OBJECT-TYPE
+    SYNTAX        CiscoCFSScopeType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "This indicates the type of the cfsFeaturePeersScopeVal.
+         "
+    ::= { cfsFeaturePeersEntry 1 }
+
+cfsFeaturePeersScopeVal OBJECT-TYPE
+    SYNTAX        CiscoCFSScopeValue (SIZE(0..32))
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The CFS scope value used with cfsFeaturePeersScopeType.
+         This indicates the scope of the feature within which
+         the device exists in the fabric.
+         "
+    ::= { cfsFeaturePeersEntry 2 }
+
+cfsFeaturePeersAddrType OBJECT-TYPE
+    SYNTAX        InetAddressType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The type of the address of a peer device in the
+         fabric for a CFS capable feature within the context
+         of a scope.
+         "
+    ::= { cfsFeaturePeersEntry 3 }
+
+cfsFeaturePeersAddr OBJECT-TYPE
+    SYNTAX        InetAddress (SIZE(0..32))
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "The address of a peer device in the fabric for a CFS
+         capable feature within the context of a scope.
+         
+         The type of address of an instance of this object is 
+         determined by the value of the corresponding instance of
+         cfsFeaturePeersAddrType.      
+         "
+    ::= { cfsFeaturePeersEntry 4 }
+
+cfsFeatureOpExtTable    OBJECT-TYPE
+    SYNTAX         SEQUENCE OF CfsFeatureOpExtEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "This table lists all the CFS capable features in the local
+         device and provides:
+
+          - the information of the result of the last CFS action
+            triggered on the CFS capable feature within the context
+            of a scope
+
+          - control flag to specify the source of 'configuration
+            view', within the context of a scope of the CFS capable
+            feature
+
+         The last action corresponds to the action triggered on a
+         CFS capable feature using the cfsFeatureOpAction of the
+         cfsFeatureOpTable.
+         "
+    ::= { cfsFeature 7 }
+
+cfsFeatureOpExtEntry    OBJECT-TYPE
+    SYNTAX         CfsFeatureOpExtEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "A conceptual row in the cfsFeatureOpExtTable. Each row
+         represents a CFS capable feature within the context of
+         the combination of scope type and scope value in the
+         system.
+
+         The combination of cfsFeatureOpExtScopeType and
+         cfsFeatureOpExtScopeVal forms a scope context within
+         which a CFS operation was performed on CFS capable
+         feature using the cfsFeatureOpScopeType and
+         cfsFeatureOpScopeVal of cfsFeatureOpTable.
+         "
+    INDEX          { cfsFeatureOpName,
+                     cfsFeatureOpExtScopeType,
+                     cfsFeatureOpExtScopeVal }
+    ::= { cfsFeatureOpExtTable 1}
+
+CfsFeatureOpExtEntry ::=
+    SEQUENCE {
+        cfsFeatureOpExtScopeType         CiscoCFSScopeType,
+        cfsFeatureOpExtScopeVal          CiscoCFSScopeValue,
+        cfsFeatureOpExtLastAction        CiscoCFSAction,
+        cfsFeatureOpExtLastActionResult  CiscoCFSFeatureActionResult,
+        cfsFeatureOpExtLastFailureReason SnmpAdminString,
+        cfsFeatureOpExtShowCfgOption     INTEGER
+}
+
+cfsFeatureOpExtScopeType OBJECT-TYPE
+    SYNTAX        CiscoCFSScopeType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "This indicates the type of the cfsFeatureOpExtScopeVal.
+         "
+    ::= { cfsFeatureOpExtEntry 1 }
+
+cfsFeatureOpExtScopeVal OBJECT-TYPE
+    SYNTAX        CiscoCFSScopeValue (SIZE(0..32))
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The CFS feature scope value to be used with
+         cfsFeatureOpExtScopeType.
+         "
+    ::= { cfsFeatureOpExtEntry 2 }
+
+cfsFeatureOpExtLastAction OBJECT-TYPE
+    SYNTAX         CiscoCFSAction
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The last action performed on this feature within the
+         context of a scope. If no action has been triggered
+         for the feature since the last reboot of the system,
+         then retrieving the value of this object will return
+         'noop'.
+         "
+    ::= { cfsFeatureOpExtEntry 3 }
+
+cfsFeatureOpExtLastActionResult  OBJECT-TYPE
+    SYNTAX         CiscoCFSFeatureActionResult
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The result of the execution of the last action (represented
+         by the value of cfsFeatureOpExtLastAction) for the feature.
+         "
+    ::= { cfsFeatureOpExtEntry 4 }
+
+cfsFeatureOpExtLastFailureReason  OBJECT-TYPE
+    SYNTAX         SnmpAdminString
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The failure reason description for the failed execution
+         of last action performed on this feature.
+
+         If the corresponding instance of
+         cfsFeatureOpExtLastActionResult has the value
+         'actionFailed', then this object contains the reason
+         as to why it failed.  Otherwise, the value of this
+         object is a zero-length string.
+         "
+    ::= { cfsFeatureOpExtEntry 5 }
+
+cfsFeatureOpExtShowCfgOption  OBJECT-TYPE
+    SYNTAX         INTEGER {
+         runningConfig(1),
+         pendingConfig(2)
+    }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "This object provides a means for management
+         applications to either view the contents of 'Running
+         Configuration' or 'Pending Configuration'.
+
+         When the value of this object is 'runningConfig', all the
+         subsequent configuration retrieval for this feature within
+         the specified context of the scope will be from 'Running
+         Configuration' on the local device.
+
+         When the value of this object is 'pendingConfig', all the
+         subsequent configuration retrieval for this feature within
+         the specified context of the scope will be from 'Pending
+         Configuration' on the local device.
+
+         The value of this object is meaningful only when the value
+         of the corresponding instance of 'cfsFeatureOpStatus' is
+         'enabled'.
+
+         The agent is not required to retain the modified value of
+         this  object across the agent restart.
+         "
+    DEFVAL { runningConfig }
+    ::= { cfsFeatureOpExtEntry 6 }
+    
+cfsDistCtrl OBJECT-TYPE
+    SYNTAX         INTEGER {
+         enable(1),
+         disable(2)
+    }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "The object to control CFS for distribution. 
+        
+         On setting the value of this object to 'enable', CFS will
+         be ready for distribution of the data across the fabric.
+         
+         On setting the value of this object to 'disable', CFS will
+         disable its capability to distribute the data across the 
+         fabric. The CFS continues to honour distribution requests
+         from the CFS capable features of the local device, with the
+         scope of the distribution limited only to the local device
+         and not fabric wide.
+         
+         The value of the object when read, reflects the current 
+         operating state of the CFS.
+         "
+    DEFVAL { enable }
+	::= { cfsDistCtrlObjects 1 }     
 
 --
 -- Objects for Notification only
 --
 
 cfsMergeFailFeatureName     OBJECT-TYPE
-    SYNTAX        SnmpAdminString (SIZE(0..64))
+    SYNTAX        SnmpAdminString (SIZE(0..32))
     MAX-ACCESS    accessible-for-notify
     STATUS        current
     DESCRIPTION
         "A human readable string value uniquely identifying the
          name of this feature for which the 'Merge Failure' occurred.
          "
-    ::= { cfsNotifObjects 1 }    
-    
+    ::= { cfsNotifObjects 1 }
+
 cfsMergeFailScopeType OBJECT-TYPE
     SYNTAX        CiscoCFSScopeType
     MAX-ACCESS    accessible-for-notify
@@ -769,15 +1320,15 @@ cfsMergeFailScopeVal OBJECT-TYPE
          feature ('cfsMergeFailFeatureName') within which the
          'Merge Failure' occurred.
          "
-    ::= { cfsNotifObjects 3 }    
-    
+    ::= { cfsNotifObjects 3 }
+
 cfsMergeFailReasonDescription  OBJECT-TYPE
     SYNTAX        SnmpAdminString
-    MAX-ACCESS    accessible-for-notify 
-    STATUS        current             
+    MAX-ACCESS    accessible-for-notify
+    STATUS        current
     DESCRIPTION
-        "The failure reason description for the 'Merge Failure'"    
-    ::= { cfsNotifObjects 4 }         
+        "The failure reason description for the 'Merge Failure'"
+    ::= { cfsNotifObjects 4 }
 
 --
 -- Notifications
@@ -813,13 +1364,26 @@ ciscoCFSMergeFailNotif NOTIFICATION-TYPE
                          cfsMergeFailReasonDescription }
         STATUS         current
         DESCRIPTION
-           "Notification to covey the information of the 'Merge 
+           "Notification to convey the information of the 'Merge
             Failure' occurred in the fabric. This notification gets
-            generated when the merge of the two fabrics fail for a 
+            generated when the merge of the two fabrics fail for a
             CFS capable feature.
             "
-        ::= { ciscoCFSMIBNotifs 2 }          
-    
+        ::= { ciscoCFSMIBNotifs 2 }
+
+ciscoCFSDiscoveryCompleteNotif NOTIFICATION-TYPE
+        OBJECTS        { cfsPeersDiscoveryResult,
+                         cfsPeersDiscoveryFailureReason }
+        STATUS         current
+        DESCRIPTION
+           "Notification to indicate that the CFS has completed
+            discovering the CFS capable devices in the fabric.
+            
+            If the value of cfsPeersDiscoveryResult is 'successful',
+            then the cfsPeersTable is appropriately populated.
+            "
+        ::= { ciscoCFSMIBNotifs 3 }
+
 --
 -- Conformance
 --
@@ -830,10 +1394,11 @@ ciscoCFSMIBGroups         OBJECT IDENTIFIER
                                 ::= { ciscoCFSMIBConformance 2 }
 
 ciscoCFSMIBCompliance     MODULE-COMPLIANCE
-    STATUS         current
+    STATUS         deprecated  -- superseded by
+                               -- ciscoCFSMIBComplianceRev1
     DESCRIPTION
         "The compliance statement for entities which implement the
-         CISCO-CFS-CONFIG-MIB.
+         CISCO-CFS-MIB.
          "
     MODULE
        MANDATORY-GROUPS {
@@ -842,22 +1407,64 @@ ciscoCFSMIBCompliance     MODULE-COMPLIANCE
            cfsFeatureActionNotifGroup
        }
     GROUP          cfsFeatureNotifObjectsGroup
-    DESCRIPTION 
-        "This group is conditionally mandatory and must be 
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
          implemented by the agent of the managed entity only
-         if the CFS implementation on the managed entity 
+         if the CFS implementation on the managed entity
          supports notifications as defined in the
          'cfsMergeFailNotifGroup'.
          "
     GROUP          cfsMergeFailNotifGroup
-    DESCRIPTION 
-        "This group is conditionally mandatory and must be 
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
          implemented by the agent of the managed entity only
-         if the CFS implementation on the managed entity 
+         if the CFS implementation on the managed entity
          supports fabric merge.
-         "         
+         "
 
     ::= { ciscoCFSMIBCompliances 1 }
+
+ciscoCFSMIBComplianceRev1     MODULE-COMPLIANCE
+    STATUS         current
+    DESCRIPTION
+        "The compliance statement for entities which implement the
+         CISCO-CFS-MIB.
+         "
+    MODULE
+       MANDATORY-GROUPS {
+           cfsFeatureOpGroupRev1,
+           cfsPendingConfOwnerGroup,
+           cfsFeatureActionNotifGroup,
+           cfsMembersGroup,
+           cfsPeerDiscoveryNotifGroup,
+           cfsFeatureOpExtGroup
+       }
+    GROUP          cfsFeatureNotifObjectsGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports notifications as defined in the
+         'cfsMergeFailNotifGroup'.
+         "
+         
+    GROUP          cfsMergeFailNotifGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports fabric merge.
+         "
+         
+    GROUP          cfsDistCtrlGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports CFS distribution control.
+         "         
+
+    ::= { ciscoCFSMIBCompliances 2 }
 
 --
 -- Units of Conformance
@@ -877,7 +1484,7 @@ cfsFeatureOpGroup  OBJECT-GROUP
         cfsFeatureOpStatus,
         cfsMergeStatusValue
     }
-    STATUS         current
+    STATUS         deprecated  -- superseded by cfsFeatureOpGroupRev1
     DESCRIPTION
         "A collection of objects for configurations of the CFS capable
          features.
@@ -908,8 +1515,8 @@ cfsFeatureNotifObjectsGroup  OBJECT-GROUP
     STATUS         current
     DESCRIPTION
         "A collection of objects required for CFS notifications."
-    ::= { ciscoCFSMIBGroups 3 }        
-    
+    ::= { ciscoCFSMIBGroups 3 }
+
 cfsFeatureActionNotifGroup  NOTIFICATION-GROUP
     NOTIFICATIONS  {ciscoCFSFeatureActionNotif}
     STATUS         current
@@ -917,15 +1524,83 @@ cfsFeatureActionNotifGroup  NOTIFICATION-GROUP
         "A collection of notifications for the CFS actions on the
          CFS capable features.
          "
-    ::= { ciscoCFSMIBGroups 4 } 
-        
+    ::= { ciscoCFSMIBGroups 4 }
+
 cfsMergeFailNotifGroup  NOTIFICATION-GROUP
-    NOTIFICATIONS  {ciscoCFSMergeFailNotif}
+    NOTIFICATIONS  { ciscoCFSMergeFailNotif }
     STATUS         current
     DESCRIPTION
-        "A collection of notifications for CFS fabric merge 
+        "A collection of notifications for CFS fabric merge
          failures.
          "
-    ::= { ciscoCFSMIBGroups 5 }          
+    ::= { ciscoCFSMIBGroups 5 }
+
+cfsMembersGroup  OBJECT-GROUP
+    OBJECTS {
+        cfsMergeMemberFabricType,
+        cfsMergeMemberRole,
+        cfsStartPeersDiscovery,
+        cfsPeersDiscoveryResult,
+        cfsPeersDiscoveryFailureReason,
+        cfsPeerAddr,
+        cfsFeaturePeersAddr
+    }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for discovering list of devices in
+         the fabric.
+        "
+    ::= { ciscoCFSMIBGroups 6 }
+
+cfsFeatureOpExtGroup  OBJECT-GROUP
+    OBJECTS {
+        cfsFeatureOpExtLastAction,
+        cfsFeatureOpExtLastActionResult,
+        cfsFeatureOpExtLastFailureReason,
+        cfsFeatureOpExtShowCfgOption
+    }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for CFS action results.
+        "
+    ::= { ciscoCFSMIBGroups 7 }
+
+cfsPeerDiscoveryNotifGroup  NOTIFICATION-GROUP
+    NOTIFICATIONS  { ciscoCFSDiscoveryCompleteNotif }
+    STATUS         current
+    DESCRIPTION
+        "A collection of notifications for CFS peer discovery.
+         "
+    ::= { ciscoCFSMIBGroups 8 }
+
+cfsFeatureOpGroupRev1  OBJECT-GROUP
+    OBJECTS {
+        cfsFeatureOpAction,
+        cfsFeatureOpScopeType,
+        cfsFeatureOpScopeVal,
+        cfsFeatureOpLastAction,
+        cfsFeatureOpLastScopeType,
+        cfsFeatureOpLastScopeVal,
+        cfsFeatureOpLastActionResult,
+        cfsFeatureOpLastFailureReason,
+        cfsFeatureOpStatus,
+        cfsMergeStatusValue
+    }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for configurations of the CFS capable
+         features.
+        "
+    ::= { ciscoCFSMIBGroups 9 }
+    
+cfsDistCtrlGroup  OBJECT-GROUP
+    OBJECTS { cfsDistCtrl }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for controlling the distribution
+         capabilities of CFS
+        "
+    ::= { ciscoCFSMIBGroups 10 }    
+
 END
 

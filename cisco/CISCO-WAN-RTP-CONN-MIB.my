@@ -3,8 +3,9 @@
 -- transport protocol) Connection MIB file
 --
 -- October 2003, George Ogagan 
+-- April 2005, Rashmi Purandare
 --
--- Copyright (c) 1999-2003 by Cisco Systems, Inc.
+-- Copyright (c) 1999-2003, 2004, 2005 by Cisco Systems, Inc.
 -- All rights reserved.
 --
 -- *****************************************************************
@@ -16,8 +17,8 @@ IMPORTS
     OBJECT-TYPE,
     Integer32, 
     Counter32,
-    IpAddress 
-                FROM SNMPv2-SMI
+    IpAddress, 
+    Unsigned32  FROM SNMPv2-SMI
     TruthValue,
     RowStatus
                 FROM SNMPv2-TC
@@ -27,7 +28,7 @@ IMPORTS
     ciscoWan    FROM CISCOWAN-SMI;
 
 ciscoWanRtpConnMIB MODULE-IDENTITY
-    LAST-UPDATED "200310200000Z"
+    LAST-UPDATED "200504120000Z"
     ORGANIZATION "Cisco Systems, Inc."
     CONTACT-INFO
             "       Cisco Systems
@@ -45,6 +46,14 @@ ciscoWanRtpConnMIB MODULE-IDENTITY
              between an endpoint and another endpoint on a remote
              VISM in the case of VoIP(Voice over IP) trunking
              application." 
+
+    REVISION    "200504120000Z"
+    DESCRIPTION
+                "
+                Add new statistics
+                vismRtpInterArrivalJitter
+                vismRtpLatency
+                "
 
     REVISION    "200310200000Z"
     DESCRIPTION
@@ -538,7 +547,7 @@ vismRtpBearerStatsTable  OBJECT-TYPE
     MAX-ACCESS  not-accessible
     STATUS      current
     DESCRIPTION
-       "This table contain the RTP bearer counters."
+       "This table contains the RTP bearer statistics."
     ::= { vismRtpBearerStatsGrp 1 }
 
 vismRtpBearerStatsEntry OBJECT-TYPE
@@ -547,7 +556,7 @@ vismRtpBearerStatsEntry OBJECT-TYPE
     STATUS      current
     DESCRIPTION
       "An entry is implicitly created when a RTP connection is 
-       established. All the counters in this table can not be
+       established. All the statistics in this table can not be
        modified by user.
       "
     INDEX  { vismRtpConnNum }
@@ -559,7 +568,9 @@ VismRtpBearerStatsEntry ::= SEQUENCE {
              vismRtpOctsSent          Counter32,
              vismRtpOctsRcv           Counter32,
              vismRtpPktsLost          Counter32,
-             vismRtpCntsCleared       TruthValue
+             vismRtpCntsCleared       TruthValue,
+             vismRtpInterArrivalJitter Unsigned32,
+             vismRtpLatency            Unsigned32
              }
 
 vismRtpPktsSent    OBJECT-TYPE
@@ -619,6 +630,32 @@ vismRtpCntsCleared    OBJECT-TYPE
         "
         ::= { vismRtpBearerStatsEntry 6 }
 
+vismRtpInterArrivalJitter    OBJECT-TYPE
+     SYNTAX     Unsigned32
+     UNITS      "milliseconds"
+     MAX-ACCESS read-only
+     STATUS     current
+     DESCRIPTION
+        "This object provides the average interarrival jitter 
+         value between packets during a VoIP call.
+        "
+     REFERENCE 
+        "RFC3550"
+        ::= { vismRtpBearerStatsEntry 7 }
+
+vismRtpLatency    OBJECT-TYPE
+     SYNTAX     Unsigned32
+     UNITS      "milliseconds"
+     MAX-ACCESS read-only
+     STATUS     current
+     DESCRIPTION
+        "The round trip delay for a voice packet to travel 
+         from the originating end of a VoIP call to the 
+         terminating end and back.
+        "
+     REFERENCE 
+        "RFC3550"
+        ::= { vismRtpBearerStatsEntry 8 }
 
 -- *****************************************************************
 -- RTP connection group notification
@@ -653,7 +690,7 @@ vismRtpConnMIBGroups       OBJECT IDENTIFIER  ::=
 --
 
 vismRtpConnMIBCompliance MODULE-COMPLIANCE
-    STATUS current
+    STATUS deprecated --Replaced by vismRtpConnMIBComplianceRev1
     DESCRIPTION
             " The complaince statement for RTP connection group
               which implements vismRtpConnGrp MIB."
@@ -663,6 +700,19 @@ vismRtpConnMIBCompliance MODULE-COMPLIANCE
                           vismRtpBearerStatsGroup 
                          }
     ::= { vismRtpConnMIBCompliances 1 }
+
+vismRtpConnMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+            " The complaince statement for RTP connection group
+              which implements vismRtpConnGrp MIB."
+    MODULE  -- this module
+        MANDATORY-GROUPS { 
+                          vismRtpConnGroup,
+                          vismRtpBearerStatsGroup,
+                          vismRtpBearerStatsGroupSup1
+                         }
+    ::= { vismRtpConnMIBCompliances 2 }
 
 --
 -- units of conformance
@@ -715,6 +765,18 @@ vismRtpBearerStatsGroup OBJECT-GROUP
              "
     ::= { vismRtpConnMIBGroups 2 }
 
+vismRtpBearerStatsGroupSup1 OBJECT-GROUP
+         OBJECTS {
+             vismRtpInterArrivalJitter,
+             vismRtpLatency
+                 }
+    STATUS    current
+    DESCRIPTION
+            "This group is a supplement for vismRtpBearerStatsGroup
+             and contains statistics for each RTP connection.
+             "
+    ::= { vismRtpConnMIBGroups 3 }
 
 END
+
 

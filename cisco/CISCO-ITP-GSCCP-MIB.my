@@ -53,7 +53,7 @@ IMPORTS
                 FROM CISCO-SMI;
                 
 ciscoGsccpMIB MODULE-IDENTITY
-        LAST-UPDATED    "200404300000Z"
+        LAST-UPDATED    "200412220000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems, Inc
@@ -102,6 +102,8 @@ ciscoGsccpMIB MODULE-IDENTITY
                   Application Group Table
                   Prefix Conversion Table
                   Translation Entries Table
+                  Global Title Errors Table
+
 
                 Abbreviations:
                   CDPA  - Called Party Address
@@ -145,6 +147,39 @@ ciscoGsccpMIB MODULE-IDENTITY
                   XUDTS - extended unitdata service message
                 "
                 
+        REVISION        "200412220000Z"
+        DESCRIPTION
+                "New cgsccpGttPref2EncodingScheme object to allow 
+                 customer to specify encoding scheme when 
+                 performing internation translation.
+                "
+                
+        REVISION        "200411160000Z"
+        DESCRIPTION
+                "New ciscoGsccpGttErrors notification to indicate
+                 global title translation errors.
+                 
+                 The following objects were added to support new
+                 notification.
+                 
+                 cgsccpGttErrorPeriod,
+                 cgsccpGttErrorRecoveryCount,
+                 cgsccpInstErrorIndicator,
+                 cgsccpGttTransErrorsNotifEnabled,
+                 cgsccpGttErrorsSelectorNotFound,
+                 cgsccpGttErrorsIncorrectFormat,
+                 cgsccpGttErrorsGtaNotFound,
+                 cgsccpGttErrorsHopViolation,
+                 cgsccpGttErrorsMapNotFound,
+                 cgsccpGttErrorsUnequipedSS,
+                 cgsccpGttErrorsSccpUnavailable,
+                 cgsccpGttErrorsDpcUnavailable,
+                 cgsccpGttErrorsSsUnavailable,
+                 cgsccpGttErrorsDpcCongested,
+                 cgsccpGttErrorsSsCongested,
+                 cgsccpGttErrorsRouteFailure,
+                 cgsccpGttErrorsSccpUnqualified"
+
         REVISION        "200404300000Z"
         DESCRIPTION
                 "Deprecated table cgsccpGttAppGrTable and added
@@ -193,6 +228,7 @@ cgsccpGttPref      OBJECT IDENTIFIER ::= { ciscoGsccpMIBObjects 8 }
 cgsccpGttTranslate OBJECT IDENTIFIER ::= { ciscoGsccpMIBObjects 9 }
 cgsccpGttPref2     OBJECT IDENTIFIER ::= { ciscoGsccpMIBObjects 10}
 cgsccpGttAppGr2    OBJECT IDENTIFIER ::= { ciscoGsccpMIBObjects 11}
+cgsccpGttErrors    OBJECT IDENTIFIER ::= { ciscoGsccpMIBObjects 12}
 -- ********************************************************************
 -- *                                                                  *
 -- * Textual Conventions                                              *
@@ -461,7 +497,47 @@ cgsccpGttLoadTableNotifEnabled   OBJECT-TYPE
         DEFVAL { false }
         ::= { cgsccpScalars 4 }
         
+cgsccpGttTransErrorsNotifEnabled   OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION 
+           "The global title translation errors notification truth 
+            value as follows.
+            
+           'true'  Indicates that the ciscoGsccpGttErrors
+                   notification is to be generated when the
+                   a configuration is loaded. That is, the 
+                   notification generation is enabled.
+           'false' Indicates that the ciscoGsccpGttErrors
+                   notification generation is disabled."
+        DEFVAL { false }
+        ::= { cgsccpScalars 5 }
+        
+cgsccpGttErrorPeriod             OBJECT-TYPE
+        SYNTAX                   Unsigned32 (30..3600) 
+        UNITS                    "seconds"
+        MAX-ACCESS               read-write
+        STATUS                   current
+        DESCRIPTION
+           "The length of the sample window used to collect 
+            global title translations errors."  
+        DEFVAL { 300 }
+        ::= { cgsccpScalars 6 }
 
+cgsccpGttErrorRecoveryCount      OBJECT-TYPE
+        SYNTAX                   Unsigned32 (1..10) 
+        UNITS                    "windows"
+        MAX-ACCESS               read-write
+        STATUS                   current
+        DESCRIPTION
+           "The number contiguous sample windows that have to be
+            error free before the ciscoGsccpGttErrors notifications
+            will be generated indicating end of global title 
+            translation errors condition."
+        DEFVAL { 3 }
+        ::= { cgsccpScalars 7 }
+        
 --  *************************************************************
 --  *                                                           *
 --  * Information per Signalling Point                          *
@@ -529,7 +605,8 @@ CgsccpInstTableEntry  ::= SEQUENCE {
         cgsccpInstAppGrTableEntries Gauge32,
         cgsccpInstRowStatus         RowStatus,
         cgsccpInstPrefTableEntries  Gauge32,
-        cgsccpInstQ752Unqualified   Counter32 
+        cgsccpInstQ752Unqualified   Counter32,
+        cgsccpInstErrorIndicator    TruthValue
 }                    
 
 cgsccpInstTotalMsgs              OBJECT-TYPE
@@ -1083,6 +1160,17 @@ cgsccpInstQ752Unqualified        OBJECT-TYPE
                  title translation is unsuccessful and the error
                  type not covered by other specific error types."
         ::= { cgsccpInstTableEntry 42 }
+        
+cgsccpInstErrorIndicator         OBJECT-TYPE
+        SYNTAX                   TruthValue
+        MAX-ACCESS               read-only
+        STATUS                   current
+        DESCRIPTION
+                "This object indicates whether global title 
+                 translation errors have occurred in last interval
+                 specified by the cgsccpGttErrorPeriod object."
+        DEFVAL  {false}
+        ::= { cgsccpInstTableEntry 43 }
         
 --  *************************************************************
 --  *                                                           *
@@ -1836,7 +1924,7 @@ CgsccpGttGtaTableEntry  ::= SEQUENCE {
         cgsccpGttGtaTTorSSNvalue         Unsigned32,
         cgsccpGttGtaRoutingInd           CgsccpGttRoutingInd,
         cgsccpGttGtaQOS                  CgsccpGttQOS,
-	cgsccpGttGtaAddrDisp             CItpTcGtaLongDisplay,
+        cgsccpGttGtaAddrDisp             CItpTcGtaLongDisplay,
         cgsccpGttGtaAddrLen              CItpTcGtaLongDisplayLen,
         cgsccpGttGtaAsName               CItpTcXuaName,
         cgsccpGttGtaRowStatus            RowStatus,
@@ -2239,9 +2327,9 @@ cgsccpGttPref2Table     OBJECT-TYPE
         DESCRIPTION
            "A table of SCCP GTT Prefix Conversion Table entries.
 
-	    This table replaces the cgsccpGttPrefTable tables and 
-	    allow prefix conversion to be specified per instance.
-	    
+            This table replaces the cgsccpGttPrefTable tables and 
+            allow prefix conversion to be specified per instance.
+            
             When a packet with GTA is received, it may need
             global title translation depending on Translation
             Type (TT), Numbering Plan (NP), Network Address
@@ -2281,7 +2369,8 @@ CgsccpGttPref2TableEntry  ::= SEQUENCE {
         cgsccpGttPref2TblNP             CItpTcNumberingPlan,
         cgsccpGttPref2ItemNAI           CItpTcNAI,
         cgsccpGttPref2ItemNP            CItpTcNumberingPlan,
-        cgsccpGttPref2RowStatus         RowStatus
+        cgsccpGttPref2RowStatus         RowStatus,
+        cgsccpGttPref2EncodingScheme    INTEGER
 }
                         
 cgsccpGttPref2Name               OBJECT-TYPE
@@ -2361,6 +2450,29 @@ cgsccpGttPref2RowStatus          OBJECT-TYPE
             create or delete the row entry in cgsccpGttPref2Table
             following the RowStatus textual convention."
         ::= { cgsccpGttPref2TableEntry 8 }
+
+cgsccpGttPref2EncodingScheme     OBJECT-TYPE
+        SYNTAX                   INTEGER {
+                                           unknown(0),
+                                           bcdOdd(1),
+                                           bcdEven(2),
+                                           national(3)
+        }
+        MAX-ACCESS               read-create
+        STATUS                   current
+        DESCRIPTION
+           "The encoding scheme to be used for output GTT address
+            as follows.
+             
+            unknown  - encoding scheme is not specified at the address
+                       level.
+            bcdOdd   - Use BCD odd encoding scheme.
+            bcdEven  - Use BCD even encoding scheme.
+            national - national specific."
+        REFERENCE
+           "E.164 and E.214 address formats and Q.713"
+        ::= { cgsccpGttPref2TableEntry 9 }
+        
 
 --  *************************************************************
 --  *                                                           *
@@ -2566,6 +2678,207 @@ cgsccpGttAppGr2RowStatus         OBJECT-TYPE
         
 --  *************************************************************
 --  *                                                           *
+--  * Global Title Errors                                       *
+--  *                                                           *
+--  *************************************************************
+cgsccpGttErrorsTable    OBJECT-TYPE
+        SYNTAX          SEQUENCE OF CgsccpGttErrorsTableEntry 
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "This table is used to indicate errors in global title
+            translation and will be used to provide information
+            for ciscoGsccpGttErrors notification."
+        ::= { cgsccpGttErrors 1 }   
+
+cgsccpGttErrorsTableEntry OBJECT-TYPE
+        SYNTAX          CgsccpGttErrorsTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "All objects in this table are derived from other 
+            objects in this MIB.  At the end of each 
+            interval the values of these objects will be updated
+            with number of errors that occurred during last 
+            interval.  The length of the interval is defined by 
+            the cgsccpGttErrorPeriod object."
+        INDEX   { cgspInstNetwork        -- shared index
+        }
+        ::= { cgsccpGttErrorsTable 1 }
+CgsccpGttErrorsTableEntry  ::= SEQUENCE {
+         cgsccpGttErrorsSelectorNotFound  Gauge32,
+         cgsccpGttErrorsIncorrectFormat   Gauge32,
+         cgsccpGttErrorsGtaNotFound       Gauge32,
+         cgsccpGttErrorsHopViolation      Gauge32,
+         cgsccpGttErrorsMapNotFound       Gauge32,
+         cgsccpGttErrorsUnequipedSS       Gauge32,
+         cgsccpGttErrorsSccpUnavailable   Gauge32,
+         cgsccpGttErrorsDpcUnavailable    Gauge32,
+         cgsccpGttErrorsSsUnavailable     Gauge32,
+         cgsccpGttErrorsDpcCongested      Gauge32,
+         cgsccpGttErrorsSsCongested       Gauge32,
+         cgsccpGttErrorsRouteFailure      Gauge32,
+         cgsccpGttErrorsSccpUnqualified   Gauge32 
+      }
+
+cgsccpGttErrorsSelectorNotFound  OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a translation
+            was requested for a combination of Translation Type,
+            Numbering Plan and Nature of Address for which no 
+            translation exists in the signalling point.  This 
+            occurs when no selector is available for the 
+            combination of parameters provided in the MSU.
+            This counter is derived from cgsccpInstQ752T7E1
+            object."
+        ::= { cgsccpGttErrorsTableEntry 1 }
+        
+cgsccpGttErrorsIncorrectFormat   OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time an invalid 
+            Global Title format is found while performing the
+            global title translation.  This counter is derived
+            from cgsccpInstInvalidGttFormat object."
+        ::= { cgsccpGttErrorsTableEntry 2 }
+
+cgsccpGttErrorsGtaNotFound       OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a global title
+            title translations was required and a selector was 
+            not found. This counter is derived from 
+            cgsccpGttQ752T7E2 object."
+        ::= { cgsccpGttErrorsTableEntry 3 }
+
+cgsccpGttErrorsHopViolation      OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a hop count 
+            violation is found in the MSU.  This counter is 
+            derived from cgsccpInstQ752T7E13 object."
+        ::= { cgsccpGttErrorsTableEntry 4 }
+
+cgsccpGttErrorsMapNotFound       OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a global 
+            title translation is successful to a certain
+            PC/SSN but it was not found in the GTT Mated 
+            Application table.  This counter is derived
+            from cgsccpInstMapNotFound object."
+        ::= { cgsccpGttErrorsTableEntry 5 }
+
+cgsccpGttErrorsUnequipedSS       OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a global 
+            title translation could not be performed due to an
+            unequipped subsystem (SS). This counter is derived
+            from cgsccpInstQ752T7E7 object."
+        ::= { cgsccpGttErrorsTableEntry 6 }
+
+cgsccpGttErrorsSccpUnavailable   OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a SCCP is 
+            unavailable at the GTT Mated Application. This 
+            counter is derived from cgsccpGttMapSccpUnavail
+            object."
+        ::= { cgsccpGttErrorsTableEntry 7 }
+
+cgsccpGttErrorsDpcUnavailable    OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a point code
+            is unavailable at the GTT Mated Application.
+            This counter is derived from cgsccpGttMapQ752T7E3Un 
+            object."
+        ::= { cgsccpGttErrorsTableEntry 8 }
+
+cgsccpGttErrorsSsUnavailable     OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a subsystem
+            is unavailable at the GTT Mated Application.  This 
+            counter is derived from cgsccpGttMapQ752T7E5 object."
+        ::= { cgsccpGttErrorsTableEntry 9 }
+
+cgsccpGttErrorsDpcCongested      OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a point code
+            is congested at the GTT Mated Application.  This 
+            counter is derived from cgsccpGttMapQ752T7E4 object."
+        ::= { cgsccpGttErrorsTableEntry 10 }
+
+cgsccpGttErrorsSsCongested       OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a subsystem is 
+            congested at the GTT Mated Application.  This counter
+            is derived from cgsccpGttMapQ752T7E6 object."
+        ::= { cgsccpGttErrorsTableEntry 11 }
+
+cgsccpGttErrorsRouteFailure      OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a the MTP3 layer
+            failed at the GTT Mated Application.  This counter is 
+            derived from cgsccpGttMapQ752T7E3Fail object."
+        ::= { cgsccpGttErrorsTableEntry 12 }
+
+cgsccpGttErrorsSccpUnqualified   OBJECT-TYPE  
+        SYNTAX                   Gauge32
+        UNITS                    "packets"
+        MAX-ACCESS               accessible-for-notify
+        STATUS                   current
+        DESCRIPTION
+           "This counter is incremented every time a global title
+            translation is unsuccessful and the error type not 
+            covered by other specific error types.  This counter
+            is derived from cgsccpInstQ752Unqualified object."
+        ::= { cgsccpGttErrorsTableEntry 13 }
+
+--  *************************************************************
+--  *                                                           *
 --  * Notifications                                             *
 --  *                                                           *
 --  *************************************************************
@@ -2597,6 +2910,39 @@ ciscoGsccpGttLoadTable NOTIFICATION-TYPE
            "This notification is generated whenever a load 
             operation is started or completes."
         ::= { ciscoGsccpMIBNotifs 2 }
+
+ciscoGsccpGttErrors NOTIFICATION-TYPE
+        OBJECTS {
+                cgspEventSequenceNumber,
+                cgspCLLICode,
+                cgsccpInstErrorIndicator,
+                cgsccpGttErrorsSelectorNotFound,
+                cgsccpGttErrorsIncorrectFormat,
+                cgsccpGttErrorsGtaNotFound,
+                cgsccpGttErrorsHopViolation,
+                cgsccpGttErrorsMapNotFound,
+                cgsccpGttErrorsUnequipedSS,
+                cgsccpGttErrorsSccpUnavailable,
+                cgsccpGttErrorsDpcUnavailable,
+                cgsccpGttErrorsSsUnavailable,
+                cgsccpGttErrorsDpcCongested,
+                cgsccpGttErrorsSsCongested,
+                cgsccpGttErrorsRouteFailure,
+                cgsccpGttErrorsSccpUnqualified
+        }
+        STATUS  current
+        DESCRIPTION
+           "This notification is generated whenever any global 
+            title error is encountered in last interval specified 
+            by the cgsccpGttErrorPeriod and the 
+            cgsccpInstErrorIndicator will be set to true. The
+            notification will also be generated when errors have
+            abated. The notification is generated after the number 
+            of recovery intervals as specified by the 
+            cgsccpGttErrorRecoveryCount object has passed without 
+            any global title errors."
+        ::= { ciscoGsccpMIBNotifs 3 }
+        
 
 --  *******************************************************************
 --  *                                                                  
@@ -2803,7 +3149,7 @@ ciscoGsccpMIBCompliance MODULE-COMPLIANCE
          DESCRIPTION      "Create/Write access is not required."
 
         ::= { ciscoGsccpMIBCompliances 1 }
-	
+        
 ciscoGsccpMIBComplianceRev1 MODULE-COMPLIANCE
         STATUS deprecated -- replaced by ciscoGsccpMIBComplianceRev2
         DESCRIPTION
@@ -3193,7 +3539,7 @@ ciscoGsccpMIBComplianceRev2 MODULE-COMPLIANCE
         ::= { ciscoGsccpMIBCompliances 3 }
 
 ciscoGsccpMIBComplianceRev3 MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated -- replaced by ciscoGsccpMIBComplianceRev4
         DESCRIPTION
                 "The compliance statement for entities which implement
                  the CISCO-ITP-GSCCP-MIB.my MIB"
@@ -3398,6 +3744,428 @@ ciscoGsccpMIBComplianceRev3 MODULE-COMPLIANCE
 
         ::= { ciscoGsccpMIBCompliances 4 }
 
+ciscoGsccpMIBComplianceRev4 MODULE-COMPLIANCE
+        STATUS deprecated -- replaced by ciscoGsccpMIBComplianceRev5
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                 the CISCO-ITP-GSCCP-MIB.my MIB"
+        MODULE -- this module
+                MANDATORY-GROUPS {
+                        ciscoGsccpGlobalEntryGroupRev1,
+                        ciscoGsccpGttConPcGroup,
+                        ciscoGsccpGttMapGroup,
+                        ciscoGsccpGttSelGroup,
+                        ciscoGsccpGttPrefGroupRev1,
+                        ciscoGsccpNotificationsGroup,
+                        ciscoGsccpInstTableEntryGroupRev1,
+                        ciscoGsccpGttGtaGroupRev2, 
+                        ciscoGsccpGttAppGroupRev3,
+                        ciscoGsccpNotificationsGroupSup1,
+                        ciscoGsccpGttErrorsGroup
+                }
+                
+--       *** Scalars objects ***************************************
+         OBJECT           cgsccpGttTranslateSample
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Write access is not required."
+         
+         OBJECT           cgsccpGttTranslatePeriod
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Write access is not required."
+        
+--       *** Instance          *************************************
+         OBJECT           cgsccpInstRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** Application Group *************************************
+         OBJECT           cgsccpGttAppGr2Mult
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Type
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Cost
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Weight
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Pc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Ssn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Ri
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2AsName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2NewSsn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+
+         OBJECT           cgsccpGttAppGr2Network
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2RowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** SCCP - GTT Mated Application Table                        
+         OBJECT           cgsccpGttMapType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapMultInd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapBackupPc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapBackupSsn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapConPcList
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapReRouteOnCong
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapAdjacent
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** Selector table *************************************
+         OBJECT           cgsccpGttSelName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelQOS
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelPrePrefConv
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelPostPrefConv
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+                
+         OBJECT           cgsccpGttSelRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** Global Title Addresss *****************************
+         OBJECT           cgsccpGttGtaSelName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResPc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResMap
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResAppGroup
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaTTorSSN
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaTTorSSNvalue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaRoutingInd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaQOS
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaAsName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** Prefix conversion  ********************************
+         OBJECT           cgsccpGttPref2OutAddr
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2TblNAI
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2TblNP
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttPref2ItemNAI
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2ItemNP
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttPref2RowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+        ::= { ciscoGsccpMIBCompliances 5 }
+        
+ciscoGsccpMIBComplianceRev5 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                 the CISCO-ITP-GSCCP-MIB.my MIB"
+        MODULE -- this module
+                MANDATORY-GROUPS {
+                        ciscoGsccpGlobalEntryGroupRev1,
+                        ciscoGsccpGttConPcGroup,
+                        ciscoGsccpGttMapGroup,
+                        ciscoGsccpGttSelGroup,
+                        ciscoGsccpGttPrefGroupRev1,
+                        ciscoGsccpNotificationsGroup,
+                        ciscoGsccpInstTableEntryGroupRev1,
+                        ciscoGsccpGttGtaGroupRev2, 
+                        ciscoGsccpGttAppGroupRev3,
+                        ciscoGsccpNotificationsGroupSup1,
+                        ciscoGsccpGttErrorsGroup,
+                        ciscoGsccpGttPrefGroupSup1
+                }
+                
+--       *** Scalars objects ***************************************
+         OBJECT           cgsccpGttTranslateSample
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Write access is not required."
+         
+         OBJECT           cgsccpGttTranslatePeriod
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Write access is not required."
+        
+--       *** Instance          *************************************
+         OBJECT           cgsccpInstRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** Application Group *************************************
+         OBJECT           cgsccpGttAppGr2Mult
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Type
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Cost
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Weight
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Pc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Ssn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2Ri
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2AsName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2NewSsn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+
+         OBJECT           cgsccpGttAppGr2Network
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+        
+         OBJECT           cgsccpGttAppGr2RowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** SCCP - GTT Mated Application Table                        
+         OBJECT           cgsccpGttMapType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapMultInd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapBackupPc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapBackupSsn
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapConPcList
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapReRouteOnCong
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapAdjacent
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttMapRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** Selector table *************************************
+         OBJECT           cgsccpGttSelName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelQOS
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelPrePrefConv
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttSelPostPrefConv
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+                
+         OBJECT           cgsccpGttSelRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+--       *** Global Title Addresss *****************************
+         OBJECT           cgsccpGttGtaSelName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResPc
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResMap
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaResAppGroup
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaTTorSSN
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaTTorSSNvalue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaRoutingInd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaQOS
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaAsName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttGtaRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** Prefix conversion  ********************************
+         OBJECT           cgsccpGttPref2OutAddr
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2TblNAI
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2TblNP
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttPref2ItemNAI
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2ItemNP
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgsccpGttPref2RowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+         OBJECT           cgsccpGttPref2EncodingScheme
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+
+        ::= { ciscoGsccpMIBCompliances 6 }
+        
+
 -- Units of Conformance
 ciscoGsccpGlobalEntryGroup OBJECT-GROUP
         OBJECTS {
@@ -3581,7 +4349,7 @@ ciscoGsccpNotificationsGroup NOTIFICATION-GROUP
           DESCRIPTION
                   "SCCP notification objects."
         ::= { ciscoGsccpMIBGroups 9 }
-	
+        
 ciscoGsccpGttPrefGroupRev1 OBJECT-GROUP
         OBJECTS {
                 cgsccpGttPref2OutAddr,
@@ -3721,4 +4489,46 @@ ciscoGsccpGttAppGroupRev3 OBJECT-GROUP
         DESCRIPTION
                 "SCCP GTT Application Group objects."
         ::= { ciscoGsccpMIBGroups 15 }
+
+ciscoGsccpNotificationsGroupSup1 NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                        ciscoGsccpGttErrors
+        }                      
+        STATUS current
+        DESCRIPTION
+               "SCCP Error notification objects."
+        ::= { ciscoGsccpMIBGroups 16 }
+        
+
+ciscoGsccpGttErrorsGroup OBJECT-GROUP
+        OBJECTS { cgsccpGttErrorPeriod,
+                  cgsccpGttErrorRecoveryCount,
+                  cgsccpInstErrorIndicator,
+                  cgsccpGttTransErrorsNotifEnabled,
+                  cgsccpGttErrorsSelectorNotFound,
+                  cgsccpGttErrorsIncorrectFormat,
+                  cgsccpGttErrorsGtaNotFound,
+                  cgsccpGttErrorsHopViolation,
+                  cgsccpGttErrorsMapNotFound,
+                  cgsccpGttErrorsUnequipedSS,
+                  cgsccpGttErrorsSccpUnavailable,
+                  cgsccpGttErrorsDpcUnavailable,
+                  cgsccpGttErrorsSsUnavailable,
+                  cgsccpGttErrorsDpcCongested,
+                  cgsccpGttErrorsSsCongested,
+                  cgsccpGttErrorsRouteFailure,
+                  cgsccpGttErrorsSccpUnqualified
+        }
+        STATUS current
+        DESCRIPTION
+                "SCCP GTT Application Group objects."
+        ::= { ciscoGsccpMIBGroups 17 }
+        
+ciscoGsccpGttPrefGroupSup1 OBJECT-GROUP
+        OBJECTS { cgsccpGttPref2EncodingScheme
+                }
+        STATUS current
+        DESCRIPTION
+                "SCCP GTT additional prefix conversion objects."
+        ::= { ciscoGsccpMIBGroups 18 }
 END

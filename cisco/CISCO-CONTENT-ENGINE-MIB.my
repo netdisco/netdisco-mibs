@@ -1,7 +1,7 @@
 -- ***************************************************************** 
 -- Cisco Content Engine
 --
--- Copyright (c) 2000, 2002 by Cisco Systems, Inc.
+-- Copyright (c) 2000, 2002, 2003, 2004 by Cisco Systems, Inc.
 -- All rights reserved.
 -- ***************************************************************** 
 
@@ -12,15 +12,15 @@ IMPORTS
     MODULE-IDENTITY, 
     OBJECT-TYPE, 
     NOTIFICATION-TYPE,
-    Counter32,
-    Counter64, Gauge32                  FROM SNMPv2-SMI
+    Counter32, Counter64,
+    Gauge32, Integer32, Unsigned32      FROM SNMPv2-SMI
     MODULE-COMPLIANCE, OBJECT-GROUP,
     NOTIFICATION-GROUP                  FROM SNMPv2-CONF
-    Unsigned32                          FROM CISCO-TC
+    TEXTUAL-CONVENTION,TimeStamp        FROM SNMPv2-TC
     ciscoMgmt                           FROM CISCO-SMI;
 
 ciscoContentEngineMIB MODULE-IDENTITY
-    LAST-UPDATED "200205200000Z"
+    LAST-UPDATED "200404210000Z"
     ORGANIZATION "Cisco Systems, Inc."
     CONTACT-INFO
         "Cisco Systems Customer Service
@@ -32,6 +32,17 @@ ciscoContentEngineMIB MODULE-IDENTITY
     DESCRIPTION
         "The MIB module for the Cisco Content Engine from
          Cisco Systems, Inc."
+    REVISION     "200404210000Z"
+    DESCRIPTION
+        "Added cceWmtReqGroupRev1 and cceWmtHCGroupRev1,
+         deprecated cceWmtReqGroup and cceWmtHCGroup, 
+         the new groups are introduced to support WMT 9.0."
+    REVISION     "200402100000Z"
+    DESCRIPTION
+        "(1) Added all alarm related objects.
+         (2) Deprecated ciscoContentEngineDataDiskFailed object
+             and replaced it by ciscoContentEngineDiskFailed.
+         (3) Added cceFailedDiskName objects."
     REVISION     "200205200000Z"
     DESCRIPTION
         "Added cceWmtGroup, cceCseGroup, and cceRpGroup groups."
@@ -59,6 +70,15 @@ cceCseGroup
 cceRpGroup
     OBJECT IDENTIFIER ::= { ciscoContentEngineMIBObjects 4 }
 
+-- Notification Info group
+cceNotificationInfo
+    OBJECT IDENTIFIER ::= { ciscoContentEngineMIBObjects 5 }
+
+-- Cisco Content Engine Alarm group
+cceAlarmGroup
+    OBJECT IDENTIFIER ::= { ciscoContentEngineMIBObjects 6 }
+
+
 -- Major categories for HTTP proxy group
 cceHttpRequests         OBJECT IDENTIFIER  ::= { cceHttpGroup 1 }
 cceHttpPerf             OBJECT IDENTIFIER  ::= { cceHttpGroup 2 }
@@ -76,6 +96,11 @@ cceCsePerf               OBJECT IDENTIFIER  ::= { cceCseGroup 3 }
 -- Major categories for Real proxy  group
 cceRpRequests           OBJECT IDENTIFIER  ::= { cceRpGroup 1 }
 cceRpHCRequests         OBJECT IDENTIFIER  ::= { cceRpGroup 2 }
+
+
+-- Major categories for Alarm  group
+cceAlarmHistory           OBJECT IDENTIFIER  ::= { cceAlarmGroup 1 }
+cceAlarmMonitoring        OBJECT IDENTIFIER  ::= { cceAlarmGroup 2 }
 
 -- The following section describes the objects that are present
 -- in the requests category of the HTTP proxy group
@@ -637,6 +662,46 @@ cceWmtTotalMulticastBytes  OBJECT-TYPE
          WMT server."
     ::= { cceWmtRequests 17 }
 
+cceWmtTotalRtspuRequests OBJECT-TYPE
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of end-user
+         RTSPU (Microsoft Media Service over UDP)
+         requests the WMT proxy/server has received."
+    ::= { cceWmtRequests 18 }
+
+cceWmtTotalRtspuBytes  OBJECT-TYPE
+    SYNTAX          Counter32
+    UNITS           "Bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of bytes served through RTSPU from WMT
+         proxy/server."
+    ::= { cceWmtRequests 19 }
+
+cceWmtTotalRtsptRequests OBJECT-TYPE
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of end-user
+         RTSPT (Microsoft Media Service over TCP)
+         requests the WMT proxy/server has received."
+    ::= { cceWmtRequests 20 }
+
+cceWmtTotalRtsptBytes  OBJECT-TYPE
+    SYNTAX          Counter32
+    UNITS           "Bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of bytes served through RTSPT from WMT
+         proxy/server."
+    ::= { cceWmtRequests 21 }
+
 -- The following objects are the "High Capacity" versions
 -- of the objects listed above in the WMT group (cceWmtRequests).
 -- These objects are all 64-bit versions of the 32-bit
@@ -714,6 +779,26 @@ cceWmtHCTotalMulticastBytes OBJECT-TYPE
          "Total number of bytes served through multicast 
           from WMT server."
     ::= { cceWmtHCRequests 7 }
+
+cceWmtHCTotalRtspuBytes  OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "Bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of bytes served through RTSPU from WMT
+          proxy/server."
+    ::= { cceWmtHCRequests 8 }
+
+cceWmtHCTotalRtsptBytes  OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "Bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+         "Total number of bytes served through RTSPT from WMT
+          proxy/server."
+    ::= { cceWmtHCRequests 9 }
 
 -- The following section describes the objects that are present
 -- in the performance category of the WMT group
@@ -970,6 +1055,203 @@ cceRpHCTotalOutgoingBytes OBJECT-TYPE
          "Total bytes sent by the Real Proxy to end-users."
     ::= { cceRpHCRequests 7 }
 
+--
+-- Notification related info
+-- MIB Objects used by notifications
+--
+cceFailedDiskName OBJECT-TYPE
+    SYNTAX          OCTET STRING (SIZE (0..32))
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "The Name of the disk on which disk-failure event occurred."
+  ::= { cceNotificationInfo 1 }
+
+--
+-- The following section describes the objects that are present
+-- in the cceAlarmGroup. 
+-- 
+AlarmSeverity ::= TEXTUAL-CONVENTION
+    STATUS current
+    DESCRIPTION
+        "Each alarm type defined by a vendor type employed by the
+        system has an associated severity.  Bellcore TR-NWT-000474
+        defines these severities as follows:
+
+        'critical'  An alarm used to indicate a severe, service-
+                    affecting condition has occurred and that immediate
+                    corrective action is imperative, regardless of the
+                    time of day or day of the week.
+
+        'major'     An alarm used for hardware or software conditions
+                    that indicate a serious disruption of service or 
+                    the malfunctioning or failure of important 
+                    hardware.
+
+                    These troubles require the immediate attention and
+                    response of a technician to restore or maintain
+                    system capability.  The urgency is less than in
+                    critical situations because of a lesser immediate
+                    or impending effect on service or system
+                    performance.
+
+        'minor'     An alarm used for troubles that do not have a
+                    serious effect on service to customers or for
+                    troubles in hardware that are not essential to
+                    the operation of the system."
+
+    SYNTAX INTEGER {
+        critical(1),
+        major(2),
+        minor(3)
+    }
+
+cceAlarmCriticalCount OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of this object specifies the number of alarms
+        currently raised with a severity of 'critical'."
+    ::= { cceAlarmMonitoring 1 }
+
+cceAlarmMajorCount OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of this object specifies the number of alarms
+        currently raised with a severity of 'major'."
+    ::= { cceAlarmMonitoring 2 }
+
+cceAlarmMinorCount OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of this object specifies the number of alarms
+        currently raised with a severity of 'minor'."
+    ::= { cceAlarmMonitoring 3 }
+
+cceAlarmHistTableSize OBJECT-TYPE
+    SYNTAX      INTEGER (0..500)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the number of entries that the 
+        cceAlarmHistTable can contain.  When a alarm gets
+        generated, and the capacity of the cceAlarmHistTable 
+        has reached the value specified by this object, then the 
+        agent deletes the oldest entity in order to accommodate 
+        the new entry. A value of '0' prevents
+        any history from being retained.  "
+    ::= { cceAlarmHistory 1 }
+--
+-- Alarm Table
+--
+cceAlarmHistTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CceAlarmHistEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains a history of cceAlarmIndicate and
+        cceAlarmClear traps generated by the agent."
+    ::= { cceAlarmHistory 2 }
+
+cceAlarmHistEntry OBJECT-TYPE
+    SYNTAX      CceAlarmHistEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The information conveyed by a cceAlarmIndicate or
+        cceAlarmClear trap."
+    INDEX       { cceAlarmHistIndex }
+    ::= { cceAlarmHistTable 1 }
+
+CceAlarmHistEntry ::= SEQUENCE {
+    cceAlarmHistIndex            Unsigned32,
+    cceAlarmHistId               Unsigned32,
+    cceAlarmHistModuleId         Unsigned32,
+    cceAlarmHistType             INTEGER,
+    cceAlarmHistCategory         Integer32,
+    cceAlarmHistSeverity         AlarmSeverity,
+    cceAlarmHistInfo             OCTET STRING,  
+    cceAlarmHistTimeStamp        TimeStamp
+}
+cceAlarmHistIndex OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An integer value uniquely identifying the entry in the table.
+        The value of this object starts at '1' and monotonically
+        increases for each alarm condition transition monitored by the
+        agent.  If the value of this object is '4294967295', the agent
+        will reset it to '1' upon monitoring the next alarm condition
+        transition."
+    ::= { cceAlarmHistEntry 1 }
+
+cceAlarmHistId OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the type of alarm generated. Each error
+         condition is mapped to an unique alarm-id."
+    ::= { cceAlarmHistEntry 2 }
+
+cceAlarmHistModuleId OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies a ACNS Module-Id which generated
+         the alarm."
+    ::= { cceAlarmHistEntry 3 }
+
+cceAlarmHistType OBJECT-TYPE
+    SYNTAX      INTEGER { raised(1), cleared(2) }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether the agent created the entry
+         as the result of an alarm being Raised or cleared."
+    ::= { cceAlarmHistEntry 4 }
+
+cceAlarmHistCategory OBJECT-TYPE
+    SYNTAX      Integer32 (1..256)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the probable cause that caused the 
+         alarm to be generated."
+    ::= { cceAlarmHistEntry 5 }
+ 
+cceAlarmHistSeverity OBJECT-TYPE
+    SYNTAX      AlarmSeverity
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the severity of the alarm generated."
+    ::= { cceAlarmHistEntry 6 }
+
+cceAlarmHistInfo OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies a human-readable message describing
+         the alarm."
+  ::= { cceAlarmHistEntry 7 }
+
+cceAlarmHistTimeStamp OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the value of the sysUpTime object at
+        the time the alarm was generated."
+    ::= { cceAlarmHistEntry 8 }
 
 -- Notifications
 ciscoContentEngineMIBNotificationPrefix
@@ -1003,7 +1285,7 @@ ciscoContentEngineWriteTransFailed  NOTIFICATION-TYPE
     ::= { ciscoContentEngineMIBNotifications 3 } 
 
 ciscoContentEngineDataDiskFailed    NOTIFICATION-TYPE
-    STATUS    current
+    STATUS    deprecated
     DESCRIPTION
         "A Content Engine data drive failed.  Additional
          information about the error is logged to syslog." 
@@ -1019,6 +1301,101 @@ ciscoContentEngineOverloadBypass   NOTIFICATION-TYPE
          to the Origin Server until the utilization falls
          below a low watermark."
     ::= { ciscoContentEngineMIBNotifications 5 } 
+
+ciscoContentEngineDiskFailed    NOTIFICATION-TYPE
+    OBJECTS {
+       cceFailedDiskName
+    }
+    STATUS    current
+    DESCRIPTION
+        "A Content Engine data drive failed.  This object supersedes
+          ciscoContentEngineDataDiskFailed. Additional
+         information about the error is logged to syslog." 
+    ::= { ciscoContentEngineMIBNotifications 6 } 
+
+cceAlarmCriticalRaised NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module raises
+         a Critical alarm."
+    ::= { ciscoContentEngineMIBNotifications 7 } 
+
+cceAlarmCriticalCleared NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module clears 
+         a Critical alarm."
+    ::= { ciscoContentEngineMIBNotifications 8 } 
+
+cceAlarmMajorRaised NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module raises 
+         a Major alarm."
+    ::= { ciscoContentEngineMIBNotifications 9 } 
+
+cceAlarmMajorCleared NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module clears 
+         a Major alarm."
+    ::= { ciscoContentEngineMIBNotifications 10 } 
+
+cceAlarmMinorRaised NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module raises 
+         a Minor alarm."
+    ::= { ciscoContentEngineMIBNotifications 11 } 
+
+cceAlarmMinorCleared NOTIFICATION-TYPE
+    OBJECTS    {
+       cceAlarmHistId,  
+       cceAlarmHistModuleId,  
+       cceAlarmHistCategory,
+       cceAlarmHistInfo,
+       cceAlarmHistTimeStamp
+    }
+    STATUS    current
+    DESCRIPTION
+        "The Agent generates this trap when any module clears 
+         a Minor alarm."
+    ::= { ciscoContentEngineMIBNotifications 12 } 
 
 ciscoContentEngineMIBConformance
     OBJECT IDENTIFIER ::= { ciscoContentEngineMIB 3 }
@@ -1044,7 +1421,8 @@ ciscoContentEngineMIBCompliance    MODULE-COMPLIANCE
     ::= { ciscoContentEngineMIBCompliances 1 }
 
 ciscoContentEngineMIBComplianceRev1    MODULE-COMPLIANCE
-    STATUS  current
+    STATUS  deprecated -- superceeded by
+                       -- ciscoContentEngineMIBComplianceRev2
     DESCRIPTION
         "The compliance statement for Cisco Systems entities which
          implement the Content Engine applications."
@@ -1057,6 +1435,55 @@ ciscoContentEngineMIBComplianceRev1    MODULE-COMPLIANCE
             cceCsePerfGroup
     }
     ::= { ciscoContentEngineMIBCompliances 2 }
+
+ciscoContentEngineMIBComplianceRev2    MODULE-COMPLIANCE
+    STATUS  deprecated -- superceeded by
+                       -- ciscoContentEngineMIBComplianceRev3
+    DESCRIPTION
+        "The compliance statement for Cisco Systems entities which
+         implement the Content Engine applications."
+    MODULE  -- this module
+    MANDATORY-GROUPS {
+            cceHttpReqGroup,
+            cceHttpPerfGroup,
+            cceCseReqGroup,
+            cceCseHCGroup,
+            cceCsePerfGroup,
+            cceWmtReqGroup,
+            cceWmtPerfGroup,
+            cceWmtHCGroup,
+            cceRpReqGroup,
+            cceAlarmInfoGroup,
+            cceHttpHCReqGroup,
+            cceRpHCReqGroup,
+            cceNotificationGroupRev1,
+            cceNotificationInfoGroup
+    }
+    ::= { ciscoContentEngineMIBCompliances 3 }
+
+ciscoContentEngineMIBComplianceRev3    MODULE-COMPLIANCE
+    STATUS  current 
+    DESCRIPTION
+        "The compliance statement for Cisco Systems entities which
+         implement the Content Engine applications."
+    MODULE  -- this module
+    MANDATORY-GROUPS {
+            cceHttpReqGroup,
+            cceHttpPerfGroup,
+            cceCseReqGroup,
+            cceCseHCGroup,
+            cceCsePerfGroup,
+            cceWmtReqGroupRev1,
+            cceWmtPerfGroup,
+            cceWmtHCGroupRev1,
+            cceRpReqGroup,
+            cceAlarmInfoGroup,
+            cceHttpHCReqGroup,
+            cceRpHCReqGroup,
+            cceNotificationGroupRev1,
+            cceNotificationInfoGroup
+    }
+    ::= { ciscoContentEngineMIBCompliances 4 }
 
 -- Units of Conformance
 cceHttpReqGroup  OBJECT-GROUP
@@ -1083,7 +1510,7 @@ cceHttpReqGroup  OBJECT-GROUP
          Counter32 objects."
     ::= { ciscoContentEngineMIBGroups 1 }
 
--- This group of high capacity counters is not mandatory.
+-- This group of high capacity counters is mandatory.
 cceHttpHCReqGroup  OBJECT-GROUP
     OBJECTS {
         cceHttpHCRequestsTotal,
@@ -1132,9 +1559,9 @@ cceNotificationGroup NOTIFICATION-GROUP
         ciscoContentEngineDataDiskFailed,
         ciscoContentEngineOverloadBypass
      }
-     STATUS current
+     STATUS deprecated -- replaced by cceNotificationGroupRev1
      DESCRIPTION
-        "the collection of notifications used for
+        "A collection of notifications used for
         monitoring errors."
      ::= { ciscoContentEngineMIBGroups 4 } 
 
@@ -1158,7 +1585,7 @@ cceWmtReqGroup OBJECT-GROUP
         cceWmtTotalHttpBytes,
         cceWmtTotalMulticastBytes
     }
-    STATUS current
+    STATUS deprecated -- replaced by cceWmtReqGroupRev1
     DESCRIPTION
         "A collection of objects providing request statistics 
          of WMT proxy and server."
@@ -1174,7 +1601,7 @@ cceWmtHCGroup OBJECT-GROUP
         cceWmtHCTotalHttpBytes,
         cceWmtHCTotalMulticastBytes
     }
-    STATUS current
+    STATUS deprecated -- replaced by cceWmtHCGroupRev1
     DESCRIPTION
         "A collection of 64-bit WMT counters"
     ::= { ciscoContentEngineMIBGroups 6 }
@@ -1188,7 +1615,7 @@ cceWmtPerfGroup OBJECT-GROUP
     }
     STATUS current
     DESCRIPTION
-        "A collection of object providing performance statistics
+        "A collection of objects providing performance statistics
          of WMT proxy and server."
     ::= { ciscoContentEngineMIBGroups 7 }
 
@@ -1253,7 +1680,104 @@ cceRpHCReqGroup OBJECT-GROUP
     }
     STATUS current
     DESCRIPTION
-        "A collection of  64-bit Real Proxy counters"
+        "A collection of 64-bit Real Proxy counters"
     ::= { ciscoContentEngineMIBGroups 12 }
+
+cceNotificationGroupRev1 NOTIFICATION-GROUP
+     NOTIFICATIONS { 
+        ciscoContentEngineReadDiskError,
+        ciscoContentEngineWriteDiskError,
+        ciscoContentEngineWriteTransFailed,
+        ciscoContentEngineOverloadBypass,
+        ciscoContentEngineDiskFailed,
+        cceAlarmCriticalRaised,
+        cceAlarmCriticalCleared,
+        cceAlarmMajorRaised,
+        cceAlarmMajorCleared,
+        cceAlarmMinorRaised,
+        cceAlarmMinorCleared
+     }
+     STATUS current
+     DESCRIPTION
+        "A collection of notifications used for
+        monitoring errors."
+     ::= { ciscoContentEngineMIBGroups 13 } 
+
+cceAlarmInfoGroup OBJECT-GROUP
+    OBJECTS {
+        cceAlarmCriticalCount,
+        cceAlarmMajorCount,
+        cceAlarmMinorCount,
+        cceAlarmHistTableSize,
+        cceAlarmHistId,
+        cceAlarmHistModuleId,
+        cceAlarmHistSeverity,
+        cceAlarmHistType,
+        cceAlarmHistCategory,
+        cceAlarmHistInfo,
+        cceAlarmHistTimeStamp
+     }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects which provides info about 
+         Cisco Content Engine alarms."
+    ::= { ciscoContentEngineMIBGroups 14 }
+
+cceNotificationInfoGroup OBJECT-GROUP
+    OBJECTS {
+        cceFailedDiskName
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects which provides info 
+         about notifications."
+    ::= { ciscoContentEngineMIBGroups 15 }
+
+cceWmtReqGroupRev1 OBJECT-GROUP
+    OBJECTS {
+        cceWmtTotalRequests,
+        cceWmtTotalClientErrors,
+        cceWmtTotalServerErrors,
+        cceWmtBlockedRequests,
+        cceWmtRequestHits,
+        cceWmtRequestMisses,
+        cceWmtRequestHitsBytesServed,
+        cceWmtRequestMissesBytesServed,
+        cceWmtTotalLiveRequests,
+        cceWmtLiveRequestBytes,
+        cceWmtTotalMmsuRequests,
+        cceWmtTotalMmsuBytes,
+        cceWmtTotalMmstRequests,
+        cceWmtTotalMmstBytes,
+        cceWmtTotalHttpRequests,
+        cceWmtTotalHttpBytes,
+        cceWmtTotalRtspuRequests,
+        cceWmtTotalRtspuBytes,
+        cceWmtTotalRtsptRequests,
+        cceWmtTotalRtsptBytes,
+        cceWmtTotalMulticastBytes
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing request statistics 
+         of WMT proxy and server."
+   ::= { ciscoContentEngineMIBGroups 16 }
+
+cceWmtHCGroupRev1 OBJECT-GROUP
+    OBJECTS {
+        cceWmtHCRequestHitsBytesServed,
+        cceWmtHCRequestMissesBytesServed,
+        cceWmtHCLiveRequestBytes,
+        cceWmtHCTotalMmsuBytes,
+        cceWmtHCTotalMmstBytes,
+        cceWmtHCTotalHttpBytes,
+        cceWmtHCTotalRtspuBytes,
+        cceWmtHCTotalRtsptBytes,
+        cceWmtHCTotalMulticastBytes
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of 64-bit WMT counters"
+    ::= { ciscoContentEngineMIBGroups 17 }
 
 END

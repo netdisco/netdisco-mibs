@@ -2,8 +2,9 @@
 -- CISCO-RADIUS-MIB.my: Radius Configuration Mib
 --
 -- October 2002, Vinay Gaonkar
+-- March   2004, Binh Le
 --
--- Copyright (c) 2002 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -14,15 +15,17 @@ IMPORTS
      MODULE-IDENTITY, OBJECT-TYPE, 
      Unsigned32                          FROM SNMPv2-SMI
      MODULE-COMPLIANCE, OBJECT-GROUP     FROM SNMPv2-CONF
-     RowStatus,  TEXTUAL-CONVENTION      FROM SNMPv2-TC
-     InetAddressType, InetAddress        FROM INET-ADDRESS-MIB	 
+     RowStatus,  TEXTUAL-CONVENTION,
+     TruthValue                          FROM SNMPv2-TC
+     InetAddressType, InetAddress        FROM INET-ADDRESS-MIB   
+     SnmpAdminString                     FROM SNMP-FRAMEWORK-MIB
      ciscoMgmt                           FROM CISCO-SMI
      TimeIntervalMin, TimeIntervalSec,        
      CiscoPort                           FROM CISCO-TC;
 
 
 ciscoRadiusMIB MODULE-IDENTITY
-        LAST-UPDATED "200211090000Z"
+        LAST-UPDATED "200403030000Z"
         ORGANIZATION "Cisco Systems Inc. "
         CONTACT-INFO
                 "     Cisco Systems
@@ -52,6 +55,16 @@ ciscoRadiusMIB MODULE-IDENTITY
                 enabling/disabling telnet and SSH (Secure Shell) 
                 authentication. Secure Shell is program which is used 
                 to log into another machine over a secured session."
+
+        REVISION   "200403030000Z"
+        DESCRIPTION
+                "Added support of 
+                    crRadiusFramedIpAddrIncluded,
+                    crRadiusVlanAssignmentEnabled,
+                    crVlanGroupTable.
+
+                 Added http(2) bit to crRadiusLoginAuthentication."
+
         REVISION   "200211090000Z"
         DESCRIPTION
                 "Removed the TC CiscoRadiusAuthKeyType.
@@ -60,6 +73,7 @@ ciscoRadiusMIB MODULE-IDENTITY
                 crRadiusServerKeyType.
                 Changed the SYNTAX of objects crRadiusAuthKey and 
                 crRadiusServerKey."
+
         REVISION   "200210080000Z"
         DESCRIPTION
                 "Initial version of this MIB module."
@@ -71,6 +85,10 @@ crRadiusGenericConfig    OBJECT IDENTIFIER
                                      ::= { ciscoRadiusMIBObjects 1 }    
 crRadiusServerConfig     OBJECT IDENTIFIER 
                                      ::= { ciscoRadiusMIBObjects 2 }
+crRadiusAttributesConfig OBJECT IDENTIFIER
+                                     ::= { ciscoRadiusMIBObjects 3 }
+crRadiusVlanConfigGroup  OBJECT IDENTIFIER
+                                     ::= { ciscoRadiusMIBObjects 4 }
 
 -- Textual Conventions
 CiscoRadiusAuthKey ::= TEXTUAL-CONVENTION
@@ -91,7 +109,7 @@ CiscoRadiusAuthKey ::= TEXTUAL-CONVENTION
 --
 
 crRadiusLoginAuthentication OBJECT-TYPE
-    SYNTAX        BITS { telnet (0), console (1) }
+    SYNTAX        BITS { telnet (0), console (1), http (2) }
     MAX-ACCESS    read-write
     STATUS        current
     DESCRIPTION   
@@ -101,6 +119,10 @@ crRadiusLoginAuthentication OBJECT-TYPE
 
            The login authentication using RADIUS feature is enabled for
            console sessions if the 'console (1) ' bit is set, and 
+           disabled if this bit is reset.
+
+           The login authentication using RADIUS feature is enabled for
+           remote web sessions if the 'http (2) ' bit is set, and 
            disabled if this bit is reset."
     DEFVAL { {} }
     ::= { crRadiusGenericConfig 1 }
@@ -185,6 +207,15 @@ crRadiusAccountingMethod  OBJECT-TYPE
             accounting."
     ::= { crRadiusGenericConfig 7 }
 
+crRadiusFramedIpAddrIncluded OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+           "Specifies if Access-Request packets will include
+            Framed-IP-Address attributes."
+    ::= { crRadiusAttributesConfig 1 }
+
 crRadiusServerTableMaxEntries OBJECT-TYPE
     SYNTAX        Unsigned32 (0..65536)
     MAX-ACCESS    read-only
@@ -199,7 +230,7 @@ crRadiusServerTableMaxEntries OBJECT-TYPE
 --
                           
 crRadiusServerTable OBJECT-TYPE
-    SYNTAX        SEQUENCE OF RadiusServerEntry
+    SYNTAX        SEQUENCE OF CrRadiusServerEntry
     MAX-ACCESS    not-accessible
     STATUS        current
     DESCRIPTION   
@@ -207,7 +238,7 @@ crRadiusServerTable OBJECT-TYPE
     ::= { crRadiusServerConfig 2 }
                                  
 crRadiusServerEntry OBJECT-TYPE
-    SYNTAX        RadiusServerEntry
+    SYNTAX        CrRadiusServerEntry
     MAX-ACCESS    not-accessible
     STATUS        current
     DESCRIPTION   
@@ -236,7 +267,7 @@ crRadiusServerEntry OBJECT-TYPE
     INDEX  { crRadiusServerIndex}
     ::= { crRadiusServerTable 1 }
 
-RadiusServerEntry ::=
+CrRadiusServerEntry ::=
     SEQUENCE {                             
           crRadiusServerIndex        Unsigned32,
           crRadiusServerAddrType     InetAddressType,
@@ -363,6 +394,108 @@ crRadiusServerRowStatus OBJECT-TYPE
            "Status of this row."
     ::= { crRadiusServerEntry 9 }
 
+crRadiusVlanAssignmentEnabled OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "Specifies if VLANs will be assigned by RADIUS server 
+         via the tunnel attribute during the authentication."
+    ::= { crRadiusVlanConfigGroup 1 }
+
+
+crVlanGroupTable OBJECT-TYPE
+    SYNTAX        SEQUENCE OF CrVlanGroupEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "A table containing VLAN Group Mapping information for the
+         purpose of distributing users across multiple VLANs which
+         have the same group name."
+    ::= { crRadiusVlanConfigGroup 2 }
+
+crVlanGroupEntry OBJECT-TYPE
+    SYNTAX        CrVlanGroupEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "An entry containing an VLAN Group Mapping information
+         applicable to a particular VLAN. Entries in this table can
+         be created or deleted using cpaeVlanGroupRowStatus object."
+    INDEX { crVlanGroupName }
+    ::= { crVlanGroupTable 1 }
+
+CrVlanGroupEntry ::= SEQUENCE {
+    crVlanGroupName             SnmpAdminString,
+    crVlanGroupVlansLow         OCTET STRING,
+    crVlanGroupVlansHigh        OCTET STRING,
+    crVlanGroupRowStatus        RowStatus
+}
+
+
+crVlanGroupName OBJECT-TYPE
+    SYNTAX        SnmpAdminString 
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "Specifies the name of the VLAN group."
+    ::= { crVlanGroupEntry 1 }
+
+crVlanGroupVlansLow OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for VLANs
+         with VlanIndex value of 0 to 2047. 
+
+         Each octet within this value specifies a set of eight
+         VLANs, with the first octet specifying VLANs 0 through
+         7, the second octet specifying VLANs 8 through 15, etc.
+         Within each octet, the most significant bit represents
+         the lowest numbered VLAN, and the least significant bit
+         represents the highest numbered VLAN. Thus, each VLAN
+         of the device is represented by a single bit within
+         the value of this object. If that bit has a value of
+         '1' then that VLAN is included in the group; the VLAN
+         is not mapped to the group if its bit has a value of
+         '0'."
+    ::= { crVlanGroupEntry 2 }
+
+crVlanGroupVlansHigh OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for VLANs
+         with VlanIndex value of 2048 to 4095. 
+
+         Each octet within this value specifies a set of eight
+         VLANs, with the first octet specifying VLANs 2048 through
+         2055, the second octet specifying VLANs 2056 through 2063,
+         etc. Within each octet, the most significant bit represents
+         the lowest numbered VLAN, and the least significant bit
+         represents the highest numbered VLAN. Thus, each VLAN
+         of the device is represented by a single bit within
+         the value of this object. If that bit has a value of
+         '1' then that VLAN is included in the group; the VLAN
+         is not mapped to the group if its bit has a value of
+         '0'."
+    ::= { crVlanGroupEntry 3 }
+
+crVlanGroupRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION
+        "This object is used to manage the creation and deletion
+         of rows in this table.
+
+         The only way to create an entry is by setting the value
+         createAndGo(4), and the only way to delete an entry is by
+         setting the value destroy(6) to this object."
+    ::= { crVlanGroupEntry 4 }
+
 --
 -- Conformance
 --
@@ -372,7 +505,7 @@ ciscoRadiusMIBGroups
        OBJECT IDENTIFIER ::= { ciscoRadiusMIBConformance 2 }
 
 ciscoRadiusMIBCompliance MODULE-COMPLIANCE
-    STATUS   current
+    STATUS   current   
     DESCRIPTION
            "The compliance statement for entities which implement the 
            CISCO-RADIUS-MIB."
@@ -414,7 +547,6 @@ ciscoRadiusMIBCompliance MODULE-COMPLIANCE
 
     ::= { ciscoRadiusMIBCompliances 1 }
 
-
 -- Units of Conformance
 
 crmConfigurationGroup  OBJECT-GROUP
@@ -425,18 +557,40 @@ crmConfigurationGroup  OBJECT-GROUP
                crRadiusDeadtime,
                crRadiusAccountingLogMaxSize,
                crRadiusAccountingMethod,
-               crRadiusServerTableMaxEntries, 
-               crRadiusServerAddrType, 
-               crRadiusServerAddr, 
-               crRadiusServerAuthPort, 
+               crRadiusServerTableMaxEntries,
+               crRadiusServerAddrType,
+               crRadiusServerAddr,
+               crRadiusServerAuthPort,
                crRadiusServerAcctPort,
-               crRadiusServerKey, 
-               crRadiusServerType, 
-               crRadiusServerMode, 
-               crRadiusServerRowStatus 
+               crRadiusServerKey,
+               crRadiusServerType,
+               crRadiusServerMode,
+               crRadiusServerRowStatus
              }
     STATUS   current
     DESCRIPTION
            "A collection of objects for RADIUS configuration."
     ::= { ciscoRadiusMIBGroups 1 }
+
+crmAttributesGroup OBJECT-GROUP
+    OBJECTS { crRadiusFramedIpAddrIncluded }
+    STATUS  current
+    DESCRIPTION
+           "A collection of objects for RADIUS attributes
+            configuration."
+    ::= { ciscoRadiusMIBGroups 2 }
+
+crmVlanConfigGroup OBJECT-GROUP
+    OBJECTS { crRadiusVlanAssignmentEnabled,
+              crVlanGroupVlansLow,
+              crVlanGroupVlansHigh,
+              crVlanGroupRowStatus
+            }
+    STATUS  current
+    DESCRIPTION
+           "A collection of objects for RADIUS Vlans assignment
+            configuration."
+    ::= { ciscoRadiusMIBGroups 3 }
+
 END
+

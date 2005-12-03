@@ -1,9 +1,8 @@
--- *********************************************************************
--- CISCO-ISCSI-GW-MIB.my: iSCSI-FC Gateway Mib
+-- CISCO-ISCSI-GW-MIB.my: iSCSI-FC Gateway MIB
 --
 -- October 2002, Vinay Gaonkar
 --
--- Copyright (c) 2002,2003 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -12,7 +11,7 @@ CISCO-ISCSI-GW-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS        
      MODULE-IDENTITY, OBJECT-TYPE, 
-     Unsigned32                             FROM SNMPv2-SMI
+     Unsigned32, Counter64                  FROM SNMPv2-SMI 
      MODULE-COMPLIANCE, OBJECT-GROUP        FROM SNMPv2-CONF
      RowStatus, 
      TEXTUAL-CONVENTION,
@@ -31,7 +30,7 @@ IMPORTS
      FcList                                 FROM CISCO-ZS-MIB;
 
 ciscoIscsiGwMIB MODULE-IDENTITY
-        LAST-UPDATED "200312080000Z"
+        LAST-UPDATED "200504290000Z"
         ORGANIZATION "Cisco Systems Inc. "
         CONTACT-INFO
                 "     Cisco Systems
@@ -57,6 +56,33 @@ ciscoIscsiGwMIB MODULE-IDENTITY
                 or multiple iSCSI targets (one to one). Same applies to 
                 initiators also."
 
+        REVISION   "200504290000Z"
+        DESCRIPTION
+            "Added new table ciscsiConnectionStatsTable.
+             Added new group cigConnectionStatsGroup.
+             Added new objects to IscsiIfEntry -
+                 iscsiIfNumNormalConnections
+                 iscsiIfNumDiscovConnections
+                 iscsiIfTcpCWMEnable
+                 iscsiIfTcpCWMBurstSize
+                 iscsiIfTcpMaxJitter
+
+             Added new objects to Iscsi2FcNodeEntry -
+                iscsi2FcTargetUserName
+                iscsi2FcTargetPassword
+
+             Added new objects -
+                iscsiTargetUserName and
+                iscsiTargetPassword to ciScsiConfig, global
+                Scsi configuration."
+
+        REVISION   "200411160000Z"
+        DESCRIPTION
+            "Added new objects iscsiIfTcpRndTrpTimeEst.
+             Added new group cigIscsiIfGroupRev4.
+             Added new object iscsiIfTcpLocalTcpPort. 
+             Deprecated iscsiIfTcpLocalPort. 
+             Added a new compliance ciscoiScsiGwMIBCompliance4."
         REVISION   "200312080000Z"
         DESCRIPTION
             "Added new objects iscsiIfIntrIdentificationMode,
@@ -323,7 +349,9 @@ Iscsi2FcNodeEntry ::=
                 iscsi2FcNodeDiscovered        TruthValue,
                 iscsi2FcNodeRowStatus         RowStatus,
                 iscsi2FcNodeFcAddrAssignment  INTEGER,
-                iscsi2FcNodeAuthUser          SnmpAdminString
+                iscsi2FcNodeAuthUser          SnmpAdminString,
+                iscsi2FcTargetUserName        SnmpAdminString,
+                iscsi2FcTargetPassword        SnmpAdminString
         }
 
 iscsi2FcNodeIndex OBJECT-TYPE
@@ -566,10 +594,40 @@ iscsi2FcNodeAuthUser OBJECT-TYPE
         DESCRIPTION   
                "The name of the user which is to be sent with iSCSI 
                authentication to the target, if authentication is
-               enabled (iscsiIfAuthMethod other than 'none') interface
+               enabled (iscsiAuthMethod other than 'none') interface
                on which carries session between initiator and target."
         DEFVAL { ''H }
         ::= { iscsi2FcNodeEntry 14 }
+
+iscsi2FcTargetUserName  OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+               "The user name to be used during the login
+                authentication. This is optional. If no user
+                name and password (defined by iscsi2FcTargetPassword
+                ) is specified, then the global username and
+                password defined by iscsiTargetUserName and
+                iscsiTargetPassword (respectively) are used."
+        DEFVAL { ''H }
+        ::= { iscsi2FcNodeEntry 15 }
+
+iscsi2FcTargetPassword  OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+               "The password to be used during the login
+                authentication. This is optional. If no user
+                name (specified by iscsi2FcTargetUserName )and
+                password is specified, then the global username
+                and password defined by iscsiTargetUserName and
+                iscsiTargetPassword (respectively) is used.
+
+                When read, it returns zero length  string."
+        DEFVAL { ''H }
+        ::= { iscsi2FcNodeEntry 16 }
 
 
 -- fc2IscsiNodeTable
@@ -762,7 +820,7 @@ fc2IscsiNodeRevertToPrimaryPort OBJECT-TYPE
                to primary port the FC target if it comes back online.
 
                Every iSCSI target represent one or more port(s) on the
-               FC target (fc2ScsiPortFCAddrListIndex). Only one of
+               FC target (fc2IscsiPortFCAddrListIndex). Only one of
                the ports is the primary port. If the primary port goes
                down, the designated secondary port takes over. This
                objects indicates if the primary port has to be used
@@ -896,8 +954,8 @@ iscsiNodeNameListEntry OBJECT-TYPE
         STATUS        current
         DESCRIPTION   
                "An entry information about an iSCSI node name which is 
-               part of a list. Entries with same nodeNameListIndex form
-               a list."
+               part of a list. Entries with same iscsiNodeNameListIndex 
+               form a list."
         INDEX { iscsiNodeNameListIndex, iscsiNodeNameIndex }
         ::= { iscsiNodeNameListTable 1 }
 
@@ -961,7 +1019,7 @@ nodeAdvIntfListTable OBJECT-TYPE
                of nodeAdvIntfIfIndex.
 
                Also, the following object cannot be modified when 
-               'nodeAdvIntfRowStatus' is 'active' :
+               'nodeAdvIntfIfRowStatus' is 'active' :
                - nodeAdvIntfIfIndex
 
                To modify the above object, the entry must be deleted and
@@ -1194,7 +1252,15 @@ IscsiIfEntry ::=
           iscsiIfIntrProxyModeNodeFcAddr    FcNameIdOrZero,
           iscsiIfIntrProxyModePortFcAddr    FcNameIdOrZero,
           iscsiIfIntrProxyModeFcAddrAsgnmt  INTEGER,
-          iscsiIfIntrIdentificationMode     CIscsiIntrIdentificationMode
+          iscsiIfIntrIdentificationMode  
+                                  CIscsiIntrIdentificationMode,
+          iscsiIfTcpRndTrpTimeEst           Unsigned32,
+          iscsiIfTcpLocalTcpPort            CiscoPort,
+          iscsiIfNumNormalConnections       Unsigned32,
+          iscsiIfNumDiscovConnections       Unsigned32,
+          iscsiIfTcpCWMEnable               TruthValue,
+          iscsiIfTcpCWMBurstSize            Unsigned32,
+          iscsiIfTcpMaxJitter               Unsigned32
         }
 
 iscsiIfTcpKeepAliveTimeout OBJECT-TYPE
@@ -1230,7 +1296,7 @@ iscsiIfTcpMinRetransmitTime OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The TCP minimum restransmit time for this iSCSI 
+               "The TCP minimum retransmit time for this iSCSI 
                interface."
         ::= { iscsiIfEntry  4 }
 
@@ -1290,14 +1356,14 @@ iscsiIfTcpPMTUResetTimeout OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The timeout after which the PMTU resets to original 
+           "The timeout after which the PMTU resets to original 
                value on this interface."
-        ::= { iscsiIfEntry  10 }
+    ::= { iscsiIfEntry  10 }
 
 iscsiIfTcpLocalPort OBJECT-TYPE
         SYNTAX        CiscoPort
         MAX-ACCESS    read-only
-        STATUS        current
+        STATUS        deprecated  --superceded by iscsiIfTcpLocalTcpPort
         DESCRIPTION   
                "The local TCP port of this interface."
         ::= { iscsiIfEntry  11 }
@@ -1305,12 +1371,32 @@ iscsiIfTcpLocalPort OBJECT-TYPE
 iscsiIfForwardingMode OBJECT-TYPE
         SYNTAX        INTEGER {
                          passThrough (1),
-                         storeAndForward (2)
+                         storeAndForward (2),
+                         cutThrough(4)
                       }
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The forwarding mode of this interface."
+               "The forwarding mode of this interface.
+  
+                passThrough - In this mode the iSCSI interface
+                              converts an iSCSI PDU into a FCP
+                              frame and then forwards it one at
+                              a time.
+                storeAndForward - In this mode iSCSI payload data
+                              is sent or received at the size desired
+                              by the iSCSI client. The interface
+                              stores each TCP segment it receives
+                              until one full iSCSI PDU is received
+                              before forwarding it as FC frames.
+        
+                cutThrough  - In this mode iSCSI payload data is sent
+                              or received at the size  desired by the
+                              iSCSI client. The interface stores each 
+                              TCP segment until one full iSCSI PDU is
+                              received before forwarding it as as FC
+                              frames.
+               "
         ::= { iscsiIfEntry  12 }
 
 iscsiIfIntrProxyMode OBJECT-TYPE
@@ -1318,9 +1404,9 @@ iscsiIfIntrProxyMode OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The intiator proxy mode for this interface. If this 
+               "The initiator proxy mode for this interface. If this 
                object is 'true', then all the initiators coming on this
-               interface would use the intiator configuration provided 
+               interface would use the initiator configuration provided 
                by this interface. The initiator configuration include
                port WWN and node WWN."
         ::= { iscsiIfEntry  13 }
@@ -1330,8 +1416,8 @@ iscsiIfIntrProxyModeNodeFcAddr OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The Node FC address used by the intiators on this 
-               interface when the intiator proxy mode is on
+               "The Node FC address used by the initiators on this 
+               interface when the initiator proxy mode is on
                (iscsiIfIntrProxyMode equal to 'true')."
         ::= { iscsiIfEntry  14 }
 
@@ -1340,8 +1426,8 @@ iscsiIfIntrProxyModePortFcAddr OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   
-               "The Port FC address used by the intiators on this 
-               interface when the intiator proxy mode is on 
+               "The Port FC address used by the initiators on this 
+               interface when the initiator proxy mode is on 
                (iscsiIfIntrProxyMode equal to 'true')."
         ::= { iscsiIfEntry  15 }
 
@@ -1370,6 +1456,79 @@ iscsiIfIntrIdentificationMode OBJECT-TYPE
                on this interface, either by its iSCSI name (name) or by
                its IP address (ipaddress)."
         ::= { iscsiIfEntry  17 }
+
+iscsiIfTcpRndTrpTimeEst OBJECT-TYPE
+        SYNTAX        Unsigned32 (0..300000)
+        UNITS         "microseconds"
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+         "This is an estimate of the round trip delay of the network
+          pipe used for the B-D product computation, which lets us
+          derive the TCP receive window to advertise."
+        ::= { iscsiIfEntry  18 }
+
+iscsiIfTcpLocalTcpPort OBJECT-TYPE
+        SYNTAX        CiscoPort
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   
+               "The local TCP port of this interface."
+        ::= { iscsiIfEntry  19 }
+
+
+iscsiIfNumNormalConnections OBJECT-TYPE
+        SYNTAX        Unsigned32 
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION
+                "The number of normal iscsi connections." 
+        ::= { iscsiIfEntry  20 }
+
+
+iscsiIfNumDiscovConnections OBJECT-TYPE
+        SYNTAX        Unsigned32 
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION
+                "The number of discovery iscsi connections." 
+        ::= { iscsiIfEntry  21 }
+
+iscsiIfTcpCWMEnable   OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "This object is used for enabling/disabling the 
+                 congestion window monitoring. If the value of
+                 this object is true(1), it is enabled. It is 
+                 disabled if the value is false(2). "
+        DEFVAL {true} 
+        ::= { iscsiIfEntry  22 }
+
+iscsiIfTcpCWMBurstSize OBJECT-TYPE
+        SYNTAX        Unsigned32 (10..100) 
+        UNITS         "kilobytes"
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "The maximum burst sent after a tcp sender idle
+                 period." 
+        DEFVAL {50} 
+        ::= { iscsiIfEntry  23 }
+
+iscsiIfTcpMaxJitter OBJECT-TYPE
+        SYNTAX        Unsigned32 (0..10000)
+        UNITS         "microseconds"
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                 "The maximum delay variation that is not due to
+                  to congestion that can be experienced by TCP 
+                  connections on this interface."
+        DEFVAL {500}
+        ::= { iscsiIfEntry  24 }
+
 
 --
 -- iSCSI configuration for GigE interfaces
@@ -1438,8 +1597,8 @@ iscsiInitiatorIdleTimeout    OBJECT-TYPE
         DESCRIPTION   
                "The time for which the gateway (representing a FC 
                target) waits from the time of last iSCSI session to a 
-               iSCSI initiator went down, before purging the information
-               about that iSCSI initiator."
+               iSCSI initiator went down, before purging the 
+               information about that iSCSI initiator."
         ::= { ciScsiConfig 11 }
 
 iscsiIntrIdentificationMode    OBJECT-TYPE
@@ -1451,6 +1610,36 @@ iscsiIntrIdentificationMode    OBJECT-TYPE
                on local device, either by its iSCSI name (name) or by
                its IP address (ipaddress)."
         ::= { ciScsiConfig 12 }
+
+iscsiTargetUserName     OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION
+               "The global user name to be used during the
+                login authentication. If the initiator specific
+                username is specified by iscsi2FcTargetUserName,
+                then that user name is used.
+                If not, iscsiTargetUserName is used by default."
+        DEFVAL { ''H }
+        ::= { ciScsiConfig 13 }
+
+
+iscsiTargetPassword     OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION
+               "The password  to be used during the login
+                authentication. If the initiator specific
+                password is specified by iscsi2FcTargetPassword,
+                then that password is used.
+                If not, iscsiTargetPassword is used by default.
+  
+                When read, a zero length  string is returned."
+        DEFVAL { ''H }
+        ::= { ciScsiConfig 14 }
+
 --
 -- Status and Statistics 
 --
@@ -1486,6 +1675,101 @@ iscsiSsnVsan    OBJECT-TYPE
         DESCRIPTION   
                "The vsan to which this session belongs to."
         ::= { iscsiSessionAttributesExtEntry 1 }
+
+
+--
+--  iscsi Connection Statstistics Table 
+--
+
+ciscsiConnectionStatsTable OBJECT-TYPE
+        SYNTAX        SEQUENCE OF CiscsiConnectionStatsEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+               "This table contains objects which provide 
+               iSCSI connection statistics."
+        ::= { ciScsiStatistics 2 }
+
+ciscsiConnectionStatsEntry OBJECT-TYPE
+        SYNTAX        CiscsiConnectionStatsEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+               "An entry containing information about iSCSI
+                connection statistics."
+        INDEX { ifIndex, cIscsiInstIndex, cIscsiStatsNodeIndex,
+                cIscsiStatsSessionIndex, 
+                cIscsiStatsConnectionIndex }
+        ::= { ciscsiConnectionStatsTable 1 }
+
+
+CiscsiConnectionStatsEntry ::=
+        SEQUENCE {
+           cIscsiStatsNodeIndex         Unsigned32, 
+           cIscsiStatsSessionIndex      Unsigned32, 
+           cIscsiStatsConnectionIndex   Unsigned32, 
+           cIscsiStatsConnectionRxBytes Counter64, 
+           cIscsiStatsConnectionTxBytes Counter64, 
+           cIscsiStatsIpSecInUse        TruthValue 
+        }
+
+cIscsiStatsNodeIndex  OBJECT-TYPE
+        SYNTAX        Unsigned32 (1..4294967295)
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+               "An integer value, which identifies an iSCSI
+               node in a FC domain."
+        ::= { ciscsiConnectionStatsEntry 1 }
+
+
+cIscsiStatsSessionIndex  OBJECT-TYPE
+        SYNTAX           Unsigned32 (1..4294967295)
+        MAX-ACCESS       not-accessible
+        STATUS           current
+        DESCRIPTION
+               "An integer value, which identifies an iSCSI
+               session."
+        ::= { ciscsiConnectionStatsEntry 2 }
+
+cIscsiStatsConnectionIndex  OBJECT-TYPE
+        SYNTAX             Unsigned32 (1..4294967295)
+        MAX-ACCESS         not-accessible
+        STATUS             current
+        DESCRIPTION
+               "An integer value, which identifies an iSCSI
+               connection. "
+        ::= { ciscsiConnectionStatsEntry 3 }
+
+cIscsiStatsConnectionRxBytes  OBJECT-TYPE
+        SYNTAX                Counter64 
+        MAX-ACCESS            read-only
+        STATUS                current
+        DESCRIPTION
+               "Total number of bytes received on an iSCSI
+               session."
+        ::= { ciscsiConnectionStatsEntry 4 }
+
+cIscsiStatsConnectionTxBytes  OBJECT-TYPE
+        SYNTAX                Counter64
+        MAX-ACCESS            read-only
+        STATUS                current
+        DESCRIPTION
+               "Total number of bytes transmitted on an iSCSI
+               session."
+        ::= { ciscsiConnectionStatsEntry 5 }
+
+cIscsiStatsIpSecInUse         OBJECT-TYPE
+        SYNTAX                TruthValue
+        MAX-ACCESS            read-only
+        STATUS                current
+        DESCRIPTION
+               "Indicates whether an iSCSI connection is secure
+                or not. If the value of this object is 'true', the
+                Ip Security is turned on and the connection is
+                secure. If 'false', Ip Security is not turned
+                on and the connection may be unsecure."
+        ::= { ciscsiConnectionStatsEntry 6 }
 
 -- Conformance
 
@@ -1528,7 +1812,6 @@ ciscoiScsiGwMIBCompliance MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1538,7 +1821,6 @@ ciscoiScsiGwMIBCompliance MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1548,7 +1830,6 @@ ciscoiScsiGwMIBCompliance MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1558,7 +1839,6 @@ ciscoiScsiGwMIBCompliance MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1568,7 +1848,6 @@ ciscoiScsiGwMIBCompliance MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1610,7 +1889,6 @@ ciscoiScsiGwMIBCompliance1 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1620,7 +1898,6 @@ ciscoiScsiGwMIBCompliance1 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1630,7 +1907,6 @@ ciscoiScsiGwMIBCompliance1 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1640,7 +1916,6 @@ ciscoiScsiGwMIBCompliance1 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1650,7 +1925,6 @@ ciscoiScsiGwMIBCompliance1 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1708,7 +1982,6 @@ ciscoiScsiGwMIBCompliance2 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1718,7 +1991,6 @@ ciscoiScsiGwMIBCompliance2 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1728,7 +2000,6 @@ ciscoiScsiGwMIBCompliance2 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1738,7 +2009,6 @@ ciscoiScsiGwMIBCompliance2 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1751,7 +2021,8 @@ ciscoiScsiGwMIBCompliance2 MODULE-COMPLIANCE
         ::= { ciscoiScsiGwMIBCompliances 3 }
 
 ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
-        STATUS   current
+        STATUS   deprecated -- superceeded by
+                            -- ciscoiScsiGwMIBCompliance4
         DESCRIPTION
                 "The compliance statement for entities which
                  implement the CISCO-ISCSI-GW-MIB."
@@ -1786,7 +2057,6 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1796,7 +2066,6 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1806,7 +2075,6 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1816,7 +2084,6 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1826,7 +2093,6 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                      active (1),
                      createAndGo (4),
                      destroy (6)}
-        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only 'createAndGo', 'destroy' and 'active' need to be 
                 supported."
@@ -1837,6 +2103,180 @@ ciscoiScsiGwMIBCompliance3 MODULE-COMPLIANCE
                 "Only read-only need to be supported."
 
         ::= { ciscoiScsiGwMIBCompliances 4 }
+
+
+ciscoiScsiGwMIBCompliance4 MODULE-COMPLIANCE
+        STATUS   deprecated -- superceded by 
+                            -- ciscoiScsiGwMIBCompliance5
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-ISCSI-GW-MIB."
+        MODULE MANDATORY-GROUPS { cigConfigurationGroupRev3,
+                                  cigSessionStatsGroup,
+                                  cigIscsiIfGroupRev4,
+                                  cigIscsiAuthGroup,
+                                  cigIscsiGigEIfGroup }
+
+        GROUP  cigLuConfigurationGroupRev1
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support creation of iSCSI virtual targets 
+                from LUs on remote FC targets."
+
+        OBJECT iscsi2FcNodeRole             
+        SYNTAX     BITS {             
+                     initiatorTypeNode (1)
+                   }  
+        DESCRIPTION 
+                "Only initiatorTypeNode role need to be supported."
+                                           
+        OBJECT fc2IscsiNodeRole             
+        SYNTAX     BITS {             
+                     targetTypeNode (0)
+                   }  
+        DESCRIPTION 
+                "Only targetTypeNode role need to be supported."
+
+        OBJECT iscsi2FcNodeRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT fc2IscsiNodeRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT fcAddressRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT iscsiNodeNameRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT scsiLuExtRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+
+        OBJECT iscsi2FcNodeDiscovered             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+
+        ::= { ciscoiScsiGwMIBCompliances 5 }
+
+
+ciscoiScsiGwMIBCompliance5 MODULE-COMPLIANCE
+        STATUS   current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-ISCSI-GW-MIB."
+        MODULE MANDATORY-GROUPS { cigConfigurationGroupRev3,
+                                  cigConfigurationGroupSup1,
+                                  cigSessionStatsGroup,
+                                  cigIscsiIfGroupRev4,
+                                  cigIscsiIfGroupSup1,
+                                  cigIscsiAuthGroup,
+                                  cigIscsiAuthGroupSup1,
+                                  cigIscsiGigEIfGroup,
+                                  cigConnectionStatsGroup }
+
+        GROUP  cigLuConfigurationGroupRev1
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support creation of iSCSI virtual targets 
+                from LUs on remote FC targets."
+
+        OBJECT iscsi2FcNodeRole             
+        SYNTAX     BITS {             
+                     initiatorTypeNode (1)
+                   }  
+        DESCRIPTION 
+                "Only initiatorTypeNode role need to be supported."
+                                           
+        OBJECT fc2IscsiNodeRole             
+        SYNTAX     BITS {             
+                     targetTypeNode (0)
+                   }  
+        DESCRIPTION 
+                "Only targetTypeNode role need to be supported."
+
+        OBJECT iscsi2FcNodeRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT fc2IscsiNodeRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT fcAddressRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT iscsiNodeNameRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+                                           
+        OBJECT scsiLuExtRowStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only 'createAndGo', 'destroy' and 'active' need to be 
+                supported."
+
+        OBJECT iscsi2FcNodeDiscovered             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+
+        ::= { ciscoiScsiGwMIBCompliances 6 }
+
 
 -- Units of Conformance
 
@@ -2010,7 +2450,7 @@ cigIscsiAuthGroup  OBJECT-GROUP
                iscsi2FcNodeAuthUser,
                iscsiGigEIfAuthMethod
         }
-        STATUS   current
+        STATUS   current 
         DESCRIPTION
                 "A collection of objects for iSCSI authentication."
         ::= { ciscoiScsiGwMIBGroups 8 }
@@ -2049,7 +2489,7 @@ cigConfigurationGroupRev2  OBJECT-GROUP
                    nodeAdvIntfIfIndex, 
                    nodeAdvIntfIfRowStatus
         }
-        STATUS   deprecated -- superceeded by cigConfigurationGroupRev2
+        STATUS   deprecated -- superceeded by cigConfigurationGroupRev3
         DESCRIPTION
                 "A collection of objects for iSCSI Gateway 
                 configuration."
@@ -2127,14 +2567,15 @@ cigConfigurationGroupRev3  OBJECT-GROUP
                    iscsiInitiatorIdleTimeout,
                    iscsiIntrIdentificationMode
         }
-        STATUS   current
+        STATUS   current 
         DESCRIPTION
                 "A collection of objects for iSCSI Gateway 
                 configuration."
         ::= { ciscoiScsiGwMIBGroups 12 }
 
+
 cigIscsiIfGroupRev3  OBJECT-GROUP
-        OBJECTS  { 
+        OBJECTS  {
                iscsiIfTcpKeepAliveTimeout,
                iscsiIfTcpMaxBandwidth,
                iscsiIfTcpMaxRetransmissions,
@@ -2142,7 +2583,7 @@ cigIscsiIfGroupRev3  OBJECT-GROUP
                iscsiIfTcpPMTUEnable,
                iscsiIfTcpQOS,
                iscsiIfTcpSACKEnable,
-               iscsiIfTcpSendBufferSize, 
+               iscsiIfTcpSendBufferSize,
                iscsiIfTcpMinBandwidth,
                iscsiIfTcpPMTUResetTimeout,
                iscsiIfTcpLocalPort,
@@ -2153,9 +2594,89 @@ cigIscsiIfGroupRev3  OBJECT-GROUP
                iscsiIfIntrProxyModeFcAddrAsgnmt,
                iscsiIfIntrIdentificationMode
         }
-        STATUS   current
+        STATUS   deprecated -- superceded by cigIscsiIfGroupRev4
         DESCRIPTION
-                "A collection of objects for iSCSI interface 
+                "A collection of objects for iSCSI interface
                 configuration and monitoring."
         ::= { ciscoiScsiGwMIBGroups 13 }
+
+cigIscsiIfGroupRev4  OBJECT-GROUP
+        OBJECTS  {
+               iscsiIfTcpKeepAliveTimeout,
+               iscsiIfTcpMaxBandwidth,
+               iscsiIfTcpMaxRetransmissions,
+               iscsiIfTcpMinRetransmitTime,
+               iscsiIfTcpPMTUEnable,
+               iscsiIfTcpQOS,
+               iscsiIfTcpSACKEnable,
+               iscsiIfTcpSendBufferSize,
+               iscsiIfTcpMinBandwidth,
+               iscsiIfTcpPMTUResetTimeout,
+               iscsiIfForwardingMode,
+               iscsiIfIntrProxyMode,
+               iscsiIfIntrProxyModeNodeFcAddr,
+               iscsiIfIntrProxyModePortFcAddr,
+               iscsiIfIntrProxyModeFcAddrAsgnmt,
+               iscsiIfIntrIdentificationMode,
+               iscsiIfTcpLocalTcpPort,
+               iscsiIfTcpRndTrpTimeEst
+        }
+        STATUS   current
+        DESCRIPTION
+                "An collection of objects for iSCSI interface
+                configuration and monitoring."
+        ::= { ciscoiScsiGwMIBGroups 14 }
+
+
+cigIscsiIfGroupSup1  OBJECT-GROUP
+        OBJECTS  {
+               iscsiIfNumNormalConnections, 
+               iscsiIfNumDiscovConnections,
+               iscsiIfTcpCWMEnable,
+               iscsiIfTcpCWMBurstSize,
+               iscsiIfTcpMaxJitter
+
+        }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for iSCSI interface
+                configuration and monitoring."
+        ::= { ciscoiScsiGwMIBGroups 15 }
+
+
+cigConnectionStatsGroup  OBJECT-GROUP
+        OBJECTS  {
+                  cIscsiStatsConnectionTxBytes,
+                  cIscsiStatsConnectionRxBytes,
+                  cIscsiStatsIpSecInUse
+
+        }
+        STATUS current
+                DESCRIPTION
+                "A collection of objects for iSCSI connection
+                statistics."
+        ::= { ciscoiScsiGwMIBGroups 16 }
+
+cigConfigurationGroupSup1  OBJECT-GROUP
+        OBJECTS  {
+                   iscsiTargetUserName,
+                   iscsiTargetPassword
+        }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for iSCSI Gateway
+                configuration."
+        ::= { ciscoiScsiGwMIBGroups 17 }
+
+
+cigIscsiAuthGroupSup1  OBJECT-GROUP
+        OBJECTS  {
+               iscsi2FcTargetUserName,
+               iscsi2FcTargetPassword 
+        }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for iSCSI authentication."
+        ::= { ciscoiScsiGwMIBGroups 18 }
+
 END

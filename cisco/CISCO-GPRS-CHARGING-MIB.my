@@ -3,7 +3,7 @@
 -- 
 -- June 2000, Huiyang Yang  
 --
--- Copyright (c) 2001, 2002, 2003, 2004 by cisco Systems, Inc. 
+-- Copyright (c) 2001, 2002, 2004, 2005 by cisco Systems, Inc. 
 -- All rights reserved. 
 -- ***************************************************************** 
 
@@ -27,7 +27,7 @@ IMPORTS
                 FROM CISCO-SMI; 
 
 ciscoGprsChargingMIB MODULE-IDENTITY 
-        LAST-UPDATED    "200403220300Z" 
+        LAST-UPDATED    "200509161800Z" 
         ORGANIZATION    "Cisco Systems, Inc." 
         CONTACT-INFO 
                 "       Cisco Systems 
@@ -67,10 +67,12 @@ ciscoGprsChargingMIB MODULE-IDENTITY
                 Acronyms and terms: 
  
                  BSS    Base Station System
+                 CCA    Credit Control Answer
                  CDR    Call Detail Record 
                  CID    Charging Identification 
                  CG     Charging Gateway 
                  CGF    Charging Gateway Functionality  
+                 DCCA   Diameter Credit Control Application
                  ETSI   European Telecommunications Standards 
                         Institute 
                  Ga     Name of the interface between SGSN/GGSN and CG 
@@ -104,7 +106,40 @@ ciscoGprsChargingMIB MODULE-IDENTITY
 --               [3] GSM 12.15: 'Digital Cellular telecommunications  
 --                   system (Phase 2+); General Packet Radio Service  
 --                   (GPRS); Charging in GPRS', ETSI, (V7.2.1)" 
+        REVISION       "200509161800Z"
+        DESCRIPTION
+                 "Added cgprsCgCdrOptionServiceRecord,
+                 cgprsCgPartialCdrGenEnableAll,
+                 cgprsCgCdrOptionApn,
+                 cgprsCgCdrOptionVirtualApn,
+                 cgprsCgCdrOptionApnSelMode,
+                 cgprsCgCdrOptionDynamicAddr,
+                 cgprsCgCdrOptionNip,
+                 cgprsCgCdrOptionPdpAddress,
+                 cgprsCgCdrOptionPdpType,
+                 cgprsCgCdrOptionSerMsisdn,
+                 cgprsCgCdrOptionSgsnPlmn
+                 cgprsCgCdrOptionCamelCharInfo,
+                 cgprsCgCdrOptionImeisv,
+                 cgprsCgCdrOptionMsTimeZone,
+                 cgprsCgCdrOptionRatType,
+                 cgprsCgCdrOptionUserLocInfo to 
+                 ciscoGprsChargingConfig.
 
+                 Added cgprsCgProfileCdrSuppressPrepaid,
+                 cgprsCgProfileContentDccaProfile,
+                 cgprsCgProfileContentPostTime,
+                 cgprsCgProfileContentPostValTime,
+                 cgprsCgProfileContentPostVolume,
+                 cgprsCgProfileContentRulebaseId to
+                 cgprsCgProfileTable.
+
+                 Added cgprsCgTotalServiceRecords to
+                 ciscoGprsChargingStats."
+        REVISION       "200407260200Z"
+        DESCRIPTION
+                 "Modified the description for cgprsCgProfileDurLimit
+                 and cgprsCgProfileVolumeLimit."
         REVISION       "200403220300Z"
         DESCRIPTION
                  "Added cgprsCgContainerTimeLimit, cgprsCgProfileTable,
@@ -905,7 +940,13 @@ CgprsCgProfileEntry         ::= SEQUENCE {
     cgprsCgProfileDurLimit          Unsigned32,
     cgprsCgProfileDurLimitReset     TruthValue,
     cgprsCgProfileTariffTime        TruthValue,
-    cgprsCgProfileSgsnChange        Integer32
+    cgprsCgProfileSgsnChange        Integer32,
+    cgprsCgProfileCdrSuppressPrepaid TruthValue,
+    cgprsCgProfileContentDccaProfile SnmpAdminString,
+    cgprsCgProfileContentPostTime    Unsigned32,
+    cgprsCgProfileContentPostValTime Unsigned32,
+    cgprsCgProfileContentPostVolume  Unsigned32,
+    cgprsCgProfileContentRulebaseId  SnmpAdminString
     }
 
 cgprsCgProfileNum                    OBJECT-TYPE
@@ -989,12 +1030,15 @@ cgprsCgProfileVolumeLimitReset       OBJECT-TYPE
     MAX-ACCESS                       read-create
     STATUS                           current
     DESCRIPTION
-        "This object is used to reset the duration limit timer. If
-        set to 'true' the duration limit timer will be reset when
-        the volume limit reaches the value set in 
-        cgprsCgProfileVolumeLimit. If set to 'false', the 
-        duration limit timer will continue until it reaches the
-        value set in cgprsCgProfileDurLimit."
+        "This object is used to reset the volume limit timer 
+        specified in cgprsCgProfileVolumeLimit when another
+        trigger occurs. 
+
+        If set to 'true' the volume limit timer will be reset when
+        another trigger such as duration limit occurs.
+
+        If set to 'false', the volume timer will continue until 
+        it reaches the value set in cgprsCgProfileVolumeLimit."
     DEFVAL { false }
     ::= { cgprsCgProfileEntry 7 }
 
@@ -1016,12 +1060,15 @@ cgprsCgProfileDurLimitReset          OBJECT-TYPE
     MAX-ACCESS                       read-create
     STATUS                           current
     DESCRIPTION
-        "This object is used to reset the volume limit timer. If
-        set to 'true' the volume limit timer will be reset when
-        the duration limit reaches the value set in 
-        cgprsCgProfileDurLimit. If set to 'false', the 
-        duration limit timer will continue until it reaches the
-        value set in cgprsCgProfileVolumeLimit."
+        "This object is used to reset the duration limit timer
+        specified in cgprsCgProfileDurLimit when another
+        trigger occurs.
+
+        If set to 'true' the duration limit timer will be reset when
+        another trigger such as volume limit occurs.
+
+        If set to 'false', the duration timer will continue until 
+        it reaches the value set in cgprsCgProfileDurLimit."
     DEFVAL { false }
     ::= { cgprsCgProfileEntry 9 }
 
@@ -1048,6 +1095,110 @@ cgprsCgProfileSgsnChange             OBJECT-TYPE
          The value '-1' indicates no sgsn change limit."
     DEFVAL { -1 }
     ::= { cgprsCgProfileEntry 11 }
+
+cgprsCgProfileCdrSuppressPrepaid     OBJECT-TYPE
+    SYNTAX                           TruthValue
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object specifies the suppression of CDRs for
+        prepaid.
+
+        This object can be set to 'true' only when the object
+        cgprsCgProfileCdrSuppress is set to 'false'.
+
+        If set to 'true', there won't be any CDRs generated
+        for prepaid users.
+
+        If set to 'false', the CDRs will be generated for
+        prepaid users."
+    DEFVAL { false }
+    ::= { cgprsCgProfileEntry 12 }
+
+cgprsCgProfileContentDccaProfile     OBJECT-TYPE
+    SYNTAX                           SnmpAdminString
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object specifies a DCCA client to use to communicate 
+        with a DCCA server in a GGSN charging profile.
+
+        The profile name is the DCCA profile name 
+        (cGgsnSADccaProfileName) which is present in  
+        CISCO-GGSN-SERVICE-AWARE-MIB and it's outside the scope of 
+        this MIB. 
+
+        The presence of the object in this table indicates online 
+        billing is required. Therefore, regardless of whether a 
+        subscriber is prepaid or postpaid, the GGSN will contact 
+        the DCCA server if this object is set.
+ 
+        If the user is to be treated as a postpaid user, the server 
+        returns X and the user is treated as a postpaid user. If 
+        this object is not set to valid value, then users using the 
+        charging profile will be treated as postpaid (offline 
+        billing)."
+    ::= { cgprsCgProfileEntry 13 }
+
+cgprsCgProfileContentPostTime        OBJECT-TYPE
+    SYNTAX                           Unsigned32(300..4294967295)
+    UNITS                            "seconds"
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object specifies a trigger condition for postpaid 
+        users in this charging profile, the time duration limit 
+        that when exceeded causes the GGSN to collect upstream 
+        and downstream traffic byte counts and close and update 
+        the G-CDR for a particular PDP context."
+    ::= { cgprsCgProfileEntry 14 }
+
+cgprsCgProfileContentPostValTime     OBJECT-TYPE
+    SYNTAX                           Unsigned32(900..4294967295)
+    UNITS                            "seconds"
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object specifies the validity timeout for this 
+        postpaid users in this charging profile. By default, the
+        time and volume quota for postpaid has no validity timeout.
+        If it is configured, it applies to both time based or volume 
+        based quota."
+    ::= { cgprsCgProfileEntry 15 }
+
+cgprsCgProfileContentPostVolume      OBJECT-TYPE
+    SYNTAX                           Unsigned32(1..4294967295)
+    UNITS                            "bytes"
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object specifies a trigger condition for postpaid 
+        users in this charging profile, the maximum number of 
+        bytes that the GGSN maintains across all containers for 
+        a particular PDP context before closing and updating 
+        the G-CDR."
+    ::= { cgprsCgProfileEntry 16 }
+
+cgprsCgProfileContentRulebaseId      OBJECT-TYPE
+    SYNTAX                           SnmpAdminString
+    MAX-ACCESS                       read-create
+    STATUS                           current
+    DESCRIPTION
+        "This object sets the rulebase ID for this charging profile.
+
+        Rulebases contain the rules for defining categories of 
+        traffic, categories on which decisions such as whether to 
+        allow or disallow traffic, and how to measure the traffic, 
+        are based. The GGSN maps Diameter Rulebase IDs to CSG 
+        billing plans.
+
+        The rulebase value presented in a RADIUS Access Accept 
+        message overrides the default rulebase ID configured in 
+        the charging profile. A rulebase ID received in a CCA 
+        initial message from a DCCA server overrides the Rulebase 
+        ID received from the RADIUS server and the default rulebase 
+        ID configured in a charging profile."
+    ::= { cgprsCgProfileEntry 17 }
 
 cgprsCgProfileMapTable          OBJECT-TYPE
     SYNTAX                      SEQUENCE OF CgprsCgProfileMapEntry
@@ -1318,7 +1469,263 @@ cgprsCgPtcPossiblyDupEnable  OBJECT-TYPE
         "GSM 12.15 version 7.6.0 Release 1998"
     DEFVAL { false }
     ::= { ciscoGprsChargingConfig 39 }
-        
+
+cgprsCgCdrOptionServiceRecord   OBJECT-TYPE
+    SYNTAX                      Unsigned32(0..100)
+    MAX-ACCESS                  read-write
+    STATUS                      current
+    DESCRIPTION
+        "G-CDRs contain information for part, or the entire 
+        duration, of a PDP context. The G-CDR includes information 
+        such as the subscriber (MSISDN, IMSI), APN used, QoS 
+        applied, SGSN ID (as the mobile access location), a time 
+        stamp and duration, data volume recorded separately for 
+        the upstream and downstream direction, and volume thresholds 
+        for intermediate CDR generation and tariff time switches.
+ 
+        In addition to all of the above, additionally, enhanced 
+        G-CDRs contain a service-record part that contains the usage 
+        data of each service flow used by a PDP session (specified 
+        by category ID). For example, the upstream and downstream 
+        volume and duration is recorded per service flow.
+
+        By default this feature is not enabled.
+    
+        The number specified is the maximum number of service records 
+        a G-CDR can contain before the G-CDR is closed and a partial 
+        G-CDR is opened."
+    DEFVAL { 0 }
+    ::= { ciscoGprsChargingConfig 40 }
+
+cgprsCgPartialCdrGenEnableAll  OBJECT-TYPE
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "This object when set to 'true' enables the GGSN to copy
+        the SGSN list for charging release prior to release 4 
+        (cgprsCgRelease). The SGSN change limit trigger 
+        specified in the object cgprsCgCdrSgsnChangeLimit has to be
+        set as well.
+
+        If this object is set to 'false'-current SGSN address may not
+        be present in CDR.
+ 
+        This object can be set to true only when the object
+        cgprsCgPartialCdrGenEnable is set to 'true'."
+    DEFVAL { false }
+    ::= { ciscoGprsChargingConfig 41 }
+
+cgprsCgCdrOptionApn                OBJECT-TYPE
+     SYNTAX                        TruthValue 
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes real APN in the 
+         G-CDR and accounting records.
+
+         If object is set to 'false'- Access Point Name is 
+         disabled in G-CDRs. The option cannot be disabed if the 
+         CHARGING_RELEASE is 98 or 99." 
+     DEFVAL { false } 
+     ::= { ciscoGprsChargingConfig 42 }
+
+cgprsCgCdrOptionVirtualApn         OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes virtual APN in 
+         G-CDR and accounting records.
+
+         If this object is set to 'false'- Real APN is included in the
+         G-CDRs."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 43 }    
+
+
+cgprsCgCdrOptionApnSelMode         OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes 'APN selection mode'
+         field in G-CDR and sent to CG. 
+ 
+         The field 'APN selection mode' indicates how the SGSN selected
+         the APN to be used. Selection Mode indicates whether a 
+         subscribed APN was selected, or whether a non subscribed APN 
+         sent by the MS, or a non-subscribed APN chosen by SGSN was
+         was selected."
+      DEFVAL { false }  
+     ::= { ciscoGprsChargingConfig 44 }
+
+cgprsCgCdrOptionDynamicAddr        OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes 'Dynamic Address' 
+         field in G-CDR and sent to CG.
+
+         This field indicates that PDP address has been dynamically 
+         allocated for that particular PDP context. This field is
+         missing if address is static i.e. part of PDP context 
+         subscription." 
+     DEFVAL { false }  
+     ::= { ciscoGprsChargingConfig 45 }
+
+cgprsCgCdrOptionNip                OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes NIP (Network
+         Initiated PDP context) field in G-CDR and sent to CG.
+
+         This field indicates that PDP context is network initiated.
+         The field is missing in case of mobile activated PDP context." 
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 46 }
+
+cgprsCgCdrOptionPdpAddress         OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes 'Served PDP Address'
+         field in G-CDR and sent to CG. 
+
+         This field (Served PDP Address) contains the PDP address 
+         of the served IMSI. This is a network layer address 
+         i.e. of type IP version 4 or IP version 6. This parameter 
+         shall be present except when both the PDP type is PPP and 
+         dynamic PDP address assignment is used." 
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 47 }
+
+cgprsCgCdrOptionPdpType            OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object if set to 'true' includes 'PDP Type' field 
+         in G-CDRs.   
+
+         This field defines the PDP type,e.g.IP,PPP or IHOSS:OSP."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 48 }
+
+cgprsCgCdrOptionSerMsisdn          OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' enable the GGSN to provide
+         the MSISDN number from the create PDP context request
+         in the G-CDRs.
+
+         This field contains the Mobile Station (MS) ISDN number 
+         (MSISDN) of the served party. The term 'served' party is
+         used to describe the mobile subscriber involved in the 
+         transaction recorded.
+
+         If the object is set to 'false', Disable the GGSN to provide
+         MSISDN number in the G-CDRs."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 49 }
+
+cgprsCgCdrOptionSgsnPlmn           OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object whe set to 'true' includes SGSN PLMN ID 
+         (MCC and MNC) in the G-CDR and sent to CG. 
+
+         The SGSN PLMN ID field contains a SGSN PLMN Identifier, 
+         for the SGSNs which have been connected during the record. 
+         This implies that when the MS moves to another PLMN, the G-CDR
+         has to be closed."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 50 }
+
+cgprsCgCdrOptionCamelCharInfo      OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object if set to 'true', S-CDR CAMEL information 
+         recieved from SGSN, which is a copy of Tag and Length 
+         from SGSN's CDR (S-CDR) is included in G-CDR. 
+
+         If this object is set to 'false', CAMEL field is not 
+         included in G-CDRs."
+     REFERENCE
+         "3GPP;Technical Specification Group Services and System 
+         Aspects;Telecommunication Management;Charging Management;
+         Charging data description for the Packet Switched (PS) domain
+         (Release 5); 3GPP TS 32.215 V5.7.0"
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 51 }
+
+cgprsCgCdrOptionImeisv             OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' the IMEI (Software Version)
+         IE shall be handled by GGSN in a transparent manner and shall 
+         be sent to the Charging gateway that is release 5.0 compliant
+         without any modification. 
+
+         International Mobile Equipment Identity IMEI Software Version 
+         (IMEISV): indicates identity of mobile equipment used by the 
+         subscriber."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 52 }
+
+cgprsCgCdrOptionMsTimeZone         OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes MS Time Zone field 
+         in the G-CDRs and sent to CG.
+
+         MS Time Zone indicates the offset between universal time
+         and local time in steps of 15 minutes of where the MS currently
+         resides." 
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 53 }
+
+cgprsCgCdrOptionRatType            OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes Radio Access Type
+         (RAT) IE in the G-CDRs and sent to CG.
+
+         RAT, indicates whether the SGSN serves the User Equipment
+         (UE) by Universal Terrestrial Radio Access Network (UTRAN)
+         or GSM/EDGE RAN (GERAN)." 
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 54 }
+
+cgprsCgCdrOptionUserLocInfo        OBJECT-TYPE
+     SYNTAX                        TruthValue
+     MAX-ACCESS                    read-write
+     STATUS                        current
+     DESCRIPTION
+         "This object when set to 'true' includes the User Location 
+         Information IE in G-CDRs and sent to CG.
+         
+         User Location Information gives Cell Global Identity
+         (CGI)/Service Area Identity (SAI) of where the MS is
+         currently located."
+     DEFVAL { false }
+     ::= { ciscoGprsChargingConfig 55 }         
 -- 
 -- Charging GW statistics 
 -- 
@@ -1456,7 +1863,21 @@ cgprsCgTotalContainerCreated OBJECT-TYPE
          Trigger Condition: This counter is triggered when the CDR is 
          closed or the CDR is updated."
     ::= { ciscoGprsChargingStats 9 }
- 
+
+cgprsCgTotalServiceRecords   OBJECT-TYPE
+     SYNTAX                  Counter32
+     UNITS                   "records"
+     MAX-ACCESS              read-only
+     STATUS                  current
+     DESCRIPTION
+         "This object reflects the total number of service records
+         created on the GGSN, either since the system startup or since
+         the time the service aware feature is enabled.
+
+         Trigger Condition: This counter is triggered when the
+         service record is closed."
+     ::= { ciscoGprsChargingStats 10 }
+
 --
 -- Charging Gateway Status
 --
@@ -1677,6 +2098,7 @@ cgprsCgMaintenanceModeNotif  NOTIFICATION-TYPE
          GGSN charging function is in maintenance mode. This
          can be identified by cgprsCgServiceMode object."
      ::= { ciscoGprsCharNotifs 4 }
+
 --  
 -- Conformances definitions 
 --  
@@ -1756,7 +2178,7 @@ cgprsCgComplianceRev2 MODULE-COMPLIANCE
     ::= {cgprsCgMIBCompliances 3 }
 
 cgprsCgComplianceRev3 MODULE-COMPLIANCE
-     STATUS  current
+     STATUS  deprecated -- replaced by cgprsCgComplianceRev4
      DESCRIPTION
             "The compliance statement for entities which implement the
             CISCO GPRS CHARGING MIB."
@@ -1789,6 +2211,30 @@ cgprsCgComplianceRev3 MODULE-COMPLIANCE
                 createAndWait(5) need not be supported."
     ::= {cgprsCgMIBCompliances 4 }
 
+cgprsCgComplianceRev4 MODULE-COMPLIANCE
+     STATUS  current
+     DESCRIPTION
+            "The compliance statement for entities which implement the
+            CISCO GPRS CHARGING MIB."
+     MODULE
+            MANDATORY-GROUPS { cgprsCgMIBConfigGroupRev3,
+                               cgprsCgMIBStatsGroupRev2,
+                               cgprsCgMIBAlarmsGroupRev1,
+                               cgprsCgMIBNotifGroupRev1,
+                               cgprsCgMIBStatusGroup,
+                               cgprsCgMIBConfigGroupR60,
+                               cgprsCgMIBStatusGroupR60
+                             }
+            OBJECT           cgprsCgProfileRowStatus
+            SYNTAX           INTEGER {
+                                active(1),
+                                createAndGo(4),
+                                destroy(6)
+                             }
+            DESCRIPTION
+                "The states notInService(2), notReady(3) and
+                createAndWait(5) need not be supported."
+    ::= {cgprsCgMIBCompliances 5 }
 
 -- units of conformance 
  
@@ -1958,6 +2404,7 @@ cgprsCgMIBConfigGroupRev2  OBJECT-GROUP
                cgprsCgTariffTimeSec,
                cgprsCgClearCdrPartialCdr,
                cgprsCgCdrSgsnChangeLimit,
+               cgprsCgSgsnChangeLimit,
                cgprsCgRelease,
                cgprsCgGtpShortHeaderEnable,
                cgprsCgTransFormNumRespEnable
@@ -2088,6 +2535,42 @@ cgprsCgMIBStatusGroup OBJECT-GROUP
         status."
     ::= { cgprsCgMIBGroups 12 }
 
+cgprsCgMIBConfigGroupR60   OBJECT-GROUP
+    OBJECTS { cgprsCgCdrOptionServiceRecord,
+              cgprsCgPartialCdrGenEnableAll,
+              cgprsCgProfileCdrSuppressPrepaid,
+              cgprsCgProfileContentDccaProfile,
+              cgprsCgProfileContentPostTime,
+              cgprsCgProfileContentPostValTime,
+              cgprsCgProfileContentPostVolume,
+              cgprsCgProfileContentRulebaseId,
+              cgprsCgCdrOptionApn,
+              cgprsCgCdrOptionVirtualApn,
+              cgprsCgCdrOptionApnSelMode,
+              cgprsCgCdrOptionDynamicAddr,
+              cgprsCgCdrOptionNip,
+              cgprsCgCdrOptionPdpAddress,
+              cgprsCgCdrOptionPdpType,
+              cgprsCgCdrOptionSerMsisdn,
+              cgprsCgCdrOptionSgsnPlmn,
+              cgprsCgCdrOptionCamelCharInfo,
+              cgprsCgCdrOptionImeisv,
+              cgprsCgCdrOptionMsTimeZone,
+              cgprsCgCdrOptionRatType,
+              cgprsCgCdrOptionUserLocInfo 
+            }
+    STATUS    current
+    DESCRIPTION
+        "A collection of objects added as part of GGSN release
+         R6.0."
+    ::= { cgprsCgMIBGroups 13 }
+
+cgprsCgMIBStatusGroupR60  OBJECT-GROUP
+    OBJECTS { cgprsCgTotalServiceRecords }
+    STATUS    current
+    DESCRIPTION
+        "A collection of status object added as part of GGSN
+        release R6.0."
+    ::= { cgprsCgMIBGroups 14 }
+
 END 
-
-

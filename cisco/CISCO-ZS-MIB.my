@@ -25,12 +25,12 @@ IMPORTS
         ifIndex, InterfaceIndexOrZero     FROM    IF-MIB
         vsanIndex                         FROM    CISCO-VSAN-MIB
         VsanIndex, DomainIdOrZero,
-        FcAddressId                       FROM    CISCO-ST-TC
+        FcAddressId, FcNameId             FROM    CISCO-ST-TC
         FcGs3RejectReasonCode             FROM    CISCO-NS-MIB;
 
 
 ciscoZsMIB  MODULE-IDENTITY
-        LAST-UPDATED  "200409010000Z"
+        LAST-UPDATED  "200504070000Z"
         ORGANIZATION  "Cisco Systems Inc."
         CONTACT-INFO
                 "     Cisco Systems
@@ -55,6 +55,13 @@ ciscoZsMIB  MODULE-IDENTITY
 
                  VSAN  -  Virtual Storage Area Network."
 
+        REVISION  "200504070000Z"
+        DESCRIPTION
+                "Added zoneDbHardZoningEnabled to zoneDbTable.
+                 Added zoneSetClone, zoneClone and zoneAliasClone
+                 objects. Added zoneActivateNotify notification.
+                 Added zoneSwitchWwn object to be used in
+                 zoneActivateNotify notification."
         REVISION  "200409010000Z"
         DESCRIPTION
                 "Added objects zoneQos, zoneQosPriority, 
@@ -615,7 +622,8 @@ ZoneSetEntry ::= SEQUENCE {
         zoneSetName             SnmpAdminString,
         zoneSetZoneList         FcList,
         zoneSetLastChange       TimeStamp,
-        zoneSetRowStatus        RowStatus
+        zoneSetRowStatus        RowStatus,
+        zoneSetClone            SnmpAdminString
 }
 
 zoneSetIndex  OBJECT-TYPE
@@ -684,6 +692,19 @@ zoneSetRowStatus OBJECT-TYPE
                  the corresponding value of zoneSetName is 
                  unique within the VSAN."
         ::= { zoneSetEntry 5 }
+
+zoneSetClone OBJECT-TYPE
+        SYNTAX        SnmpAdminString (SIZE (1..64))
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+                "Setting this object to a name will result in
+                 this zone set being cloned and the cloned
+                 zone set will be set to this name.
+
+                 When this object is read, the zero-length
+                 string is returned." 
+        ::= { zoneSetEntry 6 }
 
 --
 -- zoneSetActivateTable
@@ -893,7 +914,8 @@ ZoneEntry ::= SEQUENCE {
         zoneReadOnly         TruthValue,
         zoneQos              TruthValue,
         zoneQosPriority      ZoneQosPriorityLevel,
-        zoneBroadcast        TruthValue
+        zoneBroadcast        TruthValue,
+        zoneClone            SnmpAdminString
 }
 
 zoneIndex  OBJECT-TYPE
@@ -1056,6 +1078,19 @@ zoneBroadcast OBJECT-TYPE
         DEFVAL { false }
         ::= { zoneEntry 10 }
 
+zoneClone OBJECT-TYPE
+        SYNTAX        SnmpAdminString (SIZE (1..64))
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+                "Setting this object to a name will result in
+                 this zone being cloned and the cloned
+                 zone will be set to this name.
+
+                 When this object is read, the zero-length
+                 string is returned."
+        ::= { zoneEntry 11 }
+
 --
 -- zoneAliasTable
 --
@@ -1093,7 +1128,8 @@ ZoneAliasEntry ::= SEQUENCE {
         zoneAliasName                   SnmpAdminString,
         zoneAliasMemberList             FcList,
         zoneAliasRowStatus              RowStatus,
-        zoneAliasLastChange             TimeStamp
+        zoneAliasLastChange             TimeStamp,
+        zoneAliasClone                  SnmpAdminString
 }
 
 zoneAliasIndex OBJECT-TYPE
@@ -1168,6 +1204,19 @@ zoneAliasLastChange OBJECT-TYPE
                  of the local network management system, then this
                  object will contain a zero value."
         ::= { zoneAliasEntry 5 }
+
+zoneAliasClone OBJECT-TYPE
+        SYNTAX        SnmpAdminString (SIZE (1..64))
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+                "Setting this object to a name will result in
+                 this alias being cloned and the cloned
+                 alias will be set to this name.
+
+                 When this object is read, the zero-length
+                 string is returned."
+        ::= { zoneAliasEntry 6 }
 
 --
 -- zoneMemberTable
@@ -2362,7 +2411,8 @@ zoneDbEntry OBJECT-TYPE
 
 ZoneDbEntry ::= SEQUENCE {
         zoneDbClearDb               INTEGER,
-        zoneDbEnforcedEqualsLocal   TruthValue
+        zoneDbEnforcedEqualsLocal   TruthValue,
+        zoneDbHardZoningEnabled     TruthValue
 } 
 
 zoneDbClearDb OBJECT-TYPE
@@ -2398,6 +2448,23 @@ zoneDbEnforcedEqualsLocal OBJECT-TYPE
                  If the value of this object is 'false', then
                  they are not the same."
         ::= { zoneDbEntry 2 }
+
+zoneDbHardZoningEnabled OBJECT-TYPE
+        SYNTAX         TruthValue
+        MAX-ACCESS     read-only
+        STATUS         current
+        DESCRIPTION
+                "This object indicates if hard zoning is
+                 enabled on this VSAN. Hard Zoning is a 
+                 mechanism by which zoning is enforced in
+                 hardware.
+
+                 If the value of this object is 'true', then 
+                 hard zoning is enabled on this VSAN.
+
+                 If the value of this object is 'false', then
+                 hard zoning is not enabled on this VSAN."
+        ::= { zoneDbEntry 3 }
 
 zoneCopyTable OBJECT-TYPE
         SYNTAX         SEQUENCE OF ZoneCopyEntry
@@ -2697,6 +2764,16 @@ zoneZoneSetDistributeFailReason OBJECT-TYPE
                  this object does not make sense."
         ::= { zoneConfiguration 36 }
 
+zoneSwitchWwn OBJECT-TYPE
+        SYNTAX         FcNameId
+        MAX-ACCESS     accessible-for-notify
+        STATUS         current
+        DESCRIPTION
+                "This object represents the WWN of the 
+                 local device. It is used in the
+                 notification zoneActivateNotify."
+        ::= { zoneConfiguration 37 }
+
 -- Notifications
 
 
@@ -2765,6 +2842,18 @@ zoneUnsuppMemInIntOpModeNotify NOTIFICATION-TYPE
                  identifies the VSAN on which the mismatch has
                  been identified."
         ::= { zoneNotifications 5 }
+
+zoneActivateNotify NOTIFICATION-TYPE
+        OBJECTS  { zoneSetActivateResult, zoneSwitchWwn }
+        STATUS   current
+        DESCRIPTION
+                "This notification is generated whenever a
+                 zone set is activated/deactivated on a VSAN.
+                 The zoneSetActivateResult object denotes
+                 the outcome of the activation/deactivation.
+                 The zoneSwitchWwn object represents the
+                 WWN of the local device."
+        ::= { zoneNotifications 6 }
 
 -- Conformance
 
@@ -3216,7 +3305,8 @@ zoneServerMIBComplianceRev5 MODULE-COMPLIANCE
         ::= { zoneServerMIBCompliances 6 }
 
 zoneServerMIBComplianceRev6 MODULE-COMPLIANCE
-        STATUS current
+        STATUS  deprecated
+           -- superceded by zoneServerMIBComplianceRev7 
         DESCRIPTION
                 "The compliance statement for entities which
                  implement the Zone Server."
@@ -3296,6 +3386,89 @@ zoneServerMIBComplianceRev6 MODULE-COMPLIANCE
                 "Only IPv4 support is required."
 
         ::= { zoneServerMIBCompliances 7 }
+
+zoneServerMIBComplianceRev7 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the Zone Server."
+        MODULE MANDATORY-GROUPS {zoneConfigurationGroup6,
+                                 zoneStatisticsGroup,
+                                 zoneNotificationControlGroup1,
+                                 zoneNotificationGroup2,
+                                 zoneNotificationControlGroup1Sup1}
+
+        GROUP      zoneLunStatsGroup
+        DESCRIPTION
+                "Only entities that support LUN zoning need to
+                 support this group."
+
+        OBJECT     zoneSetRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneSetActivateRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneAliasRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneMemberRowStatus
+        SYNTAX     INTEGER {             
+                     active(1), 
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+                     
+        OBJECT     zoneCopyRowStatus
+        SYNTAX     INTEGER {             
+                     active(1), 
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+                     
+        OBJECT     zoneCopyServerAddrType
+        SYNTAX     INTEGER { ipv4(1) }
+        DESCRIPTION
+                "Only IPv4 support is required."
+
+        ::= { zoneServerMIBCompliances 8 }
 
 -- Units of Conformance                                  
 
@@ -3622,7 +3795,7 @@ zoneNotificationControlGroup1 OBJECT-GROUP
                        zoneMergeFailureVSANNum,
                        zoneMergeSuccessVSANNum,
                        zoneVsanId}
-        STATUS  current
+        STATUS  current 
         DESCRIPTION
                 "A collection of notification control and 
                  notification information objects for monitoring 
@@ -3794,12 +3967,125 @@ zoneConfigurationGroup5 OBJECT-GROUP
                  zoneZoneSetDistributeVsan,
                  zoneZoneSetDistributeResult,
                  zoneZoneSetDistributeFailReason}
-        STATUS   current
+        STATUS   deprecated 
         DESCRIPTION
                 "A collection of objects for displaying and configuring
                  Zone Membership and deleting the local zone server
                  database."
         ::= { zoneServerMIBGroups 12 }
+
+zoneConfigurationGroup6 OBJECT-GROUP
+        OBJECTS {zoneSetPropagationMode,
+                 zoneDefaultZoneBehaviour,
+                 zoneDefaultZoneReadOnly,
+                 zoneDefaultZoneQos,
+                 zoneDefaultZoneQosPriority,
+                 zoneDefaultZoneBroadcast,
+                 zoneSetNumber,
+                 zoneSetName,
+                 zoneSetZoneList,
+                 zoneSetLastChange,
+                 zoneSetRowStatus,
+                 zoneSetClone,
+                 zoneSetActivate,
+                 zoneSetActivateResult,
+                 zoneSetDeActivate,
+                 zoneSetActivateRowStatus,
+                 zoneSetFailCause,
+                 zoneSetFailDomId,
+                 zoneNumber,
+                 zoneName,
+                 zoneMemberList,
+                 zoneAliasList,
+                 zoneLastChange,
+                 zoneRowStatus,
+                 zoneReadOnly,
+                 zoneQos,
+                 zoneQosPriority,
+                 zoneBroadcast,
+                 zoneClone,
+                 zoneAliasNumber,
+                 zoneAliasName,
+                 zoneAliasMemberList,
+                 zoneAliasRowStatus,
+                 zoneAliasLastChange,
+                 zoneAliasClone,
+                 zoneMemberNumber,
+                 zoneMemberFormat,
+                 zoneMemberID,
+                 zoneMemberLunID,
+                 zoneMemberRowStatus,
+                 zoneEnforcedZoneSetNumber,
+                 zoneEnforcedZoneSetName,
+                 zoneEnforcedZoneSetZoneList,
+                 zoneEnforcedZoneSetActivateTime,
+                 zoneEnforcedZoneNumber,
+                 zoneEnforcedZoneName,
+                 zoneEnforcedZoneMemberList,
+                 zoneEnforcedZoneAliasList,
+                 zoneEnforcedZoneActivateTime,
+                 zoneEnforcedZoneReadOnly,
+                 zoneEnforcedZoneQos,
+                 zoneEnforcedZoneQosPriority,
+                 zoneEnforcedZoneBroadcast,
+                 zoneEnforcedZoneMemberNumber,
+                 zoneEnforcedZoneMemberFormat,
+                 zoneEnforcedZoneMemberID,
+                 zoneEnforcedZoneMemberLunID,
+                 zoneMergeFailRecoverSpinLock,
+                 zoneMergeFailRecoverInterface,
+                 zoneMergeFailRecoverVsan,
+                 zoneMergeFailRecoverOper,
+                 zoneMergeFailRecoverResult,
+                 zoneCopyActiveToFullOnVsan,
+                 zoneDbClearDb,
+                 zoneDbEnforcedEqualsLocal,
+                 zoneDbHardZoningEnabled,
+                 zoneCopyProto,
+                 zoneCopyDestFileType,
+                 zoneCopyServerAddrType,
+                 zoneCopyServerAddr,
+                 zoneCopyDestFileName,
+                 zoneCopyUserName,
+                 zoneCopyUserPassword,
+                 zoneCopyStartCopy,
+                 zoneCopyState,
+                 zoneCopyRowStatus,
+                 zoneZoneSetDistributeVsan,
+                 zoneZoneSetDistributeResult,
+                 zoneZoneSetDistributeFailReason}
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for displaying and configuring
+                 Zone Membership and deleting the local zone server
+                 database."
+        ::= { zoneServerMIBGroups 13 }
+
+zoneNotificationGroup2 NOTIFICATION-GROUP
+        NOTIFICATIONS {zoneServiceReqRejNotify,
+                       zoneMergeFailureNotify,
+                       zoneMergeSuccessNotify,
+                       zoneDefZoneBehaviourChngNotify,
+                       zoneUnsuppMemInIntOpModeNotify,
+                       zoneActivateNotify}
+        STATUS        current
+        DESCRIPTION
+                "A collection of notification(s) for monitoring
+                 Zone Server request rejection, zone merge
+                 failures and successes and default zoning
+                 behavioural changes."
+        ::= { zoneServerMIBGroups 14 }
+
+zoneNotificationControlGroup1Sup1 OBJECT-GROUP
+        OBJECTS {
+                  zoneSwitchWwn
+                }
+        STATUS  current
+        DESCRIPTION
+                "A group that supplements 
+                 zoneNotificationControlGroup1 with additional
+                 object(s)."
+        ::= { zoneServerMIBGroups 15 }
 
 END
 

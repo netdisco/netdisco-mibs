@@ -3,7 +3,7 @@
 --
 -- October 2002, Vinay Gaonkar
 --
--- Copyright (c) 2002, 2003 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -18,14 +18,15 @@ IMPORTS
      NOTIFICATION-GROUP                     FROM SNMPv2-CONF
      TEXTUAL-CONVENTION, TruthValue,
      DateAndTime                            FROM SNMPv2-TC 
+     EntPhysicalIndexOrZero                 FROM CISCO-TC
      SnmpAdminString                        FROM SNMP-FRAMEWORK-MIB    
      InetAddressType, InetAddress
-                                            FROM INET-ADDRESS-MIB	 
+                                            FROM INET-ADDRESS-MIB
      ciscoMgmt                              FROM CISCO-SMI;
 
 
 ciscoSystemExtMIB MODULE-IDENTITY
-        LAST-UPDATED "200305020000Z"
+        LAST-UPDATED "200506140000Z"
         ORGANIZATION "Cisco Systems Inc. "
         CONTACT-INFO
                 "     Cisco Systems
@@ -36,20 +37,42 @@ ciscoSystemExtMIB MODULE-IDENTITY
                 Tel: +1 800 553 -NETS
                 E-mail: cs-san@cisco.com"
         DESCRIPTION
-		     "MIB module for monitoring High Availability, 
+                "MIB module for monitoring High Availability,
               SNMP SET errors and bandwidths."
+
+        REVISION   "200506140000Z"
+        DESCRIPTION
+            "Updated CseHaRestartReason
+             Added a new table cseSwCoresTable. 
+             Added notifications - cseFailSwCoreNotify
+                                 - cseShutDownNotify
+             Added a new group ciscoSystemExtSwFailureGroup2.
+             Added a new group ciscoSystemExtNotificationGroup1.
+
+             Added a new object cseSysConsolePortStatus. 
+             Added a new group ciscoSystemExtInfoGroupRev2.
+             Added a new compliance group 
+                     ciscoSystemExtMIBComplianceRev4. "
+
+        REVISION   "200404190000Z"
+        DESCRIPTION
+            "Added a new object cseSwCorePath." 
+
         REVISION   "200305020000Z"
         DESCRIPTION
             "Added a new object cseWriteErase.
              Added a new group ciscoSystemExtInfoGroupOptional.
              A new compliance ciscoSystemExtMIBComplianceRev2 
              added to replace ciscoSystemExtMIBComplianceRev1." 
+
         REVISION   "200303020000Z"
         DESCRIPTION
             "Added cseSysAutoSync and cseSysAutoSyncState."      
+
         REVISION   "200211190000Z"
         DESCRIPTION
             "Added cseSysConfLastChange."      
+
         REVISION   "200210040000Z"
         DESCRIPTION
             "Initial version of this MIB module."
@@ -65,6 +88,9 @@ ciscoSystemExtMIBConformance OBJECT IDENTIFIER
 ciscoSysInfoGroup OBJECT IDENTIFIER  ::= { ciscoSystemExtMIBObjects 1 }
 ciscoSysErrorGroup OBJECT IDENTIFIER ::= { ciscoSystemExtMIBObjects 2 }
 ciscoHaGroup OBJECT IDENTIFIER       ::= { ciscoSystemExtMIBObjects 3 }
+ciscoSwFailureGroup OBJECT IDENTIFIER 
+                                     ::= { ciscoSystemExtMIBObjects 4 }
+ 
                                 
 -- Textual Conventions                                
 
@@ -77,13 +103,17 @@ CseHaRestartReason ::= TEXTUAL-CONVENTION
                   otherSignal (3)       - service got some other signal
                   sigterm (4)           - received SIGTERM
                   softwareUpgrade (5)   - software upgrade
-                  configUpdate (6)     - config update
+                  configUpdate (6)      - config update
                   configRemove (7)      - config removal
                   shutdown (8)          - manually shutdown
                   aborted (9)           - aborted
                   heartbeatFailure (10) - heartbeat failure
-                  userTerminate (11)    - user termnation
+                  userTerminate (11)    - user termination
                   gracefulExit (12)     - graceful exit
+                  failureNoCallhome (13)- service exited but it 
+                                          does not want a callhome
+                                          message to be generated 
+                  serviceTimeout (14)   - service timeout
                "
         SYNTAX    INTEGER {    
                      unknown (1), 
@@ -97,7 +127,9 @@ CseHaRestartReason ::= TEXTUAL-CONVENTION
                      aborted (9),
                      heartbeatFailure (10),
                      userTerminate (11),
-                     gracefulExit (12)
+                     gracefulExit (12),
+                     noCallHomeFailure (13),
+                     serviceTimeout (14)
                   }
 
 -- System Information Group
@@ -190,6 +222,25 @@ cseWriteErase OBJECT-TYPE
     ::= { ciscoSysInfoGroup 6 }   
 
 
+cseSysConsolePortStatus OBJECT-TYPE
+        SYNTAX          INTEGER {
+                                 connected(1),
+                                 notConnected(2)
+                        }
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+               "This object describes the status of the console
+                port on this device.  
+  
+                The status 'connected' means that there is
+                a cable attached to the console port.
+
+                The status 'notConnected' means that there is
+                no connection out of the console port."
+    ::= { ciscoSysInfoGroup 7 }
+
+
 cseSnmpErrorTable  OBJECT-TYPE
     SYNTAX     SEQUENCE OF CseSnmpErrorEntry
     MAX-ACCESS not-accessible
@@ -218,7 +269,7 @@ cseSnmpErrorTable  OBJECT-TYPE
          This table provides a framework for the command responders to 
          provide more information on the SET errors.
        
-         It is upto the implementation to create entries in this table 
+         It is up to the implementation to create entries in this table 
          for either only certain SNMP errors or all of the SNMP errors.
 
          Note that only most recent incarnation of an entry is kept in 
@@ -328,7 +379,123 @@ cseHaRestartService  OBJECT-TYPE
         DESCRIPTION   
                "Name of the service (or process) that was restarted on 
                the 'active' supervisor."
-        ::= { ciscoHaGroup 4 }                         
+        ::= { ciscoHaGroup 4 }
+
+cseHaShutDownReason  OBJECT-TYPE
+        SYNTAX        SnmpAdminString (SIZE (0..255))
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION
+               "The description of the reason as to why the system
+                is going to go down."
+        ::= { ciscoHaGroup 6 }
+
+
+--
+-- software failure group
+--
+cseSwCorePath OBJECT-TYPE
+        SYNTAX        SnmpAdminString (SIZE (0..255))
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   
+               "Provides the path where the software cores are 
+                stored on the system. The management application can
+                use this path to copy the cores from the system using
+                CISCO-FLASH-MIB."
+        ::= { ciscoSwFailureGroup 1 }
+                         
+
+cseSwCoresTable  OBJECT-TYPE
+    SYNTAX     SEQUENCE OF CseSwCoresEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+         "A table containing information about the system cores that 
+          have been generated as an effect of some system failures."
+
+    ::= { ciscoSwFailureGroup 2 }
+
+cseSwCoresEntry OBJECT-TYPE
+    SYNTAX     CseSwCoresEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "An entry (conceptual row) in the  cseSwCoresTable, containing
+        information about cores that have been generated."
+
+    INDEX { cseSwCoresModule, cseSwCoresProcName, 
+            cseSwCoresInstance }
+    ::= { cseSwCoresTable 1 }
+
+CseSwCoresEntry ::= SEQUENCE {
+        cseSwCoresModule            EntPhysicalIndexOrZero,
+        cseSwCoresProcName          SnmpAdminString,
+        cseSwCoresInstance          Unsigned32,
+        cseSwCoresPID               Unsigned32,
+        cseSwCoresTimeCreated       DateAndTime,
+        cseSwCoresSlotNum           Unsigned32
+}
+
+cseSwCoresModule OBJECT-TYPE
+    SYNTAX       EntPhysicalIndexOrZero
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "The physical module on which the process crashed."
+    ::= { cseSwCoresEntry 1 }
+
+cseSwCoresProcName OBJECT-TYPE
+    SYNTAX         SnmpAdminString (SIZE (1..64))
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "The name of the process that crashed and generated core."
+    ::= { cseSwCoresEntry 2 }
+
+cseSwCoresInstance  OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "The instance of the core for a process identified by
+         cseSwCoresProcName and on the module identified by
+         cseSwCoresModule. 
+  
+         To uniquely identify a core, the module number and 
+         process name are not sufficient as there could be 
+         multiple cores for the same module number and process
+         name."
+
+    ::= { cseSwCoresEntry 3 }
+
+cseSwCoresPID    OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "The process identifier of the process that dumped the 
+         core."
+    ::= { cseSwCoresEntry 4 }
+
+cseSwCoresTimeCreated  OBJECT-TYPE
+    SYNTAX             DateAndTime
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+        "The time at which the core was created."
+    ::= { cseSwCoresEntry 5 }
+
+        
+cseSwCoresSlotNum  OBJECT-TYPE
+    SYNTAX         Unsigned32
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The slot number corresponding to the cseSwCoresModule
+         in this chassis." 
+    ::= { cseSwCoresEntry 6 }
+
 
 -- Notifications
 --        
@@ -336,6 +503,7 @@ cseHaRestartService  OBJECT-TYPE
 -- High Availability Notifications        
 cseHaNotification OBJECT IDENTIFIER          ::= {ciscoHaGroup  5 }
 cseHaNotificationPrefix OBJECT IDENTIFIER    ::= { cseHaNotification 0 }
+
 
 cseHaRestartNotify  NOTIFICATION-TYPE
             OBJECTS     { cseHaRestartReason, 
@@ -348,6 +516,36 @@ cseHaRestartNotify  NOTIFICATION-TYPE
                  supervisor is restarted."
 
     ::= { cseHaNotificationPrefix 1 }
+
+
+cseShutDownNotify  NOTIFICATION-TYPE
+            OBJECTS     { cseHaShutDownReason }
+            STATUS      current
+            DESCRIPTION
+                 "A system shutdown notification is generated
+                 whenever a system is going to shut down. The
+                 cseHaShutDownReason, describes the reason as to
+                 why the system is going to go down." 
+
+    ::= { cseHaNotificationPrefix 2 }
+
+
+-- Failure Group Notifications
+cseFailNotification OBJECT IDENTIFIER      
+                            ::= {ciscoSwFailureGroup  3 }
+cseFailNotificationPrefix OBJECT IDENTIFIER 
+                            ::= { cseFailNotification 0 }
+
+cseFailSwCoreNotify  NOTIFICATION-TYPE
+--            OBJECTS     {}
+            STATUS      current
+            DESCRIPTION
+                 "A notification is generated whenever a software
+                  crash occurs and a core file is generated."
+
+    ::= { cseFailNotificationPrefix 1 }
+
+
 
 -- Conformance
 
@@ -418,7 +616,63 @@ ciscoSystemExtMIBComplianceRev2 MODULE-COMPLIANCE
 --                "Only ipv4 (1) needs to be supported."
           
         ::= { ciscoSystemExtMIBCompliances 3 }
+
+ciscoSystemExtMIBComplianceRev3 MODULE-COMPLIANCE
+        STATUS   deprecated -- superceeded by 
+                            -- ciscoSystemExtMIBComplianceRev4 
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-SYTEM-EXT-MIB."
+        MODULE MANDATORY-GROUPS { ciscoSystemExtInfoGroupRev1,
+                                  ciscoSystemExtErrorGroup,
+                                  ciscoSystemExtHaGroup,
+                                  ciscoSystemExtNotificationGroup
+                                  }
+        GROUP ciscoSystemExtInfoGroupOptional
+           DESCRIPTION
+                 "Implementation of this group is optional." 
+                 
+
+--        OBJECT cseSnmpErrorAddressType
+--        SYNTAX     INTEGER {
+--                     ipv4 (1)
+--                   }
+--        DESCRIPTION
+--                "Only ipv4 (1) needs to be supported."
+
+        GROUP ciscoSystemExtSwFailureGroup
+        DESCRIPTION
+                 "Implementation of this group is optional." 
+                      
+        ::= { ciscoSystemExtMIBCompliances 4 }
         
+
+ciscoSystemExtMIBComplianceRev4 MODULE-COMPLIANCE
+        STATUS   current 
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-SYTEM-EXT-MIB."
+        MODULE MANDATORY-GROUPS { ciscoSystemExtInfoGroupRev1,
+                                  ciscoSystemExtInfoGroupRev2,
+                                  ciscoSystemExtErrorGroup,
+                                  ciscoSystemExtHaGroup,
+                                  ciscoSystemExtNotificationGroup,
+                                  ciscoSystemExtNotificationGroupSup1,
+                                  ciscoSystemExtHaGroupRev1
+                                  }
+        GROUP ciscoSystemExtInfoGroupOptional
+           DESCRIPTION
+                 "Implementation of this group is optional."
+
+
+        GROUP ciscoSystemExtSwFailureGroup
+        DESCRIPTION
+                 "Implementation of this group is optional."
+                     
+        ::= { ciscoSystemExtMIBCompliances 5 }
+
+
+
 -- Units of Conformance
 
 ciscoSystemExtInfoGroup OBJECT-GROUP
@@ -443,14 +697,14 @@ ciscoSystemExtHaGroup  OBJECT-GROUP
                    cseHaRestartService,
                    cseHaRestartStateless 
                  }
-        STATUS   current
+        STATUS   current 
         DESCRIPTION
                 "A collection of objects for High Availability."
         ::= { ciscoSystemExtMIBGroups 3 }
 
 ciscoSystemExtNotificationGroup  NOTIFICATION-GROUP
         NOTIFICATIONS  { cseHaRestartNotify }
-        STATUS   current
+        STATUS   current 
         DESCRIPTION
                 "A collection of notifications for the 
                 High Availability."
@@ -462,7 +716,7 @@ ciscoSystemExtInfoGroupRev1 OBJECT-GROUP
                   cseSysConfLastChange,
                   cseSysAutoSync,
                   cseSysAutoSyncState }
-        STATUS   current
+        STATUS   current 
         DESCRIPTION
                 "A collection of objects for system information."
         ::= { ciscoSystemExtMIBGroups 5 }
@@ -474,5 +728,49 @@ ciscoSystemExtInfoGroupOptional OBJECT-GROUP
                 "A collection of objects for system information
                 which are optional."
         ::= { ciscoSystemExtMIBGroups 6 }
+
+ciscoSystemExtSwFailureGroup OBJECT-GROUP
+        OBJECTS { cseSwCorePath }
+        STATUS   current  
+        DESCRIPTION
+                "A collection of objects for system software failure
+                 information which are optional."
+        ::= { ciscoSystemExtMIBGroups 7 }
+
+ciscoSystemExtInfoGroupRev2  OBJECT-GROUP
+        OBJECTS { cseSysConsolePortStatus }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for system information."
+        ::= { ciscoSystemExtMIBGroups 8 }
+
+ciscoSystemExtSwFailureGroup2 OBJECT-GROUP
+        OBJECTS { cseSwCoresPID, 
+                  cseSwCoresTimeCreated,
+                  cseSwCoresSlotNum
+                }
+        STATUS   current   
+        DESCRIPTION
+                "A collection of objects for system software failure
+                 information which are optional."
+        ::= { ciscoSystemExtMIBGroups 9 }
         
+
+ciscoSystemExtNotificationGroupSup1 NOTIFICATION-GROUP
+         NOTIFICATIONS  { cseShutDownNotify,
+                          cseFailSwCoreNotify }
+         STATUS   current
+         DESCRIPTION
+                 "A collection of notifications for the
+                 system MIB. "
+         ::= { ciscoSystemExtMIBGroups 10 }
+
+ciscoSystemExtHaGroupRev1  OBJECT-GROUP
+        OBJECTS  { cseHaShutDownReason }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for High Availability."
+        ::= { ciscoSystemExtMIBGroups 11 }
+
+
 END

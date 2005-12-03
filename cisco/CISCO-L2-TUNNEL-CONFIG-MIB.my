@@ -1,10 +1,10 @@
 -- *****************************************************************
 -- Cisco L2 Tunnel Config MIB
 --
--- February, 2002 Seth Wang
 -- April,    2002 Binh Le
+-- September,   2003 Seth Wang
 --
--- Copyright (c) 2002 by Cisco Systems, Inc.
+-- Copyright (c) 2002-2005 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -13,6 +13,7 @@ CISCO-L2-TUNNEL-CONFIG-MIB DEFINITIONS ::= BEGIN
 IMPORTS
     MODULE-IDENTITY, 
     OBJECT-TYPE,
+    NOTIFICATION-TYPE,
     Unsigned32,
     Counter32
         FROM SNMPv2-SMI
@@ -21,7 +22,8 @@ IMPORTS
         FROM SNMPv2-TC
   
     MODULE-COMPLIANCE,
-    OBJECT-GROUP
+    OBJECT-GROUP,
+    NOTIFICATION-GROUP
         FROM SNMPv2-CONF
 
     ifIndex
@@ -35,7 +37,7 @@ IMPORTS
     ;
 
 ciscoL2TunnelConfigMIB MODULE-IDENTITY
-    LAST-UPDATED    "200205311000Z"
+    LAST-UPDATED    "200506270000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
         "Cisco Systems
@@ -47,7 +49,7 @@ ciscoL2TunnelConfigMIB MODULE-IDENTITY
 
         Tel: +1 800 553-NETS
 
-        Email: cs-wbu@cisco.com, cs-snmp@cisco.com"
+        Email: cs-lan-switch-snmp@cisco.com"
 
     DESCRIPTION
         "This MIB module is for layer 2 tunneling related configurations
@@ -58,6 +60,20 @@ ciscoL2TunnelConfigMIB MODULE-IDENTITY
         ISP, which will tunnel the packets from one network to another,
         making it appear as if the two networks are actually just one."
 
+    REVISION        "200506270000Z"
+    DESCRIPTION
+        "Add 'eoam(3)' to cltcTunneledProtocolType,
+         'eoam(5)' to cltcTunnelThresholdProtocolIndex and
+         'eoam(5)' to cltcTunneledProtocolIndex."
+    REVISION        "200406090000Z"
+    DESCRIPTION
+        "Change the description for cltcTunnelThresholdProtocolIndex.
+         Add the new groups cltcTunnelThresholdNotifsGroup and
+         cltcNotifsEnableGroup."
+    REVISION        "200309030000Z"
+    DESCRIPTION
+        "Add a new object cltcTunnelDropStats. Remove the restriction
+         for enabling cltcDot1qTunnelMode from the description."
     REVISION        "200205311000Z"
     DESCRIPTION
         "Add SNMP support for 802.1q All Tagged (dot1q-all-tagged) 
@@ -104,6 +120,16 @@ cltcTunnelCos  OBJECT-TYPE
         to all ingress tunneling interfaces."
     ::= { cltcGlobal 1 }
 
+cltcNotificationEnable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object indicates whether the system will
+         generate the cltcTunnelDropThresholdExceeded and
+         cltcTunnelShutdownThresholdExceeded notifications."
+    ::= { cltcGlobal 2 }
+
 --
 -- cltcDot1qTunnelTable
 --
@@ -143,8 +169,8 @@ cltcDot1qTunnelMode  OBJECT-TYPE
 
         Setting the interface to dot1q tunnel 'disabled' mode causes
         the dot1q tunnel feature to be disabled on this interface.
-        This object cannot be set back to 'enabled' mode, when the
-        cltcAllTaggedEnabled object is set to 'false'."
+        Setting the interface to dot1q tunnel 'enabled' mode causes
+        the dot1q tunnel feature to be enabled on this interface."
     DEFVAL { disabled }
     ::= { cltcDot1qTunnelEntry 1 }
 
@@ -177,7 +203,7 @@ CltcTunneledProtocolEntry ::=
     }
 
 cltcTunneledProtocolType  OBJECT-TYPE
-    SYNTAX      BITS { cdp(0), vtp(1), stp(2) }
+    SYNTAX      BITS { cdp(0), vtp(1), stp(2), eoam(3) }
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -189,7 +215,9 @@ cltcTunneledProtocolType  OBJECT-TYPE
         BIT is set, then the Cisco Discovery Protocol PDU is
         tunneled; if the 'vtp(1)' BIT is set, then the VLAN
         Trunking Protocol PDU is tunneled; if the 'stp(2)' BIT
-        is set, then the Spanning Tree Protocol PDU is tunneled.
+        is set, then the Spanning Tree Protocol PDU is tunneled;
+        if the 'eoam(3)' BIT is set, then the ethernet Operation,
+        Administration and Maintenance PDU is tunneled.
 
         If the bit for a given protocol is cleared for an interface,
         then the statistics for that interface and protocol are cleared.
@@ -236,21 +264,22 @@ cltcTunnelThresholdProtocolIndex  OBJECT-TYPE
                          all(1),
                          cdp(2),
                          vtp(3),
-                         stp(4)
+                         stp(4),
+                         eoam(5)
                        }
     MAX-ACCESS not-accessible
     STATUS     current
     DESCRIPTION
         "A tunneled protocol of an interface.
 
-        - all(1) is supported for devices which only allow the setting
-          of thresholds on a per interface basis, so the thresholds
-          apply for all protocols.  In this case, the three remaining
-          indices, cdp(2), vtp(3) and stp(4)  are not supported
+        - all(1) is supported for devices which allow the setting
+          of thresholds on a per interface basis. This threshold is
+          a combined threshold for the interface which includes all
+          supported protocols.
 
-        - cdp(2), vtp(3), stp(4) are supported for devices which allow
-          the setting of thresholds on a per interface, per protocol
-          basis. In this case, all(1) is not supported."
+        - cdp(2), vtp(3), stp(4) and eoam(5) are supported for devices
+          which allow the setting of thresholds on a per interface,
+          per protocol basis."
     ::= { cltcTunnelThresholdEntry 1 }
 
 cltcTunnelDropThreshold  OBJECT-TYPE
@@ -308,14 +337,16 @@ CltcTunnelStatisticsEntry ::=
     SEQUENCE {
         cltcTunneledProtocolIndex  INTEGER,
         cltcTunnelEncapStats       Counter32,
-        cltcTunnelDeEncapStats     Counter32
+        cltcTunnelDeEncapStats     Counter32,
+        cltcTunnelDropStats        Counter32
     }
 
 cltcTunneledProtocolIndex  OBJECT-TYPE
     SYNTAX     INTEGER {
                          cdp(2),
                          vtp(3),
-                         stp(4)
+                         stp(4),
+                         eoam(5)
                        }
     MAX-ACCESS not-accessible
     STATUS     current
@@ -343,6 +374,17 @@ cltcTunnelDeEncapStats  OBJECT-TYPE
         "The tunneled PDU de-encapsulation statistics of an interface.
         These statistics cover the number of tunneled egress PDUs."
     ::= { cltcTunnelStatisticsEntry 3 }
+
+cltcTunnelDropStats  OBJECT-TYPE
+    SYNTAX      Counter32
+    UNITS       "PDUs"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of PDUs dropped on an interface for a given
+        protocol. The PDUs will be dropped when the
+        cltcTunnelDropThreshold is reached."
+    ::= { cltcTunnelStatisticsEntry 4 }
 
 
 
@@ -404,7 +446,21 @@ cltcMIBNotifications
 cltcMIBNotificationsPrefix
     OBJECT IDENTIFIER ::= { cltcMIBNotifications 0 }
 
--- no notifications defined
+cltcTunnelDropThresholdExceeded NOTIFICATION-TYPE
+    OBJECTS     { cltcTunnelDropThreshold }
+    STATUS      current
+    DESCRIPTION
+        "This notification is generated when the
+         cltcTunnelDropThreshold has been exceeded."
+    ::= { cltcMIBNotificationsPrefix 1 }
+
+cltcTunnelShutdownThresholdExceeded NOTIFICATION-TYPE
+    OBJECTS     { cltcTunnelShutdownThreshold }
+    STATUS      current
+    DESCRIPTION
+        "This notification is generated when the
+         cltcTunnelShutdownThreshold has been exceeded."
+    ::= { cltcMIBNotificationsPrefix 2 }
 
 --
 -- Conformance
@@ -451,7 +507,7 @@ cltcMIBCompliance MODULE-COMPLIANCE
     ::= { cltcMIBCompliances 1 }
 
 cltcMIBCompliance2 MODULE-COMPLIANCE
-    STATUS current
+    STATUS deprecated
     DESCRIPTION
         "The compliance statement for the CISCO-L2-TUNNEL-CONFIG-MIB."
     MODULE
@@ -494,6 +550,123 @@ cltcMIBCompliance2 MODULE-COMPLIANCE
         DESCRIPTION 
             "Write access is not required."
     ::= { cltcMIBCompliances 2 }
+
+cltcMIBCompliance3 MODULE-COMPLIANCE
+    STATUS deprecated
+    DESCRIPTION
+        "The compliance statement for the CISCO-L2-TUNNEL-CONFIG-MIB."
+    MODULE
+        GROUP    cltcDot1qTunnelGroup
+        DESCRIPTION
+            "A collection of objects for configuring dot1q tunnneling.
+            This group is mandatory only in devices which support dot1q
+            tunneling."
+
+        GROUP    cltcTunneledProtocolGroup
+        DESCRIPTION
+            "A collection of objects for configuring tunneled protocols.
+            This group is mandatory only in devices which support dot1q
+            tunneling."
+
+        GROUP    cltcTunnelThresholdGroup
+        DESCRIPTION
+            "A collection of objects for configuring the thresholds for
+            protocol tunneling. This group is mandatory only in devices
+            which support protocol tunneling."
+
+        GROUP    cltcTunnelStatisticsGroup
+        DESCRIPTION
+            "A collection of objects which give the statistics regarding
+            the tunneling interfaces. This group is mandatory only in
+            devices which support tunneling statistics."
+
+        GROUP    cltcDot1qAllTaggedGroup
+        DESCRIPTION
+            "This group is mandatory only in devices which support
+             dot1q-all-tagged feature."
+
+        GROUP    cltcTunnelDropStatisticsGroup
+        DESCRIPTION
+            "A collection of objects which give the statistics regarding
+            dropped PDUs on the tunneling interfaces. This group is
+            mandatory only in devices which support tunneling drop
+            statistics."
+
+        OBJECT      cltcDot1qAllTaggedEnabled
+        MIN-ACCESS  read-only
+        DESCRIPTION 
+            "Write access is not required."
+
+        OBJECT      cltcDot1qAllTaggedIfEnabled
+        MIN-ACCESS  read-only
+        DESCRIPTION 
+            "Write access is not required."
+    ::= { cltcMIBCompliances 3 }
+
+cltcMIBCompliance4 MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+        "The compliance statement for the CISCO-L2-TUNNEL-CONFIG-MIB."
+    MODULE
+        GROUP    cltcDot1qTunnelGroup
+        DESCRIPTION
+            "A collection of objects for configuring dot1q tunnneling.
+            This group is mandatory only in devices which support dot1q
+            tunneling."
+
+        GROUP    cltcTunneledProtocolGroup
+        DESCRIPTION
+            "A collection of objects for configuring tunneled protocols.
+            This group is mandatory only in devices which support dot1q
+            tunneling."
+
+        GROUP    cltcTunnelThresholdGroup
+        DESCRIPTION
+            "A collection of objects for configuring the thresholds for
+            protocol tunneling. This group is mandatory only in devices
+            which support protocol tunneling."
+
+        GROUP    cltcTunnelStatisticsGroup
+        DESCRIPTION
+            "A collection of objects which give the statistics regarding
+            the tunneling interfaces. This group is mandatory only in
+            devices which support tunneling statistics."
+
+        GROUP    cltcDot1qAllTaggedGroup
+        DESCRIPTION
+            "This group is mandatory only in devices which support
+             dot1q-all-tagged feature."
+
+        GROUP    cltcTunnelDropStatisticsGroup
+        DESCRIPTION
+            "A collection of objects which give the statistics regarding
+            dropped PDUs on the tunneling interfaces. This group is
+            mandatory only in devices which support tunneling drop
+            statistics."
+
+        GROUP    cltcNotifsEnableGroup
+        DESCRIPTION
+            "A collections of objects used to enable notifications.
+            This group is mandatory only in devices which support
+            the protocol tunneling notification feature."
+
+        GROUP    cltcTunnelThresholdNotifsGroup
+        DESCRIPTION
+            "A collection of notifications used for the tunnel
+            thresholds. This group is mandatory only in devices
+            which support the protocol tunneling notification
+            feature."
+
+        OBJECT      cltcDot1qAllTaggedEnabled
+        MIN-ACCESS  read-only
+        DESCRIPTION 
+            "Write access is not required."
+
+        OBJECT      cltcDot1qAllTaggedIfEnabled
+        MIN-ACCESS  read-only
+        DESCRIPTION 
+            "Write access is not required."
+    ::= { cltcMIBCompliances 4 }
 
 --
 -- Units of Conformance
@@ -549,5 +722,35 @@ cltcDot1qAllTaggedGroup OBJECT-GROUP
         "A collection of objects for configuring the dot1q-all-tagged
          feature in the system."
     ::= { cltcMIBGroups 5 }
+
+cltcTunnelDropStatisticsGroup OBJECT-GROUP
+    OBJECTS {
+        cltcTunnelDropStats
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects which give the statistics regarding
+        dropped PDUs on the tunneling interfaces."
+    ::= { cltcMIBGroups 6 }
+
+cltcNotifsEnableGroup OBJECT-GROUP
+    OBJECTS {
+        cltcNotificationEnable
+    }
+    STATUS current
+    DESCRIPTION
+        "A collections of objects used to enable notifications."
+    ::= { cltcMIBGroups 7 }
+
+cltcTunnelThresholdNotifsGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+        cltcTunnelDropThresholdExceeded,
+        cltcTunnelShutdownThresholdExceeded
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of notifications used for the tunnel
+        thresholds."
+    ::= { cltcMIBGroups 8 }
 
 END

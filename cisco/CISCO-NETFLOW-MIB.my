@@ -3,7 +3,7 @@
 --
 -- January 2004, Nitish Kundu and Paul Aitken.
 --
--- Copyright (c) 2004 by Cisco Systems, Inc.
+-- Copyright (c) 2004, 2005 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *********************************************************************
 --
@@ -38,10 +38,12 @@ IMPORTS
         ifIndex
                 FROM IF-MIB
         ciscoMgmt
-                FROM CISCO-SMI;
+                FROM CISCO-SMI
+        VlanIndex
+                FROM Q-BRIDGE-MIB;
 
 ciscoNetflowMIB MODULE-IDENTITY
-        LAST-UPDATED    "200401090000Z"
+        LAST-UPDATED    "200503270000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "        Cisco Systems
@@ -66,7 +68,6 @@ ciscoNetflowMIB MODULE-IDENTITY
 
                         1. Cache information and configuration.
                         2. Export information and configuration.
-                        3. Information about Feature Acceleration.
                         4. Export Statistics.
                         5. Protocol Statistics.
                         6. Version 9 Export Template information.
@@ -147,6 +148,27 @@ ciscoNetflowMIB MODULE-IDENTITY
                  as either an ingress or an egress flow."
 
 
+        REVISION "200503270000Z"
+        DESCRIPTION
+                 "Removed
+		    OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 3 }."
+
+        REVISION "200405180000Z"
+        DESCRIPTION
+                 "Added the following objects:
+                  cnfTopFlowsGenerate
+                  cnfTopFlowsReportAvailable
+                  cnfTopFlowsVlan
+
+                  Deprecated the Group cnfTopFlowsGroup.
+
+                  Added the following Groups:
+                  cnfTopFlowsDataGroup1 
+                  cnfTopFlowsDataGroup2
+                  cnfTopFlowsVlanGroup
+                  cnfTopFlowsControlGroup1 
+                  cnfTopFlowsControlGroup2"
+
         REVISION "200401090000Z"
         DESCRIPTION
                  "Initial version of this MIB module."
@@ -158,38 +180,33 @@ ciscoNetflowMIB MODULE-IDENTITY
 --
 -- Defines 7 groups of objects.
 --
--- 1. cnfCacheInfo		: A group of objects related to cache
---				  information and configuration stored
---				  per cache configuration.
+-- 1. cnfCacheInfo              : A group of objects related to cache
+--                                information and configuration stored
+--                                per cache configuration.
 --
--- 2. cnfExportInfo		: A group of objects related to Export
---				  configuration and information.
+-- 2. cnfExportInfo             : A group of objects related to Export
+--                                configuration and information.
 --
--- 3. cnfFeatureAcceleration	: Information about NetFlow Feature
---				  Acceleration.
+-- 4. cnfExportStatistics       : Provides export statistics.
 --
--- 4. cnfExportStatistics	: Provides export statistics.
+-- 5. cnfProtocolStatistics     : Provides a summary of NetFlow cache
+--                                statistics per protocol and port.
 --
--- 5. cnfProtocolStatistics	: Provides a summary of NetFlow cache
---				  statistics per protocol and port.
+-- 6. cnfExportTemplate         : Provides Template based Version 9
+--                                flow export information and statistic.
 --
--- 6. cnfExportTemplate		: Provides Template based Version 9
---				  flow export information and statistic.
---
--- 7. cnfTopFlows		: Provides top Netflow flows.
+-- 7. cnfTopFlows               : Provides top Netflow flows.
 
 ciscoNetflowMIBNotifs   OBJECT IDENTIFIER ::= { ciscoNetflowMIB 0 }
 ciscoNetflowMIBObjects  OBJECT IDENTIFIER ::= { ciscoNetflowMIB 1 }
 ciscoNetflowMIBConform  OBJECT IDENTIFIER ::= { ciscoNetflowMIB 2 }
 
-cnfCacheInfo		OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 1 }
-cnfExportInfo		OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 2 }
-cnfFeatureAcceleration	OBJECT IDENTIFIER ::=
-			                      { ciscoNetflowMIBObjects 3 }
-cnfExportStatistics	OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 4 }
-cnfProtocolStatistics	OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 5 }
-cnfExportTemplate	OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 6 }
-cnfTopFlows		OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 7 }
+cnfCacheInfo            OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 1 }
+cnfExportInfo           OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 2 }
+cnfExportStatistics     OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 4 }
+cnfProtocolStatistics   OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 5 }
+cnfExportTemplate       OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 6 }
+cnfTopFlows             OBJECT IDENTIFIER ::= { ciscoNetflowMIBObjects 7 }
 
 
 -- Textual Conventions
@@ -226,18 +243,6 @@ NfCacheTypes ::= TEXTUAL-CONVENTION
             prefixTos(13),
             prefixPort(14),
             bgpNexthopTos(15)
-    }
-
-NfFeatureTypes ::= TEXTUAL-CONVENTION
-    STATUS  current
-    DESCRIPTION
-        "Defines different types of Feature."
-    SYNTAX  INTEGER{
-            ipAccounting(1),
-            cryptoDecryption(2),
-            cryptoEncryption(3),
-            policyRouting(4),
-            casa(5)
     }
 
 NfProtocolTypes ::= TEXTUAL-CONVENTION
@@ -338,7 +343,7 @@ cnfCIInterfaceEntry OBJECT-TYPE
     ::= { cnfCIInterfaceTable 1}
 
 CnfCIInterfaceEntry ::= SEQUENCE {
-        cnfCINetflowEnable		NfInterfaceDirectionTypes
+        cnfCINetflowEnable              NfInterfaceDirectionTypes
      }
 
 cnfCINetflowEnable OBJECT-TYPE
@@ -369,15 +374,15 @@ cnfCICacheEntry OBJECT-TYPE
     ::= { cnfCICacheTable 1}
 
 CnfCICacheEntry ::= SEQUENCE {
-        cnfCICacheType			NfCacheTypes,
-        cnfCICacheEnable		TruthValue,
-        cnfCICacheEntries		Unsigned32,
-        cnfCIActiveFlows		Unsigned32,
-        cnfCIInactiveFlows		Unsigned32,
-        cnfCIActiveTimeOut		Unsigned32,
-        cnfCIInactiveTimeOut		Unsigned32,
-        cnfCIMinSourceMask		InetAddressPrefixLength,
-        cnfCIMinDestinationMask		InetAddressPrefixLength
+        cnfCICacheType                  NfCacheTypes,
+        cnfCICacheEnable                TruthValue,
+        cnfCICacheEntries               Unsigned32,
+        cnfCIActiveFlows                Unsigned32,
+        cnfCIInactiveFlows              Unsigned32,
+        cnfCIActiveTimeOut              Unsigned32,
+        cnfCIInactiveTimeOut            Unsigned32,
+        cnfCIMinSourceMask              InetAddressPrefixLength,
+        cnfCIMinDestinationMask         InetAddressPrefixLength
      }
 
 cnfCICacheType OBJECT-TYPE
@@ -509,10 +514,10 @@ cnfEIExportInfoEntry OBJECT-TYPE
     ::= { cnfEIExportInfoTable 1}
 
 CnfEIExportInfoEntry ::= SEQUENCE {
-        cnfEIExportVersion		Unsigned32,
-        cnfEIPeerAS			TruthValue,
-        cnfEIOriginAS			TruthValue,
-        cnfEIBgpNextHop			TruthValue
+        cnfEIExportVersion              Unsigned32,
+        cnfEIPeerAS                     TruthValue,
+        cnfEIOriginAS                   TruthValue,
+        cnfEIBgpNextHop                 TruthValue
      }
 
 cnfEIExportVersion OBJECT-TYPE
@@ -589,10 +594,10 @@ cnfEICollectorEntry OBJECT-TYPE
     ::= { cnfEICollectorTable 1 }
 
 CnfEICollectorEntry ::= SEQUENCE {
-        cnfEICollectorAddressType	InetAddressType,
-        cnfEICollectorAddress		InetAddress,
-        cnfEICollectorPort		InetPortNumber,
-        cnfEICollectorStatus		RowStatus
+        cnfEICollectorAddressType       InetAddressType,
+        cnfEICollectorAddress           InetAddress,
+        cnfEICollectorPort              InetPortNumber,
+        cnfEICollectorStatus            RowStatus
    }
 
 cnfEICollectorAddressType OBJECT-TYPE
@@ -636,137 +641,6 @@ cnfEICollectorStatus OBJECT-TYPE
          * A row may be deleted by setting the RowStatus to 'destroy'.
          "
     ::= { cnfEICollectorEntry 4 }
-
-
--- Object Group: cnfFeatureAcceleration
---
---      cnfFeatureAccelerationEnable
---      cnfFeatureAvailableSlot
---      cnfFeatureActiveSlot
---      cnfFeatureTable
---          cnfFeatureEntry
---              cnfFeatureType
---              cnfFeatureSlot
---              cnfFeatureActive
---              cnfFeatureAttaches
---              cnfFeatureDetaches
---              cnfFeatureConfigChanges
-
-
-cnfFeatureAccelerationEnable OBJECT-TYPE
-    SYNTAX     TruthValue
-    MAX-ACCESS read-write
-    STATUS     current
-    DESCRIPTION
-        "Indicates whether the netflow acceleration feature is enabled
-         on the device or not.
-
-         Feature acceleration is used to accelerate
-         a number of services, such as IP Accounting,
-         crypto encryption and decryption,
-         Policy-Based Routing, CASA, and RSVP."
-    ::= { cnfFeatureAcceleration 1 }
-
-cnfFeatureAvailableSlot OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of Feature Available Slot"
-    ::= { cnfFeatureAcceleration 2 }
-
-cnfFeatureActiveSlot OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of Feature Active Slot"
-    ::= { cnfFeatureAcceleration 3 }
-
-cnfFeatureTable OBJECT-TYPE
-    SYNTAX     SEQUENCE OF CnfFeatureEntry
-    MAX-ACCESS not-accessible
-    STATUS     current
-    DESCRIPTION
-        "This table provides statistical information about active
-         features. Each feature that can be accelerated will have an
-         entry in this table. Every row of this table indicates
-         statistics like name, number of active attachment, config
-         changes of a particular feature."
-    ::= { cnfFeatureAcceleration 4 }
-
-cnfFeatureEntry OBJECT-TYPE
-    SYNTAX     CnfFeatureEntry
-    MAX-ACCESS not-accessible
-    STATUS     current
-    DESCRIPTION
-        "A conceptual row in the cnfFeatureEntry."
-    INDEX { cnfFeatureType }
-    ::= { cnfFeatureTable 1 }
-
-CnfFeatureEntry ::= SEQUENCE {
-        cnfFeatureType			NfFeatureTypes,
-        cnfFeatureSlot			Unsigned32,
-        cnfFeatureActive		Unsigned32,
-        cnfFeatureAttaches		Unsigned32,
-        cnfFeatureDetaches		Unsigned32,
-        cnfFeatureConfigChanges		Unsigned32
-   }
-
-cnfFeatureType OBJECT-TYPE
-    SYNTAX     NfFeatureTypes
-    MAX-ACCESS not-accessible
-    STATUS     current
-    DESCRIPTION
-        "Unique ID to identify feature."
-    ::= { cnfFeatureEntry 1 }
-
-cnfFeatureSlot OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Feature acceleration slot number. A value of 255 indicates that
-         the feature has not occupied any valid feature acceleration
-         slot and is not being accelerated. Other values indicate which
-         feature acceleration slot the feature has occupied."
-    ::= { cnfFeatureEntry 2 }
-
-cnfFeatureActive OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of flows currently using this feature acceleration slot
-         for acceleration."
-    ::= { cnfFeatureEntry 3 }
-
-cnfFeatureAttaches OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of flows that have attached to this
-         feature acceleration slot."
-    ::= { cnfFeatureEntry 4 }
-
-cnfFeatureDetaches OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of flows that have detached from this
-         feature acceleration slot."
-    ::= { cnfFeatureEntry 5 }
-
-cnfFeatureConfigChanges OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
-    STATUS     current
-    DESCRIPTION
-        "Number of times this feature acceleration configuration
-         has changed."
-    ::= { cnfFeatureEntry 6 }
 
 
 -- Object Group: cnfExportStatistics
@@ -891,12 +765,12 @@ cnfPSProtocolStatEntry OBJECT-TYPE
     ::= { cnfPSProtocolStatTable 1 }
 
 CnfPSProtocolStatEntry ::= SEQUENCE {
-        cnfPSProtocolType		NfProtocolTypes,
-        cnfPSExpiredFlows		Counter64,
-        cnfPSPackets			Counter64,
-        cnfPSBytes			Counter64,
-        cnfPSActive			Counter64,
-        cnfPSInactive			Counter64
+        cnfPSProtocolType               NfProtocolTypes,
+        cnfPSExpiredFlows               Counter64,
+        cnfPSPackets                    Counter64,
+        cnfPSBytes                      Counter64,
+        cnfPSActive                     Counter64,
+        cnfPSInactive                   Counter64
      }
 
 cnfPSProtocolType OBJECT-TYPE
@@ -1013,10 +887,10 @@ cnfTemplateEntry OBJECT-TYPE
     ::= { cnfTemplateTable 1 }
 
 CnfTemplateEntry ::= SEQUENCE {
-        cnfTemplateType			NfTemplateTypes,
-        cnfTemplateAdded		Unsigned32,
-        cnfTemplateActive		Unsigned32,
-        cnfTemplateAgerPolls		Unsigned32
+        cnfTemplateType                 NfTemplateTypes,
+        cnfTemplateAdded                Unsigned32,
+        cnfTemplateActive               Unsigned32,
+        cnfTemplateAgerPolls            Unsigned32
    }
 
 cnfTemplateType OBJECT-TYPE
@@ -1071,11 +945,11 @@ cnfTemplateExportInfoEntry OBJECT-TYPE
     ::= { cnfTemplateExportInfoTable 1 }
 
 CnfTemplateExportInfoEntry ::= SEQUENCE {
-        cnfTemplateExportVer9Enable		TruthValue,
-        cnfTemplateExportVer9TplTimeout		Unsigned32,
-        cnfTemplateExportVer9OptTimeout		Unsigned32,
-        cnfTemplateExportVer9TplRefreshRate	Unsigned32,
-        cnfTemplateExportVer9OptRefreshRate	Unsigned32
+        cnfTemplateExportVer9Enable             TruthValue,
+        cnfTemplateExportVer9TplTimeout         Unsigned32,
+        cnfTemplateExportVer9OptTimeout         Unsigned32,
+        cnfTemplateExportVer9TplRefreshRate     Unsigned32,
+        cnfTemplateExportVer9OptRefreshRate     Unsigned32
    }
 
 cnfTemplateExportVer9Enable OBJECT-TYPE
@@ -1251,8 +1125,7 @@ cnfTopFlowsCacheTimeout OBJECT-TYPE
         "Top Flows Cache timeout. Top flows are cached for this length
          of time and not recalculated. Configure a high value to ensure
          the cache does not change during long queries.
-         Setting this object (to any value) will expire the cache.
-         A value of 0 enables a default timeout."
+         Setting this object (to any value) will expire the cache."
     ::= { cnfTopFlows 7 }
 
 cnfTopFlowsTable OBJECT-TYPE
@@ -1274,31 +1147,32 @@ cnfTopFlowsTableEntry OBJECT-TYPE
     ::= { cnfTopFlowsTable 1 }
 
 CnfTopFlowsTableEntry ::= SEQUENCE {
-        cnfTopFlowsIndex		Unsigned32,
-        cnfTopFlowsSrcAddressType	InetAddressType,
-        cnfTopFlowsSrcAddress		InetAddress,
-        cnfTopFlowsSrcAddressMask	InetAddressPrefixLength,
-        cnfTopFlowsDstAddressType	InetAddressType,
-        cnfTopFlowsDstAddress		InetAddress,
-        cnfTopFlowsDstAddressMask	InetAddressPrefixLength,
-        cnfTopFlowsNhAddressType	InetAddressType,
-        cnfTopFlowsNhAddress		InetAddress,
-        cnfTopFlowsSrcPort		InetPortNumber,
-        cnfTopFlowsDstPort		InetPortNumber,
-        cnfTopFlowsSrcAS		InetAutonomousSystemNumber,
-        cnfTopFlowsDstAS		InetAutonomousSystemNumber,
-        cnfTopFlowsInputIfIndex		InterfaceIndex,
-        cnfTopFlowsOutputIfIndex	InterfaceIndex,
-        cnfTopFlowsFirstSwitched	TimeStamp,
-        cnfTopFlowsLastSwitched		TimeStamp,
-        cnfTopFlowsTOS			Unsigned32,
-        cnfTopFlowsProtocol		Unsigned32,
-        cnfTopFlowsTCPFlags		Unsigned32,
-        cnfTopFlowsSamplerID		Unsigned32,
-        cnfTopFlowsClassID		Unsigned32,
-        cnfTopFlowsFlags		Unsigned32,
-        cnfTopFlowsBytes		Unsigned32,
-        cnfTopFlowsPackets		Unsigned32
+        cnfTopFlowsIndex                Unsigned32,
+        cnfTopFlowsSrcAddressType       InetAddressType,
+        cnfTopFlowsSrcAddress           InetAddress,
+        cnfTopFlowsSrcAddressMask       InetAddressPrefixLength,
+        cnfTopFlowsDstAddressType       InetAddressType,
+        cnfTopFlowsDstAddress           InetAddress,
+        cnfTopFlowsDstAddressMask       InetAddressPrefixLength,
+        cnfTopFlowsNhAddressType        InetAddressType,
+        cnfTopFlowsNhAddress            InetAddress,
+        cnfTopFlowsSrcPort              InetPortNumber,
+        cnfTopFlowsDstPort              InetPortNumber,
+        cnfTopFlowsSrcAS                InetAutonomousSystemNumber,
+        cnfTopFlowsDstAS                InetAutonomousSystemNumber,
+        cnfTopFlowsInputIfIndex         InterfaceIndex,
+        cnfTopFlowsOutputIfIndex        InterfaceIndex,
+        cnfTopFlowsFirstSwitched        TimeStamp,
+        cnfTopFlowsLastSwitched         TimeStamp,
+        cnfTopFlowsTOS                  Unsigned32,
+        cnfTopFlowsProtocol             Unsigned32,
+        cnfTopFlowsTCPFlags             Unsigned32,
+        cnfTopFlowsSamplerID            Unsigned32,
+        cnfTopFlowsClassID              Unsigned32,
+        cnfTopFlowsFlags                Unsigned32,
+        cnfTopFlowsBytes                Unsigned32,
+        cnfTopFlowsPackets              Unsigned32,
+        cnfTopFlowsVlan                 VlanIndex
      }
 
 cnfTopFlowsIndex OBJECT-TYPE
@@ -1501,6 +1375,14 @@ cnfTopFlowsPackets OBJECT-TYPE
     DESCRIPTION
         "Number of packets in the flow."
     ::= { cnfTopFlowsTableEntry 25 }
+
+cnfTopFlowsVlan  OBJECT-TYPE
+    SYNTAX      VlanIndex
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The VLAN-ID of this flow."
+    ::= { cnfTopFlowsTableEntry 26 }
 
 cnfTopFlowsMatchSrcAddressType OBJECT-TYPE
     SYNTAX      InetAddressType
@@ -1752,18 +1634,43 @@ cnfTopFlowsMatchDirection OBJECT-TYPE
          A value of 0 disables this match criteria."
     ::= { cnfTopFlows 34 }
 
+
+cnfTopFlowsGenerate OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "A control variable used to generate the Top Flows.
+         When this object is set to 'true', the current 
+         entries in cnfTopFlowsTable will be removed, 
+         Top Flows will be recalculated and new entries
+         will be populated in cnfTopFlowsTable. Setting
+         this object to 'false' has no effect.
+
+         When read, this object always returns 'false'."
+    ::= { cnfTopFlows 35 }
+
+cnfTopFlowsReportAvailable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates whether the Top Flows have been successfully 
+         generated and entries in cnfTopFlowsTable are populated."
+    ::= { cnfTopFlows 36 }
+
 -- No Notification defined
 
 
 -- Conformance and Compliance
 
-cnfMIBCompliances	OBJECT IDENTIFIER ::= { ciscoNetflowMIBConform 1 }
-cnfMIBGroups		OBJECT IDENTIFIER ::= { ciscoNetflowMIBConform 2 }
+cnfMIBCompliances       OBJECT IDENTIFIER ::= { ciscoNetflowMIBConform 1 }
+cnfMIBGroups            OBJECT IDENTIFIER ::= { ciscoNetflowMIBConform 2 }
 
 -- Conformance
 
 cnfMIBCompliance MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
                 "The compliance statement for the CISCO-NETFLOW-MIB.
 
@@ -1860,11 +1767,6 @@ cnfMIBCompliance MODULE-COMPLIANCE
         DESCRIPTION
             "This group is mandatory where Export can be enabled."
 
-        GROUP   cnfFeatureAccelerationGroup
-        DESCRIPTION
-            "This group is mandatory where Feature Acceleration can
-             be enabled."
-
         GROUP   cnfExportStatisticsGroup
         DESCRIPTION
             "This group is mandatory where Export can be enabled."
@@ -1888,6 +1790,148 @@ cnfMIBCompliance MODULE-COMPLIANCE
             "Write access is not supported."
 
         ::= { cnfMIBCompliances 1 }
+
+cnfMIBCompliance1 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for the CISCO-NETFLOW-MIB.
+
+          OBJECT cnfCollectorAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfCollectorAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsSrcAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsSrcAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsDstAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsDstAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsNhAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsNhAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchSrcAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchSrcAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchDstAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchDstAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchNhAddressType
+          SYNTAX InetAddressType { ipv4(1) }
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses.
+
+          OBJECT cnfTopFlowsMatchNhAddress
+          SYNTAX InetAddress (SIZE(4))
+          DESCRIPTION
+               An implementation is only required to support IPv4
+               addresses."
+
+        MODULE  -- this module
+        MANDATORY-GROUPS { cnfCacheInfoGroup,
+                           cnfProtocolStatGroup
+                         }
+
+        GROUP   cnfExportInfoGroup
+        DESCRIPTION
+            "This group is mandatory where Export can be enabled
+             and specific netflow export configuration cab be 
+             supported."
+
+        GROUP   cnfExportStatisticsGroup
+        DESCRIPTION
+            "This group is mandatory where Export can be enabled
+             and statistical information is available."
+
+        GROUP   cnfExportTemplateGroup
+        DESCRIPTION
+            "This group is mandatory for version 9 Export."
+
+        OBJECT  cnfCICacheEnable
+        MIN-ACCESS read-only
+        DESCRIPTION
+            "Write access is not supported."
+
+        OBJECT  cnfCINetflowEnable
+        MIN-ACCESS read-only
+        DESCRIPTION
+            "Write access is not supported."
+
+        GROUP   cnfTopFlowsDataGroup1
+        DESCRIPTION
+            "This group is mandatory where Top Flows feature
+             is supported."
+
+        GROUP   cnfTopFlowsDataGroup2
+        DESCRIPTION
+            "This group is optional."
+
+        GROUP   cnfTopFlowsVlanGroup
+        DESCRIPTION
+            "This group is optional."
+
+        GROUP   cnfTopFlowsControlGroup1
+        DESCRIPTION
+            "This group is optional."
+
+        GROUP cnfTopFlowsControlGroup2
+        DESCRIPTION
+            "This group is optional."
+
+        ::= { cnfMIBCompliances 2 }
 
 
 -- Units of Conformance
@@ -1939,23 +1983,6 @@ cnfExportInfoGroup OBJECT-GROUP
         DESCRIPTION
             "A collection of objects providing Export information."
         ::= { cnfMIBGroups 3 }
-
-cnfFeatureAccelerationGroup OBJECT-GROUP
-        OBJECTS {
-            cnfFeatureAccelerationEnable,
-            cnfFeatureAvailableSlot,
-            cnfFeatureActiveSlot,
-            cnfFeatureSlot,
-            cnfFeatureActive,
-            cnfFeatureAttaches,
-            cnfFeatureDetaches,
-            cnfFeatureConfigChanges
-        }
-        STATUS current
-        DESCRIPTION
-            "A collection of objects providing Feature Acceleration
-             information and statistics."
-        ::= { cnfMIBGroups 4 }
 
 cnfExportStatisticsGroup OBJECT-GROUP
         OBJECTS {
@@ -2050,10 +2077,115 @@ cnfTopFlowsGroup OBJECT-GROUP
             cnfTopFlowsMatchMaxBytes,
             cnfTopFlowsMatchDirection
         }
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "A collection of objects providing information for top
             flows."
         ::= { cnfMIBGroups 7 }
+
+cnfTopFlowsDataGroup1 OBJECT-GROUP
+        OBJECTS {
+            cnfTopFlowsTimeStamp,
+            cnfTopFlowsTopN,
+            cnfTopFlowsAvailableFlows,
+            cnfTopFlowsTotalFlows,
+            cnfTopFlowsSortBy,
+            cnfTopFlowsSrcAddressType,
+            cnfTopFlowsSrcAddress,
+            cnfTopFlowsDstAddressType,
+            cnfTopFlowsDstAddress,
+            cnfTopFlowsSrcPort,
+            cnfTopFlowsDstPort,
+            cnfTopFlowsProtocol,
+            cnfTopFlowsBytes,
+            cnfTopFlowsPackets
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing information for top
+            flows."
+        ::= { cnfMIBGroups 8 }
+
+cnfTopFlowsDataGroup2 OBJECT-GROUP
+        OBJECTS {
+            cnfTopFlowsCacheTimeout,
+            cnfTopFlowsSrcAddressMask,
+            cnfTopFlowsDstAddressMask,
+            cnfTopFlowsNhAddressType,
+            cnfTopFlowsNhAddress,
+            cnfTopFlowsSrcAS,
+            cnfTopFlowsDstAS,
+            cnfTopFlowsInputIfIndex,
+            cnfTopFlowsOutputIfIndex,
+            cnfTopFlowsFirstSwitched,
+            cnfTopFlowsLastSwitched,
+            cnfTopFlowsTOS,
+            cnfTopFlowsTCPFlags,
+            cnfTopFlowsSamplerID,
+            cnfTopFlowsClassID,
+            cnfTopFlowsFlags
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing additional information
+             for Top Flows."
+        ::= { cnfMIBGroups 9 }
+
+cnfTopFlowsVlanGroup OBJECT-GROUP
+        OBJECTS {
+            cnfTopFlowsVlan 
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing VLAN 
+             information about the top flows."
+        ::= { cnfMIBGroups 10 }
+
+cnfTopFlowsControlGroup1 OBJECT-GROUP
+        OBJECTS {
+            cnfTopFlowsMatchingFlows,
+            cnfTopFlowsMatchSrcAddressType,
+            cnfTopFlowsMatchSrcAddress,
+            cnfTopFlowsMatchSrcAddressMask,
+            cnfTopFlowsMatchDstAddressType,
+            cnfTopFlowsMatchDstAddress,
+            cnfTopFlowsMatchDstAddressMask,
+            cnfTopFlowsMatchNhAddressType,
+            cnfTopFlowsMatchNhAddress,
+            cnfTopFlowsMatchNhAddressMask,
+            cnfTopFlowsMatchSrcPortLo,
+            cnfTopFlowsMatchSrcPortHi,
+            cnfTopFlowsMatchDstPortLo,
+            cnfTopFlowsMatchDstPortHi,
+            cnfTopFlowsMatchSrcAS,
+            cnfTopFlowsMatchDstAS,
+            cnfTopFlowsMatchInputIf,
+            cnfTopFlowsMatchOutputIf,
+            cnfTopFlowsMatchTOSByte,
+            cnfTopFlowsMatchProtocol,
+            cnfTopFlowsMatchSampler,
+            cnfTopFlowsMatchClass,
+            cnfTopFlowsMatchMinPackets,
+            cnfTopFlowsMatchMaxPackets,
+            cnfTopFlowsMatchMinBytes,
+            cnfTopFlowsMatchMaxBytes,
+            cnfTopFlowsMatchDirection
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing the match criteria
+             control information for Top Flows."
+        ::= { cnfMIBGroups 11 }
+
+cnfTopFlowsControlGroup2 OBJECT-GROUP
+        OBJECTS {
+            cnfTopFlowsGenerate,
+            cnfTopFlowsReportAvailable
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing the explicit control
+             of the way top flows are generated."
+        ::= { cnfMIBGroups 12 }
 
 END

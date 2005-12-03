@@ -10,7 +10,7 @@
 -- October  2003, Liwei Lue
 -- November 2003, Edward Pham
 --
--- Copyright (c) 2001,2002,2003 by cisco Systems, Inc.
+-- Copyright (c) 2001,2002,2003, 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 --
 -- *****************************************************************
@@ -21,9 +21,9 @@ IMPORTS
     MODULE-IDENTITY, 
     OBJECT-TYPE, 
     Counter32,
-    Unsigned32,
     Counter64,
-    Integer32
+    Integer32,
+    Unsigned32
         FROM SNMPv2-SMI
   
     MODULE-COMPLIANCE,
@@ -35,9 +35,6 @@ IMPORTS
     MacAddress,
     TruthValue
         FROM SNMPv2-TC
-
---    Unsigned32
---        FROM CISCO-TC
 
     ifIndex,
     InterfaceIndex
@@ -61,6 +58,9 @@ IMPORTS
     SnmpAdminString
         FROM SNMP-FRAMEWORK-MIB
 
+    CiscoPortList
+        FROM CISCO-TC
+
     InetAddressType,
     InetAddress
         FROM INET-ADDRESS-MIB
@@ -68,7 +68,7 @@ IMPORTS
 
 
 ciscoCatOSAclQosMIB    MODULE-IDENTITY
-    LAST-UPDATED    "200311260000Z"
+    LAST-UPDATED    "200507260000Z"
     ORGANIZATION    "Cisco Systems Inc. "
     CONTACT-INFO
         "Cisco Systems
@@ -209,6 +209,24 @@ ciscoCatOSAclQosMIB    MODULE-IDENTITY
         interface. If the packet matches an ACE in the ACLs, it is
         either permitted to go through the device or blocked and
         dropped or redirected to another interface."
+    REVISION   "200507260000Z"
+    DESCRIPTION
+        "Add 'matchEapoudp' and 'matchUrlRedirect' enum value
+         for caqIpProtocolMatchCriteria object."
+    REVISION   "200405260000Z"
+    DESCRIPTION
+        "Add the following groups to support ACL hit count
+         configuration and statistics: 
+
+         caqAclFeatureGroup 
+         caqAclHitCountGroup 
+
+         Add the following groups to support additional matching
+         criteria for MAC ACE and MAC packet classify feature on
+         VLAN:
+
+         caqMacAceExtGroup. 
+         caqMacPktClassifyVlanGroup." 
     REVISION   "200311260000Z"
     DESCRIPTION
         "Add the following objects to support group name for source
@@ -359,6 +377,19 @@ CaqThresholdNumber ::= TEXTUAL-CONVENTION
         "An integer indicates a threshold number."
     SYNTAX  Unsigned32 (1..100)
 
+--
+-- HitCountAclType 
+--
+CaqHitCountAclType ::= TEXTUAL-CONVENTION
+    STATUS  current
+    DESCRIPTION
+        "An integer indicating the ACL type that 
+         supports ACL hit count feature."
+    SYNTAX  INTEGER { ipSecurity(1), 
+                      ipxSecurity(2), 
+                      macSecurity(3) 
+                    } 
+
 -- Cisco CatOS Acl Qos MIB object definitions
 
 ciscoCatOSAclQosMIBObjects OBJECT IDENTIFIER 
@@ -390,6 +421,8 @@ caqLoggingObjects     OBJECT IDENTIFIER
     ::= { ciscoCatOSAclQosMIBObjects 7 }
 caqArpInspObjects     OBJECT IDENTIFIER
     ::= { ciscoCatOSAclQosMIBObjects 8 }
+caqAclHitCountObjects     OBJECT IDENTIFIER
+    ::= { ciscoCatOSAclQosMIBObjects 9 }
 
 
 --**********************************************************************
@@ -1038,6 +1071,55 @@ caqDscpRewriteEnabled OBJECT-TYPE
         values as when they arrived."
     ::= { caqGlobalObjects 9 }
 
+caqMacPktClassifyVlansLow  OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for
+         VLANs with VlanIndex value of 0 to 2047. The first
+         octet corresponds to VLANs with VlanIndex values
+         of 0 through 7; the second octet to VLANs 8 through
+         15; etc.  The most significant bit of each octet
+         corresponds to the lowest value VlanIndex in that octet.
+
+         For each VLAN, if Ethernet packet classify feature is 
+         enabled then the bit corresponding to that VLAN is set
+         to '1'.
+
+         Note that if the length of this string is less than
+         256 octets, any 'missing' octets are assumed to contain
+         the value zero. A NMS may omit any zero-valued octets
+         from the end of this string in order to reduce SetPDU size,
+         and the agent may also omit zero-valued trailing octets,
+         to reduce the size of GetResponse PDUs."
+    ::= { caqGlobalObjects 10 }
+
+caqMacPktClassifyVlansHigh  OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for
+         VLANs with VlanIndex value of 2048 to 4095. The first
+         octet corresponds to VLANs with VlanIndex values
+         of 2048 through 2055; the second octet to VLANs 2056
+         through 2063; etc.  The most significant bit of each
+         octet corresponds to the lowest value VlanIndex in that
+         octet.
+
+         For each VLAN, if Ethernet packet classify feature is 
+         enabled then the bit corresponding to that VLAN is set
+         to '1'.
+
+         Note that if the length of this string is less than
+         256 octets, any 'missing' octets are assumed to contain
+         the value zero. A NMS may omit any zero-valued octets
+         from the end of this string in order to reduce SetPDU size,
+         and the agent may also omit zero-valued trailing octets,
+         to reduce the size of GetResponse PDUs."
+    ::= { caqGlobalObjects 11 }
+
 
 --*********************************************************************
 -- Cisco CatOS Acl Qos Interface Group
@@ -1249,7 +1331,7 @@ CaqClassifierEntry ::= SEQUENCE {
     caqClassifierAclType          INTEGER, 
     caqClassifierAclName          CaqAclName, 
     caqClassifierMapStatus        RowStatus,
-    caqClassifierMapDirection     BITS 
+    caqClassifierMapDirection     BITS
 }
 
 caqClassifierAclType       OBJECT-TYPE
@@ -1769,7 +1851,9 @@ caqIpAceProtocolMatchCriteria     OBJECT-TYPE
                     matchIcmpType(3),
                     matchIcmpTypeAndCode(4),
                     matchEstablished(5),
-                    matchSecurityId(6)
+                    matchSecurityId(6),
+                    matchEapoudp(7),
+                    matchUrlRedirect(8)
                   }
     MAX-ACCESS    read-create
     STATUS        current
@@ -1802,7 +1886,14 @@ caqIpAceProtocolMatchCriteria     OBJECT-TYPE
          matchSecurityId(6) means that the Security Association
          Identifier field of IPv4 ESP packet header needs to be matched.
          If this value is specified, the caqIpAceSecurityId object in
-         the same row should be configured."
+         the same row should be configured.
+
+         matchEapoudp(7) means that this ACE needs to be matched
+         against the criteria for EAP (Extensible Authentication
+         Protocol) over UDP purpose. 
+
+         matchUrlRedirect(8) means that this ACE needs to be matched
+         against the criteria for URL redirection purpose."
     DEFVAL { none }
     ::= { caqIpAceEntry 20 }
 
@@ -1946,6 +2037,7 @@ caqIpAceDestGroup        OBJECT-TYPE
          the same row will have the value of 0."
     DEFVAL { "" }
     ::= { caqIpAceEntry 29 }
+
 --
 -- caqIpxAceTable
 --
@@ -2264,7 +2356,10 @@ CaqMacAceEntry ::= SEQUENCE {
     caqMacAceEthertype      Unsigned32,
     caqMacAceOrderPosition  Unsigned32,
     caqMacAceBeforePosition Unsigned32,
-    caqMacAceStatus         RowStatus
+    caqMacAceStatus         RowStatus,
+    caqMacAceMatchCriteria  BITS,
+    caqMacAceCos            QosLayer2Cos,
+    caqMacAceVlan           VlanIndex
 }
 
 caqMacAceFeature       OBJECT-TYPE
@@ -2425,7 +2520,53 @@ caqMacAceStatus     OBJECT-TYPE
         caqClassifierTable." 
     ::= { caqMacAceEntry 12 }
 
+caqMacAceMatchCriteria        OBJECT-TYPE
+    SYNTAX    BITS {
+                   matchCos(0),
+                   matchVlan(1)
+              }
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION
+        "Indicates which field in the packet header to be matched. 
 
+        matchCos(0) means that the packet Cos value  
+        will be matched against the value specified by
+        caqMacAceCos object in the same row.
+
+        matchVlan(1) means that the packet VLAN value 
+        will be matched against the value specified by
+        caqMacAceVlan object in the same row."
+    DEFVAL { { } }
+    ::= { caqMacAceEntry 13 }
+
+caqMacAceCos        OBJECT-TYPE
+    SYNTAX      QosLayer2Cos 
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Indicates the packet Cos value to be matched.
+
+         The value of this object is ignored whenever the
+         matchCos(0) bit of caqMacAceMatchCriteria object
+         is not on." 
+    ::= { caqMacAceEntry 14 }
+
+caqMacAceVlan        OBJECT-TYPE
+    SYNTAX      VlanIndex 
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Indicates the packet VLAN number to be matched.
+     
+         The value of this object is ignored whenever the
+         matchVlan(1) bit of caqMacAceMatchCriteria object
+         is not on." 
+    ::= { caqMacAceEntry 15 }
+
+--
+--  Flow policing capability
+--
 
 caqFlowPolicingCpb   OBJECT-TYPE
     SYNTAX      BITS { 
@@ -3261,6 +3402,26 @@ caqQosDefaultAggregate OBJECT-TYPE
         the caqFlowPolicerTable which has its RowStatus value to be
         active(1) and the type of the policer should be aggregate(2)."
     ::= { caqQosDefaultActionEntry 6 }
+
+--
+--  Acl Feature support 
+--
+
+caqAclFeatureCpb      OBJECT-TYPE
+    SYNTAX        BITS { vlanAclHitCount(0), portAclHitCount (1) } 
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "Indicates the set of features that the device supports
+         related to ACLs configured in the device. 
+
+         vlanAclHitCount(0) indicates that the device supports 
+         ACL hit count feature for ACLs attached to VLAN interfaces.
+
+         portAclHitCount(1) indicates that the device supports 
+         ACL hit count feature for ACLs attached to physical 
+         interfaces."
+    ::= { caqAclObjects 15 }
 
 --
 --  The caqQosStatsObjects
@@ -4328,12 +4489,322 @@ caqIfArpInspShutdownThreshold  OBJECT-TYPE
     ::= { caqIfArpInspConfigEntry 2 }
 
 --
+--  caqAclHitCountObjects group
 --
+
+caqAclHitCountVlansLow  OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for
+         VLANs with VlanIndex value of 0 to 2047. The first
+         octet corresponds to VLANs with VlanIndex values
+         of 0 through 7; the second octet to VLANs 8 through
+         15; etc.  The most significant bit of each octet
+         corresponds to the lowest value VlanIndex in that octet.
+
+         For each VLAN, if ACL hit count feature is enabled then
+         the bit corresponding to that VLAN is set to '1'.
+
+         Note that if the length of this string is less than
+         256 octets, any 'missing' octets are assumed to contain
+         the value zero. A NMS may omit any zero-valued octets
+         from the end of this string in order to reduce SetPDU size,
+         and the agent may also omit zero-valued trailing octets,
+         to reduce the size of GetResponse PDUs.
+
+         This object is only instantiated when the vlanAclHitCount(0)
+         bit is set to '1' in the caqAclFeatureCpb object."
+    ::= { caqAclHitCountObjects 1 }
+
+caqAclHitCountVlansHigh  OBJECT-TYPE
+    SYNTAX        OCTET STRING (SIZE(0..256))
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "A string of octets containing one bit per VLAN for
+         VLANs with VlanIndex value of 2048 to 4095. The first
+         octet corresponds to VLANs with VlanIndex values
+         of 2048 through 2055; the second octet to VLANs 2056
+         through 2063; etc.  The most significant bit of each
+         octet corresponds to the lowest value VlanIndex in that
+         octet.
+
+         For each VLAN, if ACL hit count feature is enabled then
+         the bit corresponding to that VLAN is set to '1'.
+
+         Note that if the length of this string is less than
+         256 octets, any 'missing' octets are assumed to contain
+         the value zero. A NMS may omit any zero-valued octets
+         from the end of this string in order to reduce SetPDU size,
+         and the agent may also omit zero-valued trailing octets,
+         to reduce the size of GetResponse PDUs.
+
+         This object is only instantiated when the vlanAclHitCount(0)
+         bit is set to '1' in the caqAclFeatureCpb object."
+    ::= { caqAclHitCountObjects 2 }
+
+caqAclHitCountPortList OBJECT-TYPE
+    SYNTAX      CiscoPortList
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Indicates the set of physical port(s), in bridge port
+        number, where ACL hit count feature is enabled. 
+
+        For each port, if ACL hit count feature is enabled then 
+        the bit corresponding to that port is set to '1'.
+
+        This object is only instantiated when the portAclHitCount(1)
+        bit is set to '1' in the caqAclFeatureCpb object."
+    ::= { caqAclHitCountObjects 3 }
+
 --
+-- The caqAclHitCountTable
 --
+
+caqAclHitCountTable      OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CaqAclHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table provides the hit count configuration on 
+        ACLs which support this feature."
+    ::= { caqAclHitCountObjects 4 }
+
+caqAclHitCountEntry      OBJECT-TYPE
+    SYNTAX      CaqAclHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry indicates whether the hit count feature is enabled
+        on a particular ACL as well as its statistic collection mode." 
+    INDEX { caqAclHitCountAclType,
+            IMPLIED caqAclHitCountAclName }
+    ::= { caqAclHitCountTable 1 }
+
+CaqAclHitCountEntry ::= SEQUENCE {
+    caqAclHitCountAclType          CaqHitCountAclType, 
+    caqAclHitCountAclName          CaqAclName, 
+    caqAclHitCountEnable           TruthValue
+}
+
+caqAclHitCountAclType       OBJECT-TYPE
+    SYNTAX      CaqHitCountAclType
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the type of ACL.
+
+        ipSecurity(1) indicates that this ACL is an IP Security ACL.
+
+        ipxSecurity(2) indicates that this ACL is an IPX Security ACL.
+
+        macSecurity(3) indicates that this ACL is a MAC Security ACL."
+    ::= { caqAclHitCountEntry 1 }
+
+caqAclHitCountAclName       OBJECT-TYPE
+    SYNTAX      CaqAclName 
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the ACL name which should exist in the ACL tables
+         e.g. in caqIpAceTable. This ACL must be matching the type
+         specified in caqAclHitCountAclType in the same row." 
+    ::= { caqAclHitCountEntry 2 }
+
+caqAclHitCountEnable     OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Indicates whether this ACL hit count is enabled."
+    ::= { caqAclHitCountEntry 3 }
+
+--
+-- The caqAceHitCountTable
+--
+
+caqAceHitCountTable      OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CaqAceHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table provides the hit count configuration on 
+        ACEs which support this feature."
+    ::= { caqAclHitCountObjects 5 }
+
+caqAceHitCountEntry      OBJECT-TYPE
+    SYNTAX      CaqAceHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry indicates whether the hit count feature is enabled
+        on a particular ACE as well as its hit count statistic." 
+    INDEX { caqAceHitCountAclType,
+            caqAceHitCountAclName,
+            caqAceHitCountAceIndex }
+    ::= { caqAceHitCountTable 1 }
+
+CaqAceHitCountEntry ::= SEQUENCE {
+    caqAceHitCountAclType          CaqHitCountAclType, 
+    caqAceHitCountAclName          CaqAclName, 
+    caqAceHitCountAceIndex         Unsigned32, 
+    caqAceHitCountEnable           TruthValue,
+    caqAceIngressHitCount          Counter64,
+    caqAceEgressHitCount           Counter64
+}
+
+caqAceHitCountAclType       OBJECT-TYPE
+    SYNTAX      CaqHitCountAclType
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the type of ACL.
+
+        ipSecurity(1) indicates that this ACL is an IP Security ACL.
+
+        ipxSecurity(2) indicates that this ACL is an IPX Security ACL.
+
+        macSecurity(3) indicates that this ACL is a MAC Security ACL."
+    ::= { caqAceHitCountEntry 1 }
+
+caqAceHitCountAclName       OBJECT-TYPE
+    SYNTAX      CaqAclName 
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the ACL name which should exist in the ACL tables
+         e.g. in caqIpAceTable. This ACL must be matching the type
+         specified in caqAceHitCountAclType in the same row." 
+    ::= { caqAceHitCountEntry 2 }
+
+caqAceHitCountAceIndex      OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The index of an ACE within an ACL."
+    ::= { caqAceHitCountEntry 3 }
+
+caqAceHitCountEnable     OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Indicates whether this ACE hit count is enabled."
+    ::= { caqAceHitCountEntry 4 }
+
+caqAceIngressHitCount        OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates number of hit count for this ACE for
+        ingress traffic."
+    ::= { caqAceHitCountEntry 5 }
+
+caqAceEgressHitCount        OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates number of hit count for this ACE for
+        egress traffic."
+    ::= { caqAceHitCountEntry 6 }
+
+--
+-- The caqAclIfHitCountTable
+--
+
+caqIfAclHitCountTable      OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CaqIfAclHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table provides the ACL hit count statistics at
+         an interface. An interface can be a physical port if
+         the bit portAclHitCount(1) is set in the object
+         caqAclFeatureCpb or a VLAN if the bit vlanAclHitCount(0)
+         is set in the object caqAclFeatureCpb."
+    ::= { caqAclHitCountObjects 6 }
+
+caqIfAclHitCountEntry      OBJECT-TYPE
+    SYNTAX      CaqIfAclHitCountEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each entry indicates the number of hit count at each
+         ACE belonged to an ACL which supports hit count collection
+         at an interface where the ACL is attached."
+    INDEX { ifIndex,
+            caqIfAclHitCountAclType,
+            caqIfAclHitCountAclName,
+            caqIfAclHitCountAceIndex }
+    ::= { caqIfAclHitCountTable 1 }
+
+CaqIfAclHitCountEntry ::= SEQUENCE {
+    caqIfAclHitCountAclType      CaqHitCountAclType, 
+    caqIfAclHitCountAclName      CaqAclName, 
+    caqIfAclHitCountAceIndex     Unsigned32, 
+    caqIfAclIngressHitCount      Counter64,
+    caqIfAclEgressHitCount       Counter64
+}
+
+caqIfAclHitCountAclType       OBJECT-TYPE
+    SYNTAX      CaqHitCountAclType
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the type of ACL.
+
+        ipSecurity(1) indicates that this ACL is an IP Security ACL.
+
+        ipxSecurity(2) indicates that this ACL is an IPX Security ACL.
+
+        macSecurity(3) indicates that this ACL is a MAC Security ACL."
+    ::= { caqIfAclHitCountEntry 1 }
+
+caqIfAclHitCountAclName       OBJECT-TYPE
+    SYNTAX      CaqAclName 
+    MAX-ACCESS  not-accessible 
+    STATUS      current
+    DESCRIPTION
+        "Indicates the ACL name which should exist in the ACL tables
+         e.g. in caqIpAceTable. This ACL must be matching the type
+         specified in caqIfAclHitCountAclType in the same row." 
+    ::= { caqIfAclHitCountEntry 2 }
+
+caqIfAclHitCountAceIndex       OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The index of an ACE within an ACL." 
+    ::= { caqIfAclHitCountEntry 3 }
+
+
+caqIfAclIngressHitCount     OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates the number of hit count of this ACE for
+        ingress traffic on this interface." 
+    ::= { caqIfAclHitCountEntry 4 }
+
+caqIfAclEgressHitCount     OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates the number of hit count of this ACE for
+        egress traffic on this interface." 
+    ::= { caqIfAclHitCountEntry 5 }
+
 --
 -- Notifications
---
 --
 
 caqMIBNotifications   OBJECT IDENTIFIER ::= { ciscoCatOSAclQosMIB 2 }
@@ -4558,7 +5029,7 @@ caqMIBCompliance2 MODULE-COMPLIANCE
 
                      
 caqMIBCompliance3 MODULE-COMPLIANCE
-        STATUS current 
+        STATUS deprecated 
         DESCRIPTION
             "The compliance statement for the  CISCO-CATOS-ACL-QOS-MIB."
         MODULE        
@@ -4657,6 +5128,217 @@ caqMIBCompliance3 MODULE-COMPLIANCE
         DESCRIPTION
          "An implementation is only required to support IPv4 addresses."
         ::= { caqMIBCompliances 3 }
+
+
+caqMIBCompliance4 MODULE-COMPLIANCE
+        STATUS current 
+        DESCRIPTION
+            "The compliance statement for the  CISCO-CATOS-ACL-QOS-MIB."
+        MODULE        
+        MANDATORY-GROUPS { caqIfConfigGroup, 
+                           caqAclCpbGroup,
+                           caqFlowPolicingCpbGroup,
+                           caqQueueAssignmentGroup,
+                           caqQueueGroup }
+
+        GROUP caqQosStatsGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform 
+            which support QoS statistics information." 
+
+        GROUP caqQosMappingGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform 
+            which support mapping between Cos, IpPrecedence
+            and DSCP." 
+
+        GROUP caqIfAclConfigGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform 
+            which support ACL configuration."
+
+        GROUP caqIpAceGroup
+        DESCRIPTION
+            "This group is mandatory only in agents for which the 
+            ipQos bit or ipSecurity bit of caqAclCapabilities is
+            turned on."
+
+        GROUP caqIpxAceGroup
+        DESCRIPTION
+            "This group is mandatory only in agents for which the 
+            ipxQos bit or ipxSecurity bit of caqAclCapabilities is
+            turned on."
+
+        GROUP caqMacAceGroup
+        DESCRIPTION
+            "This group is mandatory only in agents for which the 
+            macQos bit or macSecurity bit of caqAclCapabilities is
+            turned on."
+
+        GROUP caqPolicingGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform
+            which supports flow policing."
+
+        GROUP caqActionGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform
+            which supports flow classification."
+
+        GROUP caqSecurityGroup2
+        DESCRIPTION
+            "This group is mandatory only for the platform
+            which supports security feature."
+
+        GROUP caqQosBridgedFlowPolicerGroup
+        DESCRIPTION
+            "This group is mandatory only for the platform
+            which supports enabling or disabling bridged packets
+            policing."
+
+        GROUP caqQosMacVlanGroup
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports flow classification based on MAC address
+            and VLAN pair."
+
+        GROUP caqLoggingGroup
+        DESCRIPTION
+            "Implementation of this group is optional."
+
+        GROUP caqArpInspGroup 
+        DESCRIPTION
+            "Implementation of this group is optional."
+
+        GROUP caqQosStatsGroup2
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports QoS statistics information per aggregate
+            policer." 
+
+        GROUP caqSecurityPBFGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+             supports PBF configuration and statistics
+            information." 
+
+        GROUP caqQosExcessBurstGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports Qos information on excess burst size." 
+
+        GROUP caqIfTrustDeviceGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports trusted device configuration and operational
+            state."
+
+        GROUP caqSecurityRateLimitGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports security acl feature rate limit configuration
+            state." 
+
+        GROUP caqDscpMutationGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports DSCP mutation configuration information." 
+
+        GROUP caqQosDefaultActionGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports default Qos action configuration on the device." 
+
+        GROUP caqIfAclConfigGroup2 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports additional ACL attachment configuration on
+            the device."
+
+        GROUP caqIpEspGroup 
+        DESCRIPTION
+            "Implementation of this group is optional."
+
+        GROUP caqDscpRewriteGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports configuration of DSCP rewrite feature on
+            the device." 
+
+        GROUP caqAggPolicerOctetStatsGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports QoS statistics information per aggregate
+            policer in unit of octet." 
+
+        GROUP caqIfSecurityAclConfigGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports security ACL information applied at 
+            physical interface on the device." 
+
+        GROUP caqIpAceExtGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports source and destination group information to
+            configure IP ACL on the device." 
+
+        GROUP caqAclHitCountGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports ACL hit count configuration and statistics
+            on the device." 
+
+        GROUP caqMacAceExtGroup
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports addtional matching criteria such as the VLAN, 
+            Cos information to configure MAC ACE on the device."
+
+        GROUP caqMacPktClassifyVlanGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports VLAN configuration for MAC packet classify
+            feature on the device."
+
+        GROUP caqAclFeatureGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports device capability related to feature using
+            ACL configured on the device."
+
+        GROUP caqPortAclHitCountGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports security ACL information applied at
+            physical interface on the device." 
+
+        GROUP caqVlanAclHitCountGroup 
+        DESCRIPTION
+            "This group is mandatory only for platform which
+            supports security ACL information applied at
+            VLAN interface on the device." 
+
+        OBJECT caqIpAceSrcIp
+        SYNTAX InetAddress (SIZE(4))
+        DESCRIPTION
+         "An implementation is only required to support IPv4 addresses."
+
+        OBJECT caqIpAceSrcIpMask
+        SYNTAX InetAddress (SIZE(4))
+        DESCRIPTION
+         "An implementation is only required to support IPv4 addresses."
+
+        OBJECT caqIpAceDestIp
+        SYNTAX InetAddress (SIZE(4))
+        DESCRIPTION
+         "An implementation is only required to support IPv4 addresses."
+
+        OBJECT caqIpAceDestIpMask
+        SYNTAX InetAddress (SIZE(4))
+        DESCRIPTION
+         "An implementation is only required to support IPv4 addresses."
+        ::= { caqMIBCompliances 4 }
                      
 --
 -- Units of Conformance
@@ -5122,4 +5804,74 @@ caqIpAceExtGroup OBJECT-GROUP
          group information to configure IP ACL on the device."
     ::= { caqMIBGroups 33 }
 
+caqAclHitCountGroup OBJECT-GROUP
+    OBJECTS {
+      caqAclHitCountEnable, 
+      caqAceHitCountEnable, 
+      caqAceIngressHitCount, 
+      caqAceEgressHitCount, 
+      caqIfAclIngressHitCount,
+      caqIfAclEgressHitCount
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing the ACL hit count 
+         configuration and statistics on the device."
+    ::= { caqMIBGroups 34 }
+
+caqMacAceExtGroup OBJECT-GROUP
+    OBJECTS {
+      caqMacAceMatchCriteria,
+      caqMacAceVlan,
+      caqMacAceCos
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing addtional matching
+         criteria such as the VLAN, Cos information to configure
+         MAC ACE on the device."
+    ::= { caqMIBGroups 35 }
+
+caqMacPktClassifyVlanGroup OBJECT-GROUP
+    OBJECTS {
+      caqMacPktClassifyVlansLow, 
+      caqMacPktClassifyVlansHigh 
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing the VLAN
+         configuration for MAC packet classify feature 
+         on the device."
+    ::= { caqMIBGroups 36 }
+
+caqAclFeatureGroup OBJECT-GROUP
+    OBJECTS {
+      caqAclFeatureCpb
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of object providing what feature
+         related to ACL that the device is capable of."
+    ::= { caqMIBGroups 37 }
+
+caqPortAclHitCountGroup OBJECT-GROUP
+    OBJECTS {
+      caqAclHitCountPortList
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of object providing the set of physical
+         ports where ACL hit count feature is enabled." 
+    ::= { caqMIBGroups 38 }
+
+caqVlanAclHitCountGroup OBJECT-GROUP
+    OBJECTS {
+      caqAclHitCountVlansLow,
+      caqAclHitCountVlansHigh
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing the set of VLANs 
+         where ACL hit count feature is enabled." 
+    ::= { caqMIBGroups 39 }
 END

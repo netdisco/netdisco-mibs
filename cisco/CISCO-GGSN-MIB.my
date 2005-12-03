@@ -4,7 +4,7 @@
 -- 
 -- Dec   2001, Rajesh M. L.
 --
--- Copyright (c), 2000, 2001, 2002, 2003, 2004 by Cisco Systems, Inc.
+-- Copyright (c), 2000-2005 by Cisco Systems, Inc.
 -- All rights reserved.
 -- ********************************************************************
 -- $Endlog$
@@ -51,7 +51,7 @@ IMPORTS
 
 
 cGgsnMIB    MODULE-IDENTITY
-        LAST-UPDATED    "200402230100Z"
+        LAST-UPDATED    "200508241800Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -107,17 +107,23 @@ cGgsnMIB    MODULE-IDENTITY
                 Acronyms and terms:
 
                  APN    Access Point Name
+                 CSG    Content Service Gateway
+                 CDR    Charging Data Record
+                 DCCA   Diameter Credit Control Application
                  ETSI   European Telecommunications Standards Institute
                  GGSN   Gateway GPRS Support Node
                  GPRS   General Packet Radio Service
                  GSM    Global System for Mobile communication
                  GTP    GPRS Tunneling Protocol
                  G-PDU  GTP PDU 
+                 IE     Information Element
                  MS     Mobile Station
+                 MSISDN Mobile Station ISDN number
                  PDP    Packet Data Protocol
                  PDU    Protocol Data Unit
                  PLMN   Public Land Mobile Network
                  SGSN   Serving GPRS support Node
+                 SLB     Server Load Balancing
                  TFT    Traffic Flow Template
                  T-PDU  the payload of G-PDU 
                  UMTS   Universal Mobile Telecommunications System
@@ -127,6 +133,7 @@ cGgsnMIB    MODULE-IDENTITY
                  PDF    Policy Decision Function
                  P-CSCF Proxy Call Session Control Function
                  PLMN   Public Land Mobile Network
+                 QS     Quota Server
                  UE     User Equipment
 
                 REFERENCE
@@ -152,6 +159,53 @@ cGgsnMIB    MODULE-IDENTITY
                 [5] 3GPP: Technical Specification Group Core Network;
                     Policy control over Go interface (Release 5).
                     3GPP TS 29.207 V5.2.0"
+        REVISION       "200508241800Z"
+        DESCRIPTION 
+                 "Added cGgsnSlbCacFailures,
+                   cGgsnSlbSessionFailures,
+                   cGgsnRedundancyStatistics to
+                   cGgsnStatistics.
+                 
+                 + Added cGgsnSlbVserverTable,
+                   cGgsnSlbVserverEntry,
+                   cGgsnSlbVserAddrType,
+                   cGgsnSlbVserAddress to 
+                   cGgsnConfigurations.
+
+                 + Added cGgsnPrepaidPDPs,
+                   cGgsnPostpaidPDPs to cGgsnStatus.
+ 
+                 + Added cGgsnNotifPdpMsisdn
+                   to cGgsnNotifInfo."
+
+        REVISION       "200501041800Z"
+        DESCRIPTION
+                "Added cGgsnConfigVersion to
+                 cGgsnStatus."
+
+        REVISION       "200411230100Z"
+        DESCRIPTION
+                "- Deprecated cGgsnNotification
+                 + Added cGgsnGlobalErrorNotif,
+                   cGgsnAccessPointNameNotif, 
+                   cGgsnPacketDataProtocolNotif.
+
+                 + Added cGgsnNotifAccessPointName,
+                   cGgsnNotifPdpImsi,
+                   cGgsnGlobalErrorTypes,
+                   cGgsnAccessPointErrorTypes,
+                   cGgsnPacketDataProtoErrorTypes to 
+                   cGgsnNotifInfo.
+
+                 - Deprecated cGgsnNotifEnabled
+                 + Added cGgsnServiceNotifEnabled,
+                   cGgsnMemoryNotifEnabled,
+                   cGgsnPdfNotifEnabled,
+                   cGgsnGlobalErrorNotifEnabled,
+                   cGgsnAccessPointNotifEnabled,
+                   cGgsnPdpNotifEnabled to 
+                   cGgsnNotifMgmt"
+
         REVISION       "200402230100Z"
         DESCRIPTION
                 "+ Added cGgsnInServiceNotif,
@@ -534,8 +588,8 @@ cGgsnTftSemanticErrorPdps     OBJECT-TYPE
          "3GPP; Technical Specification Group Core Network;
          General Packet Radio Service(GPRS); GPRS
          Tunnelling Protocol (GTP) across Gn and Gp
-         Interface (Release 1999). 3G TS 29.060 v3.5.0.
-         "
+         Interface (Release 1999). 3G TS 29.060 v3.5.0."
+         
     ::= { cGgsnStatistics 19 }
 
 cGgsnTftSyntacticErrorPdps    OBJECT-TYPE
@@ -892,13 +946,13 @@ cGgsnSgsnDownStreamPktCnt            OBJECT-TYPE
         packets sent on this SGSN data path. Data flow from
         PDN to MS is considered to be downstream traffic.
 
-        When the throughput intervals (cGgsnThruputIntervalOne or
-        cGgsnThruputIntervalTwo) is set to some valid value this
+        When the throughput interval (cGgsnThruputIntervalOne or
+        cGgsnThruputIntervalTwo) is set to some valid value, this
         object is set to '0' (meaning, a fresh throughput collection
         is started). Until the first expiry of the throughput 
         interval , this object will be '0'. On further periodic expiry,
         the throughput downstream packet count per SGSN is collected 
-        and updated to this object"
+        and updated to this object."
     ::= { cGgsnSgsnStatEntry 5 }
 
 cGgsnSgsnDownStreamByteCnt           OBJECT-TYPE
@@ -911,14 +965,209 @@ cGgsnSgsnDownStreamByteCnt           OBJECT-TYPE
         bytes sent on this SGSN data path. Data flow from
         PDN to MS is considered to be downstream traffic.
 
-        When the throughput intervals (cGgsnThruputIntervalOne or
-        cGgsnThruputIntervalTwo) is set to some valid value this
+        When the throughput interval (cGgsnThruputIntervalOne or
+        cGgsnThruputIntervalTwo) is set to some valid value, this
         object is set to '0' (meaning, a fresh throughput collection
         is started). Until the first expiry of the throughput 
         interval , this object will be '0'. On further periodic expiry,
         the throughput downstream byte count per SGSN is collected and 
-        updated to this object"
+        updated to this object."
     ::= { cGgsnSgsnStatEntry 6 }
+
+--
+--Redundancy Statistics
+--
+cGgsnRedundancyStatistics           OBJECT IDENTIFIER
+     ::= { cGgsnStatistics 27 }
+
+cGgsnTotalMessages                  OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This counter will maintain the count of total number of 
+         messages of all kind.
+
+         Trigger Condition: The counter is increamented whenever
+         a redundancy message is sent."
+     ::= { cGgsnRedundancyStatistics 1 }
+
+cGgsnContextSetupMessages          OBJECT-TYPE
+     SYNTAX                        Counter32
+     MAX-ACCESS                    read-only
+     STATUS                        current
+     DESCRIPTION
+         "The PDP context is check pointed to standby only after it
+         goes to active.
+         
+         This object is a counter, which maintains the total count
+         of PDP context setup messages.
+
+         Trigger Condition: This counter is updated whenever
+         a PDP context setup message is check pointed to standby."
+     ::= { cGgsnRedundancyStatistics 2 }
+
+cGgsnContextModifyMessages          OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "For modify or update PDP context, the categories get
+         affected and new quota is assigned to them. This new info 
+         must be check pointed to the standby.
+         
+         This object maintains the total number of context modify 
+         messages which are check pointed to standby.
+
+         Trigger Condition: This counter is incremented whenever a
+         context modify message is check pointed to standby."
+     ::= { cGgsnRedundancyStatistics 3 }
+
+cGgsnContextRemoveMessages          OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "When the PDP context is deleted, deletion event is 
+         check pointed to the standby, so that the corresponding 
+         backup context deleted as well.
+         
+         This object will maintain the total number of context 
+         removed messages which are check pointed to standby.
+
+         Trigger Condition: The counter is incremented for every 
+         context remove message, which is check pointed."
+     ::= { cGgsnRedundancyStatistics 4 }
+
+cGgsnPathSetupMessages              OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "Messages (of any kind PDP create/delete etc)indicate 
+         the presence of other GSN. Path is setup between the GSNs 
+         when they transmit the messages.
+        
+         This object contains the number of path setup messages
+         between SGSN and GGSN.
+
+         Trigger Condition: This counter is updated for every path
+         setup messages sent."
+     ::= { cGgsnRedundancyStatistics 5 }
+
+cGgsnPathModifyMessages             OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This object will contain the total number of path Modify
+         messages.
+       
+         The IE recovery count is used to indicate restart of other
+         GSN. Any change related to path or GSN will be check pointed
+         to standby.
+
+         Trigger Condition: This counter is incremented for every change
+         related to path."
+     ::= { cGgsnRedundancyStatistics 6 }
+
+cGgsnPathRemoveMessages             OBJECT-TYPE 
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This object will keep track of all the messages which are
+         responsible for path removal between the GSNs.
+         As long as context remain established, the path between the  
+         GSNs is alive. In an instant where the last context is released
+         and the echo timer is not enabled, the path timer is started 
+         within which the PDP context is expected to keep the path
+         live, when the timer expires, path is Removed.
+
+         Trigger Condition: This timer is triggered when the path
+         between the GSNs is removed."
+     ::= { cGgsnRedundancyStatistics 7 }
+
+cGgsnCGFReadyMessages               OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "The charging information are sent from GGSN to charging
+         gateway. GTP' protocol is used between them.
+         
+         This object will consists of total number of CGF ready 
+         messages.
+
+         Trigger Condition: The counter is incremented when CGF ready
+         message is check pointed to standby."
+     ::= { cGgsnRedundancyStatistics 8 }
+
+cGgsnCGFModifyMessages          OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "Significant information related to change in state of 
+         CGF must be check pointed to GGSN.
+        
+         This object indicates the total number of CGF modify 
+         messages recieved.
+
+         Trigger condition: This counter is triggered when there
+         is a change in CGF state."
+     ::= { cGgsnRedundancyStatistics 9 }
+
+cGgsnCGFRemoveMessages          OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This object maintains the count for all the messages
+         responsible for CGF removal
+
+         Trigger Condition: This counter is triggered when
+         context is deleted."
+     ::= { cGgsnRedundancyStatistics 10 }
+
+cGgsnInternalStateMsgs              OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "The GGSN certain information which are sent out to other
+         GSN's  (SGSN) and CGF. On failover these information must be 
+         consistent. Information like, IE recovery count sent to the 
+         other GSN's for path management, local record sequence number
+         and charging ID etc.
+
+         Trigger Condition: The counter is incremented for each of
+         these kind of messages."
+     ::= { cGgsnRedundancyStatistics 11 }
+
+cGgsnSlbCacFailures                 OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This object will keep track of number of CAC Failure
+         notifications sent to SLB.
+
+         Trigger Condition: The counter is incremented whenever
+         GGSN sends CAC failure notification to SLB."
+     ::= { cGgsnStatistics 28 }
+
+cGgsnSlbSessionFailures             OBJECT-TYPE
+     SYNTAX                         Counter32
+     MAX-ACCESS                     read-only
+     STATUS                         current
+     DESCRIPTION
+         "This object will keep track of number of Session failure
+         notifications sent to SLB.
+
+         Trigger Condition: The counter is incremented whenever
+         GGSN sends Session failure notification to SLB."
+     ::= { cGgsnStatistics 29 } 
 
 --
 --  Notification and alarm related objects
@@ -927,7 +1176,7 @@ cGgsnSgsnDownStreamByteCnt           OBJECT-TYPE
 cGgsnNotifEnabled              OBJECT-TYPE
     SYNTAX                     TruthValue
     MAX-ACCESS                 read-write
-    STATUS                     current
+    STATUS                     deprecated
     DESCRIPTION
         "Indicates whether cGgsnNotification notification will
         be sent when a notification is generated by the device.
@@ -1007,6 +1256,88 @@ cGgsnHistNotifTable            OBJECT-TYPE
         then the oldest entry is deleted and replaced with an entry
         for the latest notification."
     ::= { cGgsnNotifMgmt 7 }
+
+cGgsnServiceNotifEnabled       OBJECT-TYPE
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnInServiceNotif notification and
+         cGgsnMaintenanceNotif notification will be sent when a
+         notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification."
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 8 }
+
+cGgsnMemoryNotifEnabled       OBJECT-TYPE       
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnMemThresholdReachedNotif notification 
+         and cGgsnMemThresholdClearedNotif notification will be sent 
+         when a notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification." 
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 9 }                           
+
+cGgsnPdfNotifEnabled           OBJECT-TYPE                      
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnPdfStateUpNotif notification and
+         cGgsnPdfStateDownNotiff notification will be sent when a
+         notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification."
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 10 }         
+
+cGgsnGlobalErrorNotifEnabled   OBJECT-TYPE
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnGlobalErrorNotif notification will be 
+         sent when a notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification."
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 11 }                            
+
+cGgsnAccessPointNotifEnabled   OBJECT-TYPE
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnAccessPointNameNotif notification will 
+         be sent when a notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification."
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 12 }                    
+
+
+cGgsnPdpNotifEnabled           OBJECT-TYPE
+    SYNTAX                     TruthValue
+    MAX-ACCESS                 read-write
+    STATUS                     current
+    DESCRIPTION
+        "Indicates whether cGgsnPacketDataProtocolNotif notification 
+         will be sent when a notification is generated by the device.
+          - 'true',  it will enable the device to send a notification.
+          - 'false', it will prevent the device from sending out a
+                     notification."
+    DEFVAL { false }
+    ::= { cGgsnNotifMgmt 13 }                                
 
 cGgsnHistNotifEntry            OBJECT-TYPE
     SYNTAX                     CGgsnHistNotifEntry
@@ -2008,8 +2339,146 @@ cGgsnDownlinkVerifyMsDisable      OBJECT-TYPE
         'false' - Routing beyond MS is disabled."
     DEFVAL { false }
     ::= { cGgsnConfigurations 20 } 
-    
 
+cGgsnSlbMode                 OBJECT-TYPE
+     SYNTAX                  INTEGER {
+                                      directed(1),
+                                      dispatched(2)
+                              }
+     MAX-ACCESS              read-write
+     STATUS                  current
+     DESCRIPTION
+         "GTP SLB can operate in two modes-dispatched and directed.
+     
+         - 'dispatched' mode: It forwards the create request without
+         changing the destination IP address (vserver address) and the
+         create response comes from the same (vserver) address.
+
+         - 'directed' mode: It changes the destination IP address to
+         that of GGSN's VT and the create response comes from the
+         GGSN VT."
+     ::= { cGgsnConfigurations 21 }
+
+cGgsnSlbNotif                OBJECT-TYPE
+     SYNTAX                  INTEGER {
+                                      cacFailure(1),
+                                      sessionDeletion(2)
+                             } 
+     MAX-ACCESS              read-write
+     STATUS                  current
+     DESCRIPTION
+         "This object is used to enable or disable the GGSN behavior 
+         of sending CAC failure notification to SLB, or session failure
+         notification to SLB.
+
+         If this object is set to cacFailure(1), then this object is
+         required to enable the feature in the dispatched mode
+         of operation of SLB.
+
+         If this object is set to sessionDeletion(2), then GGSN will
+         send delete notification message to SLB when the last PDP 
+         associated with a IMSI is deleted." 
+     ::= { cGgsnConfigurations 22 }
+
+cGgsnSlbVserverTable               OBJECT-TYPE
+     SYNTAX                        SEQUENCE OF CGgsnSlbVserverEntry
+     MAX-ACCESS                    not-accessible
+     STATUS                        current
+     DESCRIPTION
+         "This table includes the different virtual servers
+         (IP address of virtual servers) and the
+         elements gives the interface to reach these servers.
+
+         The table is indexed on the vserver address.
+         
+         The table objects can be modified, when the RowStatus
+          (cGgsnSlbVserRowStatus) is active."
+    ::= { cGgsnConfigurations 23 }
+
+cGgsnSlbVserverEntry               OBJECT-TYPE
+     SYNTAX                        CGgsnSlbVserverEntry
+     MAX-ACCESS                    not-accessible
+     STATUS                        current
+     DESCRIPTION
+         "Entry contains the Virtual server details(IP address type,
+         IP address)and next hop address and VRF name."
+     INDEX    { cGgsnSlbVserAddrType,
+                cGgsnSlbVserAddress }
+     ::= { cGgsnSlbVserverTable 1 }
+
+CGgsnSlbVserverEntry           ::= SEQUENCE {
+     cGgsnSlbVserAddrType        InetAddressType,
+     cGgsnSlbVserAddress         InetAddress,
+     cGgsnSlbVserNextHopAddrType InetAddressType,
+     cGgsnSlbVserNextHopAddress  InetAddress,
+     cGgsnSlbVserVrfName         SnmpAdminString,
+     cGgsnSlbVserRowStatus       RowStatus
+     }
+
+cGgsnSlbVserAddrType               OBJECT-TYPE
+     SYNTAX                        InetAddressType
+     MAX-ACCESS                    not-accessible
+     STATUS                        current
+     DESCRIPTION
+         "This object specifies the address type of the vserver.
+          IP address of type ipv(4) is only supported."
+     ::= { cGgsnSlbVserverEntry 1 }
+
+cGgsnSlbVserAddress                OBJECT-TYPE
+     SYNTAX                        InetAddress (SIZE (4..20))
+     MAX-ACCESS                    not-accessible
+     STATUS                        current
+     DESCRIPTION
+         "This object specifies the address of GTP vservers.
+         It is required only in directed mode. If SLB is running
+         in directed mode and this object is not configured, then
+         the feature remains disabled.
+
+         If SLB is running in the dispatched mode, the vserver that
+         forwarded the create request is known to the GGSN and
+         thus it is possible to send the notification directly to
+         the vserver."
+     ::= { cGgsnSlbVserverEntry 2 }
+
+cGgsnSlbVserNextHopAddrType        OBJECT-TYPE
+     SYNTAX                        InetAddressType
+     MAX-ACCESS                    read-create 
+     STATUS                        current          
+     DESCRIPTION
+         "This object specifies the IP address type to reach the
+         virtual server.  IP address of type ipv(4) is only supported."
+     DEFVAL { ipv4 }
+     ::= { cGgsnSlbVserverEntry 3 }
+
+cGgsnSlbVserNextHopAddress         OBJECT-TYPE
+      SYNTAX                        InetAddress (SIZE (4..20))
+      MAX-ACCESS                    read-create 
+      STATUS                        current
+      DESCRIPTION
+          "This object specifies the IP address to reach the vserver."  
+      ::= { cGgsnSlbVserverEntry 4 }
+
+cGgsnSlbVserVrfName                 OBJECT-TYPE
+     SYNTAX                         SnmpAdminString
+     MAX-ACCESS                     read-create 
+     STATUS                         current
+     DESCRIPTION
+         "This object specifies the VRF name on an interface on GGSN
+         connected to SLB, to reach the vserver."
+     ::= { cGgsnSlbVserverEntry 5 }
+
+cGgsnSlbVserRowStatus              OBJECT-TYPE
+     SYNTAX                        RowStatus
+     MAX-ACCESS                    read-create
+     STATUS                        current
+     DESCRIPTION
+         "This object will create new row into the table or deletes the
+         existing one.
+
+         To create a row, set this object to 'createAndGo(4)'.
+         To delete a row, set this object to 'destroy(6)'."
+     ::= { cGgsnSlbVserverEntry 6 }
+    
 --
 -- Status 
 --
@@ -2020,7 +2489,8 @@ cGgsnVersion                   OBJECT-TYPE
                                         release30(2),
                                         release40(3),
                                         release31(4),
-                                        release50(5)
+                                        release50(5),
+                                        release60(6)
                                }
     MAX-ACCESS                 read-only
     STATUS                     current
@@ -2138,6 +2608,40 @@ cGgsnServiceModeStatus        OBJECT-TYPE
         cGgsnServiceMode."
     ::= { cGgsnStatus 9 }
 
+cGgsnConfigVersion             OBJECT-TYPE
+    SYNTAX                     SnmpAdminString
+    MAX-ACCESS                 read-only
+    STATUS                     current
+    DESCRIPTION
+        "This object specifies the config version of GPRS
+        image. The value of this object will be of the form
+        Version.Release.Maintenence.
+
+        This object provides information on the ability 
+        of the devices to support configuration operations."
+    ::= { cGgsnStatus 10 }
+
+cGgsnPrepaidPDPs               OBJECT-TYPE
+     SYNTAX                    Gauge32
+     MAX-ACCESS                read-only
+     STATUS                    current
+     DESCRIPTION
+         "This object specifies the number of prepaid PDPs created 
+         since the last clearance of statistics 
+         (GPRS service aware statistics)." 
+     ::= { cGgsnStatus 11 }
+
+cGgsnPostpaidPDPs              OBJECT-TYPE
+     SYNTAX                    Gauge32
+     MAX-ACCESS                read-only
+     STATUS                    current
+     DESCRIPTION
+         "This object specifies the current number of postpaid PDPs,
+         created since the last clearance of statistics
+         (GPRS service aware statistics)."
+     ::= { cGgsnStatus 12 } 
+
+
 -- Notif Info
 
 cGgsnPdfServerAddrType          OBJECT-TYPE
@@ -2159,6 +2663,111 @@ cGgsnPdfServerAddr              OBJECT-TYPE
         the object cGgsnPdfServerAddrType."
     ::= { cGgsnNotifInfo 2 }
 
+cGgsnNotifAccessPointName       OBJECT-TYPE
+    SYNTAX                      SnmpAdminString (SIZE(1..100))
+    MAX-ACCESS                  accessible-for-notify
+    STATUS                      current
+    DESCRIPTION
+        "This object specifies the Access Point Name and is used
+         specify the name in the cGgsnAccessPointNameNotif 
+         notification."
+    ::= { cGgsnNotifInfo 3 }
+
+cGgsnNotifPdpImsi               OBJECT-TYPE
+    SYNTAX                      SnmpAdminString (SIZE(1..8))
+    MAX-ACCESS                  accessible-for-notify
+    STATUS                      current
+    DESCRIPTION
+        "This object specifies the International Mobile Subscriber
+         Identity (IMSI) of the user for whom the notification
+         is generated.  This object is used to specify IMSI of the
+         user in the cGgsnPacketDataProtocolNotif notification."
+    ::= { cGgsnNotifInfo 4 }
+
+cGgsnGlobalErrorTypes           OBJECT-TYPE
+    SYNTAX   INTEGER {
+               ggsnServiceUp(1),  
+               ggsnServiceDown(2),
+               mapSgsnUp(3),      
+               mapSgsnDown(4),    
+               noDHCPServer(5)    
+             }
+
+    MAX-ACCESS                 accessible-for-notify
+    STATUS                     current
+    DESCRIPTION
+        "This object indicates the types of global errors
+         as follows.
+        
+         'ggsnServiceUp'   -  GGSN service has started
+         'ggsnServiceDown' -  GGSN service is shutdown
+         'mapSgsnUp'       -  MAP-SGSN service has started
+         'mapSgsnDown'     -  MAP-SGSN service is shutdown
+         'noDHCPServer'    -- DHCP server is not configured
+        "
+    ::= { cGgsnNotifInfo 5 }
+
+cGgsnAccessPointErrorTypes     OBJECT-TYPE
+    SYNTAX   INTEGER {
+               noRadius(1),
+               ipAllocationFail(2),
+               apnUnreachable(3) 
+             }
+    MAX-ACCESS                 accessible-for-notify
+    STATUS                     current
+    DESCRIPTION
+        "This object indicates the types access point errors as
+         follows.
+          
+          'noRadius'    - RADIUS Server is not configured. 
+          'ipAllocationFail' - Unable to allocate IP address.
+          'apnUnreachable' -  Unable to reach access point."
+    ::= { cGgsnNotifInfo 6 }
+    
+cGgsnPacketDataProtoErrorTypes OBJECT-TYPE
+    SYNTAX   INTEGER {
+               noResource(1),
+               authenticationFail(2),
+               ccrInitFail(3),
+               quotaPushFail(4) 
+             }
+
+    MAX-ACCESS                 accessible-for-notify
+    STATUS                     current
+    DESCRIPTION
+        "This object indicates the types of Packet Data Protocol
+         errors as follows.
+         
+          'noResource' - Mobile Station initiated PDP count reaches
+                         the specified limit or
+                         Network initiated PDP count reaches the 
+                         specified limit.
+                         
+          'authenticationFail' - Authentication failed.
+
+          'ccrInitFail' - CCR(initial)is sent to diameter server, and 
+                          Tx timer expires before getting CCA (initial)
+                          response. The action on the PDP context 
+                          creation is determined by the configured
+                          failure handling, as specified in 
+                          cGgsnSADccaCcfh object in 
+                          CISCO-GGSN-SERVICE-AWARE-MIB.
+
+          'quotaPushFail' - Quota Push failed, when the path between
+                            CSG-QS is down or when CSG sends a negative
+                            Response for quota push request."
+    ::= { cGgsnNotifInfo 7 }
+
+cGgsnNotifPdpMsisdn              OBJECT-TYPE
+     SYNTAX                      SnmpAdminString 
+     MAX-ACCESS                  accessible-for-notify
+     STATUS                      current
+     DESCRIPTION
+        "This object specifies the Mobile Subscriber ISDN (MSISDN) 
+         value of the user for whom the notification is generated.
+         This object is used to specify MSISDN of the
+         user in the cGgsnPacketDataProtocolNotif notification."
+     ::= { cGgsnNotifInfo 8 } 
 --
 --  Notification Definitions
 --
@@ -2181,7 +2790,7 @@ cGgsnNotification      NOTIFICATION-TYPE
                             cGgsnHistNotifGgsnIpAddr,
                             cGgsnHistNotifInfo
                            }
-    STATUS            current
+    STATUS             deprecated 
     DESCRIPTION
         "This notification indicates the occurrence of a GGSN 
         related alarm. If and when additional useful information
@@ -2238,13 +2847,59 @@ cGgsnPdfStateDownNotif         NOTIFICATION-TYPE
     }
     STATUS                     current
     DESCRIPTION
-        "A notification of this type is generated when PDF
+       "A notification of this type is generated when PDF
         connection goes DOWN."
     ::= { cGgsnNotifications 7 }
 
--- 
--- Conformances definitions
--- 
+cGgsnGlobalErrorNotif        NOTIFICATION-TYPE
+    OBJECTS                {
+                            cGgsnGlobalErrorTypes,
+                            cGgsnHistNotifSeverity,
+                            cGgsnHistNotifTimestamp,
+                            cGgsnHistNotifGgsnIpAddrType,
+                            cGgsnHistNotifGgsnIpAddr,
+                            cGgsnHistNotifInfo
+                           }
+    STATUS                     current
+    DESCRIPTION
+       "This notification indicates the occurrence of a GGSN 
+        related alarm."
+    ::= { cGgsnNotifications 8 }
+
+cGgsnAccessPointNameNotif    NOTIFICATION-TYPE
+    OBJECTS                {
+                            cGgsnAccessPointErrorTypes,
+                            cGgsnHistNotifSeverity,
+                            cGgsnHistNotifTimestamp,
+                            cGgsnHistNotifGgsnIpAddrType,
+                            cGgsnHistNotifGgsnIpAddr,
+                            cGgsnHistNotifInfo,
+                            cGgsnNotifAccessPointName
+                           }
+    STATUS                     current
+    DESCRIPTION
+       "This notification indicates the occurrence of a APN 
+        related alarm." 
+    ::= { cGgsnNotifications 9 }
+
+cGgsnPacketDataProtocolNotif   NOTIFICATION-TYPE
+    OBJECTS                {
+                            cGgsnPacketDataProtoErrorTypes,
+                            cGgsnHistNotifSeverity,
+                            cGgsnHistNotifTimestamp,
+                            cGgsnHistNotifGgsnIpAddrType,
+                            cGgsnHistNotifGgsnIpAddr,
+                            cGgsnHistNotifInfo,
+                            cGgsnNotifPdpImsi,
+                            cGgsnNotifPdpMsisdn,
+                            cGgsnNotifAccessPointName
+                           }
+    STATUS                     current
+    DESCRIPTION
+        "This notification indicates the occurrence of a User
+        related alarm."
+    ::= { cGgsnNotifications 10 }
+
 
 cGgsnMIBConformances   OBJECT IDENTIFIER
                            ::= { cGgsnMIB 3 }
@@ -2325,7 +2980,7 @@ cGgsnMIBComplianceRev1   MODULE-COMPLIANCE
         ::= { cGgsnMIBCompliances 2 }
 
 cGgsnMIBComplianceRev2   MODULE-COMPLIANCE
-        STATUS           current
+        STATUS           deprecated
         DESCRIPTION
              "The compliance statements for entities which
              implement the CISCO GGSN MIB."
@@ -2334,7 +2989,8 @@ cGgsnMIBComplianceRev2   MODULE-COMPLIANCE
                            cGgsnNotifMgmtGroup,
                            cGgsnConfigurationsGroupRev2,
                            cGgsnNotifGroupRev1,
-                           cGgsnStatusGroupRev1
+                           cGgsnStatusGroupRev1,
+                           cGgsnNotifInfoGroup
                          }
         GROUP            cGgsnUmtsGroup
         DESCRIPTION
@@ -2395,6 +3051,239 @@ cGgsnMIBComplianceRev2   MODULE-COMPLIANCE
              createAndWait(5) need not be supported."
         ::= { cGgsnMIBCompliances 3 }
 
+cGgsnMIBComplianceRev3   MODULE-COMPLIANCE
+        STATUS           deprecated
+        DESCRIPTION
+             "The compliance statements for entities which
+             implement the CISCO GGSN MIB.
+
+             This is deprecated by cGgsnMIBComplianceRev4."
+        MODULE      -- this module
+        MANDATORY-GROUPS { cGgsnStatisticsGroupRev1,
+                           cGgsnNotifMgmtGroupRev1,
+                           cGgsnConfigurationsGroupRev2,
+                           cGgsnNotifGroupRev2,
+                           cGgsnStatusGroupRev1,
+                           cGgsnNotifInfoGroupRev1
+                         }
+        GROUP            cGgsnUmtsGroup
+        DESCRIPTION
+             "This group is mandatory for a GGSN that supports GTP v1."
+        OBJECT           cGgsnHistNotifGgsnIpAddrType
+        SYNTAX           INTEGER { unknown(0),
+                                   ipv4(1)
+                         }
+        DESCRIPTION
+             "Support for ipv6(2) and dns(16) is not mandatory."
+        OBJECT           cGgsnIpDupProtectRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnDefaultAggregRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnAddrRangeRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPdfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPcscfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        ::= { cGgsnMIBCompliances 4 }
+
+cGgsnMIBComplianceRev4   MODULE-COMPLIANCE
+        STATUS           deprecated  
+        DESCRIPTION
+             "The compliance statements for entities which
+             implement the CISCO GGSN MIB.
+
+             This is deprecated by cGgsnMIBComplianceRev5."
+        MODULE      -- this module
+        MANDATORY-GROUPS { cGgsnStatisticsGroupRev1,
+                           cGgsnNotifMgmtGroupRev1,
+                           cGgsnConfigurationsGroupRev2,
+                           cGgsnNotifGroupRev2,
+                           cGgsnStatusGroupRev1,
+                           cGgsnNotifInfoGroupRev1,
+                           cGgsnStatusGroupConfigVer
+                         }
+        GROUP            cGgsnUmtsGroup
+        DESCRIPTION
+             "This group is mandatory for a GGSN that supports GTP v1."
+        OBJECT           cGgsnHistNotifGgsnIpAddrType
+        SYNTAX           INTEGER { unknown(0),
+                                   ipv4(1)
+                         }
+        DESCRIPTION
+             "Support for ipv6(2) and dns(16) is not mandatory."
+        OBJECT           cGgsnIpDupProtectRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnDefaultAggregRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnAddrRangeRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPdfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPcscfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+            ::= { cGgsnMIBCompliances  5}
+
+cGgsnMIBComplianceRev5   MODULE-COMPLIANCE
+        STATUS           current
+        DESCRIPTION
+             "The compliance statements for entities which
+             implement the CISCO GGSN MIB."
+        MODULE      -- this module
+        MANDATORY-GROUPS { cGgsnStatisticsGroupRev1,
+                           cGgsnNotifMgmtGroupRev1,
+                           cGgsnConfigurationsGroupRev2,
+                           cGgsnNotifGroupRev2,
+                           cGgsnStatusGroupRev1,
+                           cGgsnNotifInfoGroupRev1,
+                           cGgsnStatusGroupConfigVer,
+                           cGgsnConfigurationsGroupR60,
+                           cGgsnStatisticsGroupR60,
+                           cGgsnStatusGroupR60,
+                           cGgsnNotifInfoGroupR60
+                         }
+        GROUP            cGgsnUmtsGroup
+        DESCRIPTION
+             "This group is mandatory for a GGSN that supports GTP v1."
+        OBJECT           cGgsnHistNotifGgsnIpAddrType
+        SYNTAX           INTEGER { unknown(0),
+                                   ipv4(1)
+                         }
+        DESCRIPTION
+             "Support for ipv6(2) and dns(16) is not mandatory."
+        OBJECT           cGgsnIpDupProtectRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnDefaultAggregRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnAddrRangeRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPdfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPcscfRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT           cGgsnPlmnRowStatus
+        SYNTAX           INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+             "The states notInService(2), notReady(3) and
+             createAndWait(5) need not be supported."
+        OBJECT            cGgsnSlbVserRowStatus
+        SYNTAX            INTEGER { active(1),
+                                   createAndGo(4),
+                                   destroy(6)
+                                 }
+        DESCRIPTION
+            "The states notInService(2), notReady(3) and
+            createAndWait(5) need not be supported."
+           ::= { cGgsnMIBCompliances  6}
 
 -- units of conformance
 
@@ -2439,7 +3328,7 @@ cGgsnNotifMgmtGroup   OBJECT-GROUP
                            cGgsnHistNotifGgsnIpAddr,
                            cGgsnHistNotifInfo
                            }
-    STATUS                 current
+    STATUS                 deprecated
     DESCRIPTION
         " A collection of objects related with notification
         management on GGSN."
@@ -2568,7 +3457,7 @@ cGgsnNotifGroupRev1        NOTIFICATION-GROUP
                            cGgsnPdfStateUpNotif,
                            cGgsnPdfStateDownNotif
                            }
-    STATUS              current
+    STATUS                 deprecated
     DESCRIPTION
         "A collection of notifications."
     ::= { cGgsnMIBGroups 9 }
@@ -2627,10 +3516,129 @@ cGgsnNotifInfoGroup        OBJECT-GROUP
                            cGgsnPdfServerAddrType,
                            cGgsnPdfServerAddr
                            }
-    STATUS                 current
+    STATUS                 deprecated
     DESCRIPTION
         " A collection of objects representing Notif Info on GGSN."
     ::= { cGgsnMIBGroups 12 }
+
+cGgsnNotifGroupRev2        NOTIFICATION-GROUP
+    NOTIFICATIONS          { 
+                           cGgsnInServiceNotif,
+                           cGgsnMaintenanceNotif,
+                           cGgsnMemThresholdReachedNotif,
+                           cGgsnMemThresholdClearedNotif,
+                           cGgsnPdfStateUpNotif,
+                           cGgsnPdfStateDownNotif,
+                           cGgsnGlobalErrorNotif,
+                           cGgsnAccessPointNameNotif,
+                           cGgsnPacketDataProtocolNotif   
+                           }
+    STATUS                 current
+    DESCRIPTION
+        "A collection of notifications."
+    ::= { cGgsnMIBGroups 13 }
+
+cGgsnNotifInfoGroupRev1    OBJECT-GROUP
+    OBJECTS                {
+                           cGgsnPdfServerAddrType,
+                           cGgsnPdfServerAddr,
+                           cGgsnNotifAccessPointName,
+                           cGgsnNotifPdpImsi,
+                           cGgsnGlobalErrorTypes,
+                           cGgsnAccessPointErrorTypes,
+                           cGgsnPacketDataProtoErrorTypes
+                           }
+    STATUS                 current
+    DESCRIPTION
+        " A collection of objects representing Notif Info on GGSN."
+    ::= { cGgsnMIBGroups 14 }
+
+cGgsnNotifMgmtGroupRev1   OBJECT-GROUP
+    OBJECTS                {
+                           cGgsnNotifLeastSeverLevel,
+                           cGgsnGeneratedNotifs,
+                           cGgsnIgnoredAlarms,
+                           cGgsnHistNotifMaxLength,
+                           cGgsnHistNotifLatestIndex,
+                           cGgsnHistNotifType,
+                           cGgsnHistNotifSeverity,
+                           cGgsnHistNotifTimestamp,
+                           cGgsnHistNotifGgsnIpAddrType,
+                           cGgsnHistNotifGgsnIpAddr,
+                           cGgsnHistNotifInfo,
+                           cGgsnServiceNotifEnabled,
+                           cGgsnMemoryNotifEnabled,
+                           cGgsnPdfNotifEnabled,
+                           cGgsnGlobalErrorNotifEnabled,
+                           cGgsnAccessPointNotifEnabled,
+                           cGgsnPdpNotifEnabled
+                           }
+    STATUS                 current
+    DESCRIPTION
+        " A collection of objects related with notification
+        management on GGSN."
+    ::= { cGgsnMIBGroups 15 }
+
+cGgsnStatusGroupConfigVer  OBJECT-GROUP
+    OBJECTS                {
+                           cGgsnConfigVersion
+                           }
+    STATUS                 current
+    DESCRIPTION
+        " A collection of objects representing config version of GGSN."
+    ::= { cGgsnMIBGroups 16 }
+
+cGgsnConfigurationsGroupR60    OBJECT-GROUP
+     OBJECTS                   {
+                               cGgsnSlbMode,
+                               cGgsnSlbNotif,
+                               cGgsnSlbVserRowStatus,
+                               cGgsnSlbVserNextHopAddrType,
+                               cGgsnSlbVserNextHopAddress,
+                               cGgsnSlbVserVrfName    
+                              }
+     STATUS                    current
+     DESCRIPTION
+         "A collection of objects representing configurations on GGSN."
+     ::= { cGgsnMIBGroups 17 }
+
+cGgsnStatisticsGroupR60       OBJECT-GROUP
+     OBJECTS                  {
+                              cGgsnTotalMessages,
+                              cGgsnContextSetupMessages,
+                              cGgsnContextModifyMessages,
+                              cGgsnContextRemoveMessages,
+                              cGgsnPathSetupMessages,
+                              cGgsnPathModifyMessages,
+                              cGgsnPathRemoveMessages,
+                              cGgsnCGFReadyMessages, 
+                              cGgsnCGFModifyMessages,
+                              cGgsnCGFRemoveMessages,
+                              cGgsnInternalStateMsgs,
+                              cGgsnSlbCacFailures,
+                              cGgsnSlbSessionFailures
+                             }
+     STATUS                  current
+     DESCRIPTION 
+         "A collection of objects related with statistics."
+     ::= { cGgsnMIBGroups 18 }
+
+cGgsnStatusGroupR60        OBJECT-GROUP
+     OBJECTS                {
+                           cGgsnPrepaidPDPs,
+                           cGgsnPostpaidPDPs
+                            }
+     STATUS                    current
+     DESCRIPTION
+         "A collection of objects related to gtp status."
+     ::= { cGgsnMIBGroups 19 } 
+
+cGgsnNotifInfoGroupR60     OBJECT-GROUP
+     OBJECTS               { cGgsnNotifPdpMsisdn }
+     STATUS                 current
+     DESCRIPTION
+         "A collection of objects representing the Notif info on
+         GGSN."
+     ::= { cGgsnMIBGroups 20 } 
+    
 END
-
-

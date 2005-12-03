@@ -3,9 +3,9 @@
 --   The MIB contains Card statistics and specific 
 --   information for VISM(Voice Interworking Service Module)
 --
--- October 2003, George Ogagan
+-- October 2005, Rashmi Purandare
 --
--- Copyright (c) 2003 by Cisco Systems, Inc.
+-- Copyright (c) 2003, 2004, 2005 by Cisco Systems, Inc.
 -- All rights reserved.
 -- ****************************************************************
 
@@ -14,18 +14,19 @@ IMPORTS
     MODULE-IDENTITY,
     OBJECT-TYPE,
     Integer32,
-    IpAddress 
-                               FROM SNMPv2-SMI
+    IpAddress,
+    Unsigned32                 FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     OBJECT-GROUP               FROM SNMPv2-CONF
     SnmpAdminString            FROM SNMP-FRAMEWORK-MIB 
-    TruthValue                 FROM SNMPv2-TC
+    TruthValue,
+    TEXTUAL-CONVENTION         FROM SNMPv2-TC
     cardSpecific,
     voice                      FROM BASIS-MIB
     ciscoWan                   FROM CISCOWAN-SMI;
 
 ciscoVismModuleMIB MODULE-IDENTITY
-    LAST-UPDATED    "200310310000Z"
+    LAST-UPDATED    "200510170000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "       Cisco Systems
@@ -42,7 +43,37 @@ ciscoVismModuleMIB MODULE-IDENTITY
         "This MIB module contains VISM Card specific attributes
          and call statistics information for VISM service module.
         "
-
+    REVISION    "200510170000Z"
+    DESCRIPTION
+        "Added objects
+         - vismOamLoopbackSetCLP
+         - vismFaxDeJitterMode
+         - vismFaxDeJitterInitialDelay
+         - vismPvcAlarmLogEnable
+         - vismPvcAlarmLogAdminTimer
+         - vismPvcAlarmLogOperTimer
+         - vismContinuityCheckCellEnable
+        "
+    REVISION    "200503010000Z"
+    DESCRIPTION
+        "Added objects
+         - vismSplModemToneBitMap
+         - vismSSRCEnable
+        "
+    REVISION    "200405240000Z"
+    DESCRIPTION
+        "Corrected description for vismConfigChangeTypeBitMap
+         Added new objects 
+         - vismBearerIpPingEnable
+         - vismTrapFilteringEnable
+         - vismTrapIntegerValue
+        "
+    REVISION    "200403090000Z"
+    DESCRIPTION
+        "Deprecated object:
+           -vismAisSuppression
+         Modified description for vismConfigChangeTypeBitMap
+        "
     REVISION    "200310310000Z"
     DESCRIPTION
         "Update descriptions in MIB.
@@ -76,6 +107,63 @@ vismTrapObjGrp   OBJECT IDENTIFIER ::= { vismConfig 5 }
 vismAal2Grp      OBJECT IDENTIFIER ::= { vismConfig 6 }
 vismInteropGrp   OBJECT IDENTIFIER ::= { vismConfig 7 }
 
+-- Textual Conventions
+VismFaxDeJitterMode::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "This mode parameter selects the de-jitter mode to be 
+         used during fax calls.
+         'unSpecified': Unspecified mode of operation
+         'adaptive': In this mode of operation, the delay applied by 
+                     the de-jitter buffer is adapted based on 
+                     observations of the incoming packet jitter.
+         'fixedWithTS': Indicates use of a constant jitter buffer 
+                     size with a timestamp check on the incoming 
+                     packets, as defined by the object 
+                     vismFaxDeJitterInitialDelay.
+         'fixedWithoutTS': Indicates use of a constant jitter buffer 
+                     size, which is defined by the object 
+                     vismFaxDeJitterInitialDelay.
+         'passThrough': This mode is designed to support de-jittering 
+                     while in pass-through mode for the transport 
+                     of modem and fax signals.
+        "
+    SYNTAX    INTEGER {
+                unSpecified         (1),
+                adaptive            (2),
+                fixedWithTS         (3),
+                fixedWithoutTS      (4),
+                passThrough         (5)
+              }
+
+VismFaxDeJitterInitDelay::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "General category of fax initial delays in milliseconds
+         supported on the module."
+    SYNTAX  INTEGER {
+            unSpecified (0),
+            five        (5),
+            ten         (10),
+            fifteen     (15),
+            twenty      (20),
+            twentyfive  (25),
+            thirty      (30),
+            thirtyfive  (35),
+            forty       (40),
+            fortyfive   (45),
+            fifty       (50),
+            fiftyfive   (55),
+            sixty       (60),
+            sixtyfive   (65),
+            seventy     (70),
+            seventyfive (75),
+            eighty      (80),
+            eightyfive  (85),
+            ninety      (90),
+            ninetyfive  (95),
+            hundred     (100)
+            }
 
 --
 -- VISM Performance statistics 
@@ -768,6 +856,36 @@ vismDSPHeartbeat  OBJECT-TYPE
             "
         DEFVAL { 0 }
         ::= { vismDspGrp 11 }
+
+vismFaxDeJitterMode  OBJECT-TYPE
+    SYNTAX      VismFaxDeJitterMode
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "This object specifies the de-jitter mode to 
+             be used for the fax upspeed.
+             This object is applicable only in the case of
+             VoIP applications.
+            "
+    DEFVAL { unSpecified }
+    ::= { vismDspGrp 12 }
+
+vismFaxDeJitterInitialDelay    OBJECT-TYPE
+    SYNTAX      VismFaxDeJitterInitDelay
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+          "This object defines the de-jitter buffer size 
+           for fax upspeed. If the vismFaxDeJitter Mode is 
+           set to be 'fixedWithTS' or 'fixedWithoutTS', the jitter
+           buffer size is set to this value for the call. 
+           If vismDeJitterMode is 'adaptive', this is the initial 
+           jitter buffer size, and the DSP will adapt to an optimal 
+           size. If the vismDeJitterMode is 'passThrough', this value 
+           is ignored.
+          "
+    DEFVAL { unSpecified }
+    ::= { vismDspGrp 13 }
 
 --
 -- vismSystemGrp group
@@ -1660,7 +1778,7 @@ vismAisSuppression OBJECT-TYPE
                      disable (2)
                    }
     MAX-ACCESS     read-write
-    STATUS         current
+    STATUS         deprecated
     DESCRIPTION
         "This object is used to enable/disable the
          AIS(Alarm Indication Signal) suppression
@@ -1674,6 +1792,144 @@ vismAisSuppression OBJECT-TYPE
         "
     DEFVAL { disable }
     ::= { vismSystemGrp 40 }
+
+vismBearerIpPingEnable OBJECT-TYPE
+    SYNTAX         TruthValue
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "This object is used to enable/disable the bearer 
+         IP ping response configuration. 
+         When set to true, the bearer IP ping feature will
+         be enabled on the module and the bearer IP will 
+         respond to ping messages. 
+         When set to false, the bearer IP ping feature is 
+         disabled on the module.
+        "
+    DEFVAL { true }
+    ::= { vismSystemGrp 41 }
+
+vismTrapFilteringEnable OBJECT-TYPE
+    SYNTAX     TruthValue
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+        "This object is used to enable/disable the trap 
+         filtering feature on the module.
+         When set to true, the trap filtering feature is 
+         enabled on the module.
+         When set to false, the trap filtering feature is 
+         disabled on the module."
+    DEFVAL { false }
+    ::= { vismSystemGrp 42 }
+
+vismSplModemToneBitMap OBJECT-TYPE
+    SYNTAX     BITS {
+               vism1560980Tone(0)
+                     }
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+        "This bit map is applicable for any special modem 
+         tones that need to be enabled or disabled on the module. 
+         If a bit is set to 1, the tone detection is enabled. 
+         If the bit is set to 0, the tone detection is disabled.
+         The values mean:
+         vism1560980Tone: 1560/ 980Hz tone in used in special modem 
+         calls to carry encrypted data."
+    ::= { vismSystemGrp 43 }
+
+vismSSRCEnable    OBJECT-TYPE
+    SYNTAX     TruthValue
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+        "This object is used to enable/disable more than one
+         SSRC (Synchronization Source) per RTP session.
+         When set to true, the module will accept more than
+         one SSRC per RTP session.
+         When set to false, the module will not allow more
+         than one SSRC per RTP session."
+    DEFVAL { false }
+    ::= { vismSystemGrp 44 }
+
+vismOamLoopbackSetCLP  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object is used to set the cell loss priority 
+         of the oam loopback cell for all the PVCs. 
+         If set to true, all the CLP bits will be set to 1. 
+         If set to false, all the CLP bits will be set to 0.
+        "
+DEFVAL { true }
+    ::= {  vismSystemGrp 45 }
+
+vismPvcAlarmLogEnable  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether detailed alarm logging 
+         on all the PVC's on the module is enabled or disabled. 
+         If this object is true, detailed alarm logging for all
+         the PVC's on the module will be enabled.
+         If this object is false, detailed alarm logging for all 
+         the PVC's on the module will be disabled."
+    DEFVAL { false }
+    ::= {  vismSystemGrp 46 }
+
+vismPvcAlarmLogAdminTimer  OBJECT-TYPE
+    SYNTAX Unsigned32 (0..2147483647)
+    UNITS "minutes"
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "This object specifies the time for which the detailed 
+         alarm logging for all the PVCs on the module will 
+         remain active.
+         The value in this object can be set and is valid only 
+         if vismPvcAlarmLogEnable is set to true.
+         If this object is set to 0, it indicates that the alarm 
+         logging will remain active forever.
+         Once set, this object can be overwritten as long as 
+         vismPvcAlarmLogEnable is true. If this is done, the 
+         vismPvcAlarmLogAdminTimer will be refreshed to take the 
+         new value set in this object."
+    DEFVAL { 7200 }
+    ::= { vismSystemGrp 47 }
+
+vismPvcAlarmLogOperTimer  OBJECT-TYPE
+    SYNTAX Unsigned32 (0..2147483647)
+    UNITS "minutes"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object specifies the time remaining in minutes for 
+         which the detailed alarm logging will remain enabled on 
+         all the PVCs on the module.
+         When this value becomes 0, it indicates that all the PVCs 
+         on the module have run through the time specified in 
+         vismPvcAlarmLogOperTimer. This will cause the 
+         vismPvcAlarmLogEnable to be set to false.
+         If vismPvcAlarmLogAdminTimer is overwritten with a new 
+         value, this object will also be set to reflect the new value."
+    ::= { vismSystemGrp 48 }
+
+vismContinuityCheckCellEnable OBJECT-TYPE
+    SYNTAX       TruthValue 
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object is used to enable/disable the continuity check 
+         cell for all the PVCs on the module. 
+         If set to true, the module will transmit continuity check 
+         cells. 
+         If set to false, the module will disable the cell transmission.
+        "
+    DEFVAL { true }
+    ::= {  vismSystemGrp 49 }
 
 --
 -- vismInteropGrp group
@@ -1768,6 +2024,8 @@ vismConfigChangeTypeBitMap OBJECT-TYPE
         bit 26 set = mgcRedundancyProtocolTable changed
         bit 27 set = vismSessionSetTable changed
         bit 28 set = vismSessionGrpTable changed
+        bit 29 set = cvcmABCDBitTemplateConfigTable changed
+        bit 30 set = vismConfigToneDetectTable changed
 
         When used in vismScalarChanged trap, the bits indicate
         the following:
@@ -1875,6 +2133,24 @@ vismTrapStrIndex1    OBJECT-TYPE
          valid for this object.
         "
     ::= { vismTrapObjGrp 4 }
+
+vismTrapIntegerValue    OBJECT-TYPE
+    SYNTAX      Integer32 (0..2147483647) 
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This object is used only for the purpose of sending it in
+         the trap varbind. 
+
+         This object can be used when the instance value of an 
+         integer object has to be sent instead of the actual 
+         integer object.
+
+         The NMS applications should not depend on the implementation 
+         of this object. The SNMP Requests(GET,GET-NEXT) may not be 
+         valid for this object.
+        "
+    ::= { vismTrapObjGrp 5 }
 
 --
 -- vismAal2Group 
@@ -2009,7 +2285,7 @@ ciscoVismModuleMIBCompliances  OBJECT IDENTIFIER ::=
 -- compliance statements
 
 ciscoVismModuleCompliance MODULE-COMPLIANCE
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
         "The compliance statement for objects related
         to VISM module."
@@ -2026,6 +2302,90 @@ ciscoVismModuleCompliance MODULE-COMPLIANCE
             ciscoVismAal2Group
         }
     ::= { ciscoVismModuleMIBCompliances 1 }
+
+ciscoVismModuleCompliance1 MODULE-COMPLIANCE
+    STATUS  deprecated --Replaced by ciscoVismModuleComplianceRev2
+    DESCRIPTION
+        "The compliance statement for objects related
+        to VISM module."
+    MODULE  -- this module
+        MANDATORY-GROUPS {
+            ciscoVismPerfStatsGroup,
+            ciscoVismCallStatsGroup,
+            ciscoVismIpGroup,
+            ciscoVismVoIpGroup,
+            ciscoVismDspGroup,
+            ciscoVismSystemGroup1,
+            ciscoVismInteropGroup, 
+            ciscoVismTrapObjGroup,
+            ciscoVismAal2Group
+        }
+    ::= { ciscoVismModuleMIBCompliances 2 }
+
+ciscoVismModuleComplianceRev2 MODULE-COMPLIANCE
+    STATUS  deprecated --Replaced by ciscoVismModuleComplianceRev3
+    DESCRIPTION
+        "The compliance statement for objects related
+        to VISM module."
+    MODULE  -- this module
+        MANDATORY-GROUPS {
+            ciscoVismPerfStatsGroup,
+            ciscoVismCallStatsGroup,
+            ciscoVismIpGroup,
+            ciscoVismVoIpGroup,
+            ciscoVismDspGroup,
+            ciscoVismSystemGroup1,
+            ciscoVismInteropGroup, 
+            ciscoVismTrapObjGroup,
+            ciscoVismAal2Group,
+            ciscoVismSystemFeatureGroup,
+            ciscoVismTrapVarbindGroup
+        }
+    ::= { ciscoVismModuleMIBCompliances 3 }
+
+ciscoVismModuleComplianceRev3 MODULE-COMPLIANCE
+    STATUS  deprecated --Replaced by ciscoVismModuleComplianceRev4
+    DESCRIPTION
+        "The compliance statement for objects related
+        to VISM module."
+    MODULE  -- this module
+        MANDATORY-GROUPS {
+            ciscoVismPerfStatsGroup,
+            ciscoVismCallStatsGroup,
+            ciscoVismIpGroup,
+            ciscoVismVoIpGroup,
+            ciscoVismDspGroup,
+            ciscoVismSystemGroup1,
+            ciscoVismInteropGroup, 
+            ciscoVismTrapObjGroup,
+            ciscoVismAal2Group,
+            ciscoVismSystemFeatureGroupRev1,
+            ciscoVismTrapVarbindGroup
+        }
+    ::= { ciscoVismModuleMIBCompliances 4 }
+
+ciscoVismModuleComplianceRev4 MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for objects related
+        to VISM module."
+    MODULE  -- this module
+        MANDATORY-GROUPS {
+            ciscoVismPerfStatsGroup,
+            ciscoVismCallStatsGroup,
+            ciscoVismIpGroup,
+            ciscoVismVoIpGroup,
+            ciscoVismDspGroup,
+            ciscoVismSystemGroup1,
+            ciscoVismInteropGroup, 
+            ciscoVismTrapObjGroup,
+            ciscoVismAal2Group,
+            ciscoVismSystemFeatureGroupRev1,
+            ciscoVismTrapVarbindGroup,
+            ciscoVismDspGroupSup1,
+            ciscoVismSystemGroupSup1
+        }
+    ::= { ciscoVismModuleMIBCompliances 5 }
 
 ciscoVismPerfStatsGroup OBJECT-GROUP
      OBJECTS {
@@ -2147,7 +2507,7 @@ ciscoVismSystemGroup OBJECT-GROUP
          vismDualToneDetect,
          vismAisSuppression 
       }
-      STATUS current
+      STATUS deprecated
       DESCRIPTION
           "This group contains objects that are specific to the card."
       ::= { ciscoVismModuleMIBGroups  6 }
@@ -2225,4 +2585,107 @@ ciscoVismVoIpDeprecateGroup OBJECT-GROUP
           supported earlier but deprecated now."
       ::= { ciscoVismModuleMIBGroups  12 }
 
+ciscoVismSystemGroup1 OBJECT-GROUP
+    OBJECTS {
+         vismDaughterCardSerialNum,
+         vismDaughterCardDescription,
+         vismDaughterCardHWRev,
+         vismEcanEncoding,
+         vismMode,
+         vismCacEnable,
+         vismAvailableDs0Count,
+         vismAppliedTemplate,
+         vismTftpServerDn,
+         vismXgcpBearerNetworkType,
+         vismXgcpBearerVCType,
+         vismXgcpBearerConnectionType,
+         vismBearerContinuityTimer,
+         vismCodecNegotiationOption,
+         vismProfileNegotiationOption,
+         vismCarrierLossPolicy,
+         vismCacRejectionPolicy,
+         vismExtDnsServerDn,
+         vismFeatureBitMap,
+         vismVADTolerance,
+         vismVADDutyCycle,
+         vismAggregateTrafficClipping,
+         vismAggregateSvcBandwidth,
+         vismBearerContinuityTest,
+         vismCaleaEnable,
+         vismMaxConfNum,
+         vismLongDurationTimer,
+         vismContinuityCo1Timer,
+         vismContinuityCo2Timer,
+         vismReverseCotTone,
+         vismSendDnEnable,
+         vismSendDataGramSize,
+         vismOamLoopThreshold,
+         vismFreeDs0Threshold,
+         vismCPUUtilizationThreshold,
+         vismMemoryUtilizationThreshold,
+         vismDualToneDetect 
+      }
+      STATUS current
+      DESCRIPTION
+          "This group contains objects that are specific to the card."
+      ::= { ciscoVismModuleMIBGroups  13 }
+
+ciscoVismSystemFeatureGroup OBJECT-GROUP
+    OBJECTS {
+         vismBearerIpPingEnable,
+         vismTrapFilteringEnable
+      }
+      STATUS deprecated --Replaced by ciscoVismSystemFeatureGroupRev1
+      DESCRIPTION
+          "This group contains specific card level 
+           objects for feature support on the module."
+      ::= { ciscoVismModuleMIBGroups  14 }
+
+ciscoVismTrapVarbindGroup OBJECT-GROUP
+    OBJECTS {
+          vismTrapIntegerValue
+      }
+      STATUS current
+      DESCRIPTION
+          "This group contains objects that are defined for the 
+          purpose of sending in trap varbinds." 
+      ::= { ciscoVismModuleMIBGroups  15 }
+
+ciscoVismSystemFeatureGroupRev1 OBJECT-GROUP
+    OBJECTS {
+         vismBearerIpPingEnable,
+         vismTrapFilteringEnable,
+         vismSplModemToneBitMap,
+         vismSSRCEnable
+      }
+      STATUS current
+      DESCRIPTION
+          "This group contains specific card level 
+           objects for feature support on the module."
+      ::= { ciscoVismModuleMIBGroups  16 }
+
+ciscoVismSystemGroupSup1 OBJECT-GROUP
+    OBJECTS {
+         vismOamLoopbackSetCLP,
+         vismPvcAlarmLogEnable,
+         vismPvcAlarmLogAdminTimer,
+         vismPvcAlarmLogOperTimer,
+         vismContinuityCheckCellEnable
+      }
+      STATUS current
+      DESCRIPTION
+          "This group contains objects that are specific to the card."
+      ::= { ciscoVismModuleMIBGroups  17 }
+
+ciscoVismDspGroupSup1 OBJECT-GROUP
+    OBJECTS {
+         vismFaxDeJitterMode,
+         vismFaxDeJitterInitialDelay
+      }
+      STATUS current
+      DESCRIPTION
+          "This group contains objects that are used to manage 
+          DSPs on the VISM card."
+      ::= { ciscoVismModuleMIBGroups  18 }
 END
+

@@ -3,7 +3,7 @@
 -- *
 -- * Altiga Networks was acquired by Cisco Systems on March 29, 2000
 -- *
--- * Copyright (c) 2002, 2003 by Cisco Systems, Inc.
+-- * Copyright (c) 2002, 2003, 2005 by Cisco Systems, Inc.
 -- * All rights reserved.
 -- *
 -- *------------------------------------------------------------------
@@ -23,7 +23,7 @@ ALTIGA-SESSION-STATS-MIB DEFINITIONS ::= BEGIN
          FROM ALTIGA-GLOBAL-REG;
 
    altigaSessionStatsMibModule MODULE-IDENTITY
-      LAST-UPDATED   "200303170000Z"
+      LAST-UPDATED   "200501260000Z"
       ORGANIZATION   "Cisco Systems, Inc."
       CONTACT-INFO
          "Cisco Systems
@@ -42,9 +42,38 @@ ALTIGA-SESSION-STATS-MIB DEFINITIONS ::= BEGIN
           The following acronyms are used in this document:
 
             MIB:        Management Information Base
+            ACS:        Access Control Server
 
          "
  
+        REVISION "200501260000Z"
+        DESCRIPTION
+                "Added NAC objects alActiveNacAcceptedSessions, 
+                 alTotalNacAcceptedSessions.
+                 alActiveNacRejectedSessions, 
+                 alTotalNacRejectedSessions.
+                 alActiveNacExemptedSessions, 
+                 alTotalNacExemptedSessions.
+                 alActiveNacNonresponsiveSessions, 
+                 alTotalNacNonresponsiveSessions.
+                 alActiveNacHoldoffSessions,
+                 alTotalNacHoldoffSessions.
+                 alActiveNacDisabledSessions, 
+                 alTotalNacDisabledSessions.
+                 alActiveSessionNacResult, 
+                 alActiveSessionSubEntryNacRevalTimer.
+                 alActiveSessionSubEntryNacTimetoReval, 
+                 alActiveSessionSubEntryNacSqTimer.
+                 alActiveSessionSubEntryNacSessionAge, 
+                 alActiveSessionSubEntryNacHoldTimer, 
+                 alActiveSessionSubEntryNacPosture.
+                 alActiveSessionSubEntryNacRedirectUrl."
+        
+        REVISION "200309090000Z"
+        DESCRIPTION
+                "Added new enum value to SessionProtocol and EncryptionAlgorithm. 
+                 Added alActiveSessionMaxWebVpnUsers and alWeightedSessionCount objects"
+        
         REVISION "200303170000Z"
         DESCRIPTION
                 "Added alActiveSessionFilterId object"
@@ -71,7 +100,8 @@ SessionProtocol                 ::= TEXTUAL-CONVENTION
       "Session Protocol for Active Sessions.
        As noted in the comments below, some values
        will not be seen as a subentry, and others
-       will not be seen as an entry."
+       will not be seen as an entry.
+       httpsTunnel - SSL Tunnel Client session"
    SYNTAX INTEGER {
       pptp(1),
       l2tp(2),
@@ -95,7 +125,12 @@ SessionProtocol                 ::= TEXTUAL-CONVENTION
       pppoe(20),         -- Not a subentry
       ipsecOverNatT(21), -- Not a subentry
       ipsecLan2LanOverNatT(22), -- Not a subentry
-      l2tpOverIpsecOverNatT(23)
+      l2tpOverIpsecOverNatT(23),
+      userHttps(24),
+      pop3s(25),
+      imap4s(26),
+      smtps(27),
+      httpsTunnel(28)
    }
 
 EncryptionAlgorithm     ::= TEXTUAL-CONVENTION
@@ -113,7 +148,15 @@ EncryptionAlgorithm     ::= TEXTUAL-CONVENTION
       rc4Statefull128(8),
       aes128(9),
       aes192(10),
-      aes256(11)
+      aes256(11),
+      sslv3(64),
+      sslv3des56(66),           -- +64
+      sslv3des168(68),          -- +64
+      sslv3rc4Statefull128(72), -- +64 
+      tlsv1(128),
+      tlsv1des56(130),           -- +128
+      tlsv1des168(132),          -- +128
+      tlsv1rc4Statefull128(136)  -- +128
    }
 
 CompressionAlgorithm            ::= TEXTUAL-CONVENTION
@@ -125,6 +168,27 @@ CompressionAlgorithm            ::= TEXTUAL-CONVENTION
       lzs(1),
       deflate(2),
       lz(3) -- MPPC
+   }
+
+NacResult            ::= TEXTUAL-CONVENTION
+   STATUS            current
+   DESCRIPTION
+       "NAC result for remote access IPsec sessions.
+       unknown - Posture Validation (authentication of NAC credentials) result none.
+       accepted - Access-Accept received from ACS.
+       rejected - Access-Reject received from ACS.
+       exempted - Exempted from Posture Validation.
+       nonResponsive - No response to Posture Validation requests.
+       notApplicable - NAC is disabled.
+       holdoff - NAC session in Hold-off state."
+   SYNTAX INTEGER {
+      unknown(0),
+      accepted(1),
+      rejected(2),
+      exempted(3),
+      nonResponsive(4), 
+      notApplicable(5),
+      holdoff(6)
    }
 
 alActiveSessionCount    OBJECT-TYPE
@@ -199,6 +263,128 @@ alActiveRemoteAccessSessionCount OBJECT-TYPE
       "The number of currently active Remote Access sessions."
    ::= { alStatsSessionGlobal 9 }
 
+alActiveSessionMaxWebVpnUsers OBJECT-TYPE
+   SYNTAX            Gauge32
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "The maximum number of WebVPN user sessions allowed."
+   ::= { alStatsSessionGlobal 10 }
+
+alWeightedSessionCount OBJECT-TYPE
+   SYNTAX            Gauge32
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "The weighted number of sessions."
+   ::= { alStatsSessionGlobal 11 }
+
+alActiveNacAcceptedSessions     OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of currently active 
+       Access-Accepted NAC sessions."
+   ::= { alStatsSessionGlobal 12 }
+
+alTotalNacAcceptedSessions      OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of Access-Accepted NAC 
+       sessions since the device booted."
+   ::= { alStatsSessionGlobal 13 }
+
+alActiveNacRejectedSessions     OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of currently active 
+       Access-Rejected NAC sessions."
+   ::= { alStatsSessionGlobal 14 }
+
+alTotalNacRejectedSessions      OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of Access-Rejected NAC 
+       sessions since the device booted."
+   ::= { alStatsSessionGlobal 15 }
+
+alActiveNacExemptedSessions     OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of currently active PV exempt NAC sessions."
+   ::= { alStatsSessionGlobal 16 }
+
+alTotalNacExemptedSessions      OBJECT-TYPE
+   SYNTAX                       Gauge32
+   MAX-ACCESS                   read-only
+   STATUS                       current
+   DESCRIPTION
+      "The number of PV exempt NAC sessions since the device booted."
+   ::= { alStatsSessionGlobal 17 }
+
+alActiveNacNonresponsiveSessions     OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of currently active 
+       non-responsive NAC sessions."
+   ::= { alStatsSessionGlobal 18 }
+
+alTotalNacNonresponsiveSessions      OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of non-responsive NAC 
+       sessions since the device booted."
+   ::= { alStatsSessionGlobal 19 }
+
+alActiveNacDisabledSessions          OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of currently active 
+       sessions not subjected to NAC."
+   ::= { alStatsSessionGlobal 20 }
+
+alTotalNacDisabledSessions           OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of sessions not subjected 
+       to NAC since the device booted."
+   ::= { alStatsSessionGlobal 21 }
+
+alActiveNacHoldoffSessions           OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of sessions currently in
+       Hold-off state."
+   ::= { alStatsSessionGlobal 22 }
+
+alTotalNacHoldoffSessions            OBJECT-TYPE
+   SYNTAX                            Gauge32
+   MAX-ACCESS                        read-only
+   STATUS                            current
+   DESCRIPTION
+      "The number of sessions placed in Hold-off
+       state since the device booted."
+   ::= { alStatsSessionGlobal 23 }
+
 alActiveSessionTable    OBJECT-TYPE
    SYNTAX            SEQUENCE OF AlActiveSessionEntry
    MAX-ACCESS        not-accessible
@@ -235,7 +421,8 @@ AlActiveSessionEntry ::= SEQUENCE {
    alActiveSessionLoginTime         Unsigned32,
    alActiveSessionOS                DisplayString,
    alActiveSessionVersion           DisplayString,
-   alActiveSessionFilterId          Integer32
+   alActiveSessionFilterId          Integer32,
+   alActiveSessionNacResult         NacResult
 }
 
 alActiveSessionRowStatus   OBJECT-TYPE
@@ -248,8 +435,8 @@ alActiveSessionRowStatus   OBJECT-TYPE
    ::= { alActiveSessionEntry 1 }
 
 alActiveSessionIndex    OBJECT-TYPE
-   SYNTAX            Integer32
-   MAX-ACCESS        read-only
+   SYNTAX            Integer32(1..10000)
+   MAX-ACCESS        read-only 
    STATUS            current
    DESCRIPTION
       "Index of this session."
@@ -395,6 +582,16 @@ alActiveSessionFilterId     OBJECT-TYPE
    DESCRIPTION
        "The Filter ID applied to the user Session."
    ::= { alActiveSessionEntry 19 }
+
+alActiveSessionNacResult    OBJECT-TYPE
+   SYNTAX             NacResult
+   MAX-ACCESS         read-only
+   STATUS             current
+   DESCRIPTION
+       "The NAC result for the remote access IPsec session
+        for which the SessionProtocol is ipsec, l2tpOverIpsec,
+        ipsecOverUdp, ipsecOverTcp, ipsecOverNatT or l2tpOverIpsecOverNatT."
+   ::= { alActiveSessionEntry 20 }
 
 
 alActiveSessionThroughputTable   OBJECT-TYPE
@@ -900,7 +1097,7 @@ alActiveSessionSubTable OBJECT-TYPE
    MAX-ACCESS        not-accessible
    STATUS            current
    DESCRIPTION
-      ""
+      "List of active session sub entries."
    ::= { alStatsSession 6 }
 
 alActiveSessionSubEntry OBJECT-TYPE
@@ -945,7 +1142,14 @@ AlActiveSessionSubEntry ::= SEQUENCE {
    alActiveSessionSubEntryTcpDstPort      Integer32,
    alActiveSessionSubEntryUdpSrcPort      Integer32,
    alActiveSessionSubEntryIkeUdpSrcPort   Integer32,
-   alActiveSessionSubEntryIkeUdpDstPort   Integer32
+   alActiveSessionSubEntryIkeUdpDstPort   Integer32,
+   alActiveSessionSubEntryNacRevalTimer   Integer32,
+   alActiveSessionSubEntryNacTimetoReval  Integer32,
+   alActiveSessionSubEntryNacSqTimer      Integer32,
+   alActiveSessionSubEntryNacSessionAge   Integer32,
+   alActiveSessionSubEntryNacPosture      DisplayString,
+   alActiveSessionSubEntryNacRedirectUrl  DisplayString,
+   alActiveSessionSubEntryNacHoldTimer    Integer32
 }
 
 alActiveSessionSubEntryRowStatus OBJECT-TYPE
@@ -1013,7 +1217,11 @@ alActiveSessionSubEntryDiffHelmanGrp   OBJECT-TYPE
    MAX-ACCESS        read-only
    STATUS            current
    DESCRIPTION
-      "Diffie Helman Group used on this session sub-entry."
+      "Diffie Helman Group used on this session sub-entry.
+            rsaCertHybrid - RSA Cert Hybrid
+            dsaCertHybrid - DSA Cert Hybrid
+            crack - Challenge/Resp Auth
+            "
    ::= { alActiveSessionSubEntry 7 }
 
 alActiveSessionSubEntryAuthMode  OBJECT-TYPE
@@ -1031,7 +1239,11 @@ alActiveSessionSubEntryAuthMode  OBJECT-TYPE
                         preSharedKeysXauth(10),
                         rsaCertXauth(11),
                         dsaCertXauth(12),
-                        eap(13)
+                        eap(13),
+			usernamePassword(14),
+                        rsaCertHybrid(15),
+                        dsaCertHybrid(16),
+			crack(17)
                      }
    MAX-ACCESS        read-only
    STATUS            current
@@ -1271,12 +1483,80 @@ alActiveSessionSubEntryIkeUdpDstPort   OBJECT-TYPE
       "The UDP Source port used by IPSec/UDP for IKE Session."
    ::= { alActiveSessionSubEntry 33 }
 
+alActiveSessionSubEntryNacRevalTimer   OBJECT-TYPE
+   SYNTAX            Integer32(0..86400)
+   UNITS             "seconds"
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "NAC Re-validation Timer. Periodic interval after IPsec
+       session establishment and initial posture validation, at 
+       which the host is subject to a full posture validation."
+   ::= { alActiveSessionSubEntry 34 }
+
+alActiveSessionSubEntryNacTimetoReval   OBJECT-TYPE
+   SYNTAX            Integer32(0..86400)
+   UNITS             "seconds"
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "Time after which the NAC session will be re-validated. This
+       is the number of seconds before the NAC Revalidation Timer
+       expires."
+   ::= { alActiveSessionSubEntry 35 }
+
+alActiveSessionSubEntryNacSqTimer   OBJECT-TYPE
+   SYNTAX            Integer32(0..1800)
+   UNITS             "seconds"
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "NAC Status Query Timer. Periodic interval after IPsec
+       session establishment and initial posture validation, at 
+       which the host is queried for changes in its posture."
+   ::= { alActiveSessionSubEntry 36 }
+
+alActiveSessionSubEntryNacSessionAge   OBJECT-TYPE
+   SYNTAX            Integer32(0..86400)
+   UNITS             "seconds"
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "NAC EAPoUDP session age. The total time in seconds for
+       which the EAPoUDP association exists."
+   ::= { alActiveSessionSubEntry 37 }
+
+alActiveSessionSubEntryNacPosture   OBJECT-TYPE
+   SYNTAX            DisplayString
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "Posture-token for the NAC session."
+   ::= { alActiveSessionSubEntry 38 }
+
+alActiveSessionSubEntryNacRedirectUrl   OBJECT-TYPE
+   SYNTAX            DisplayString
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "Re-direct URL for the NAC session."
+   ::= { alActiveSessionSubEntry 39}
+
+alActiveSessionSubEntryNacHoldTimer   OBJECT-TYPE
+   SYNTAX            Integer32(0..86400)
+   UNITS             "seconds"
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+      "Time after which the NAC PV will be retried."
+   ::= { alActiveSessionSubEntry 40 }
+
 alActiveHWClientUserTable          OBJECT-TYPE
    SYNTAX         SEQUENCE OF AlActiveHWClientUserEntry
    MAX-ACCESS     not-accessible
    STATUS         current
    DESCRIPTION
-      ""
+      "List of active hardware client sessions"
    ::= { alStatsSession 7 }
 
 alActiveHWClientUserEntry     OBJECT-TYPE
@@ -1308,7 +1588,7 @@ alActiveHWClientUserRowStatus OBJECT-TYPE
    ::= { alActiveHWClientUserEntry 1 }
 
 alActiveHWClientUserSessionIndex    OBJECT-TYPE
-   SYNTAX         Integer32
+   SYNTAX         Integer32(1..10000)
    MAX-ACCESS     read-only
    STATUS         current
    DESCRIPTION
@@ -1371,7 +1651,7 @@ altigaSessionStatsMibCompliance MODULE-COMPLIANCE
    ::= { altigaSessionStatsMibCompliances 1 }
 
 altigaSessionStatsMibComplianceRev1 MODULE-COMPLIANCE 
-   STATUS         current 
+   STATUS         deprecated 
    DESCRIPTION 
       "The compliance statement for agents which 
        implement the Altiga Session Statistics MIB." 
@@ -1380,6 +1660,29 @@ altigaSessionStatsMibComplianceRev1 MODULE-COMPLIANCE
       altigaSessionStatsGroupRev1 
    } 
    ::= { altigaSessionStatsMibCompliances 2 } 
+
+altigaSessionStatsMibComplianceRev2 MODULE-COMPLIANCE 
+   STATUS         deprecated 
+   DESCRIPTION 
+      "The compliance statement for agents which 
+       implement the Altiga Session Statistics MIB." 
+   MODULE 
+   MANDATORY-GROUPS { 
+      altigaSessionStatsGroupRev2
+   } 
+   ::= { altigaSessionStatsMibCompliances 3 } 
+   
+altigaSessionStatsMibComplianceRev3 MODULE-COMPLIANCE 
+   STATUS         current 
+   DESCRIPTION 
+      "The compliance statement for agents which 
+       implement the Altiga Session Statistics MIB." 
+   MODULE 
+   MANDATORY-GROUPS { 
+      altigaSessionStatsGroupRev2,
+      altigaSessionStatsGroupRev2Sup1
+   } 
+   ::= { altigaSessionStatsMibCompliances 4 }
 
 altigaSessionStatsGroup OBJECT-GROUP
    OBJECTS
@@ -1625,11 +1928,166 @@ altigaSessionStatsGroupRev1 OBJECT-GROUP
       alActiveHWClientUserLoginTime,
       alActiveHWClientUserUpTime
    }
-   STATUS   current 
+   STATUS   deprecated 
    DESCRIPTION 
           "The objects for Session statistics." 
    ::= { alSessionGroup 3 } 
 
+altigaSessionStatsGroupRev2 OBJECT-GROUP 
+   OBJECTS
+   {
+
+      alActiveSessionCount,
+      alTotalSessionCount,
+      alActiveSessionLastUpdate,
+      alActiveSessionMaxUsers,
+      alActiveSessionGroupIdLock,
+      alMaxSessionCount,
+      alActiveLanToLanSessionCount,
+      alActiveManagementSessionCount,
+      alActiveRemoteAccessSessionCount,
+      alActiveSessionRowStatus,
+      alActiveSessionIndex,
+      alActiveSessionUserName,
+      alActiveSessionIpAddress,
+      alActiveSessionProtocol,
+      alActiveSessionEncrType,
+      alActiveSessionStartTime,
+      alActiveSessionConnectTime,
+      alActiveSessionOctetsSent,
+      alActiveSessionOctetsRcvd,
+      alActiveSessionSepId,
+      alActiveSessionGroupName,
+      alActiveSessionGroupId,
+      alActiveSessionPublicIpAddress,
+      alActiveSessionTopTenData,
+      alActiveSessionLoginTime,
+      alActiveSessionOS,
+      alActiveSessionVersion,
+      alActiveSessionFilterId,
+      alActiveSessionThroughputRowStatus,
+      alActiveSessionThroughputIndex,
+      alActiveSessionThroughputUserName,
+      alActiveSessionThroughputIpAddress,
+      alActiveSessionThroughputProtocol,
+      alActiveSessionThroughputEncrType,
+      alActiveSessionThroughputStartTime,
+      alActiveSessionThroughputConnectTime,
+      alActiveSessionThroughputOctetsSent,
+      alActiveSessionThroughputOctetsRcvd,
+      alActiveSessionThroughputSepId,
+      alActiveSessionThroughputGroupName,
+      alActiveSessionThroughputGroupId,
+      alActiveSessionThroughputPublicIpAddress,
+      alActiveSessionThroughputTopTenData,
+      alActiveSessionThroughputLoginTime,
+      alActiveSessionDataRowStatus,
+      alActiveSessionDataIndex,
+      alActiveSessionDataUserName,
+      alActiveSessionDataIpAddress,
+      alActiveSessionDataProtocol,
+      alActiveSessionDataEncrType,
+      alActiveSessionDataStartTime,
+      alActiveSessionDataConnectTime,
+      alActiveSessionDataOctetsSent,
+      alActiveSessionDataOctetsRcvd,
+      alActiveSessionDataSepId,
+      alActiveSessionDataGroupName,
+      alActiveSessionDataGroupId,
+      alActiveSessionDataPublicIpAddress,
+      alActiveSessionDataTopTenData,
+      alActiveSessionDataLoginTime,
+      alActiveSessionDurationRowStatus,
+      alActiveSessionDurationIndex,
+      alActiveSessionDurationUserName,
+      alActiveSessionDurationIpAddress,
+      alActiveSessionDurationProtocol,
+      alActiveSessionDurationEncrType,
+      alActiveSessionDurationStartTime,
+      alActiveSessionDurationConnectTime,
+      alActiveSessionDurationOctetsSent,
+      alActiveSessionDurationOctetsRcvd,
+      alActiveSessionDurationSepId,
+      alActiveSessionDurationGroupName,
+      alActiveSessionDurationGroupId,
+      alActiveSessionDurationPublicIpAddress,
+      alActiveSessionDurationTopTenData,
+      alActiveSessionDurationLoginTime,
+      alActiveSessionSubEntryRowStatus,
+      alActiveSessionSubEntryIndex,
+      alActiveSessionSubEntryInstance,
+      alActiveSessionSubEntryProtocol,
+      alActiveSessionSubEntryEncrAlg,
+      alActiveSessionSubEntryHashAlg,
+      alActiveSessionSubEntryDiffHelmanGrp,
+      alActiveSessionSubEntryAuthMode,
+      alActiveSessionSubEntryEncapMode,
+      alActiveSessionSubEntryRekeyTime,
+      alActiveSessionSubEntryRekeyKBytes,
+      alActiveSessionSubEntryRemAddrType,
+      alActiveSessionSubEntryRemAddr1,
+      alActiveSessionSubEntryRemAddr2,
+      alActiveSessionSubEntryLocAddrType,
+      alActiveSessionSubEntryLocAddr1,
+      alActiveSessionSubEntryLocAddr2,
+      alActiveSessionSubEntryRcvdOctets, 
+      alActiveSessionSubEntrySentOctets,
+      alActiveSessionSubEntrySep,
+      alActiveSessionSubEntryUserName,
+      alActiveSessionSubEntryClientIpAddr,
+      alActiveSessionSubEntryUdpPort,
+      alActiveSessionSubEntryTotalIdleTime,
+      alActiveSessionSubEntryIkeNegMode,
+      alActiveSessionSubEntryCompression,
+      alActiveSessionSubEntryInstId,
+      alActiveSessionSubEntryPfsGroup,
+      alActiveSessionSubEntryTcpSrcPort,
+      alActiveSessionSubEntryTcpDstPort,
+      alActiveSessionSubEntryUdpSrcPort,
+      alActiveSessionSubEntryIkeUdpSrcPort,
+      alActiveSessionSubEntryIkeUdpDstPort,
+      alActiveHWClientUserRowStatus,
+      alActiveHWClientUserSessionIndex,
+      alActiveHWClientUserName,
+      alActiveHWClientUserIpAddr,
+      alActiveHWClientUserMacAddr,
+      alActiveHWClientUserLoginTime,
+      alActiveHWClientUserUpTime,
+      alActiveSessionMaxWebVpnUsers,
+      alWeightedSessionCount
+   }
+   STATUS   current 
+   DESCRIPTION 
+          "The objects for Session statistics." 
+   ::= { alSessionGroup 4 } 
+
+altigaSessionStatsGroupRev2Sup1 OBJECT-GROUP 
+   OBJECTS
+   {
+      alActiveSessionNacResult,
+      alActiveSessionSubEntryNacRevalTimer, 
+      alActiveSessionSubEntryNacTimetoReval, 
+      alActiveSessionSubEntryNacSqTimer, 
+      alActiveSessionSubEntryNacSessionAge, 
+      alActiveSessionSubEntryNacPosture, 
+      alActiveSessionSubEntryNacRedirectUrl,
+      alActiveSessionSubEntryNacHoldTimer, 
+      alActiveNacAcceptedSessions,
+      alTotalNacAcceptedSessions,
+      alActiveNacRejectedSessions,
+      alTotalNacRejectedSessions,
+      alActiveNacExemptedSessions,
+      alTotalNacExemptedSessions,
+      alActiveNacNonresponsiveSessions,
+      alTotalNacNonresponsiveSessions,
+      alActiveNacDisabledSessions,
+      alTotalNacDisabledSessions,
+      alActiveNacHoldoffSessions,
+      alTotalNacHoldoffSessions
+   }
+   STATUS   current 
+   DESCRIPTION 
+          "The objects for Session statistics." 
+   ::= { alSessionGroup 5 } 
+
 END
-
-
