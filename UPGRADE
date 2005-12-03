@@ -1,0 +1,193 @@
+Netdisco - MIB Repository
+Max Baker
+
+---------------------------------------------------------------------------
+UPGRADING MIB REPOSITORY
+---------------------------------------------------------------------------
+This document is to guide the process I go through to make a new version
+of this repository.
+
+---------------------------------------------------------------------------
+RFC
+---------------------------------------------------------------------------
+Do the RFC mibs first so you can then remove the older versions 
+that come with cisco's mibs, making sure you have the newest versions.
+
+(From instructions inside of net-snmp)
+
+1. wget http://easynews.dl.sourceforge.net/sourceforge/net-snmp/net-snmp-5.2.2.tar.gz
+    (change 5.2.2 with newest version) 
+   tar xvfz net-snmp*
+   cd net-snmp*/mibs
+
+2. Edit Makefile.mib
+    Change PREFIX to .
+    Change ALLDIR to rfc.orig
+    Change INSTDIR to rfc
+
+3.  Download all IANA and RFC mibs into rfc/ dir
+
+    make -f Makefile.mib rfc
+
+4.  Check what's new.  sanity check, look at the output...
+    
+    diff_dir netdisco_mibs/rfc net-snmp*/mibs/rfc
+
+5.  Copy new versions over old versions
+
+    diff_dir netdisco_mibs/rfc net-snmp*/mibs/rfc 1
+
+6.  Patch
+    patch rfc < rfc1.diff
+
+7.  Check
+    ./chk_mib rfc
+    
+    Fix and create new patches as necessary.
+
+---------------------------------------------------------------------------
+Cisco
+---------------------------------------------------------------------------
+1. Download new Cisco mibs : ftp://ftp-sj.cisco.com/pub/mibs/v2/v2.tar.gz
+                             ftp://ftp-sj.cisco.com/pub/mibs/v1/v1.tar.gz
+
+2. Move the old dir out of the way
+    mv cisco /tmp/cisco_old 
+
+3. Make a new dir and unarchive
+    mkdir cisco
+    cd cisco
+    tar xvfz ../v2.tar.gz
+    tar xvfz ../v1.tar.gz
+    cd ..
+
+4. Remove Cruft
+    rm -f *CAPABILITY.my
+    rm -f *V1SMI.my
+    rm -f CISCO-GENERAL-TRAPS.my
+
+4. Remove duplicates
+    mkindex
+    ./chk_dups > dups.txt    
+
+    Review that file and make sure the newest file ends up in the right directory.
+    Do not put non-cisco mibs in the cisco directory.
+
+    Known mibs that are newer in cisco/ than in rfc/
+    Copy these from cisco/ to rfc/.  Change extension.
+        RSVP-MIB
+        UDP-MIB
+        IP-FORWARD-MIB
+        DOCS-IF-MIB
+
+    Known multiple copies in cisco/  Remove.
+        Q-BRIDGE
+        P-BRIDGE
+        CISCO-RTTMON-MIB
+
+    Known newer but hacked up:  Remove from cisco/
+        ATM-ACCOUNTING-INFORMATION-MIB
+    
+    Remove the dups
+        ./mkindex
+        ./rm_cisco_dups
+        ./chk_dups
+
+5. Move the original (CVS) directory back and then copy the new versions over.
+    mv cisco cisco.new
+    mv /tmp/cisco.old cisco
+    mv -f cisco.new/* cisco
+    rmdir cisco.new
+
+6. Patch
+    cd cisco
+    patch < ../cisco1.diff
+    patch < ../cisco2.diff
+    rm -f *.rej *.orig
+    cd ..
+
+7. Check
+    ./chk_mibs cisco
+
+---------------------------------------------------------------------------
+net-snmp:
+---------------------------------------------------------------------------
+    cp -f net-snmp*/mibs/*.txt net-snmp
+    ./mk_index
+    ./rm_cisco_dups mib_index.txt net-snmp
+    ./chk_mibs net-snmp
+
+---------------------------------------------------------------------------
+HP
+---------------------------------------------------------------------------
+1. Get new MIBs from HP
+    From: http://www.hp.com/rnd/software/MIBs.htm
+          ftp://ftp.hp.com/pub/networking/software
+
+2. Unarchive them into a new directory.  Set the old one aside for now.
+    mv hp /tmp/hp.old
+    mkdir hp.new
+    cd hp.new && tar xvfZ ../mibs-*.tar.Z
+    rm *.txt *.htm cisco-* 
+    chmod -x *
+
+3. fix Case
+    Some brain child decided to change the file names by capitalizing
+    some letters along the way.  change to older all lower-case.
+
+    cd hp.new
+    ../to_locase *.mib
+    
+3. Check for the newest versions 
+    ./mkindex
+    ./chk_dups
+
+4. Remove older versions
+    ./rm_cisco_dups mib_index.txt hp.new 
+    ./mkindex
+    ./chk_dups
+     
+4. Patch
+    cd hp.new && patch < ../hp1.diff
+    rm -f *.orig
+
+5. Syntax check
+    ./chk_mibs hp.new 
+    Fix
+    Create new patch
+
+6. Copy over
+    cp -f hp.new/* /tmp/hp.old
+    rm -rf hp.new
+    mv /tmp/hp.old hp
+
+---------------------------------------------------------------------------
+Package and Ship
+---------------------------------------------------------------------------
+1. Run one final set of checks
+    ./mkindex
+    ./chk_dups
+
+2. cd .. & make mib-dist 
+
+---------------------------------------------------------------------------
+OTHER VENDORS NOTES
+---------------------------------------------------------------------------
+allied:
+    I painstakingly merged AThub-mib and Allied 4.1 MIB together to form one
+    ATI-MIB
+
+asante:
+
+nortel:
+    Includes :
+        BayStack425.3.0.0.18.zip
+        p16a1100.mib.zip (passport 1100)
+
+    rm RFC* rfc*
+    rm other rfcs in other names
+
+foundry:
+    From: ????
+
+$Id$
