@@ -13,13 +13,13 @@ IMPORTS
         FROM IF-MIB;
 
 s5AgentMib MODULE-IDENTITY
-       LAST-UPDATED    "200412090000Z"
+       LAST-UPDATED    "200505130000Z"
        ORGANIZATION    "Nortel Networks"
        CONTACT-INFO    "Nortel Networks"
        DESCRIPTION
            "S5000 Agent MIB
 
-            Copyright 1995 - 2004 Nortel Networks, Inc.
+            Copyright 1995 - 2005 Nortel Networks, Inc.
             All rights reserved.
             This Bay Networks SNMP Management Information Base Specification
             (Specification) embodies Bay Networks' confidential and
@@ -30,6 +30,25 @@ s5AgentMib MODULE-IDENTITY
             This Specification is supplied 'AS IS,' and Bay Networks makes
             no warranty, either express or implied, as to the use,
             operation, condition, or performance of the Specification."
+
+       REVISION "200505130000Z" -- 13 May 2005
+       DESCRIPTION "Version 167:  Expand range of s5AgSysUsbTargetUnit."
+
+       REVISION "200505110000Z" -- 11 May 2005
+       DESCRIPTION "Version 166:  Fix support for USB flash dongles."
+
+       REVISION "200505040000Z" -- 04 May 2005
+       DESCRIPTION "Version 165:  Fleshed out support for USB flash dongles."
+
+       REVISION "200504220000Z" -- 22 Apr 2005
+       DESCRIPTION "Version 164:  Added s5AgSysSpanningTreePathCostCalculationMode."
+ 
+       REVISION "200503240000Z" -- 24 Mar 2005
+       DESCRIPTION "Version 163:  Added dnldImgFromUsb, upldImgToUsb,
+                                        dnldFwFromUsb, upldFwToUsb."
+
+       REVISION "200503220000Z" -- 22 Mar 2005
+       DESCRIPTION "Version 162:  Added dnldImgNoReset and dnldFwNoReset."
 
        REVISION "200412090000Z" -- 09 Dec 2004
        DESCRIPTION "Version 161:  Added s5AgSysAsciiConfigManualUpload."
@@ -671,7 +690,15 @@ s5AgInfoFileAction OBJECT-TYPE
            dnldFw(6),
            upldFw(7),
            dnldImgIfNewer(8),
-           dnldImgToDram(9)
+           dnldImgToDram(9),
+           dnldImgNoReset(10),
+           dnldFwNoReset(11),
+           dnldImgFromUsb(12),
+           upldImgToUsb(13),
+           dnldFwFromUsb(14),
+           upldFwToUsb(15),
+           dnldConfigFromUsb(16),
+           upldConfigToUsb(17)
            }
     MAX-ACCESS read-write
     STATUS current
@@ -699,7 +726,17 @@ s5AgInfoFileAction OBJECT-TYPE
                               version is newer than the image stored in
                               local NV storage
             dnldImgToDram(9)  download an image to a device, but do not
-                              save it to NVRAM, just keep it in DRAM"
+                              save it to NVRAM, just keep it in DRAM
+            dnldImgNoReset(10) download an image to a device, but do not
+                              reset the device after the download
+            dnldFwNoReset(11) download firmware to a device, but do not
+                              reset the device after the download
+            dnldImgFromUsb(12) download image from USB port
+            upldImgToUsb(13)  upload image to USB port
+            dnldFwFromUsb(14) download firmware from USB port
+            upldFwToUsb(15)   upload firmware to USB port
+            dnldConfigFromUsb(16) download binary config from USB port
+            upldConfigToUsb(17)   upload binary config to USB port"
     ::= {s5AgentGbl 24}
 
 
@@ -1608,8 +1645,9 @@ s5AgSysBinaryConfigFilename OBJECT-TYPE
 	DESCRIPTION
             "Name of the binary configuration file that will be
              downloaded/uploaded when the s5AgInfoFileAction object is
-             set to dnldConfig(2) or upldConfig(4).  When not used,
-             the value is a zero length string."
+             set to dnldConfig(2), upldConfig(4), dlndConfigFromUsb(16),
+             or upldConfigToUsb(17).  When not used, the value is
+             a zero length string."
 	::= { s5AgentSystem 4 }
 
 s5AgSysTftpServerAddress OBJECT-TYPE
@@ -1629,9 +1667,9 @@ s5AgSysAsciiConfigFilename OBJECT-TYPE
             "Name of the ascii configuration file that will be
              downloaded/uploaded either at boot time when the
              s5AgSysAsciiConfigAutoDownload object is set to
-             useConfig(3), or when the s5AgSysAsciiConfigDownloadStatus
-             object is set to startDownload(4).  When not used, the
-             value is a zero length string."
+             useConfig(3), or when the s5AgSysAsciiConfigManualDownload
+             object is set to downloadNow(4) or downloadFromUsb(5).
+             When not used, the value is a zero length string."
 	::= { s5AgentSystem 6 }
 
 s5AgSysAsciiConfigAutoDownload OBJECT-TYPE
@@ -1670,7 +1708,8 @@ s5AgSysAsciiConfigManualDownload OBJECT-TYPE
                       passed(1),
                       inProgress(2),
                       failed(3),
-                      downloadNow(4)
+                      downloadNow(4),
+                      downloadFromUsb(5)
                   }
 	MAX-ACCESS	read-write
 	STATUS	current
@@ -1680,9 +1719,11 @@ s5AgSysAsciiConfigManualDownload OBJECT-TYPE
              this object when retrieved can be either passed(1),
              inProgress(2) or failed(3).  Setting this object to
              downloadNow(4) will initiate a manual ASCII
-             configuration file download.  If no attempt has been
-             made to manually download a configuration file, the
-             value returned will be failed(3)."
+             configuration file download from a TFTP server.  Setting
+             this object to downloadFromUsb(5) will initial a manual
+             ASCII configuration file download from a USB flash dongle.
+             If no attempt has been made to manually download a
+             configuration file, the value returned will be failed(3)."
 	::= { s5AgentSystem 9 }
 
 s5AgSysCpuIpAddress OBJECT-TYPE
@@ -1820,7 +1861,8 @@ s5AgSysAsciiConfigManualUpload OBJECT-TYPE
                       passed(1),
                       inProgress(2),
                       failed(3),
-                      uploadNow(4)
+                      uploadNow(4),
+                      uploadToUsb(5)
                    }
 	MAX-ACCESS read-write
 	STATUS     current
@@ -1830,10 +1872,35 @@ s5AgSysAsciiConfigManualUpload OBJECT-TYPE
              this object when retrieved can be either passed(1),
              inProgress(2) or failed(3).  Setting this object to
              downloadNow(4) will initiate a manual ASCII
-             configuration file upload.  If no attempt has been
-             made to manually upload a configuration file, the
-             value returned will be failed(3)."
+             configuration file upload to a TFTP server.  Setting
+             this object to uploadToUsb(5) will initiate a manual
+             ASCII configuration file upload to a USB flash dongle.
+             If no attempt has been made to manually upload a
+             configuration file, the value returned will be failed(3)."
 	::= { s5AgentSystem 19 }
+
+s5AgSysSpanningTreePathCostCalculationMode OBJECT-TYPE
+      SYNTAX      INTEGER {
+                              ieee802dot1dCompatible(1),
+                              ieee802dot1tCompatible(2)
+                          }
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION
+            "This object indicates the current spanning-tree path cost
+             calculation mode of the system.  Note that this object can
+             only take the value ieee802dot1dCompatible(1) if the value of
+             s5AgSysSpanningTreeOperMode is currently nortelStpg(1)."
+      ::= { s5AgentSystem 20 }
+
+s5AgSysUsbTargetUnit OBJECT-TYPE
+      SYNTAX      Integer32 (0..9)
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION
+            "This object indicates the unit number of the USB port to be
+             use in file upload/download operations."
+      ::= { s5AgentSystem 21 }
 
 --
 -- Custom Banner Group
