@@ -24,7 +24,9 @@ FOUNDRY-SN-SWITCH-GROUP-MIB DEFINITIONS ::= BEGIN
 IMPORTS
 	Counter, TimeTicks, IpAddress, Gauge
 		FROM RFC1155-SMI
-	Unsigned32
+	InterfaceIndex
+		FROM IF-MIB
+	Unsigned32, Gauge32, Counter32, Counter64
 		FROM SNMPv2-SMI
 	OBJECT-TYPE
 		FROM RFC-1212
@@ -120,6 +122,12 @@ snNetFlow 				OBJECT IDENTIFIER ::= { snSwitch 18 }
 snSFlow 				OBJECT IDENTIFIER ::= { snSwitch 19 }
 snFDP 				    OBJECT IDENTIFIER ::= { snSwitch 20 }
 snVsrp   				OBJECT IDENTIFIER ::= { snSwitch 21 }
+snArpInfo				OBJECT IDENTIFIER ::= { snSwitch 22 }
+snWireless 				OBJECT IDENTIFIER ::= { snSwitch 23 }
+snMac	 				OBJECT IDENTIFIER ::= { snSwitch 24 }
+snPortMonitor			OBJECT IDENTIFIER ::= { snSwitch 25 }
+snSSH					OBJECT IDENTIFIER ::= { snSwitch 26 }
+snSSL					OBJECT IDENTIFIER ::= { snSwitch 27 }
 
 -- SECTION 2: Switch Group Configuration MIBs
 
@@ -214,7 +222,7 @@ snVLanGroupSetAllVLan OBJECT-TYPE
 	STATUS  mandatory
 	DESCRIPTION
 		"The value of this object is the VLanIndex of a particalur
-		 entry in snVLanByPortTable (snVLanByPortVLanIndex).  
+		 entry in snVLanByPortCfgTable (snVLanByPortCfgVLanId).  
 		 All the attributes of that row of table except PortMask
 		 will be used to set the same attributes for the 
 		 entire VLan group. VLanId and PortMask must be set for 
@@ -507,24 +515,28 @@ snSwProtocolVLanMode OBJECT-TYPE
 	    enabled(1)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"disabled(0) - represents system with Protocol VLAN disabled. 
 		 enabled(1) - represents system with Protocol VLAN enabled (Layer3 VLAN)."
 	::= { snSwInfo 31 }
 
 snMacStationVLanId OBJECT-TYPE
-	SYNTAX  INTEGER (1..4095)
+	SYNTAX  INTEGER (0..4095)
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
-		"This MAC Station VLAN ID index to the standard Forwarding Database for Transparent Bridge Table.
-		 (dot1dTpFdbTable).  Since the dot1dTpFdbTable index is the MAC Address assigned to one of 
-		 the ports in the bridge(VLAN) and each MAC address can be re-assigned to a different
-		 ports belonging to different bridges(VLANs), the snMacStationVLanId can be used by
-		 users to specify which bridge(VLAN) MAC Station information of the dot1dTpFdbTable 
-		 users want to retrieve.  If users do not specify the VLan ID in this MIB, the default
-		 VLAN (bridge) ID will be used when dot1dTpFdbTable is retrieved."
+		"This VLAN ID controls filtering of the Forwarding Database
+		table in the standard Bridge MIB (dot1dTpFdbTable).  Since the
+		dot1dTpFdbTable contains MAC addresses associated with each of
+		the ports in the bridge, and each MAC address can be
+		associated with different VLANs, the snMacStationVLanId can be
+		used by users to specify which VLAN's MAC Station information
+		the dot1dTpFdbTable should provide.  If this variable is set
+		to zero (the default value), all MAC station entries will be
+		returned when the dot1dTpFdbTable is retrieved.  The
+		VLAN-aware dot1qTpFdbTable described in RFC 2674 should be
+		used as a replacement for this variable."
 	::= { snSwInfo 32 }
 
 snSwClearCounters OBJECT-TYPE
@@ -650,6 +662,26 @@ snSwFastStpMode OBJECT-TYPE
 		 enabled(1)...........activate Fast Spanning Tree
 		 disabled(0)..........no Fast Spanning Tree"
 	::= { snSwInfo 42 }
+
+snSwViolatorIfIndex OBJECT-TYPE
+	SYNTAX	INTEGER
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"The port number of the switch or router that received
+		 a violator packet. It is included in the locked
+		 address violation trap."
+	::= { snSwInfo 43 }
+
+snSwSingleStpVLanId OBJECT-TYPE
+	SYNTAX  INTEGER
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"The VLAN ID of the Single Spanning Tree VLAN if Single
+		Spanning Tree was enabled. This object returns zero if
+		Single Spanning Tree was disabled."
+	::= { snSwInfo 44 }
 
 
 -- VLAN Layer 2 Switch VLAN By Port Information Table
@@ -800,8 +832,9 @@ snVLanByPortQos OBJECT-TYPE
 
 snVLanByPortStpMode OBJECT-TYPE
 	SYNTAX  INTEGER {
-		disabled(0),
-		enabled(1)       
+		disable(0),
+		enableStp(1),
+		enableRstp(2)
 		}
 	ACCESS  read-write
 	STATUS  deprecated
@@ -809,8 +842,9 @@ snVLanByPortStpMode OBJECT-TYPE
 		"Spanning Tree Mode in the Switch Group can be set
 		 either enabled or disabled and the default is 
 		 enabled mode.
-		 enabled(1)...........activate Spanning Tree
-		 disabled(0)..........no Spanning Tree"
+		 disable(0)...........no Spanning Tree
+		 enableStp(1).........activate Spanning Tree
+		 enableRstp(2)........activate Rapid Spanning Tree"
 	::= { snVLanByPortEntry 5 }
 
 snVLanByPortStpPriority OBJECT-TYPE
@@ -1158,7 +1192,7 @@ SnVLanByPortMemberEntry ::= SEQUENCE {
 		INTEGER,
 	snVLanByPortMemberPortId
 		INTEGER,
-	snVLanByPortMemberRowStatus
+	snVLanByPortMemberRowStatus 
 		INTEGER
 	}
 
@@ -1275,7 +1309,9 @@ SnVLanByPortCfgEntry ::= SEQUENCE {
     snVLanByPortCfgRouterIntf
 	    INTEGER,
 	snVLanByPortCfgRowStatus
-		INTEGER
+		INTEGER,
+	snVLanByPortCfgStpVersion
+    	INTEGER
 	}
 
 snVLanByPortCfgVLanId OBJECT-TYPE
@@ -1310,8 +1346,9 @@ snVLanByPortCfgQos OBJECT-TYPE
 
 snVLanByPortCfgStpMode OBJECT-TYPE
 	SYNTAX  INTEGER {
-		disabled(0),
-		enabled(1)       
+		disable(0),
+		enableStp(1),
+		enableRstp(2)
 		}
 	ACCESS  read-write
 	STATUS  mandatory
@@ -1319,12 +1356,13 @@ snVLanByPortCfgStpMode OBJECT-TYPE
 		"Spanning Tree Mode in the Switch Group can be set
 		 either enabled or disabled and the default is 
 		 enabled mode.
-		 enabled(1)...........activate Spanning Tree
-		 disabled(0)..........no Spanning Tree"
+		 disable(0)...........no Spanning Tree
+		 enableStp(1).........activate Spanning Tree
+		 enableRstp(2)........activate Rapid Spanning Tree"
 	::= { snVLanByPortCfgEntry 3 }
 
 snVLanByPortCfgStpPriority OBJECT-TYPE
-    SYNTAX  INTEGER (1..65535)
+    SYNTAX  INTEGER (0..65535)
     ACCESS  read-write
     STATUS  mandatory
     DESCRIPTION
@@ -1336,7 +1374,7 @@ snVLanByPortCfgStpPriority OBJECT-TYPE
 	::= { snVLanByPortCfgEntry 4 }
 
 snVLanByPortCfgStpGroupMaxAge OBJECT-TYPE
-	SYNTAX  INTEGER (6..40)
+    SYNTAX  INTEGER
     ACCESS  read-write
     STATUS  mandatory
     DESCRIPTION
@@ -1349,11 +1387,13 @@ snVLanByPortCfgStpGroupMaxAge OBJECT-TYPE
      timer is specified by 802.1D-1990 to be 1 second.
      An agent may return a badValue error if a set is
      attempted to a value which is not a whole number
-     of seconds."
-	::= { snVLanByPortCfgEntry 5 }
+     of seconds.
+       Valid value betweek 6 and 40. Default is 20 seconds.
+     Value 0 is returned if no STP is not configured for this vlan."
+        ::= { snVLanByPortCfgEntry 5 }
 
 snVLanByPortCfgStpGroupHelloTime OBJECT-TYPE
-    SYNTAX  INTEGER (1..10)
+    SYNTAX  INTEGER
     ACCESS  read-write
     STATUS  mandatory
     DESCRIPTION
@@ -1363,11 +1403,13 @@ snVLanByPortCfgStpGroupHelloTime OBJECT-TYPE
      granularity of this timer is specified by 802.1D-
      1990 to be 1 second.  An agent may return a
      badValue error if a set is attempted to a value
-     which is not a whole number of seconds."
+     which is not a whole number of seconds.
+       Valid value betweek 1 and 10. Default is 2 seconds.
+     Value 0 is returned if no STP is not configured for this vlan."
 	::= { snVLanByPortCfgEntry 6 }
 
 snVLanByPortCfgStpGroupForwardDelay OBJECT-TYPE
-	SYNTAX  INTEGER (2..30)
+	SYNTAX  INTEGER
     ACCESS  read-write
     STATUS  mandatory
     DESCRIPTION
@@ -1380,7 +1422,9 @@ snVLanByPortCfgStpGroupForwardDelay OBJECT-TYPE
      timer is specified by 802.1D-1990 to be 1 second.
      An agent may return a badValue error if a set is
      attempted to a value which is not a whole number
-     of seconds."
+     of seconds.
+       Valid value betweek 2 and 30. Default is 15 seconds.
+     Value 0 is returned if no STP is not configured for this vlan."
 	::= { snVLanByPortCfgEntry 7 }
 
 snVLanByPortCfgBaseNumPorts OBJECT-TYPE
@@ -1588,6 +1632,23 @@ snVLanByPortCfgRowStatus OBJECT-TYPE
 	DESCRIPTION
 		"Use object to delete a vlan entry."
 	::= { snVLanByPortCfgEntry 23 }
+
+snVLanByPortCfgStpVersion OBJECT-TYPE
+	SYNTAX  INTEGER {
+		stpCompatible(0),
+		rstp(2)
+		}
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+        "The version of Spanning Tree Protocol the bridge is
+         currently running.  The value 'stpCompatible(0)'
+         indicates the Spanning Tree Protocol specified in
+         IEEE 802.1D and 'rstp(2)' indicates the Rapid Spanning
+         Tree Protocol specified in IEEE 802.1w.  New value may
+         be defined as future versions of the protocol become
+         available."
+	::= { snVLanByPortCfgEntry 24 }
 
 
 -- VLAN by Protocol Configuration Table 
@@ -2433,12 +2494,11 @@ snVLanByATCableStaticPortList OBJECT-TYPE
 
 -- Switch Port Information Group
 
-
-
+-- begin of deprecated snSwPortInfoTable
 snSwPortInfoTable OBJECT-TYPE
 	SYNTAX  SEQUENCE OF SnSwPortInfoEntry
 	ACCESS  not-accessible
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"A specific snSwPortInfo group consists of a number of 
 		 switch ports.  "
@@ -2447,7 +2507,7 @@ snSwPortInfoTable OBJECT-TYPE
 snSwPortInfoEntry OBJECT-TYPE
 	SYNTAX  SnSwPortInfoEntry
 	ACCESS  not-accessible
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"An entry in the snSwPortInfo table indicates the 
 		 configuration on a specified port. A SNMP SET PDU 
@@ -2574,13 +2634,31 @@ SnSwPortInfoEntry ::= SEQUENCE {
 	snSwPortLoadInterval
 	    INTEGER (30..300),
 	snSwPortTagType
-	    INTEGER
+	    INTEGER,
+	snSwPortInLinePowerControl
+	    INTEGER,
+	snSwPortInLinePowerWattage
+	    INTEGER,
+	snSwPortInLinePowerClass
+	    INTEGER,
+	snSwPortInLinePowerPriority
+	    INTEGER,
+	snSwPortInfoMirrorMode
+	    INTEGER,
+	snSwPortStatsInJumboFrames
+	    Counter64,
+	snSwPortStatsOutJumboFrames
+	    Counter64,
+	snSwPortInLinePowerConsumed
+	    INTEGER,
+	snSwPortInLinePowerPDType
+	    DisplayString
 	}
 
 snSwPortInfoPortNum OBJECT-TYPE
 	SYNTAX  INTEGER
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The port index.
 		 The bit 0 to bit 7: port number. 
@@ -2596,18 +2674,10 @@ snSwPortInfoMonitorMode OBJECT-TYPE
 		both(3)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
-		"A monitoring port is selected and its traffic will be
-		 analyzed if the mode is not disabled(0), which is
-		 the default mode.
-		 The values are:
-
-		 disabled(0) -- No traffic monitoring
-		 input(1)  -- traffic monitoring is activated on packets received
-		 output(2)  -- traffic monitoring is activated on packets transmitted
-		 both(3)  -- traffic monitoring is activated on packets
-		             received and transmitted."
+		"DEPRECATED by snSwPortInfoMirrorMode and
+		snPortMonitorTable."
 	::= { snSwPortInfoEntry 2 }
 
 
@@ -2619,7 +2689,7 @@ snSwPortInfoTagMode OBJECT-TYPE
 		disabled(4)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"For tagged port, we could have multiple VLANs 
 		 per port. For untagged port or auto port, there 
@@ -2634,7 +2704,7 @@ snSwPortInfoChnMode OBJECT-TYPE
 		fullDuplex(2)   
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The port can be configured to operate in either
 		half or full duplex mode. The values are:
@@ -2663,12 +2733,12 @@ snSwPortInfoSpeed OBJECT-TYPE
 		s10M(2),
 		s100M(3),
 		s1G(4),
-		s45M(5),
+		s1GM(5),
 		s155M(6),
 		s10G(7)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION     
 		"The speed configuration for a port. The values are:
           none(0)..........link down or no traffic.
@@ -2676,7 +2746,7 @@ snSwPortInfoSpeed OBJECT-TYPE
 		  s10M(2)..........10Mbits per second.
 		  s100M(3).........100Mbits per second.
 		  s1G(4)...........1Gbits per second.
-		  s45M(5)..........45Mbits per second (T3) (for expansion board only).
+		  s1GM(5)..........1Gbits per second master.
 		  s155M(6).........155Mbits per second (ATM) (for expansion board only).
 		  s10G(7)..........10Gbits per second.
 
@@ -2685,7 +2755,7 @@ snSwPortInfoSpeed OBJECT-TYPE
 		  s10M(2)..........10Mbits per second.
 		  s100M(3).........100Mbits per second.
 		  s1G(4)...........1Gbits per second.
-		  s45M(5)..........45Mbits per second (T3) (for expansion board only).
+		  s1GM(5)..........1Gbits per second master.
 		  s155M(6).........155Mbits per second (ATM) (for expansion board only).
 		  s10G(7)..........10Gbits per second.
 
@@ -2719,7 +2789,7 @@ snSwPortInfoMediaType OBJECT-TYPE
 		m10000BaseFX(12)
 		}
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION 
 		"The media type for the port. The
 		values are:
@@ -2746,7 +2816,7 @@ snSwPortInfoConnectorType OBJECT-TYPE
 		fiber(3)
 		}
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION 
 		"The type of connector that the port offers.
 		 The values are:
@@ -2764,7 +2834,7 @@ snSwPortInfoAdminStatus OBJECT-TYPE
 		testing(3)   -- in some test mode
 		}
     ACCESS  read-write
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
 		"The desired state of all ports.  The
 	 	testing(3) state indicates that no operational
@@ -2780,7 +2850,7 @@ snSwPortInfoLinkStatus OBJECT-TYPE
     	testing(3)   -- in some test mode
         }
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
         "The current operational state of the interface.
          The testing(3) state indicates that no operational
@@ -2801,7 +2871,7 @@ snSwPortInfoPortQos OBJECT-TYPE
 		level7(7)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The Stand alone stackable switch Port Qos Priority values are:
 		 low(0)   -- low prority
@@ -2815,7 +2885,7 @@ snSwPortInfoPortQos OBJECT-TYPE
 snSwPortInfoPhysAddress OBJECT-TYPE
 	SYNTAX  PhysAddress
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The port physical address. The physical address 
 		represents the switch port."
@@ -2826,7 +2896,7 @@ snSwPortInfoPhysAddress OBJECT-TYPE
 snSwPortStatsInFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of packets received on the interface."
     ::= { snSwPortInfoEntry 12 }
@@ -2835,7 +2905,7 @@ snSwPortStatsInFrames OBJECT-TYPE
 snSwPortStatsOutFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of packets transmitted out of the interface."
     ::= { snSwPortInfoEntry 13 }
@@ -2844,7 +2914,7 @@ snSwPortStatsOutFrames OBJECT-TYPE
 snSwPortStatsAlignErrors   OBJECT-TYPE
      SYNTAX     Counter
      ACCESS     read-only
-     STATUS     mandatory
+     STATUS     deprecated
      DESCRIPTION
 	 	"dot3StatsAlignmentErrors : A count of frames 
 	  	received on a particular interface that are 
@@ -2864,7 +2934,7 @@ snSwPortStatsAlignErrors   OBJECT-TYPE
 snSwPortStatsFCSErrors   OBJECT-TYPE
      SYNTAX      Counter
      ACCESS      read-only
-     STATUS      mandatory
+     STATUS      deprecated
      DESCRIPTION
 	 	"dot3StatsFCSErrors : A count of frames received 
 	  	on a particular interface that are an integral 
@@ -2885,7 +2955,7 @@ snSwPortStatsFCSErrors   OBJECT-TYPE
 snSwPortStatsMultiColliFrames   OBJECT-TYPE
      SYNTAX      Counter
      ACCESS      read-only
-     STATUS      mandatory
+     STATUS      deprecated
      DESCRIPTION
 	 	"dot3StatsMultipleCollisionFrames : 
 	  	A count of successfully transmitted frames on
@@ -2905,7 +2975,7 @@ snSwPortStatsMultiColliFrames   OBJECT-TYPE
 snSwPortStatsFrameTooLongs   OBJECT-TYPE
      SYNTAX    Counter
      ACCESS    read-only
-     STATUS    mandatory
+     STATUS    deprecated
      DESCRIPTION
 	 	"dot3StatsFrameTooLongs : A count of frames 
 	  	received on a particular interface that 
@@ -2925,7 +2995,7 @@ snSwPortStatsFrameTooLongs   OBJECT-TYPE
 snSwPortStatsTxColliFrames   OBJECT-TYPE
      SYNTAX      Counter
      ACCESS      read-only
-     STATUS      mandatory
+     STATUS      deprecated
      DESCRIPTION
 	 	"A count of successfully transmitted frames on
 	  	a particular interface for which transmission
@@ -2939,7 +3009,7 @@ snSwPortStatsTxColliFrames   OBJECT-TYPE
 snSwPortStatsRxColliFrames   OBJECT-TYPE
      SYNTAX      Counter
      ACCESS      read-only
-     STATUS      mandatory
+     STATUS      deprecated
      DESCRIPTION
 	 	"A count of successfully received frames on
 	  	a particular interface for which transmission
@@ -2951,7 +3021,7 @@ snSwPortStatsRxColliFrames   OBJECT-TYPE
 snSwPortStatsFrameTooShorts   OBJECT-TYPE
      SYNTAX    Counter
      ACCESS    read-only
-     STATUS    mandatory
+     STATUS    deprecated
      DESCRIPTION
 	 	" A count of frames received on a particular 
 	 	interface that below the minimum permitted 
@@ -2961,7 +3031,7 @@ snSwPortStatsFrameTooShorts   OBJECT-TYPE
 snSwPortLockAddressCount OBJECT-TYPE
      SYNTAX  INTEGER (0..2048)
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
 	 	"The number of source MAC addresses are allowed
 	 	for a port. Writing 0 to this object will allow
@@ -2975,7 +3045,7 @@ snSwPortStpPortEnable OBJECT-TYPE
                enabled(1)
              }
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "The enabled/disabled status of the port."
      REFERENCE
@@ -2985,7 +3055,7 @@ snSwPortStpPortEnable OBJECT-TYPE
 snSwPortDhcpGateListId OBJECT-TYPE
 	SYNTAX  INTEGER (0..32)
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The ID for a DHCP gateway list entry relative 
 		 to this switch port. 0 = unset or no assigned ID"
@@ -2994,7 +3064,7 @@ snSwPortDhcpGateListId OBJECT-TYPE
 snSwPortName OBJECT-TYPE
 	SYNTAX	DisplayString (SIZE(0..255))
 	ACCESS	read-write
-	STATUS	mandatory
+	STATUS	deprecated
 	DESCRIPTION
 		"Port Name string."
 	::= { snSwPortInfoEntry 24 }
@@ -3002,7 +3072,7 @@ snSwPortName OBJECT-TYPE
 snSwPortStatsInBcastFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of broadcast packets received on the interface."
     ::= { snSwPortInfoEntry 25 }
@@ -3011,7 +3081,7 @@ snSwPortStatsInBcastFrames OBJECT-TYPE
 snSwPortStatsOutBcastFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of broadcast packets transmitted out of the interface."
     ::= { snSwPortInfoEntry 26 }
@@ -3019,7 +3089,7 @@ snSwPortStatsOutBcastFrames OBJECT-TYPE
 snSwPortStatsInMcastFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of multicast packets received on the interface."
     ::= { snSwPortInfoEntry 27 }
@@ -3028,7 +3098,7 @@ snSwPortStatsInMcastFrames OBJECT-TYPE
 snSwPortStatsOutMcastFrames OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of multicast packets transmitted out of the interface."
     ::= { snSwPortInfoEntry 28 }
@@ -3037,7 +3107,7 @@ snSwPortStatsOutMcastFrames OBJECT-TYPE
 snSwPortStatsInDiscard OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
         "The number of inbound packets which were chosen
          to be discarded even though no errors had been
@@ -3051,7 +3121,7 @@ snSwPortStatsInDiscard OBJECT-TYPE
 snSwPortStatsOutDiscard OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
         "The number of outbound packets which were chosen
          to be discarded even though no errors had been
@@ -3063,7 +3133,7 @@ snSwPortStatsOutDiscard OBJECT-TYPE
 snSwPortStatsMacStations OBJECT-TYPE
     SYNTAX  INTEGER
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of MAC Stations connected to the interface."
     ::= { snSwPortInfoEntry 31 }
@@ -3072,7 +3142,7 @@ snSwPortStatsMacStations OBJECT-TYPE
 snSwPortCacheGroupId OBJECT-TYPE
     SYNTAX  INTEGER
     ACCESS  read-write
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"Cache Group ID for the interface."
     ::= { snSwPortInfoEntry 32 }
@@ -3080,7 +3150,7 @@ snSwPortCacheGroupId OBJECT-TYPE
 snSwPortTransGroupId OBJECT-TYPE
     SYNTAX  INTEGER
     ACCESS  read-write
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"Transparent Group ID for the interface."
     ::= { snSwPortInfoEntry 33 }
@@ -3094,7 +3164,7 @@ snSwPortInfoAutoNegotiate OBJECT-TYPE
 		other(4)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"This feature only applies to Gigabit Ethernet ports. If set to
 		disable(0), port will be put to non-negotiation mode. If set to
@@ -3116,7 +3186,7 @@ snSwPortInfoFlowControl OBJECT-TYPE
 		enabled(1)
 		}
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"Enable/Disbale port flow control."
     DEFVAL { enabled }
@@ -3133,10 +3203,27 @@ snSwPortInfoGigType OBJECT-TYPE
 		m10000BaseSR(6),
 		m10000BaseLR(7),
 		m10000BaseER(8),
+		sfpCWDM1470nm80Km(9),
+		sfpCWDM1490nm80Km(10),
+		sfpCWDM1510nm80Km(11),
+		sfpCWDM1530nm80Km(12),
+		sfpCWDM1550nm80Km(13),
+		sfpCWDM1570nm80Km(14),
+		sfpCWDM1590nm80Km(15),
+		sfpCWDM1610nm80Km(16),
+		sfpCWDM1470nm100Km(17),
+		sfpCWDM1490nm100Km(18),
+		sfpCWDM1510nm100Km(19),
+		sfpCWDM1530nm100Km(20),
+		sfpCWDM1550nm100Km(21),
+		sfpCWDM1570nm100Km(22),
+		sfpCWDM1590nm100Km(23),
+		sfpCWDM1610nm100Km(24),
+		m1000BaseLHX(25),
 		notApplicable(255)
 		}
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION 
 		"The media type for the port. The
 		values are:
@@ -3149,6 +3236,23 @@ snSwPortInfoGigType OBJECT-TYPE
 		  m10000BaseSR(6)....10Gbits per second fiber, with a short range wavelength transceiver (100m).
 		  m10000BaseLR(7)....10Gbits per second fiber, with a long range wavelength transceiver (10km).
 		  m10000BaseER(8)....10Gbits per second fiber, with a extended range wavelength transceiver (40km).
+		  sfpCWDM1470nm80Km(9)....1Gbits per second CWDM fiber, with a wavelength 1470nm, reach 80 kms.
+		  sfpCWDM1490nm80Km(10)....1Gbits per second CWDM fiber, with a wavelength 1490nm, reach 80 kms.
+		  sfpCWDM1510nm80Km(11)....1Gbits per second CWDM fiber, with a wavelength 1510nm, reach 80 kms.
+		  sfpCWDM1530nm80Km(12)....1Gbits per second CWDM fiber, with a wavelength 1530nm, reach 80 kms.
+		  sfpCWDM1550nm80Km(13)....1Gbits per second CWDM fiber, with a wavelength 1550nm, reach 80 kms.
+		  sfpCWDM1570nm80Km(14)....1Gbits per second CWDM fiber, with a wavelength 1570nm, reach 80 kms.
+		  sfpCWDM1590nm80Km(15)....1Gbits per second CWDM fiber, with a wavelength 1590nm, reach 80 kms.
+		  sfpCWDM1610nm80Km(16)....1Gbits per second CWDM fiber, with a wavelength 1610nm, reach 80 kms.
+		  sfpCWDM1470nm100Km(17)....1Gbits per second CWDM fiber, with a wavelength 1470nm, reach 100 kms.
+		  sfpCWDM1490nm100Km(18)....1Gbits per second CWDM fiber, with a wavelength 1490nm, reach 100 kms.
+		  sfpCWDM1510nm100Km(19)....1Gbits per second CWDM fiber, with a wavelength 1510nm, reach 100 kms.
+		  sfpCWDM1530nm100Km(20)....1Gbits per second CWDM fiber, with a wavelength 1530nm, reach 100 kms.
+		  sfpCWDM1550nm100Km(21)....1Gbits per second CWDM fiber, with a wavelength 1550nm, reach 100 kms.
+		  sfpCWDM1570nm100Km(22)....1Gbits per second CWDM fiber, with a wavelength 1570nm, reach 100 kms.
+		  sfpCWDM1590nm100Km(23)....1Gbits per second CWDM fiber, with a wavelength 1590nm, reach 100 kms.
+		  sfpCWDM1610nm100Km(24)....1Gbits per second CWDM fiber, with a wavelength 1610nm, reach 100 kms.
+		  m1000BaseLHX(25)...1Gbits per second fiber, with a special wavelength transceiver (150km).
 		  notApplicable(255)....a non-gigabit port."
 	::= { snSwPortInfoEntry 36 }
 
@@ -3156,7 +3260,7 @@ snSwPortInfoGigType OBJECT-TYPE
 snSwPortStatsLinkChange OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of link state change of the interface."
     ::= { snSwPortInfoEntry 37 }
@@ -3165,7 +3269,7 @@ snSwPortStatsLinkChange OBJECT-TYPE
 snSwPortIfIndex OBJECT-TYPE
     SYNTAX  INTEGER
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"In order to identify a particular interface, this
 		object shall identify the instance of the ifIndex
@@ -3176,7 +3280,7 @@ snSwPortIfIndex OBJECT-TYPE
 snSwPortDescr OBJECT-TYPE
     SYNTAX  DisplayString
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"A textual string containing the slot/port information
     	about the interface."
@@ -3186,7 +3290,7 @@ snSwPortDescr OBJECT-TYPE
 snSwPortInOctets OBJECT-TYPE
     SYNTAX  OCTET STRING (SIZE(8))
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of octets received on the interface,
     	including framing characters. This object is a 64-bit
@@ -3198,7 +3302,7 @@ snSwPortInOctets OBJECT-TYPE
 snSwPortOutOctets OBJECT-TYPE
     SYNTAX  OCTET STRING (SIZE(8))
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The total number of octets transmitted out of the interface,
     	including framing characters. This object is a 64-bit
@@ -3210,7 +3314,7 @@ snSwPortOutOctets OBJECT-TYPE
 snSwPortStatsInBitsPerSec OBJECT-TYPE
     SYNTAX  Gauge
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The number of bits per second received on the interface
     	over a 5 minutes interval."
@@ -3220,7 +3324,7 @@ snSwPortStatsInBitsPerSec OBJECT-TYPE
 snSwPortStatsOutBitsPerSec OBJECT-TYPE
     SYNTAX  Gauge
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The number of bits per second transmitted out of the interface
     	over a 5 minutes interval."
@@ -3230,7 +3334,7 @@ snSwPortStatsOutBitsPerSec OBJECT-TYPE
 snSwPortStatsInPktsPerSec OBJECT-TYPE
     SYNTAX  Gauge
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The number of packets per second received on the interface
     	over a 5 minutes interval."
@@ -3240,7 +3344,7 @@ snSwPortStatsInPktsPerSec OBJECT-TYPE
 snSwPortStatsOutPktsPerSec OBJECT-TYPE
     SYNTAX  Gauge
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The number of packets per second transmitted out of the interface
     	over a 5 minutes interval."
@@ -3250,7 +3354,7 @@ snSwPortStatsOutPktsPerSec OBJECT-TYPE
 snSwPortStatsInUtilization OBJECT-TYPE
     SYNTAX  INTEGER (0..10000)
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The input network utilization in hundredths of a percent
     	over a 5 minutes interval."
@@ -3260,7 +3364,7 @@ snSwPortStatsInUtilization OBJECT-TYPE
 snSwPortStatsOutUtilization OBJECT-TYPE
     SYNTAX  INTEGER (0..10000)
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"The output network utilization in hundredths of a percent
     	over a 5 minutes interval."
@@ -3272,7 +3376,7 @@ snSwPortFastSpanPortEnable OBJECT-TYPE
                enabled(1)
              }
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "The enabled/disabled fast span port status of the port."
      ::= { snSwPortInfoEntry 48 }
@@ -3283,7 +3387,7 @@ snSwPortFastSpanUplinkEnable OBJECT-TYPE
                enabled(1)
              }
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "The enabled/disabled fast span uplink status of the port."
      ::= { snSwPortInfoEntry 49 }
@@ -3291,7 +3395,7 @@ snSwPortFastSpanUplinkEnable OBJECT-TYPE
 snSwPortVlanId OBJECT-TYPE
      SYNTAX  INTEGER (0..4095)
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "The ID of a VLAN of which this port is a member. Port must
         be untagged. For tagged port which belongs to multiple
@@ -3302,7 +3406,7 @@ snSwPortVlanId OBJECT-TYPE
 snSwPortRouteOnly OBJECT-TYPE
      SYNTAX  INTEGER { disabled(0), enabled(1) }
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "Enable/Disable L2 switching of a routing switch port.
 		By default, the routing switch performs routing first.
@@ -3320,7 +3424,7 @@ snSwPortPresent OBJECT-TYPE
                true(1)
              }
      ACCESS  read-only
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "Indicate if the port is absent or present.
 		 This object only valid for M4 module
@@ -3335,7 +3439,7 @@ snSwPortGBICStatus OBJECT-TYPE
                other(4)
              }
      ACCESS  read-only
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "Indicate if the gig port has GBICs on them.
 		 If set to  GBIC(1), it means that the port is GBIC.
@@ -3348,7 +3452,7 @@ snSwPortGBICStatus OBJECT-TYPE
 snSwPortStatsInKiloBitsPerSec OBJECT-TYPE
     SYNTAX  Unsigned32
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"Bit rate in kilobits per second received on the 10G and faster interface
     	over a 5 minutes interval."
@@ -3358,7 +3462,7 @@ snSwPortStatsInKiloBitsPerSec OBJECT-TYPE
 snSwPortStatsOutKiloBitsPerSec OBJECT-TYPE
     SYNTAX  Unsigned32
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     	"Bit rate in kilobits per second transmitted out of the 10G and faster interface
     	over a 5 minutes interval."
@@ -3367,7 +3471,7 @@ snSwPortStatsOutKiloBitsPerSec OBJECT-TYPE
 snSwPortLoadInterval OBJECT-TYPE
      SYNTAX  INTEGER (30..300)
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
         "The time in seconds for which average port utilization should be carried out.
         The value should be incremental of 30 seconds, between the ranges specified."
@@ -3377,7 +3481,7 @@ snSwPortLoadInterval OBJECT-TYPE
 snSwPortTagType OBJECT-TYPE
      SYNTAX  INTEGER
      ACCESS  read-write
-     STATUS  mandatory
+     STATUS  deprecated
      DESCRIPTION
 		"The IEEE802.1q tag type embedded in the length/type field of
 		an Ethernet packet. It specifies that the 2 octets after the
@@ -3385,6 +3489,1057 @@ snSwPortTagType OBJECT-TYPE
      DEFVAL { 33024 }
      ::= { snSwPortInfoEntry 57 }
 
+snSwPortInLinePowerControl OBJECT-TYPE
+     SYNTAX  INTEGER {
+               other(1),
+               disable(2),
+               enable(3),
+               enableLegacyDevice(4)
+             }
+     ACCESS  read-write
+     STATUS  deprecated
+     DESCRIPTION
+		"Control inline power on/off to a port. If a port does not
+		have inline power capability, reading this object returns
+		'other(1)'."
+     ::= { snSwPortInfoEntry 58 }
+
+snSwPortInLinePowerWattage OBJECT-TYPE
+     SYNTAX  INTEGER
+     ACCESS  read-write
+     STATUS  deprecated
+     DESCRIPTION
+		"Adjust the inline power wattage. Valid value between 
+		1000 and 15400. Each unit is milliwatts.
+		This object can only be set after snSwPortInLinePowerControl
+		has been set to 'enable(3)' or 'enableLegacyDevice(4)'. If
+		a port does not have inline power capability, reading this
+		object returns undefined value."
+     ::= { snSwPortInfoEntry 59 }
+
+snSwPortInLinePowerClass OBJECT-TYPE
+     SYNTAX  INTEGER (0..3)
+     ACCESS  read-write
+     STATUS  deprecated
+     DESCRIPTION
+		"Adjust the inline power class. This object can only be set
+		after snSwPortInLinePowerControl has been set to 'enable(3)'
+		or 'enableLegacyDevice(4)'. If a port does not have inline
+		power capability, reading this object returns undefined value."
+     ::= { snSwPortInfoEntry 60 }
+
+snSwPortInLinePowerPriority OBJECT-TYPE
+     SYNTAX  INTEGER {
+               invalid(0),
+               critical(1),
+               high(2),
+               low(3),
+               medium(4),
+               other(5)
+             }
+     ACCESS  read-write
+     STATUS  deprecated
+     DESCRIPTION
+		"Inline power allocation priority for the power device
+		 0- Not a POE port, 1- Critical, 2- High, 3- Low,
+		 4- Medium, 5- other."
+     ::= { snSwPortInfoEntry 61 }
+
+snSwPortInfoMirrorMode OBJECT-TYPE
+     SYNTAX  INTEGER {
+               disable(0),
+               enable(1)
+             }
+     ACCESS  read-write
+     STATUS  deprecated
+     DESCRIPTION
+             "Enable/disable mirror on this port."
+     ::= { snSwPortInfoEntry 62 }
+
+snSwPortStatsInJumboFrames OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  deprecated
+    DESCRIPTION
+    	"The total number of jumbo packets received on the interface."
+    ::= { snSwPortInfoEntry 63 }
+
+snSwPortStatsOutJumboFrames OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  deprecated
+    DESCRIPTION
+    	"The total number of jumbo packets transmitted out of the interface."
+    ::= { snSwPortInfoEntry 64 }
+
+snSwPortInLinePowerConsumed OBJECT-TYPE
+     SYNTAX  INTEGER
+     ACCESS  read-only
+     STATUS  deprecated
+     DESCRIPTION
+		"Inline power consumed by the port. Each unit is milliwatts."
+     ::= { snSwPortInfoEntry 66 }
+
+snSwPortInLinePowerPDType OBJECT-TYPE
+	 SYNTAX	DisplayString
+     ACCESS  read-only
+     STATUS  deprecated
+     DESCRIPTION
+		"Inline Power device type	802.3af or Legacy device."
+     ::= { snSwPortInfoEntry 67 }
+-- end of deprecated snSwPortInfoTable
+
+
+-- Switch Port Information Group
+-- snSwIfInfoTable which is indexed by ifIndex port format is replacing the
+-- snSwPortInfoTable which is indexed by a proprietary port format.
+
+snSwIfInfoTable OBJECT-TYPE
+	SYNTAX  SEQUENCE OF SnSwIfInfoEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"A specific snSwIfInfo group consists of a number of 
+		 switch ports.  "
+	::= { snSwPortInfo 5 }
+
+snSwIfInfoEntry OBJECT-TYPE
+	SYNTAX  SnSwIfInfoEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"An entry in the snSwIfInfo table indicates the 
+		 configuration on a specified port. A SNMP SET PDU 
+		 for a row of the snSwIfInfoTable requires the entire 
+		 sequence of the MIB Objects in each 
+		 snSwIfInfoEntry stored in one PDU.  Otherwise, 
+	 	 GENERR return-value will be returned."
+	INDEX   { snSwIfInfoPortNum }
+	::= { snSwIfInfoTable 1 }
+
+SnSwIfInfoEntry ::= SEQUENCE {
+	snSwIfInfoPortNum
+		InterfaceIndex,
+	snSwIfInfoMonitorMode
+	    INTEGER,
+	snSwIfInfoMirrorPorts
+	    OCTET STRING,
+	snSwIfInfoTagMode
+		INTEGER,
+	snSwIfInfoTagType
+	    INTEGER,
+	snSwIfInfoChnMode
+	    INTEGER,
+	snSwIfInfoSpeed
+	    INTEGER,
+    snSwIfInfoMediaType
+	    INTEGER,
+	snSwIfInfoConnectorType
+	    INTEGER,
+	snSwIfInfoAdminStatus
+		INTEGER,
+	snSwIfInfoLinkStatus
+		INTEGER,
+	snSwIfInfoPortQos
+	    INTEGER,
+	snSwIfInfoPhysAddress
+	    PhysAddress,
+	snSwIfLockAddressCount
+	    INTEGER,
+	snSwIfStpPortEnable
+	    INTEGER,
+    snSwIfDhcpGateListId
+	    INTEGER,
+	snSwIfName
+		DisplayString,
+	snSwIfDescr
+	    DisplayString,
+	snSwIfInfoAutoNegotiate
+	    INTEGER,
+	snSwIfInfoFlowControl
+	    INTEGER,
+	snSwIfInfoGigType
+	    INTEGER,
+	snSwIfFastSpanPortEnable
+	    INTEGER,
+	snSwIfFastSpanUplinkEnable
+	    INTEGER,
+	snSwIfVlanId
+	    INTEGER,
+	snSwIfRouteOnly
+	    INTEGER,
+	snSwIfPresent
+	    INTEGER,
+	snSwIfGBICStatus
+	    INTEGER,
+	snSwIfLoadInterval
+	    INTEGER (30..300),
+    snSwIfStatsInFrames 
+    	Counter32,
+	snSwIfStatsOutFrames 
+    	Counter32,
+	snSwIfStatsAlignErrors            
+		Counter32,
+    snSwIfStatsFCSErrors                  
+		Counter32,
+    snSwIfStatsMultiColliFrames    
+		Counter32,
+	snSwIfStatsTxColliFrames
+	    Counter32,
+	snSwIfStatsRxColliFrames
+	    Counter32,
+    snSwIfStatsFrameTooLongs              
+		Counter32,
+	snSwIfStatsFrameTooShorts
+	    Counter32,
+	snSwIfStatsInBcastFrames
+	    Counter32,
+	snSwIfStatsOutBcastFrames
+	    Counter32,
+	snSwIfStatsInMcastFrames
+	    Counter32,
+	snSwIfStatsOutMcastFrames
+	    Counter32,
+	snSwIfStatsInDiscard
+	    Counter32,
+	snSwIfStatsOutDiscard
+	    Counter32,
+	snSwIfStatsMacStations
+	    INTEGER,
+	snSwIfStatsLinkChange
+	    Counter32,
+	snSwIfInOctets
+	    Counter64,
+	snSwIfOutOctets
+	    Counter64,
+	snSwIfStatsInBitsPerSec
+	    Gauge32,
+	snSwIfStatsOutBitsPerSec
+	    Gauge32,
+	snSwIfStatsInPktsPerSec
+	    Gauge32,
+	snSwIfStatsOutPktsPerSec
+	    Gauge32,
+	snSwIfStatsInUtilization
+	    INTEGER (0..10000),
+	snSwIfStatsOutUtilization
+	    INTEGER (0..10000),
+	snSwIfStatsInKiloBitsPerSec
+		Unsigned32,
+	snSwIfStatsOutKiloBitsPerSec    
+		Unsigned32,
+	snSwIfStatsInJumboFrames
+	    Counter64,
+	snSwIfStatsOutJumboFrames
+	    Counter64,
+	snSwIfInfoMirrorMode
+	    INTEGER
+	}
+
+snSwIfInfoPortNum OBJECT-TYPE
+	SYNTAX	InterfaceIndex
+	ACCESS  read-only
+	STATUS	mandatory
+	DESCRIPTION
+		"The port/interface index (ifindex)."
+	::= { snSwIfInfoEntry 1 }
+
+snSwIfInfoMonitorMode OBJECT-TYPE
+	SYNTAX  INTEGER {
+				disabled(0),
+				input(1),
+				output(2),
+				both(3)
+			}
+	ACCESS  read-write
+	STATUS  deprecated
+	DESCRIPTION
+		"DEPRECATED by snSwIf2MirrorMode and
+		snPortMonitorTable."
+	::= { snSwIfInfoEntry 2 }
+
+snSwIfInfoMirrorPorts OBJECT-TYPE
+	SYNTAX		OCTET STRING
+	ACCESS  read-write
+	STATUS		mandatory
+	DESCRIPTION
+		"The list of port/interface index (ifindex), which mirror this interface,
+		 when monitoring is enabled."
+	::= { snSwIfInfoEntry 3 }
+
+snSwIfInfoTagMode OBJECT-TYPE
+	SYNTAX  INTEGER {
+				tagged(1),      
+				untagged(2)
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"For tagged port, we could have multiple VLANs 
+		 per port. For untagged port, there 
+		 is only one VLAN ID per port."  
+	::= { snSwIfInfoEntry 4 }
+
+snSwIfInfoTagType OBJECT-TYPE
+     SYNTAX  INTEGER
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+		"The IEEE802.1q tag type embedded in the length/type field of
+		an Ethernet packet. It specifies that the 2 octets after the
+		length/type field in an Ethernet packet is the tag value."
+     DEFVAL { 33024 }
+     ::= { snSwIfInfoEntry 5 }
+
+snSwIfInfoChnMode OBJECT-TYPE
+	SYNTAX  INTEGER {
+				none(0),
+				halfDuplex(1),  
+				fullDuplex(2)   
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"The port can be configured to operate in either
+		half or full duplex mode. The values are:
+			halfDuplex(1)...half duplex mode
+			fullDuplex(2)...full duplex mode
+		The read-back channel status from hardware are:
+            none(0).........link down or port disabled.
+			halfDuplex(1)...half duplex mode
+			fullDuplex(2)...full duplex mode
+		
+		The port media type (expansion or regular)
+		and port link type (trunk or feeder) determine
+		value of this object.
+		The port can not set to half duplex mode
+		if the port connect mode is m200e(4).
+		However, the value of this parameter may be
+		automatically set whenever the expansion port
+		is connected (e.g. cascade connecting device)."
+	::= { snSwIfInfoEntry 6 }
+
+snSwIfInfoSpeed OBJECT-TYPE
+	SYNTAX  INTEGER {
+				none(0),
+				sAutoSense(1),
+				s10M(2),
+				s100M(3),
+				s1G(4),
+				s1GM(5),
+				s155M(6),
+				s10G(7)
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION     
+		"The speed configuration for a port. The values are:
+          none(0)..........link down or no traffic.
+		  sAutoSense(1)....Auto-sensing 10 or 100Mbits.
+		  s10M(2)..........10Mbits per second.
+		  s100M(3).........100Mbits per second.
+		  s1G(4)...........1Gbits per second.
+		  s1GM(5)..........1Gbits per second master.
+		  s155M(6).........155Mbits per second (ATM) (for expansion board only).
+		  s10G(7)..........10Gbits per second.
+
+         The read-back hardware status are the following:
+          none(0)..........link down or no traffic.
+		  s10M(2)..........10Mbits per second.
+		  s100M(3).........100Mbits per second.
+		  s1G(4)...........1Gbits per second.
+		  s1GM(5)..........1Gbits per second master.
+		  s155M(6).........155Mbits per second (ATM) (for expansion board only).
+		  s10G(7)..........10Gbits per second.
+
+		The port media type (expansion or regular)
+		and port link type (trunk or feeder) determine
+		whether this object can be written and the valid
+		values.
+		It is not allowed to change speed for trunks ports.
+		For expansion ports, all of the above speed 
+		can be set.
+		However, the value of this parameter may be
+		automatically set whenever the expansion port
+		is connected (e.g. cascade connecting device)."
+	::= { snSwIfInfoEntry 7 }
+
+snSwIfInfoMediaType OBJECT-TYPE
+	SYNTAX  INTEGER {
+				other(1),
+				m100BaseTX(2),
+				m100BaseFX(3),
+				m1000BaseFX(4),
+				mT3(5),
+				m155ATM(6),
+				m1000BaseTX(7),
+				m622ATM(8),
+				m155POS(9),
+				m622POS(10),
+				m2488POS(11),
+				m10000BaseFX(12)
+			}
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION 
+		"The media type for the port. The
+		values are:
+		  other(1).........other or unknown media.
+		  m100BaseTX(2)....100Mbits per second copper.
+		  m100BaseFX(3)....100Mbits per second fiber.
+		  m1000BaseFX(4)...1Gbits per second fiber.
+		  mT3(5)...........45Mbits per second (T3).
+		  m155ATM(6).......155Mbits per second (ATM).
+		  m1000BaseTX(7)...1Gbits per second copper.
+		  m622ATM(8).......622Mbits per second (ATM).
+		  m155POS(9).......155Mbits per second (POS).
+		  m622POS(10)......622Mbits per second (POS).
+		  m2488POS(11).....2488Mbits per second (POS).
+		  m10000BaseFX(12).10Gbits per second fiber."
+	::= { snSwIfInfoEntry 8 }
+
+snSwIfInfoConnectorType OBJECT-TYPE
+	SYNTAX  INTEGER {
+				other(1),
+				copper(2),
+				fiber(3)
+			}
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION 
+		"The type of connector that the port offers.
+		 The values are:
+		  other(1)...........other or unknown connector
+		  copper(2)..........Copper connector
+		  fiber(3)...........Fiber connector
+		 This describes the physical connector type"
+	::= { snSwIfInfoEntry 9 }
+
+snSwIfInfoAdminStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+				up(1),       -- ready to pass packets
+				down(2),
+				testing(3)   -- in some test mode
+			}
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+		"The desired state of all ports.  The
+	 	testing(3) state indicates that no operational
+	 	packets can be passed. 
+	 	(same as ifAdminStatus in MIB-II)"
+    ::= { snSwIfInfoEntry 10 }
+
+snSwIfInfoLinkStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+    			up(1),       -- ready to pass packets
+    			down(2),
+    			testing(3)   -- in some test mode
+			}
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+        "The current operational state of the interface.
+         The testing(3) state indicates that no operational
+         packets can be passed. 
+         (same as ifOperStatus in MIB-II)"
+    ::= { snSwIfInfoEntry 11 }
+
+snSwIfInfoPortQos OBJECT-TYPE
+	SYNTAX  INTEGER {
+				level0(0),
+				level1(1),
+				level2(2),
+				level3(3),
+				level4(4),
+				level5(5),
+				level6(6),
+				level7(7)
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"The Stand alone stackable switch Port Qos Priority values are:
+		 low(0)   -- low prority
+		 high(1) -- high prority.
+		 The BigIron Port Qos Priority values are:
+		level0(0), level1(1), level2(2), level3(3),
+		level4(4), level5(5), level6(6), level7(7) "
+	::= { snSwIfInfoEntry 12 }
+
+snSwIfInfoPhysAddress OBJECT-TYPE
+	SYNTAX  PhysAddress
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"The port physical address. The physical address 
+		represents the switch port."
+	::= { snSwIfInfoEntry 13 }
+
+snSwIfLockAddressCount OBJECT-TYPE
+     SYNTAX  INTEGER (0..2048)
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+	 	"The number of source MAC addresses are allowed
+	 	for a port. Writing 0 to this object will allow
+	 	any number of addresses."
+    DEFVAL { 8 }
+    ::= { snSwIfInfoEntry 14 }
+
+snSwIfStpPortEnable OBJECT-TYPE
+     SYNTAX  INTEGER {
+				disabled(0),
+				enabled(1)
+             }
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "The enabled/disabled status of the port."
+     REFERENCE
+     	"IEEE 802.1D-1990: Section 4.5.5.2, dot1dStpPortEnable"
+     ::= { snSwIfInfoEntry 15 }
+
+snSwIfDhcpGateListId OBJECT-TYPE
+	SYNTAX  INTEGER (0..32)
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"The ID for a DHCP gateway list entry relative 
+		 to this switch port. 0 = unset or no assigned ID"
+	::= { snSwIfInfoEntry 16 }
+
+snSwIfName OBJECT-TYPE
+	SYNTAX	DisplayString (SIZE(0..255))
+	ACCESS	read-write
+	STATUS	mandatory
+	DESCRIPTION
+		"Port Name string."
+	::= { snSwIfInfoEntry 17 }
+
+snSwIfDescr OBJECT-TYPE
+    SYNTAX  DisplayString
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"A textual string containing the slot/port information
+    	about the interface."
+    ::= { snSwIfInfoEntry 18 }
+
+snSwIfInfoAutoNegotiate OBJECT-TYPE
+	SYNTAX  INTEGER {
+				disabled(0),
+				enabled(1),
+				negFullAuto(2),
+				global(3),
+				other(4)
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"This feature only applies to Gigabit Ethernet ports. If set to
+		disable(0), port will be put to non-negotiation mode. If set to
+		enable(1), port will start auto-negotiation indefinitely until
+		succeed. If set to negFullAuto(2), the port will start with auto-
+		negotiation, if the negotiation failed, then it will automatically
+		switch to non-negotiation mode. Stackable products (except TurboIron
+		8) Gigabit Ethernet ports do not support negFullAuto(2). If set
+		to global(3), port negotiation mode follows the value of
+		snSwGlobalAutoNegotiate. Non-Gigabit Ethernet port returns
+		the value other(4)."
+    DEFVAL { global }
+	::= { snSwIfInfoEntry 19 }
+
+snSwIfInfoFlowControl OBJECT-TYPE
+	SYNTAX  INTEGER {
+				disabled(0),
+				enabled(1)
+			}
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+		"Enable/Disbale port flow control."
+    DEFVAL { enabled }
+	::= { snSwIfInfoEntry 20 }
+
+snSwIfInfoGigType OBJECT-TYPE
+	SYNTAX  INTEGER {
+				m1000BaseSX(0),
+				m1000BaseLX(1),
+				m1000BaseLH(2),
+				m1000BaseLHA(3),
+				m1000BaseLHB(4),
+				m1000BaseTX(5),
+				m10000BaseSR(6),
+				m10000BaseLR(7),
+				m10000BaseER(8),
+				sfpCWDM1470nm80Km(9),
+				sfpCWDM1490nm80Km(10),
+				sfpCWDM1510nm80Km(11),
+				sfpCWDM1530nm80Km(12),
+				sfpCWDM1550nm80Km(13),
+				sfpCWDM1570nm80Km(14),
+				sfpCWDM1590nm80Km(15),
+				sfpCWDM1610nm80Km(16),
+				sfpCWDM1470nm100Km(17),
+				sfpCWDM1490nm100Km(18),
+				sfpCWDM1510nm100Km(19),
+				sfpCWDM1530nm100Km(20),
+				sfpCWDM1550nm100Km(21),
+				sfpCWDM1570nm100Km(22),
+				sfpCWDM1590nm100Km(23),
+				sfpCWDM1610nm100Km(24),
+				m1000BaseLHX(25),
+				notApplicable(255)
+			}
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION 
+		"The media type for the port. The
+		values are:
+		  m1000BaseSX(0)....1Gbits per second fiber, with a short wavelength transceiver.
+		  m1000BaseLX(1)....1Gbits per second fiber, with a long wavelength transceiver (3km).
+		  m1000BaseLH(2)....1Gbits per second fiber, with a special wavelength transceiver (50km).
+		  m1000BaseLHA(3)....1Gbits per second fiber, with a special wavelength transceiver (70km).
+		  m1000BaseLHB(4)....1Gbits per second fiber, with a special wavelength transceiver (150km).
+		  m1000BaseTX(5)....1Gbits per second copper (100meter).
+		  m10000BaseSR(6)....10Gbits per second fiber, with a short range wavelength transceiver (100m).
+		  m10000BaseLR(7)....10Gbits per second fiber, with a long range wavelength transceiver (10km).
+		  m10000BaseER(8)....10Gbits per second fiber, with a extended range wavelength transceiver (40km).
+		  sfpCWDM1470nm80Km(9)....1Gbits per second CWDM fiber, with a wavelength 1470nm, reach 80 kms.
+		  sfpCWDM1490nm80Km(10)....1Gbits per second CWDM fiber, with a wavelength 1490nm, reach 80 kms.
+		  sfpCWDM1510nm80Km(11)....1Gbits per second CWDM fiber, with a wavelength 1510nm, reach 80 kms.
+		  sfpCWDM1530nm80Km(12)....1Gbits per second CWDM fiber, with a wavelength 1530nm, reach 80 kms.
+		  sfpCWDM1550nm80Km(13)....1Gbits per second CWDM fiber, with a wavelength 1550nm, reach 80 kms.
+		  sfpCWDM1570nm80Km(14)....1Gbits per second CWDM fiber, with a wavelength 1570nm, reach 80 kms.
+		  sfpCWDM1590nm80Km(15)....1Gbits per second CWDM fiber, with a wavelength 1590nm, reach 80 kms.
+		  sfpCWDM1610nm80Km(16)....1Gbits per second CWDM fiber, with a wavelength 1610nm, reach 80 kms.
+		  sfpCWDM1470nm100Km(17)....1Gbits per second CWDM fiber, with a wavelength 1470nm, reach 100 kms.
+		  sfpCWDM1490nm100Km(18)....1Gbits per second CWDM fiber, with a wavelength 1490nm, reach 100 kms.
+		  sfpCWDM1510nm100Km(19)....1Gbits per second CWDM fiber, with a wavelength 1510nm, reach 100 kms.
+		  sfpCWDM1530nm100Km(20)....1Gbits per second CWDM fiber, with a wavelength 1530nm, reach 100 kms.
+		  sfpCWDM1550nm100Km(21)....1Gbits per second CWDM fiber, with a wavelength 1550nm, reach 100 kms.
+		  sfpCWDM1570nm100Km(22)....1Gbits per second CWDM fiber, with a wavelength 1570nm, reach 100 kms.
+		  sfpCWDM1590nm100Km(23)....1Gbits per second CWDM fiber, with a wavelength 1590nm, reach 100 kms.
+		  sfpCWDM1610nm100Km(24)....1Gbits per second CWDM fiber, with a wavelength 1610nm, reach 100 kms.
+		  m1000BaseLHX(25)...1Gbits per second fiber, with a special wavelength transceiver (150km).
+		  notApplicable(255)....a non-gigabit port."
+	::= { snSwIfInfoEntry 21 }
+
+snSwIfFastSpanPortEnable OBJECT-TYPE
+     SYNTAX  INTEGER {
+				disabled(0),
+				enabled(1)
+             }
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "The enabled/disabled fast span port status of the port."
+     ::= { snSwIfInfoEntry 22 }
+
+snSwIfFastSpanUplinkEnable OBJECT-TYPE
+     SYNTAX  INTEGER {
+				disabled(0),
+				enabled(1)
+             }
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "The enabled/disabled fast span uplink status of the port."
+     ::= { snSwIfInfoEntry 23 }
+
+snSwIfVlanId OBJECT-TYPE
+     SYNTAX  INTEGER (0..4095)
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "The ID of a VLAN of which this port is a member. Port must
+        be untagged. For tagged port which belongs to multiple
+        VLANs, this object return 0 which is an invalid VLAN ID
+        value."
+     ::= { snSwIfInfoEntry 24 }
+
+snSwIfRouteOnly OBJECT-TYPE
+     SYNTAX INTEGER {
+				disabled(0),
+				enabled(1)
+			}
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "Enable/Disable L2 switching of a routing switch port.
+		By default, the routing switch performs routing first.
+		If routing failed, it performs switching. Enable route
+		only instrcuts the routing switch to perform routing
+		only. For a L2 switching only product, reading this
+		object always return 'disabled', writing 'enabled' to
+		this object takes no effect."
+     DEFVAL { disabled }
+     ::= { snSwIfInfoEntry 25 }
+
+snSwIfPresent OBJECT-TYPE
+     SYNTAX  INTEGER {
+				false(0),
+				true(1)
+             }
+     ACCESS  read-only
+     STATUS  mandatory
+     DESCRIPTION
+        "Indicate if the port is absent or present.
+		 This object only valid for M4 module."
+     ::= { snSwIfInfoEntry 26 }
+
+snSwIfGBICStatus OBJECT-TYPE
+     SYNTAX  INTEGER {
+				gbic(1),
+				miniGBIC(2),
+				empty(3),
+				other(4)
+             }
+     ACCESS  read-only
+     STATUS  mandatory
+     DESCRIPTION
+        "Indicate if the gig port has GBICs on them.
+		 If set to  GBIC(1), it means that the port is GBIC.
+		 If set to  miniGBIC(2), it means that the port miniGBIC.
+		 If set to empty(3), it means that the GBIC is missing.
+		 Value other(4) means that the port not a removable gig port.
+		 "
+     ::= { snSwIfInfoEntry 27 }
+
+snSwIfLoadInterval OBJECT-TYPE
+     SYNTAX  INTEGER (30..300)
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+        "The time in seconds for which average port utilization should be carried out.
+        The value should be incremental of 30 seconds, between the ranges specified."
+     DEFVAL { 300 }
+     ::= { snSwIfInfoEntry 28 }
+
+snSwIfStatsInFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of packets received on the interface."
+    ::= { snSwIfInfoEntry 29 }
+
+snSwIfStatsOutFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of packets transmitted out of the interface."
+    ::= { snSwIfInfoEntry 30 }
+
+snSwIfStatsAlignErrors   OBJECT-TYPE
+     SYNTAX     Counter32
+     ACCESS     read-only
+     STATUS     mandatory
+     DESCRIPTION
+		"dot3StatsAlignmentErrors : A count of frames 
+		received on a particular interface that are 
+		not an integral number of octets in length 
+		and do not pass the FCS check.
+
+		The count represented by an instance of this
+		object is incremented when the alignmentError
+		status is returned by the MAC service to the
+		LLC (or other MAC user). Received frames for
+		which multiple error conditions obtain are,
+		according to the conventions of IEEE 802.3
+		Layer Management, counted exclusively according
+		to the error status presented to the LLC."
+    ::= { snSwIfInfoEntry 31 }
+
+snSwIfStatsFCSErrors   OBJECT-TYPE
+     SYNTAX      Counter32
+     ACCESS      read-only
+     STATUS      mandatory
+     DESCRIPTION
+	 	"dot3StatsFCSErrors : A count of frames received 
+	  	on a particular interface that are an integral 
+	  	number of octets in length but do not pass the 
+	  	FCS check.
+
+	  	The count represented by an instance of this
+	  	object is incremented when the frameCheckError
+	  	status is returned by the MAC service to the
+	  	LLC (or other MAC user). Received frames for
+	  	which multiple error conditions obtain are,
+	  	according to the conventions of IEEE 802.3
+	  	Layer Management, counted exclusively according
+	  	to the error status presented to the LLC."
+    ::= { snSwIfInfoEntry 32 }
+
+snSwIfStatsMultiColliFrames   OBJECT-TYPE
+     SYNTAX      Counter32
+     ACCESS      read-only
+     STATUS      mandatory
+     DESCRIPTION
+	 	"dot3StatsMultipleCollisionFrames : 
+	  	A count of successfully transmitted frames on
+	  	a particular interface for which transmission
+	  	is inhibited by more than one collision.
+
+	  	A frame that is counted by an instance of this
+	  	object is also counted by the corresponding
+	  	instance of either the ifOutUcastPkts,
+	  	ifOutMulticastPkts, or ifOutBroadcastPkts,
+	  	and is not counted by the corresponding
+	  	instance of the dot3StatsSingleCollisionFrames
+	  	object."
+    ::= { snSwIfInfoEntry 33 }
+
+snSwIfStatsTxColliFrames   OBJECT-TYPE
+     SYNTAX      Counter32
+     ACCESS      read-only
+     STATUS      mandatory
+     DESCRIPTION
+	 	"A count of successfully transmitted frames on
+	  	a particular interface for which transmission
+	  	is inhibited by more than one collision.
+
+	  	A frame that is counted by a combination of
+		both dot3StatsSingleCollisionFrames and
+		dot3StatsMultipleCollisionFrames objects."
+    ::= { snSwIfInfoEntry 34 }
+
+snSwIfStatsRxColliFrames   OBJECT-TYPE
+     SYNTAX      Counter32
+     ACCESS      read-only
+     STATUS      mandatory
+     DESCRIPTION
+	 	"A count of successfully received frames on
+	  	a particular interface for which transmission
+	  	is inhibited by more than one collision.  This
+	  	object is not specified in dot3 but it has the
+	  	same functionarity as snSwIfStatsTxColliFrames."
+    ::= { snSwIfInfoEntry 35 }
+
+snSwIfStatsFrameTooLongs   OBJECT-TYPE
+     SYNTAX    Counter32
+     ACCESS    read-only
+     STATUS    mandatory
+     DESCRIPTION
+	 	"dot3StatsFrameTooLongs : A count of frames 
+	  	received on a particular interface that 
+	  	exceed the maximum permitted frame size.
+
+	  	The count represented by an instance of this
+	  	object is incremented when the frameTooLong
+	  	status is returned by the MAC service to the
+	  	LLC (or other MAC user). Received frames for
+	  	which multiple error conditions obtain are,
+	  	according to the conventions of IEEE 802.3
+	  	Layer Management, counted exclusively according
+	  	to the error status presented to the LLC."
+    ::= { snSwIfInfoEntry 36 }
+    
+snSwIfStatsFrameTooShorts   OBJECT-TYPE
+     SYNTAX    Counter32
+     ACCESS    read-only
+     STATUS    mandatory
+     DESCRIPTION
+	 	" A count of frames received on a particular 
+	 	interface that below the minimum permitted 
+	 	frame size."
+    ::= { snSwIfInfoEntry 37 }
+    
+snSwIfStatsInBcastFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of broadcast packets received on the interface."
+    ::= { snSwIfInfoEntry 38 }
+
+snSwIfStatsOutBcastFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of broadcast packets transmitted out of the interface."
+    ::= { snSwIfInfoEntry 39 }
+
+snSwIfStatsInMcastFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of multicast packets received on the interface."
+    ::= { snSwIfInfoEntry 40 }
+
+snSwIfStatsOutMcastFrames OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of multicast packets transmitted out of the interface."
+    ::= { snSwIfInfoEntry 41 }
+
+snSwIfStatsInDiscard OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+        "The number of inbound packets which were chosen
+         to be discarded even though no errors had been
+         detected to prevent their being deliverable to a
+         higher-layer protocol.  One possible reason for
+         discarding such a packet could be to free up
+         buffer space."
+    ::= { snSwIfInfoEntry 42 }
+
+snSwIfStatsOutDiscard OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+        "The number of outbound packets which were chosen
+         to be discarded even though no errors had been
+         detected to prevent their being transmitted.  One
+         possible reason for discarding such a packet could
+         be to free up buffer space."
+    ::= { snSwIfInfoEntry 43 }
+
+snSwIfStatsMacStations OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of MAC Stations connected to the interface."
+    ::= { snSwIfInfoEntry 44 }
+
+snSwIfStatsLinkChange OBJECT-TYPE
+    SYNTAX  Counter32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of link state change of the interface."
+    ::= { snSwIfInfoEntry 45 }
+
+snSwIfInOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of octets received on the interface,
+    	including framing characters. This object is a 64-bit
+		counter of the ifInOctets object, defined in RFC 1213.
+		The octet string is in big-endian byte order."
+    ::= { snSwIfInfoEntry 46 }
+
+snSwIfOutOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of octets transmitted out of the interface,
+    	including framing characters. This object is a 64-bit
+		counter of the ifOutOctets object, defined in RFC 1213.
+		The octet string is in big-endian byte order."
+    ::= { snSwIfInfoEntry 47 }
+
+snSwIfStatsInBitsPerSec OBJECT-TYPE
+    SYNTAX  Gauge32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The number of bits per second received on the interface
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 48 }
+
+snSwIfStatsOutBitsPerSec OBJECT-TYPE
+    SYNTAX  Gauge32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The number of bits per second transmitted out of the interface
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 49 }
+
+snSwIfStatsInPktsPerSec OBJECT-TYPE
+    SYNTAX  Gauge32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The number of packets per second received on the interface
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 50 }
+
+snSwIfStatsOutPktsPerSec OBJECT-TYPE
+    SYNTAX  Gauge32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The number of packets per second transmitted out of the interface
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 51 }
+
+snSwIfStatsInUtilization OBJECT-TYPE
+    SYNTAX  INTEGER (0..10000)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The input network utilization in hundredths of a percent
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 52 }
+
+snSwIfStatsOutUtilization OBJECT-TYPE
+    SYNTAX  INTEGER (0..10000)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The output network utilization in hundredths of a percent
+    	over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 53 }
+    
+snSwIfStatsInKiloBitsPerSec OBJECT-TYPE
+    SYNTAX  Unsigned32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"Bit rate in kilobits per second received on the 10G and
+    	 faster interface over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 54 }
+
+snSwIfStatsOutKiloBitsPerSec OBJECT-TYPE
+    SYNTAX  Unsigned32
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"Bit rate in kilobits per second transmitted out of the 10G
+    	 and faster interface over a 5 minutes interval."
+    ::= { snSwIfInfoEntry 55 }
+
+snSwIfStatsInJumboFrames OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of jumbo packets received on the interface."
+    ::= { snSwIfInfoEntry 56 }
+
+snSwIfStatsOutJumboFrames OBJECT-TYPE
+    SYNTAX  Counter64
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    	"The total number of jumbo packets transmitted out of the interface."
+    ::= { snSwIfInfoEntry 57 }
+
+snSwIfInfoMirrorMode OBJECT-TYPE
+     SYNTAX  INTEGER {
+               disable(0),
+               enable(1)
+             }
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+             "Enable/disable mirror on this port."
+     ::= { snSwIfInfoEntry 58 }
 
 -- Interface ID Registration Group
 
@@ -3639,23 +4794,24 @@ snFdbRowStatus OBJECT-TYPE
 
 
 -- Port STP Configuration Group
+-- snPortStpTable was deprecated. It has been replaced by snIfStpTable.
 
 
 snPortStpTable OBJECT-TYPE
 	SYNTAX  SEQUENCE OF SnPortStpEntry
 	ACCESS  not-accessible
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"A specific snPortStpTable consists of a number of 
 		 switch ports. This table only exists if only if
-		 snVLanByPortTable exists and snVLanByPortStpMode is
+		 snVLanByPortCfgTable exists and snVLanByPortCfgStpMode is
 		 enabled for each VLAN."
 	::= { snPortStpInfo 1 }
 
 snPortStpEntry OBJECT-TYPE
 	SYNTAX  SnPortStpEntry
 	ACCESS  not-accessible
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"An entry in the snPortStpTable indicates the 
 		 configuration on a specified port. A SNMP SET PDU 
@@ -3693,13 +4849,21 @@ SnPortStpEntry ::= SEQUENCE {
     snPortStpPortDesignatedBridge
         BridgeId,
     snPortStpPortDesignatedPort
-        OCTET STRING
+        OCTET STRING,
+    snPortStpPortAdminRstp
+        INTEGER,
+    snPortStpPortProtocolMigration
+        INTEGER,
+    snPortStpPortAdminEdgePort
+        INTEGER,
+    snPortStpPortAdminPointToPoint
+        INTEGER
 	}
 
 snPortStpVLanId OBJECT-TYPE
 	SYNTAX  INTEGER (1..65535)
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The VLAN ID of the VLAN switch community." 
 	::= { snPortStpEntry 1 }
@@ -3707,7 +4871,7 @@ snPortStpVLanId OBJECT-TYPE
 snPortStpPortNum OBJECT-TYPE
 	SYNTAX  INTEGER
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"The port number of the Switch. 
 		 The bit 0 to bit 7: port number. 
@@ -3717,7 +4881,7 @@ snPortStpPortNum OBJECT-TYPE
 snPortStpPortPriority OBJECT-TYPE
 	SYNTAX  INTEGER (8..255)
 	ACCESS  read-write
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
     "The value of the priority field which is
      contained in the first (in network byte order)
@@ -3729,7 +4893,7 @@ snPortStpPortPriority OBJECT-TYPE
 snPortStpPathCost OBJECT-TYPE
     SYNTAX  INTEGER (0..65535)
     ACCESS  read-write
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
 	"dot1dStpPortPathCost : The contribution of this 
 	 port to the path cost of paths towards the spanning 
@@ -3751,7 +4915,7 @@ snPortStpOperState OBJECT-TYPE
 		activated(1)
 		}
 	ACCESS  read-only
-	STATUS  mandatory
+	STATUS  deprecated
 	DESCRIPTION
 		"By default, this mode is set to notActivated(0).
 		 notActivated(0)...the Port STP entry is not activated and not in running mode.
@@ -3764,7 +4928,7 @@ snPortStpPortEnable OBJECT-TYPE
               disabled(2)
             }
     ACCESS  not-accessible
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The enabled/disabled status of the port."
 	::= { snPortStpEntry 6 }
@@ -3772,7 +4936,7 @@ snPortStpPortEnable OBJECT-TYPE
 snPortStpPortForwardTransitions OBJECT-TYPE
     SYNTAX  Counter
     ACCESS  not-accessible
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The number of times this port has transitioned
      from the Learning state to the Forwarding state."
@@ -3785,10 +4949,11 @@ snPortStpPortState OBJECT-TYPE
               listening(3),
               learning(4),
               forwarding(5),
-              broken(6)
+              broken(6),
+              preforwarding(7)
             }
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The port's current state as defined by
      application of the Spanning Tree Protocol.  This
@@ -3803,7 +4968,7 @@ snPortStpPortState OBJECT-TYPE
 snPortStpPortDesignatedCost OBJECT-TYPE
     SYNTAX  INTEGER
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The path cost of the Designated Port of the
      segment connected to this port.  This value is
@@ -3815,7 +4980,7 @@ snPortStpPortDesignatedCost OBJECT-TYPE
 snPortStpPortDesignatedRoot OBJECT-TYPE
     SYNTAX  BridgeId
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The unique Bridge Identifier of the Bridge
      recorded as the Root in the Configuration BPDUs
@@ -3826,7 +4991,7 @@ snPortStpPortDesignatedRoot OBJECT-TYPE
 snPortStpPortDesignatedBridge OBJECT-TYPE
     SYNTAX  BridgeId
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The Bridge Identifier of the bridge which this
      port considers to be the Designated Bridge for
@@ -3836,12 +5001,328 @@ snPortStpPortDesignatedBridge OBJECT-TYPE
 snPortStpPortDesignatedPort OBJECT-TYPE
     SYNTAX  OCTET STRING (SIZE (2))
     ACCESS  read-only
-    STATUS  mandatory
+    STATUS  deprecated
     DESCRIPTION
     "The Port Identifier of the port on the Designated
      Bridge for this port's segment."
 	::= { snPortStpEntry 12 }
 
+snPortStpPortAdminRstp OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  deprecated
+    DESCRIPTION
+    "Enable or disable RSTP of a port which is a member of a VLAN.
+    If the VLAN is not operating in RSTP, this object will return
+    FALSE(2) and this object is not writable."
+	::= { snPortStpEntry 13 }
+
+snPortStpPortProtocolMigration OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  deprecated
+    DESCRIPTION
+    "When operating in RSTP (version 2) mode, writing TRUE(1)
+     to this object forces this port to transmit RSTP BPDUs.
+     Any other operation on this object has no effect and
+     it always returns FALSE(2) when read."
+	::= { snPortStpEntry 14 }
+
+snPortStpPortAdminEdgePort OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  deprecated
+    DESCRIPTION
+    "The administrative value of the Edge Port parameter.  A
+     value of TRUE(1) indicates that this port should be
+     assumed as an edge-port and a value of FALSE(2) indicates
+     that this port should be assumed as a non-edge-port."
+	::= { snPortStpEntry 15 }
+
+snPortStpPortAdminPointToPoint OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  deprecated
+    DESCRIPTION
+    "The administrative point-to-point status of the LAN segment
+     attached to this port.  A value of TRUE(1) indicates that
+     this port should always be treated as if it is connected to
+     a point-to-point link.  A value of FALSE(2) indicates
+     that this port should be treated as having a shared media
+     connection."
+	::= { snPortStpEntry 16 }
+
+-- Port STP Configuration Group
+-- snIfStpTable is replacing snPortStpTable.
+-- snIfStpPortNum is using ifIndex value to index snIfStpTable.
+
+
+snIfStpTable OBJECT-TYPE
+	SYNTAX  SEQUENCE OF SnIfStpEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"A specific snIfStpTable consists of a number of 
+		 switch ports. This table only exists if only if
+		 snVLanByPortCfgTable exists and snVLanByPortCfgStpMode is
+		 enabled for each VLAN."
+	::= { snPortStpInfo 2 }
+
+snIfStpEntry OBJECT-TYPE
+	SYNTAX  SnIfStpEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"An entry in the snIfStpTable indicates the 
+		 configuration on a specified port. A SNMP SET PDU 
+		 for a row of the snIfStpTable requires the entired 
+		 sequence of the MIB Objects in each 
+		 snIfStpEntry stored in one PDU.  Otherwise, 
+	 	 GENERR return-value will be returned."
+	INDEX   { 
+			snIfStpVLanId,	
+			snIfStpPortNum
+	}
+	::= { snIfStpTable 1 }
+
+SnIfStpEntry ::= SEQUENCE {
+	snIfStpVLanId
+		INTEGER,
+	snIfStpPortNum
+		INTEGER,
+	snIfStpPortPriority
+		INTEGER,
+	snIfStpCfgPathCost
+		INTEGER,
+    snIfStpOperState
+		INTEGER,
+    snIfStpPortState
+        INTEGER,
+    snIfStpPortDesignatedCost
+        INTEGER,
+    snIfStpPortDesignatedRoot
+        BridgeId,
+    snIfStpPortDesignatedBridge
+        BridgeId,
+    snIfStpPortDesignatedPort
+        OCTET STRING,
+    snIfStpPortAdminRstp
+        INTEGER,
+    snIfStpPortProtocolMigration
+        INTEGER,
+    snIfStpPortAdminEdgePort
+        INTEGER,
+    snIfStpPortAdminPointToPoint
+        INTEGER,
+    snIfStpOperPathCost
+        INTEGER
+	}
+
+snIfStpVLanId OBJECT-TYPE
+	SYNTAX  INTEGER (1..65535)
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"The VLAN ID of the VLAN switch community." 
+	::= { snIfStpEntry 1 }
+
+snIfStpPortNum OBJECT-TYPE
+	SYNTAX  INTEGER
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"The port number of the Switch. It has the ifIndex value."
+	::= { snIfStpEntry 2 }
+
+snIfStpPortPriority OBJECT-TYPE
+	SYNTAX  INTEGER (8..255)
+	ACCESS  read-write
+	STATUS  mandatory
+	DESCRIPTION
+    "The value of the priority field which is
+     contained in the first (in network byte order)
+     octet of the (2 octet long) Port ID.  The other
+     octet of the Port ID is given by the value of
+     dot1dStpPort."
+	::= { snIfStpEntry 3 }
+
+snIfStpCfgPathCost OBJECT-TYPE
+    SYNTAX  INTEGER (0..200000000)
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+	"dot1dStpPortPathCost : The contribution of this 
+	 port to the path cost of paths towards the spanning 
+	 tree root which include this port.  802.1D-1990 
+	 recommends that the default value of this parameter 
+	 be in inverse proportion to the speed of the 
+	 attached LAN. Writing value zero to this object
+	 sets path cost to a default value which automatically
+	 changes according to port speed."
+	::= { snIfStpEntry 4 }
+
+
+snIfStpOperState OBJECT-TYPE
+	SYNTAX  INTEGER {
+		notActivated(0),             
+		activated(1)
+		}
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"By default, this mode is set to notActivated(0).
+		 notActivated(0)...the Port STP entry is not activated and not in running mode.
+		 activated(1)......the Port STP entry is activated and in running mode"  
+	::= { snIfStpEntry 5 }
+
+snIfStpPortState OBJECT-TYPE
+    SYNTAX  INTEGER {
+              disabled(1),
+              blocking(2),
+              listening(3),
+              learning(4),
+              forwarding(5),
+              broken(6),
+              preforwarding(7)
+            }
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    "The port's current state as defined by
+     application of the Spanning Tree Protocol.  This
+     state controls what action a port takes on
+     reception of a frame.  If the bridge has detected
+     a port that is malfunctioning it will place that
+     port into the broken(6) state.  For ports which
+     are disabled (see dot1dStpPortEnable), this object
+     will have a value of disabled(1)."
+	::= { snIfStpEntry 8 }
+
+snIfStpPortDesignatedCost OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    "The path cost of the Designated Port of the
+     segment connected to this port.  This value is
+     compared to the Root Path Cost field in received
+     bridge PDUs."
+	::= { snIfStpEntry 9 }
+
+
+snIfStpPortDesignatedRoot OBJECT-TYPE
+    SYNTAX  BridgeId
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    "The unique Bridge Identifier of the Bridge
+     recorded as the Root in the Configuration BPDUs
+     transmitted by the Designated Bridge for the
+     segment to which the port is attached."
+	::= { snIfStpEntry 10 }
+
+snIfStpPortDesignatedBridge OBJECT-TYPE
+    SYNTAX  BridgeId
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    "The Bridge Identifier of the bridge which this
+     port considers to be the Designated Bridge for
+     this port's segment."
+	::= { snIfStpEntry 11 }
+
+snIfStpPortDesignatedPort OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE (2))
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+    "The Port Identifier of the port on the Designated
+     Bridge for this port's segment."
+	::= { snIfStpEntry 12 }
+
+snIfStpPortAdminRstp OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+    "Enable or disable RSTP of a port which is a member of a VLAN.
+    If the VLAN is not operating in RSTP, this object will return
+    FALSE(2) and this object is not writable."
+	::= { snIfStpEntry 13 }
+
+snIfStpPortProtocolMigration OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+    "When operating in RSTP (version 2) mode, writing TRUE(1)
+     to this object forces this port to transmit RSTP BPDUs.
+     Any other operation on this object has no effect and
+     it always returns FALSE(2) when read."
+	::= { snIfStpEntry 14 }
+
+snIfStpPortAdminEdgePort OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+    "The administrative value of the Edge Port parameter.  A
+     value of TRUE(1) indicates that this port should be
+     assumed as an edge-port and a value of FALSE(2) indicates
+     that this port should be assumed as a non-edge-port."
+	::= { snIfStpEntry 15 }
+
+snIfStpPortAdminPointToPoint OBJECT-TYPE
+    SYNTAX  INTEGER {
+              true(1),
+              false(2)
+            }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+    "The administrative point-to-point status of the LAN segment
+     attached to this port.  A value of TRUE(1) indicates that
+     this port should always be treated as if it is connected to
+     a point-to-point link.  A value of FALSE(2) indicates
+     that this port should be treated as having a shared media
+     connection."
+	::= { snIfStpEntry 16 }
+
+snIfStpOperPathCost OBJECT-TYPE
+    SYNTAX  INTEGER (0..200000000)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+	"dot1dStpPortPathCost : The contribution of this 
+	 port to the path cost of paths towards the spanning 
+	 tree root which include this port.  802.1D-1990 
+	 recommends that the default value of this parameter 
+	 be in inverse proportion to the speed of the 
+	 attached LAN. Reading value zero indicates an unknown
+	 path cost value because port speed cannot be determined
+	 due to speed auto sense in progress or port link is down."
+	::= { snIfStpEntry 17 }
 
 
 -- Trunk Port Configuration Group
@@ -3878,11 +5359,12 @@ SnTrunkEntry ::= SEQUENCE {
 	}
 
 snTrunkIndex OBJECT-TYPE
-	SYNTAX  INTEGER (1..64)
+	SYNTAX  INTEGER
 	ACCESS  read-only
 	STATUS  mandatory
 	DESCRIPTION
-		"The number of the trunk entries can be configured."
+		"The number of the trunk entries can be configured.
+		This can be 32*<slots> for Jetcore, and 16*<slots> for Ironcore."
 	::= { snTrunkEntry 1 }
 
 
@@ -4521,7 +6003,7 @@ snRadiusRetransmit         OBJECT-TYPE
 	::= { snRadiusGeneral 3 }
 
 snRadiusTimeOut            OBJECT-TYPE
-	SYNTAX  INTEGER (1..15)
+	SYNTAX  INTEGER (1..60)
 	ACCESS  read-write
 	STATUS  mandatory
 	DESCRIPTION
@@ -4887,7 +6369,7 @@ SnQosProfileEntry ::= SEQUENCE {
 	}
 
 snQosProfileIndex OBJECT-TYPE
-	SYNTAX  INTEGER (1..4)
+	SYNTAX  INTEGER (1..8)
 	ACCESS  read-only
 	STATUS  mandatory
 	DESCRIPTION
@@ -4964,13 +6446,120 @@ snQosBindPriority OBJECT-TYPE
 	::= { snQosBindEntry 2 }
 
 snQosBindProfileIndex OBJECT-TYPE
-	SYNTAX  INTEGER (1..4)
+	SYNTAX  INTEGER (1..8)
 	ACCESS  read-write
 	STATUS  mandatory
 	DESCRIPTION
 		"QOS Bind Profile Index. This is pointer to the
 		index of snQosProfile Table." 
 	::= { snQosBindEntry 3 }
+
+-- Denial of service attack
+
+snDosAttack       OBJECT IDENTIFIER ::= { snQos 3 }
+snDosAttackGlobal OBJECT IDENTIFIER ::= { snDosAttack 1 }
+
+snDosAttackICMPDropCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"ICMP drop counter."
+	::= { snDosAttackGlobal 1 }
+
+snDosAttackICMPBlockCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"ICMP block counter."
+	::= { snDosAttackGlobal 2 }
+
+snDosAttackSYNDropCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"SYN drop counter."
+	::= { snDosAttackGlobal 3 }
+
+snDosAttackSYNBlockCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"SYN block counter."
+	::= { snDosAttackGlobal 4 }
+
+snDosAttackPortTable OBJECT-TYPE
+	SYNTAX  SEQUENCE OF SnDosAttackPortEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"Denial of service attack port table."
+	::= { snDosAttack 2 }
+
+snDosAttackPortEntry OBJECT-TYPE
+	SYNTAX  SnDosAttackPortEntry
+	ACCESS  not-accessible
+	STATUS  mandatory
+	DESCRIPTION
+		"An entry of the denial of service attack port table."
+	INDEX {snDosAttackPort}
+	::= { snDosAttackPortTable 1 }
+
+SnDosAttackPortEntry ::= SEQUENCE {
+	snDosAttackPort
+		INTEGER,
+	snDosAttackPortICMPDropCount
+		Counter,
+	snDosAttackPortICMPBlockCount
+		Counter,
+	snDosAttackPortSYNDropCount
+		Counter,
+	snDosAttackPortSYNBlockCount
+		Counter
+	}
+
+snDosAttackPort OBJECT-TYPE
+	SYNTAX  INTEGER
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"ifIndex value of a port." 
+	::= { snDosAttackPortEntry 1 }
+
+snDosAttackPortICMPDropCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"ICMP drop counter."
+	::= { snDosAttackPortEntry 2 }
+
+snDosAttackPortICMPBlockCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"ICMP block counter."
+	::= { snDosAttackPortEntry 3 }
+
+snDosAttackPortSYNDropCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"SYN drop counter."
+	::= { snDosAttackPortEntry 4 }
+
+snDosAttackPortSYNBlockCount OBJECT-TYPE
+	SYNTAX  Counter
+	ACCESS  read-only
+	STATUS  mandatory
+	DESCRIPTION
+		"SYN block counter."
+	::= { snDosAttackPortEntry 5 }
 
 -- AAA Mib
 
@@ -5102,7 +6691,7 @@ snNetFlowGblEnable OBJECT-TYPE
 	::= { snNetFlowGlb 1 }
 
 snNetFlowGblVersion OBJECT-TYPE
-	SYNTAX	INTEGER { version1 (1), version5 (5) }
+	SYNTAX	INTEGER { versionNotSet (0), version1 (1), version5 (5) }
 	ACCESS	read-write
 	STATUS	mandatory
 	DESCRIPTION
@@ -5860,5 +7449,164 @@ snFdpCachedAddrValue OBJECT-TYPE
                      First 2-octet as the network number
                      Second 1-octet as the host number"
     ::= { snFdpCachedAddressEntry 5 }
+
+
+snMacSecurity   OBJECT IDENTIFIER ::= { snMac 1 }
+snPortMacSecurity   OBJECT IDENTIFIER ::= { snMacSecurity 1 }
+
+--
+-- Port MAC Security Table
+--
+
+snPortMacSecurityTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF PortMacSecurityEntry
+    ACCESS     not-accessible
+    STATUS     mandatory
+    DESCRIPTION
+            "Status of port MAC security on the device's interfaces."
+    ::= { snPortMacSecurity 1 }
+
+snPortMacSecurityEntry OBJECT-TYPE
+    SYNTAX     PortMacSecurityEntry
+    ACCESS     not-accessible
+    STATUS     mandatory
+    DESCRIPTION
+            "An entry in the snPortMacSecurityTable"
+    INDEX      { snPortMacSecurityIfIndex,
+                     snPortMacSecurityResource,
+                     snPortMacSecurityQueryIndex
+                  }
+    ::= { snPortMacSecurityTable 1 }
+
+PortMacSecurityEntry ::= SEQUENCE {
+    snPortMacSecurityIfIndex                    Unsigned32,
+    snPortMacSecurityResource                 INTEGER,
+    snPortMacSecurityQueryIndex              Unsigned32,
+    snPortMacSecurityMAC                       MacAddress,
+    snPortMacSecurityAgeLeft                  Unsigned32,
+    snPortMacSecurityShutdownStatus       INTEGER,
+    snPortMacSecurityShutdownTimeLeft   Unsigned32,
+    snPortMacSecurityVlanId                    Unsigned32
+}
+
+snPortMacSecurityIfIndex     OBJECT-TYPE
+    SYNTAX     Unsigned32
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "ifIndex value of the local Ethernet interface on 
+            which MAC security is configured."
+    ::= {snPortMacSecurityEntry 1}
+
+snPortMacSecurityResource OBJECT-TYPE
+    SYNTAX     INTEGER { local(1), shared(2) }
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "The MAC address was secured using local or shared resources."
+    ::= {snPortMacSecurityEntry 2}
+
+snPortMacSecurityQueryIndex     OBJECT-TYPE
+    SYNTAX     Unsigned32
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "Entry index within the given resource of local Ethernet interface on 
+            which MAC security is configured."
+    ::= {snPortMacSecurityEntry 3}
+
+snPortMacSecurityMAC OBJECT-TYPE
+    SYNTAX     MacAddress
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "The secure MAC address for this interface."
+    ::= {snPortMacSecurityEntry 4}
+
+snPortMacSecurityAgeLeft OBJECT-TYPE
+    SYNTAX     Unsigned32
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "The number of minutes the MAC address will remain secure
+            before being aged out. 0 means no aging."
+    ::= {snPortMacSecurityEntry 5}
+
+snPortMacSecurityShutdownStatus OBJECT-TYPE
+    SYNTAX     INTEGER { up(1), down(2) }
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "Interface up/down status."
+    ::= {snPortMacSecurityEntry 6}
+
+snPortMacSecurityShutdownTimeLeft OBJECT-TYPE
+    SYNTAX     Unsigned32
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "If snPortMacSecurityShutdownStatus is up(1), this value will be 0.
+            If snPortMacSecurityShutdownStatus is down(2), this gives
+            the number of seconds before this interface is enabled again.
+            In the later case, 0 means interface is permanently down."
+    ::= {snPortMacSecurityEntry 7}
+
+snPortMacSecurityVlanId OBJECT-TYPE
+    SYNTAX     Unsigned32 (1..65535)
+    ACCESS     read-only
+    STATUS     mandatory
+    DESCRIPTION
+            "The vlan membership of this interface."
+    ::= {snPortMacSecurityEntry 8}
+
+
+--
+-- Port Monitor Table
+--
+
+snPortMonitorTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF PortMonitorEntry
+    ACCESS     not-accessible
+    STATUS     mandatory
+    DESCRIPTION
+            "Status of port monitoring on the device's interfaces."
+    ::= { snPortMonitor 1 }
+
+snPortMonitorEntry OBJECT-TYPE
+    SYNTAX     PortMonitorEntry
+    ACCESS     not-accessible
+    STATUS     mandatory
+    DESCRIPTION
+            "An entry in the snPortMonitorTable"
+    INDEX      { snPortMonitorIfIndex }
+    ::= { snPortMonitorTable 1 }
+
+PortMonitorEntry ::= SEQUENCE {
+    snPortMonitorIfIndex                    InterfaceIndex,
+    snPortMonitorMirrorList                 DisplayString
+}
+
+snPortMonitorIfIndex OBJECT-TYPE
+    SYNTAX     InterfaceIndex
+    ACCESS     not-accessible
+    STATUS     mandatory
+    DESCRIPTION
+            "ifIndex value of the local interface on which
+            monitoring is configuerd."
+    ::= { snPortMonitorEntry 1 }
+
+snPortMonitorMirrorList OBJECT-TYPE
+     SYNTAX  DisplayString
+     ACCESS  read-write
+     STATUS  mandatory
+     DESCRIPTION
+             "Lists the monitoring configuration of this port.
+             The value is a space delimited sequence of ifIndex of mirror port
+             and monitor mode. The values for mode can be -
+             0 -  off, 1 - input, 2 - output, 3 - both
+             Eg. '65 2 66 1' means send the output traffic to port 2/1 and
+             input traffic to port 2/2.
+              To turn off a mirror use monitor mode of 0 (off) in the list."
+     ::= { snPortMonitorEntry 2 }
 
 END
