@@ -3,7 +3,7 @@
 --
 -- October 2002, Vinay Gaonkar, Dipesh Gorashia
 --
--- Copyright (c) 2002, 2003, 2004 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004, 2006 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -22,13 +22,13 @@ IMPORTS
      RowStatus,TimeStamp                    FROM SNMPv2-TC
      SnmpAdminString                        FROM SNMP-FRAMEWORK-MIB    
      InetAddressType, InetAddress
-                                            FROM INET-ADDRESS-MIB	 
+                                            FROM INET-ADDRESS-MIB     
      SyslogSeverity                         FROM CISCO-SYSLOG-MIB
      ciscoMgmt                              FROM CISCO-SMI;        
 
 ciscoCallHomeMIB MODULE-IDENTITY
-        LAST-UPDATED "200408020000Z"
-        ORGANIZATION "Cisco Systems Inc. "
+        LAST-UPDATED "200603300000Z"
+        ORGANIZATION "Cisco Systems Inc."
         CONTACT-INFO
                 "     Cisco Systems
                       Customer Service
@@ -55,6 +55,9 @@ ciscoCallHomeMIB MODULE-IDENTITY
                features that allow storage systems to send 
                performance, accounting and system health information 
                in addition to just the fault information." 
+        REVISION    "200603300000Z"
+        DESCRIPTION
+               "Add ccmUserDefCmdGroup."
         REVISION    "200408020000Z"
         DESCRIPTION
                "Added new compliance section 'chMIBCompliance3'."
@@ -122,7 +125,7 @@ CallHomeMsgFormat ::= TEXTUAL-CONVENTION
                 message. In general, all the CallHome message is sent 
                 with following information : 
  
-               'Subject : System Notification from <device-name>'
+               'Subject : System Notification from '
                'TimeStamp :' 
                'Message Name :' 
                'Message Type :' 
@@ -170,7 +173,7 @@ CallHomeMsgFormat ::= TEXTUAL-CONVENTION
                format. For 'fullText', above information is sent out in
                plain text. For 'shortText', only following information 
                is provided in plain text:
-                  'Subject : System Notification from <device-name> '
+                  'Subject : System Notification from  '
                   'Device Id : ' 
                   'TimeStamp : ' 
                   'Error Message : ' 
@@ -254,7 +257,7 @@ AlertGroupList ::= TEXTUAL-CONVENTION
             with 'alertGroupTypeIndex' 'n', then
             bit position 'n' in the value of this object is
             irrelevant. 
-                                                                                    
+
             If the length of an object of this type is less
             than 8 bytes, then the alert group types which are 
             not represented are not considered to be part of this
@@ -1086,6 +1089,119 @@ ccmMsgThrottlingEnable OBJECT-TYPE
     DEFVAL      { true }
     ::= { ccmCallHomeConfiguration 29 }
 
+ccmCallHomeAlertGroupCfg OBJECT IDENTIFIER
+                            ::= { ccmCallHomeConfiguration 30 }
+
+--
+-- callHome User Specified CLI Command specifications table
+--
+
+callHomeUserDefMaxCmds OBJECT-TYPE
+    SYNTAX        Unsigned32 (0..65535)
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+           "The maximum number of CLI commands that the system supports
+           in the callHomeUserDefCmdTable for a particular alert
+           group type represented by the
+           callHomeAlertGroupTypeIndex object.
+
+           A value of zero for this object indicates that the number of CLI
+           commands system supports for a particular alert gorup type
+           is only limited by resources available on system."
+    ::= { ccmCallHomeAlertGroupCfg 5 }
+
+callHomeUserDefCmdTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF CallHomeUserDefCmdEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "Callhome alert messages are sent with output of some
+            pre-defined commands run in the system.
+
+            This table provides an option for the user to specify
+            a CLI(Command Line Interface) command or set of CLI
+            commands to be executed when some important failures
+            occur in the system, and whose output should be sent
+            with the callhome alert messages. The user should
+            associate these commands with an alert group type.
+
+            Whenever an alert message is to be sent, the callhome
+            server would find out if any commands are specified by
+            the user for the alert group associated with the
+            alert message, and attach the output of those
+            commands in the callhome alert message.
+
+            This table contains information about all the user
+            specified CLI commands for the alert groups types
+            supported in the system.
+
+            GLOSSARY :
+            CLI - Command Line Interface provided by the system."
+    ::= { ccmCallHomeAlertGroupCfg 6 }
+
+callHomeUserDefCmdEntry OBJECT-TYPE
+    SYNTAX     CallHomeUserDefCmdEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "An entry containing information about a user specified
+            CLI command for a callHome alert group type in
+            the system.
+
+            The index object 'callHomeAlertGroupTypeIndex' represents
+            the alert group type to which the user specified CLI
+            command should be associated.
+
+            User can not configure any CLI commands for a
+            callHomeAlertGroupTypeIndex, whose corresponding
+            instance callHomeAlertGroupName object is configured
+            with value 'Cisco-TAC'."
+    INDEX {callHomeAlertGroupTypeIndex, callHomeUserDefCmdIndex }
+    ::= { callHomeUserDefCmdTable 1 }
+
+CallHomeUserDefCmdEntry ::= SEQUENCE {
+        callHomeUserDefCmdIndex          Unsigned32,
+        callHomeUserDefCmdName           SnmpAdminString,
+        callHomeUserDefCmdRowStatus      RowStatus
+}
+
+callHomeUserDefCmdIndex OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+            "An arbitrary integer identifying the user specified
+            CLI command for a particular callHomeAlertGroupTypeIndex."
+    ::= { callHomeUserDefCmdEntry 1 }
+
+callHomeUserDefCmdName OBJECT-TYPE
+    SYNTAX       SnmpAdminString (SIZE(1..255))
+    MAX-ACCESS   read-create
+    STATUS       current
+    DESCRIPTION
+            "This object represents a CLI command to be executed
+            and whose output should be sent with the callhome
+            alert message.
+            The implementation of this object does not do any
+            syntax or semantic validation of the CLI command
+            specified as a value of the object.
+
+            The value of this object can not be modified
+            when the value of the corresponding instance of
+            'callHomeUserDefCmdRowStatus' is 'active'.
+            To modify the value this object the corresponding
+            entry must be deleted and re-created with new
+            value for this object."
+    ::= { callHomeUserDefCmdEntry 2 }
+
+callHomeUserDefCmdRowStatus OBJECT-TYPE
+    SYNTAX       RowStatus
+    MAX-ACCESS   read-create
+    STATUS       current
+    DESCRIPTION
+            "Status of this row."
+    ::= { callHomeUserDefCmdEntry 3 }
 
 -- Notifications
 
@@ -1885,5 +2001,16 @@ chSwInventoryInfoGroup1 OBJECT-GROUP
                 "A collection of objects for displaying 
                 software inventory information."
         ::= { chMIBGroups 15 }
+
+ccmUserDefCmdGroup OBJECT-GROUP
+        OBJECTS  { callHomeUserDefMaxCmds,
+                   callHomeUserDefCmdName,
+                   callHomeUserDefCmdRowStatus
+                   }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for configuring user defined
+                commands for the callhome alert group types."
+        ::= { chMIBGroups 16 }
 
 END

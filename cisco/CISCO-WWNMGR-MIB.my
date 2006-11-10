@@ -3,7 +3,7 @@
 --
 -- October 2002, Vinay Gaonkar
 --
--- Copyright (c) 2002 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2006 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -16,11 +16,15 @@ IMPORTS
      Unsigned32, Gauge32                    FROM SNMPv2-SMI
      MODULE-COMPLIANCE, OBJECT-GROUP,
      NOTIFICATION-GROUP                     FROM SNMPv2-CONF
-     MacAddress                             FROM SNMPv2-TC
+     MacAddress,
+     StorageType,
+     RowStatus                              FROM SNMPv2-TC
+     FcNameId                               FROM CISCO-ST-TC
+     vsanIndex                              FROM CISCO-VSAN-MIB
      ciscoMgmt                              FROM CISCO-SMI;        
 
 ciscoWwnmgrMIB MODULE-IDENTITY
-        LAST-UPDATED "200210010000Z"
+        LAST-UPDATED "200602060000Z"
         ORGANIZATION "Cisco Systems Inc. "
         CONTACT-INFO
                 "     Cisco Systems
@@ -31,8 +35,28 @@ ciscoWwnmgrMIB MODULE-IDENTITY
                 Tel: +1 800 553 -NETS
                 E-mail: cs-san@cisco.com"
         DESCRIPTION
-		     "MIB module for WWN Manager related management 
-		     functionalities."
+            "The World Wide Name (WWN) in the fibre channel networking 
+             technology is equivalent to the MAC address in Ethernet. 
+             There are six different types of WWNs defined in ANSI 
+             Standard for Fibre Channel Framing and Signalling (FC-FS) 
+             Spec Rev 1.4. 
+
+             This mib provides the mechanism to configure and report
+             WWNs for the fibre channel devices connected to a
+             fibre channel switch.
+
+             GLOSSARY :
+             NAA   Network Address Authority (NAA) address formats 
+                   for WWN.
+
+             OUI   Organization Unique Identifier.
+             
+             VSAN  Virtual Storage Area Network, 
+                   similar to a VLAN."
+        REVISION   "200602060000Z"
+        DESCRIPTION
+            "Added a new table 'wwnmVsanWwnTable'
+             to configure user specific WWN for VSANs."
         REVISION   "200210010000Z"
         DESCRIPTION
             "Initial version of this MIB module."
@@ -44,7 +68,7 @@ wwnmNotificationGroup OBJECT IDENTIFIER  ::= { ciscoWwnmMIBObjects 2 }
 wwnmNotification OBJECT IDENTIFIER       ::= {wwnmNotificationGroup  1 }
 wwnmNotificationPrefix OBJECT IDENTIFIER ::= { wwnmNotification 0 }
 
-
+--
 -- WWN Manager configuration group
 --
 
@@ -138,7 +162,94 @@ wwnmTypeOtherReservedWwns  OBJECT-TYPE
         REFERENCE
            "FC-FS-2 Rev 1.70, Section 14 Name Identifier Formats."
         ::= {wwnmConfigurationGroup  8 }   
-                                      
+
+--
+-- WWN configured for VSANs
+--
+
+wwnmVsanWwnTable OBJECT-TYPE
+        SYNTAX       SEQUENCE OF WwnmVsanWwnEntry
+        MAX-ACCESS   not-accessible
+        STATUS       current
+        DESCRIPTION
+               "This table provides an option to configure
+               user specified WWN for the VSANs. 
+
+               To enable the fibre channel switch to interoperate
+               with other vendor switches on a VSAN, user 
+               needs to configure a WWN (based on the other 
+               vendor switch OUI) for the corresponding VSAN. 
+
+               To create a new entry in this table for a VSAN,
+               a corresponding entry for that VSAN should exists in
+               the vsanTable. Also, the value of the corresponding 
+               instance of vsanAdminState should be in 'suspended' 
+               state and the VSAN should interoperate in mode 4 
+               (represented by vsanInterOperValue '4'). 
+ 
+               An entry from this table can be removed by any one
+               of the following ways, 
+               a. Setting the corresponding instance 
+                  wwnmVsanWwnRowStatus value to 'destroy'. 
+               b. Deleting the corresponding VSAN from vsanTable.
+               c. Changing the corresponding VSAN configuration 
+                  from interoperate mode 4 (represented by 
+                  vsanInterOperValue '4') to any other value."
+        REFERENCE "vsanTable, vsanAdminState, vsanInterOperValue in 
+                   CISCO-VSAN-MIB"
+        ::= {wwnmConfigurationGroup 9 }
+
+wwnmVsanWwnEntry OBJECT-TYPE
+        SYNTAX       WwnmVsanWwnEntry 
+        MAX-ACCESS   not-accessible
+        STATUS       current
+        DESCRIPTION
+               "An entry (conceptual row) in this table.
+               Each entry of this table represents the 
+               WWN configuration set for a VSAN." 
+        INDEX { vsanIndex }
+        ::= { wwnmVsanWwnTable 1 }
+
+WwnmVsanWwnEntry ::= SEQUENCE {
+        wwnmVsanWwn                 FcNameId,
+        wwnmVsanWwnStorageType      StorageType,
+        wwnmVsanWwnRowStatus        RowStatus 
+}
+
+wwnmVsanWwn  OBJECT-TYPE
+        SYNTAX       FcNameId
+        MAX-ACCESS   read-create
+        STATUS       current
+        DESCRIPTION
+               "The user configurable WWN for a VSAN.
+
+               For row creation, it is mandatory to set
+               the value of this object to a valid value."
+        ::= { wwnmVsanWwnEntry 1 }
+
+wwnmVsanWwnStorageType OBJECT-TYPE
+        SYNTAX         StorageType
+        MAX-ACCESS     read-only
+        STATUS         current
+        DESCRIPTION
+               "The storage type for this conceptual row.
+               Conceptual rows having the value 'permanent' need
+               not allow write-access to any columnar objects in
+               the row."
+        DEFVAL         { nonVolatile }
+        ::= { wwnmVsanWwnEntry 2 }
+
+wwnmVsanWwnRowStatus  OBJECT-TYPE
+        SYNTAX RowStatus 
+        MAX-ACCESS   read-create
+        STATUS       current
+        DESCRIPTION
+               "The status of this conceptual row. 
+
+               The value of this object cannot be 'active' 
+               unless the value of the corresponding instance
+               of 'wwnmVsanWwn' is set to a valid value." 
+        ::= { wwnmVsanWwnEntry 3 }
 
 --
 -- WWN Manager Notification Group
@@ -210,7 +321,7 @@ ciscoWwnmMIBGroups OBJECT IDENTIFIER
                                  ::= { ciscoWwnmMIBConformance 2 }
 
 ciscoWwnmMIBCompliance MODULE-COMPLIANCE
-        STATUS   current
+        STATUS  deprecated 
         DESCRIPTION
                 "The compliance statement for entities which
                  implement the CISCO-WWNMGR-MIB."
@@ -218,6 +329,26 @@ ciscoWwnmMIBCompliance MODULE-COMPLIANCE
                                   cwmWwnmNotificationGroup }
 
         ::= { ciscoWwnmMIBCompliances 1 }
+
+ciscoWwnmMIBCompliance1 MODULE-COMPLIANCE
+        STATUS   current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-WWNMGR-MIB."
+        MODULE MANDATORY-GROUPS { cwmWwnmConfigurationGroup,
+                                  cwmWwnmVsanWwnGroup,
+                                  cwmWwnmNotificationGroup }
+        OBJECT wwnmVsanWwnRowStatus
+        SYNTAX     INTEGER {
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)
+                   }
+        DESCRIPTION
+                "Only 'active', 'createAndGo' and 'destroy' needs
+                to be supported."
+
+        ::= { ciscoWwnmMIBCompliances 2 }
 
 -- Units of Conformance
 
@@ -243,4 +374,16 @@ cwmWwnmNotificationGroup  NOTIFICATION-GROUP
                 "A collection of notifications for the 
                 WWN assignment."
         ::= { ciscoWwnmMIBGroups 8 }
+
+cwmWwnmVsanWwnGroup OBJECT-GROUP
+        OBJECTS  { 
+                   wwnmVsanWwn,
+                   wwnmVsanWwnStorageType,
+                   wwnmVsanWwnRowStatus
+                 }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects to represent the configured 
+                 WWN for the VSANs."
+        ::= { ciscoWwnmMIBGroups 9 }
 END

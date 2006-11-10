@@ -3,7 +3,7 @@
 --
 -- October 2002, Vinay Gaonkar
 --
--- Copyright (c) 2002, 2003, 2004 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -17,12 +17,13 @@ IMPORTS
      TruthValue, RowStatus, 
      TEXTUAL-CONVENTION                     FROM SNMPv2-TC
      SnmpAdminString                        FROM SNMP-FRAMEWORK-MIB   
-     InetAddressType, InetAddress           FROM INET-ADDRESS-MIB 
+     InetAddressType, InetAddress,
+     InetPortNumber                         FROM INET-ADDRESS-MIB 
      ciscoMgmt                              FROM CISCO-SMI
      SyslogSeverity                         FROM CISCO-SYSLOG-MIB;
 
 ciscoSyslogExtMIB MODULE-IDENTITY
-        LAST-UPDATED "200409200000Z"
+        LAST-UPDATED "200501300000Z"
         ORGANIZATION "Cisco Systems Inc." 
         CONTACT-INFO
                 "     Cisco Systems
@@ -35,6 +36,14 @@ ciscoSyslogExtMIB MODULE-IDENTITY
         DESCRIPTION
            "MIB module for configuring and monitoring System Log 
            related management parameters as defined by RFC 3164." 
+        REVISION   "200501300000Z"
+        DESCRIPTION
+             "- Added SylogProtocol TEXTUAL CONVENTION.
+              - Added following objects in cseSyslogServerTable.
+                cseSyslogServerProtocol
+                cseSyslogServerPort
+                cseSyslogServerProtocolFallback
+             "
         REVISION   "200409200000Z"
         DESCRIPTION
              "Added new enumerations isns, fccLc, cfs, dstats, ipsec, 
@@ -329,6 +338,20 @@ SyslogExFacility ::= TEXTUAL-CONVENTION
                           sanExtTuner (1520)  -- SAN extension Tuner
                       }
 
+SyslogProtocol ::= TEXTUAL-CONVENTION
+        STATUS  current
+        DESCRIPTION
+               "The protocol used for sending syslog
+               messages to syslog server.
+
+                 tcp (6)    - TCP
+                 udp (17)   - UDP."
+        SYNTAX  INTEGER {
+                          tcp (6),
+                          udp (17)
+        }
+
+
 -- Syslog Configuration Group       
 -- This group provides the System log (Syslog) configuration options.
 
@@ -432,7 +455,10 @@ CseSyslogServerEntry ::=
               cseSyslogServerAddress          InetAddress, 
               cseSyslogServerMsgSeverity      SyslogSeverity,
               cseSyslogServerStatus           RowStatus,
-              cseSyslogServerFacility         SyslogFacility 
+              cseSyslogServerFacility         SyslogFacility,
+              cseSyslogServerProtocol         SyslogProtocol,
+              cseSyslogServerPort             InetPortNumber,
+              cseSyslogServerProtocolFallback SyslogProtocol
         }
 
 cseSyslogServerIndex   OBJECT-TYPE
@@ -504,6 +530,46 @@ cseSyslogServerFacility OBJECT-TYPE
                this server."
         DEFVAL    {local7}
         ::= { cseSyslogServerEntry 6 }
+
+cseSyslogServerProtocol OBJECT-TYPE
+        SYNTAX     SyslogProtocol 
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+               "The transport protocol used for sending syslog messages
+               to syslog server."
+        DEFVAL    { udp }
+        ::= { cseSyslogServerEntry 7 }
+
+cseSyslogServerPort OBJECT-TYPE
+        SYNTAX     InetPortNumber (1..65535)
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+               "The port number of the syslog server to
+               which syslog messages are sent.
+               The default value in case of 'cseSyslogServerProtocol'
+               value of 'udp' is 514.
+               The default value in case of 'cseSyslogServerProtocol'
+               value of 'tcp' is 1468."
+        ::= { cseSyslogServerEntry 8 }
+
+cseSyslogServerProtocolFallback OBJECT-TYPE
+        SYNTAX     SyslogProtocol
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+               "This object is used for specifying the
+              protcol to fallback to if the sending of
+              syslog messages using the protocol configured
+              in 'cseSyslogServerProtocol' fails.
+              If the value of this object is same as 
+              the value specified in 'cseSyslogServerProtocol',
+              then protocol fallback in case of failure is not
+              supported."
+        DEFVAL    { udp }
+        ::= { cseSyslogServerEntry 9 }
+
 --
 -- cseSyslogMessageControlTable
 -- 
@@ -650,6 +716,54 @@ ciscoSyslogExtMIBCompliance MODULE-COMPLIANCE
 --                "Only the standard facilities need to be supported."
         ::= { ciscoSyslogExtMIBCompliances 1 }
 
+
+ciscoSyslogExtMIBComplianceRev2 MODULE-COMPLIANCE
+        STATUS   current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the CISCO-SYSLOG-EXT-MIB."
+        MODULE MANDATORY-GROUPS { ciscoSyslogExtGroup }
+
+        GROUP ciscoSyslogProtocolGroup
+        DESCRIPTION
+            "The implementation of this group is mandatory
+            in case of systems where different protcol type 
+            can be supported for sending syslog messages."
+
+        OBJECT cseSyslogServerAddressType             
+        SYNTAX      INTEGER {
+                   ipv4 (1),
+                   dns (16)                                     
+               }                                               
+        DESCRIPTION 
+                "Only dns and ipv4 addresses are need to be 
+                supported."
+               
+        OBJECT cseSyslogServerStatus             
+        SYNTAX     INTEGER {             
+                     active (1),
+                     createAndGo (4),
+                     destroy (6)}
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and 
+                'active' need to be supported."
+
+        OBJECT cseSyslogLinecardEnable             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Write access is not required."
+
+        OBJECT cseSyslogLinecardMsgSeverity             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Write access is not required."
+
+--        OBJECT cseSyslogMessageFacility
+--        SYNTAX     SyslogFacility
+--        DESCRIPTION 
+--                "Only the standard facilities need to be supported."
+        ::= { ciscoSyslogExtMIBCompliances 2 }
+
 -- Units of Conformance
 
 ciscoSyslogExtGroup  OBJECT-GROUP
@@ -674,5 +788,17 @@ ciscoSyslogExtGroup  OBJECT-GROUP
         DESCRIPTION
                 "A collection of objects for Syslog management."
         ::= { ciscoSyslogExtMIBGroups 1 }
+
+ciscoSyslogProtocolGroup  OBJECT-GROUP
+        OBJECTS  { 
+            cseSyslogServerProtocol,
+            cseSyslogServerPort,
+            cseSyslogServerProtocolFallback
+        }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects referring to
+                protocol related objects in syslog configuration."
+        ::= { ciscoSyslogExtMIBGroups 2 }
 
 END

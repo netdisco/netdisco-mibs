@@ -4,7 +4,7 @@
 --
 -- October 2003, Francis Pang 
 --
--- Copyright (c) 2003-2004 by Cisco Systems, Inc.
+-- Copyright (c) 2003-2004, 2005, 2006 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 --
@@ -44,7 +44,7 @@ IMPORTS
 -- ********************************************************************
 
 ciscoDot11SsidSecMIB MODULE-IDENTITY
-        LAST-UPDATED    "200409140000Z"
+        LAST-UPDATED    "200605160000Z"
         ORGANIZATION    "Cisco System Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -165,6 +165,18 @@ ciscoDot11SsidSecMIB MODULE-IDENTITY
                 Basic Service Set
                     The IEEE 802.11 BSS of an AP comprises of the 
                     stations directly associating with the AP.
+
+                Backup VLAN
+                    Wireless clients found to be running outdated/
+                    unsupported virus software and not compliant to
+                    network admission control guidelines need to be 
+                    placed on different VLANs than the intended normal
+                    VLAN.  These VLANs on which the non-compliant
+                    clients are placed are termed as Backup VLANs.
+                    Backup VLANs are used to quarantine the 
+                    non-compliant clients running incorrect software
+                    till they upgrade their software to the correct
+                    version.
 
                 Bridge    
                     Device that connects two or more segments 
@@ -324,7 +336,13 @@ ciscoDot11SsidSecMIB MODULE-IDENTITY
                 Wired Equivalent Privacy
                     WEP is generally used to refer to 802.11 
                     encryption."
- 
+
+        REVISION        "200605160000Z"
+        DESCRIPTION
+                "Add cdot11SecSsidMaxBackupVlans, and
+                cdot11SecSsidBackupVlanTable, and
+                cdot11SecSsidvlanManagementGroup to manage the backup
+                VLAN configuration."
         REVISION        "200409140000Z"
         DESCRIPTION
                 "Added cdot11MbssidMacAddrSupportTable and 
@@ -1220,6 +1238,70 @@ cdot11MbssidIfBroadcast OBJECT-TYPE
                 "CISCO-DOT11-IF-MIB, cd11IfStationConfigTable."
         ::= { cdot11MbssidInterfaceEntry 2 }
 
+cdot11SecSsidMaxBackupVlans OBJECT-TYPE
+        SYNTAX     Unsigned32 (1..128)
+        MAX-ACCESS read-write
+        STATUS     current
+        DESCRIPTION
+		"Maximum number of backup VLANs that can be
+		configured on a SSID."
+        DEFVAL  { 3 }
+       ::= { cdot11SecSsidManagement 6 }
+
+cdot11SecSsidBackupVlanTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF Cdot11SecSsidBackupVlanEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "This table lists the backup VLANs configured
+                on a SSID.
+
+                The number of backup VLANs that can be configured 
+                for each SSID identified by cdot11SecAuxSsid is 
+                limited by the value of dot11SecSsidMaxBackupVlans.
+               
+                This table has an expansion depedent relationship with
+                cdot11SecAuxSsidTable. The value of cdot11SecAuxSsid
+                for the entries in this table must exist in
+                cdot11SecAuxSsidTable. 
+
+                When an entry in  cdot11SecAuxSsidTable is deleted,
+                all the backup VLANs configured for the corresponding
+                SSID get deleted from this table."
+        ::= { cdot11SecSsidManagement 7 }
+
+cdot11SecSsidBackupVlanEntry OBJECT-TYPE
+        SYNTAX     Cdot11SecSsidBackupVlanEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "Each entry defines a backup VLAN configured on an 
+                SSID. "
+        INDEX  { cdot11SecAuxSsid, cdot11SecSsidBackupVlan }
+        ::= { cdot11SecSsidBackupVlanTable 1 }
+
+Cdot11SecSsidBackupVlanEntry ::=
+        SEQUENCE   {
+                cdot11SecSsidBackupVlan          CDot11IfVlanIdOrZero,
+                cdot11SecSsidBackupVlanRowStatus RowStatus
+        }
+
+cdot11SecSsidBackupVlan OBJECT-TYPE
+        SYNTAX     CDot11IfVlanIdOrZero (1..4095)
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "The backup VLAN configured on a SSID identified
+                by the instance identifier value of cdot11SecAuxSsid. " 
+        ::= { cdot11SecSsidBackupVlanEntry 1 }
+
+cdot11SecSsidBackupVlanRowStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+		"The status of this conceptual row."
+        ::= { cdot11SecSsidBackupVlanEntry 2 }
 
 cdot11SecLocalAuthServerEnabled OBJECT-TYPE
         SYNTAX     TruthValue
@@ -1235,7 +1317,6 @@ cdot11SecLocalAuthServerEnabled OBJECT-TYPE
                 when network authentication server is not
                 available."
         ::= { cdot11SecAuthManagement 1 }
-
 
 cdot11SecVlanNameTable OBJECT-TYPE
         SYNTAX     SEQUENCE OF Cdot11SecVlanNameEntry
@@ -1335,7 +1416,7 @@ ciscoDot11SsidSecMIBGroups
 -- *****************************************************************
 
 ciscoDot11SsidSecCompliance MODULE-COMPLIANCE
-        STATUS     current
+        STATUS     deprecated  -- by ciscoDot11SsidSecComplianceRev1
         DESCRIPTION
                 "This is the compliance statement for the 
                 ciscoDot11SsidSecMIB module."
@@ -1408,6 +1489,90 @@ ciscoDot11SsidSecCompliance MODULE-COMPLIANCE
         ::= { ciscoDot11SsidSecMIBCompliances 1 }
 
 
+ciscoDot11SsidSecComplianceRev1 MODULE-COMPLIANCE
+        STATUS     current
+        DESCRIPTION
+                "This is the compliance statement for the 
+                ciscoDot11SsidSecMIB module."
+        MODULE  
+                MANDATORY-GROUPS {
+                        cdot11SecSsidManagementGroup,
+                        cdot11SsidAuthenticationGroup,
+                        cdot11ModuleAuthenticationGroup,
+                        cdot11SecSsidBackupVlanManagementGroup
+                                 }
+
+        GROUP cdot11SecVlanManagementGroup
+        DESCRIPTION
+                "This group is required only if VLAN by name is
+                supported on the IEEE 802.11 wireless LAN
+                devices."
+
+        GROUP cdot11MbssidSupportGroup
+        DESCRIPTION
+                "This group is required only if MBSSID feature 
+                is supported on the IEEE 802.11 wireless LAN 
+                devices."
+
+        OBJECT cdot11SecAuxSsidLoginPassword 
+        DESCRIPTION
+                "Due to security reasons, for SNMPv1/v2c, this
+                this object will return blank spaces if a 
+                password is configured." 
+
+        OBJECT cdot11SecAuxSsidMaxStations 
+        DESCRIPTION
+                "The supported range of values for SET queries 
+                are 1 to 255.  The supported range of values for 
+                SNMP GET or GET-NEXT queries are 0 to 255." 
+
+        OBJECT cdot11SecSsidRedirectFilter 
+        DESCRIPTION
+                "Only Cisco IP extend access list number 100 to
+                199 are required and supported."
+
+        OBJECT cdot11SecAuxSsidRowStatus   
+        SYNTAX INTEGER {             
+                active(1),
+                createAndGo(4),
+                destroy(6)
+                        }
+        DESCRIPTION 
+                "Only the values 'createAndGo', 'destroy', and 
+                'active' need to be supported."
+
+        OBJECT cdot11SecInterfSsidRowStatus 
+        SYNTAX INTEGER {
+                active(1),
+                createAndGo(4),
+                destroy(6)
+                        }
+        DESCRIPTION
+                "Only the values 'createAndGo', 'destroy', and
+                'active' need to be supported."
+
+        OBJECT cdot11SecVlanNameRowStatus
+        SYNTAX INTEGER {
+                active(1),
+                createAndGo(4),
+                destroy(6)
+                        }
+        DESCRIPTION
+                "Only the values 'createAndGo', 'destroy', and
+                'active' need to be supported."
+
+        OBJECT cdot11SecSsidBackupVlanRowStatus
+        SYNTAX INTEGER {
+                active(1),
+                createAndGo(4),
+                destroy(6)
+                        }
+        DESCRIPTION
+                "Only the values 'createAndGo', 'destroy', and
+                'active' need to be supported."
+
+        ::= { ciscoDot11SsidSecMIBCompliances 2 }
+
 -- *****************************************************************
 --   Units of conformance
 -- *****************************************************************
@@ -1432,7 +1597,7 @@ cdot11SecSsidManagementGroup OBJECT-GROUP
                 cdot11SecSsidRedirectFilter, 
                 cdot11SecSsidInformationElement,
                 cdot11SecAuxSsidVlanName, 
-                cdot11SecInterfSsidRowStatus 
+                cdot11SecInterfSsidRowStatus
                 }
         STATUS     current
         DESCRIPTION
@@ -1494,5 +1659,15 @@ cdot11MbssidSupportGroup OBJECT-GROUP
                 MBSSID configuration information."
         ::= { ciscoDot11SsidSecMIBGroups 5 }
 
-END
 
+cdot11SecSsidBackupVlanManagementGroup OBJECT-GROUP
+	OBJECTS {
+		cdot11SecSsidBackupVlanRowStatus,
+		cdot11SecSsidMaxBackupVlans
+		}
+	STATUS     current
+	DESCRIPTION
+                "This group of objects are to manage the
+                backup VLAN configuration on a SSID. "
+	::= { ciscoDot11SsidSecMIBGroups 6 }  
+END

@@ -3,7 +3,7 @@
 --
 -- March 2002, Anh Nguyen
 --
--- Copyright (c) 2002 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004, 2005, 2006 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 --
@@ -13,6 +13,7 @@ IMPORTS
         MODULE-IDENTITY,
         NOTIFICATION-TYPE,
         OBJECT-TYPE,
+        Unsigned32,
         Counter32,
         Counter64,
         Gauge32
@@ -20,7 +21,7 @@ IMPORTS
 
         CiscoPort,
         CiscoIpProtocol,
-        Unsigned32
+        CiscoHTTPResponseStatusCode
                 FROM CISCO-TC
 
         SnmpAdminString
@@ -32,18 +33,22 @@ IMPORTS
 
         slbEntity,
         slbStatsTableEntry,
+        slbServerFarmName,
         slbServerFarmTableEntry,
         slbVirtualServerTableEntry,
         SlbServerString,
         SlbRealServerState,
-        SlbConnectionState
+        SlbConnectionState,
+        SlbPasswordString
                 FROM CISCO-SLB-MIB
 
         TimeInterval,
         TimeStamp,
         TruthValue,
         TEXTUAL-CONVENTION,
-        RowStatus
+        RowStatus,
+        DateAndTime,
+        StorageType
                 FROM SNMPv2-TC
 
         MODULE-COMPLIANCE,
@@ -55,7 +60,7 @@ IMPORTS
                 FROM CISCO-SMI;
 
 ciscoSlbExtMIB MODULE-IDENTITY
-        LAST-UPDATED    "200208190000Z"
+        LAST-UPDATED    "200601200000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -101,7 +106,91 @@ ciscoSlbExtMIB MODULE-IDENTITY
                   NAT    Network Address Translation
                   SF     Serverfarm
                   FT     Fault Tolerance
-                "
+                  SSL    Secure Sockets Layer
+                  TLS    Transport Layer Security 
+                "	
+
+        REVISION        "200601200000Z"
+        DESCRIPTION
+                "- Following TEXTUAL CONVENTIONS are modified:
+                   SlbStickyType : New enums(value 5-7) added.
+                   SlbFunctionNameString : Size change from 0..31 to 0..255		   
+
+                - Following tables are moved to CISCO-SLB-HEALTH-MON-MIB
+                    cslbxProbeCfgTable
+                    cslbxDnsProbeIpTable
+                    cslbxProbeHeaderCfgTable
+                    cslbxProbeExpectStatusCfgTable
+
+                - SlbProbeType TEXTUAL-CONVENTION is
+                  moved to CISCO-SLB-HEALTH-MON-MIB
+
+                - Added UNITS clause for the following objects
+                    cslbxServerFarmInbandResetTimer           
+                    cslbxHttpReturnCodeResetTimer             
+                    cslbxHttpReturnCodeResetTimer             
+                    cslbxVirtualPendingTimer                     
+                    cslbxFtHeartBeatTimer                     
+
+                - Added following objects in cslbxServerFarmTable 
+                    cslbxServerFarmTransparent 
+                    cslbxServerFarmSlowStart
+                    cslbxServerFarmHashHeaderName 
+                    cslbxServerFarmHashCookieName
+                    cslbxServerFarmUrlPatternBegin
+                    cslbxServerFarmUrlPatternEnd
+                    cslbxServerFarmDescription
+                    cslbxServerFarmType
+
+                - Added following objects in CslbxStatsTable
+                    cslbxStatsL4PolicyHCConns
+                    cslbxStatsL7PolicyHCConns
+                    cslbxStatsDroppedL4PolicyHCConns
+                    cslbxStatsDroppedL7PolicyHCConns
+                    cslbxStatsNoMatchPolicyHCRejects
+                    cslbxStatsNoCfgPolicyHCRejects
+                    cslbxStatsAclDenyHCRejects
+                    cslbxStatsVerMismatchHCRejects
+
+                - defined following tables. 
+                    cslbxSfarmHttpReturnCodeTable."
+
+        REVISION        "200502241000Z"
+        DESCRIPTION
+                "Additional definition to support new SLB features:
+
+                   - Add new objects into cslbxPolicyTable and
+                     cslbxVirtualServerTable to support Backup Server
+                     feature.
+
+                   - Add new cslbxScriptFileTable, cslbxScriptTaskTable
+                     and new objects into cslbxProbeCfgTable to support
+                     Scripted Probe feature.
+
+                   - Add new cslbxOwnerTalbe and new object into
+                     cslbVirtualServerTable to support Owner feature.
+
+                   - Add new objects into cslbxRuleTable to support the
+                     packet counters per SLB policy.
+
+                   - Add new objects into cslbxXmlConfigTable to support
+                     additional user access control for the XML server.
+
+                   - Add new objects into cslbxVirtualServerTable and
+                     cslbxPolicyTable to support the Reverse Sticky
+                     configuration.
+
+                   - Add new object cslbxProbePort to support
+                     configuration of service port for a Probe entry.
+
+                   - Add new object cslbxHttpExpressionRequestMethod to
+                     support configuration of HTTP request method
+                     matching.
+
+                   - Add new object cslbxVirtualMaxConns and
+                     cslbxVirtualFlowMode into cslbxVirtualServerTable
+                     to support additional flow control for a Virtual
+                     Server."
 
         REVISION        "200208190000Z"
         DESCRIPTION
@@ -124,6 +213,8 @@ cslbxFaultTolerance   OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 10 }
 cslbxXmlConfig        OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 11 }
 cslbxConnections      OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 12 }
 cslbxNotifObjects     OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 13 }
+cslbxOwnerObjects     OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 14 }
+cslbxScriptObjects    OBJECT IDENTIFIER ::= { ciscoSlbExtMIBObjects 15 }
 ciscoSlbExtMIBConform OBJECT IDENTIFIER ::= { ciscoSlbExtMIB 2 }
 
 --  ********************************************************************
@@ -138,6 +229,29 @@ SlbObjectNameString ::= TEXTUAL-CONVENTION
                 "The name of an associated SLB object.
                  All SLB object names are in uppercase."
         SYNTAX OCTET STRING (SIZE (0..15))
+
+SlbFunctionNameString ::= TEXTUAL-CONVENTION
+        STATUS          current
+        DESCRIPTION
+                "The label name for a section of the executable script.
+                A section of script is a logical container which 
+                includes the executable instructions to perform a 
+                certain task.  The Tool Command Language (Tcl) is one
+                of the well-defined scripting languages.  The language
+                is depending on individual implementation of an SLB
+                device.  The scripts will be imported into an SLB
+                system as parts of the user's configurations.  The 
+                purpose of supporting scripting language is to extend
+                the existing functionalities in a particular SLB 
+                implementation.
+
+                The SlbFunctionNameString must only contain these
+                characters:
+                     - lowercase character 'a' to 'z'.
+                     - uppercase character 'A' to 'Z'.
+                     - numeric character '0' to '9'.
+                     - the underscore '_' character."
+        SYNTAX OCTET STRING (SIZE (0..255))
 
 SlbUrlString ::= TEXTUAL-CONVENTION
         DISPLAY-HINT    "255a"
@@ -190,11 +304,16 @@ SlbFailAction ::= TEXTUAL-CONVENTION
                 'noAction'      : No additional action besides taking
                                   the server out of service.
                 'purgeConns'    : Purge all connections to this real
-                                  server."
+                                  server.
+                'reassignConns' : Re-assign all connections to another
+                                  real server.
+                'undefined'     : New action not yet defined."
 
         SYNTAX INTEGER {
                 noAction(1),
-                purgeConns(2)
+                purgeConns(2),
+                reassignConns(3),
+                undefined(4)
         }
 
 SlbIpAdvertise ::= TEXTUAL-CONVENTION
@@ -204,11 +323,13 @@ SlbIpAdvertise ::= TEXTUAL-CONVENTION
                 IP address.
                 'alwaysAdvertise' : Advertise VIP if configured. 
                 'activeAdvertise' : Advertise VIP only if virtual
-                                    server is active."
+                                    server is active.
+                'undefined'       : New type not yet defined."
 
         SYNTAX INTEGER {
                 alwaysAdvertise(1),
-                activeAdvertise(2)
+                activeAdvertise(2),
+                undefined(3)
         }
 
 SlbStickyType ::= TEXTUAL-CONVENTION
@@ -223,12 +344,23 @@ SlbStickyType ::= TEXTUAL-CONVENTION
                 matching rule.
                 'srcIpSticky'      : Stick based on source IP address.
                 'httpCookieSticky' : Stick based on HTTP Cookie name. 
-                'sslSticky'        : Stick based on SSL Session ID."
+                'sslSticky'        : Stick based on SSL Session ID.
+                'undefined'        : New sticky type not yet defined.
+                'destIpSticky'     : Stick based on the destination 
+                                     IP address.
+                'srcDestISticky'   : Stick based on the Source and 
+                                     Destionation IP Address.
+                'httpHeaderSticky' : Stick based on the HTTP Header 
+                                     Name."
 
         SYNTAX INTEGER {
                 srcIpSticky(1),
                 httpCookieSticky(2),
-                sslSticky(3)
+                sslSticky(3),
+                undefined(4),
+                destIpSticky(5),
+                srcDestSticky(6),
+                httpHeaderSticky(7)
         }
 
 SlbMapType ::= TEXTUAL-CONVENTION
@@ -242,14 +374,16 @@ SlbMapType ::= TEXTUAL-CONVENTION
                 'urlMap'        : HTTP URL matching group.
                 'cookieMap'     : HTTP Cookie matching group.
                 'headerMap'     : HTTP Header field matching group.
-                'returnCodeMap' : HTTP return code matching group."
+                'returnCodeMap' : HTTP return code parsing group.
+                'undefined'     : New matching type not yet defined."
 
         SYNTAX INTEGER {
                 notCfgMap(1),
                 urlMap(2),
                 cookieMap(3),
                 headerMap(4),
-                returnCodeMap(5)
+                returnCodeMap(5),
+                undefined(6)
         }
 
 SlbReplicationMode ::= TEXTUAL-CONVENTION
@@ -272,35 +406,6 @@ SlbReplicationMode ::= TEXTUAL-CONVENTION
                 replStickyData(4)
         }
 
-SlbProbeType ::= TEXTUAL-CONVENTION
-        STATUS          current
-        DESCRIPTION
-                "The probe type for probing the health of a server.
-                'icmpProbe'     : Probe server by sending ICMP
-                                  echo requests.
-                'tcpProbe'      : Probe server by opening TCP
-                                  connections.
-                'dnsProbe'      : Probe server by sending DNS
-                                  queries.
-                'httpProbe'     : Probe server by sending HTTP
-                                  requests.
-                'ftpProbe'      : Probe server by opening FTP
-                                  connections.
-                'telnetProbe'   : Probe server by opening Telnet
-                                  connections.
-                'smtpProbe'     : Probe server by opening SMTP
-                                  connections."
-
-        SYNTAX INTEGER {
-                icmpProbe(1),
-                tcpProbe(2),
-                dnsProbe(3),
-                httpProbe(4),
-                ftpProbe(5),
-                telnetProbe(6),
-                smtpProbe(7)
-        }
-
 SlbProbeAction ::= TEXTUAL-CONVENTION
         STATUS          current
         DESCRIPTION
@@ -308,12 +413,16 @@ SlbProbeAction ::= TEXTUAL-CONVENTION
                 monitoring condition such as the HTTP return code.
                 'noAction'      : No action.
                 'logAction'     : Logging the event.
-                'removeAction'  : Removing the service."
+                'removeAction'  : Removing the service.
+                'countAction'   : Counting and logging the event.
+                'undefined'     : New action not yet defined."
 
         SYNTAX INTEGER {
                 noAction(1),
                 logAction(2),
-                removeAction(3)
+                removeAction(3),
+                countAction(4),
+                undefined(5)
         }
 
 SlbVlanType ::= TEXTUAL-CONVENTION
@@ -345,6 +454,23 @@ SlbFtState ::= TEXTUAL-CONVENTION
                 initializingFT(2),
                 activeFT(3),
                 standbyFT(4)
+        }
+
+SlbDirectionalMode ::= TEXTUAL-CONVENTION
+        STATUS          current
+        DESCRIPTION
+                "The flow direction type of the traffic destined to a
+                particular Virtual Server.
+                'unidirectional' : traffic only in one direction.
+                'bidirectional'  : traffic in both directions.
+                'defdirectional' : UDP traffic is unidirection,
+                                   TCP and other traffics are
+                                   bidirectional."
+
+        SYNTAX INTEGER {
+                unidirectional(1),
+                bidirectional(2),
+                defdirectional(3)
         }
 
 --  *************************************************************
@@ -398,7 +524,15 @@ CslbxStatsTableEntry ::= SEQUENCE {
         cslbxStatsOutOfMemoryRejects              Counter32,
         cslbxStatsTimedOutConnections             Counter32,
         cslbxStatsTcpChecksumErrorPkts            Counter32,
-        cslbxStatsIpChecksumErrorPkts             Counter32
+        cslbxStatsIpChecksumErrorPkts             Counter32,
+        cslbxStatsL4PolicyHCConns                 Counter64, 
+        cslbxStatsL7PolicyHCConns                 Counter64,
+        cslbxStatsDroppedL4PolicyHCConns          Counter64,
+        cslbxStatsDroppedL7PolicyHCConns          Counter64,
+        cslbxStatsNoMatchPolicyHCRejects          Counter64,
+        cslbxStatsNoCfgPolicyHCRejects            Counter64,
+        cslbxStatsAclDenyHCRejects                Counter64,
+        cslbxStatsVerMismatchHCRejects            Counter64
 }
 
 cslbxStatsServerInitConns                 OBJECT-TYPE
@@ -659,6 +793,96 @@ cslbxStatsIpChecksumErrorPkts             OBJECT-TYPE
                 checksum error."
         ::= { cslbxStatsTableEntry 25 }
 
+cslbxStatsL4PolicyHCConns                 OBJECT-TYPE
+    SYNTAX      Counter64
+    UNITS       "connections"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The number of connections made to the virtual servers
+            with only layer 4 configuration. This object is a 64-bit
+            version of cslbxStatsL4PolicyConns."
+        ::= { cslbxStatsTableEntry 26 }
+
+cslbxStatsL7PolicyHCConns                 OBJECT-TYPE
+    SYNTAX      Counter64
+    UNITS       "connections"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The number of connections made to the virtual servers
+            with some layer 7 configuration. This object is a 64-bit
+            version of cslbxStatsL7PolicyConns."
+        ::= { cslbxStatsTableEntry 27 }
+
+cslbxStatsDroppedL4PolicyHCConns          OBJECT-TYPE
+    SYNTAX      Counter64
+    UNITS       "connections"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The number of connections dropped by virtual servers
+            with only layer 4 configuration. This object is a 64-bit
+            version of cslbxStatsDroppedL4PolicyConns."
+        ::= { cslbxStatsTableEntry 28 }
+
+cslbxStatsDroppedL7PolicyHCConns          OBJECT-TYPE
+    SYNTAX      Counter64
+    UNITS       "connections"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The number of connections dropped by virtual servers
+            with some layer 7 configuration. This object is a 64-bit
+            version of cslbxStatsDroppedL7PolicyConns."
+        ::= { cslbxStatsTableEntry 29 }
+
+cslbxStatsNoMatchPolicyHCRejects            OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "connections"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of connections rejected because they
+                failed to match any configured policy. This object
+                is a 64-bit version of cslbxStatsNoMatchPolicyRejects."
+        ::= { cslbxStatsTableEntry 30 }
+
+cslbxStatsNoCfgPolicyHCRejects              OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "connections"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of connections rejected because the
+                matching virtual server was not configured with any
+                policy. This object is a 64-bit version of
+                cslbxStatsNoCfgPolicyRejects."
+        ::= { cslbxStatsTableEntry 31 }
+
+cslbxStatsAclDenyHCRejects                  OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "connections"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of connections rejected because the
+                the matching client access list was configured to deny
+                access. This object is a 64-bit version of
+                cslbxStatsAclDenyRejects."
+        ::= { cslbxStatsTableEntry 32 }
+
+cslbxStatsVerMismatchHCRejects              OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "connections"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of connections rejected because the
+                Layer 7 configuration was changed while Layer 7
+                parsing was occurring on the connection. This object
+                is a 64-bit version of cslbxStatsVerMismatchRejects."
+        ::= { cslbxStatsTableEntry 33 }
 
 --  *************************************************************
 --  *                                                           *
@@ -689,14 +913,21 @@ cslbxServerFarmTableEntry                         OBJECT-TYPE
         ::= { cslbxServerFarmTable 1 }
 
 CslbxServerFarmTableEntry ::= SEQUENCE {
-        cslbxServerFarmHashMaskAddrType           InetAddressType,
-        cslbxServerFarmHashMaskAddr               InetAddress,
-        cslbxServerFarmClientNatPool              SlbObjectNameString,
-        cslbxServerFarmFailAction                 SlbFailAction,
-        cslbxServerFarmHttpReturnCodeMap          SlbObjectNameString,
-        cslbxServerFarmInFailedThreshold          Unsigned32,
-        cslbxServerFarmInbandResetTimer           TimeInterval
-            
+        cslbxServerFarmHashMaskAddrType   InetAddressType,
+        cslbxServerFarmHashMaskAddr       InetAddress,
+        cslbxServerFarmClientNatPool      SlbObjectNameString,
+        cslbxServerFarmFailAction         SlbFailAction,
+        cslbxServerFarmHttpReturnCodeMap  SlbObjectNameString,
+        cslbxServerFarmInFailedThreshold  Unsigned32,
+        cslbxServerFarmInbandResetTimer   TimeInterval,
+        cslbxServerFarmTransparent        TruthValue,
+        cslbxServerFarmSlowStart          Unsigned32,
+        cslbxServerFarmHashHeaderName     SnmpAdminString,
+        cslbxServerFarmHashCookieName     SnmpAdminString,
+        cslbxServerFarmUrlPatternBegin    SnmpAdminString,
+        cslbxServerFarmUrlPatternEnd      SnmpAdminString,
+        cslbxServerFarmDescription        SnmpAdminString,
+        cslbxServerFarmType		  INTEGER
 }
 
 cslbxServerFarmHashMaskAddrType           OBJECT-TYPE
@@ -762,6 +993,7 @@ cslbxServerFarmInFailedThreshold          OBJECT-TYPE
 
 cslbxServerFarmInbandResetTimer           OBJECT-TYPE
         SYNTAX          TimeInterval
+        UNITS           "seconds"
         MAX-ACCESS      read-create
         STATUS          current
         DESCRIPTION
@@ -771,6 +1003,142 @@ cslbxServerFarmInbandResetTimer           OBJECT-TYPE
         DEFVAL          { 0 }
         ::= { cslbxServerFarmTableEntry 7 }
 
+cslbxServerFarmTransparent OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object is used for specifying a 
+            transparent server farm. In the transparent
+            mode virtual IP Address to Server IP Address
+            translation does not take place.
+            The value 'true' is used for setting it to
+            transparent mode."
+        DEFVAL          { false }
+        ::= { cslbxServerFarmTableEntry 8 }
+
+cslbxServerFarmSlowStart OBJECT-TYPE
+        SYNTAX      Unsigned32
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION
+            "This object specifies that the connections
+            to this serverfarm to be in slow start mode.
+            In an environment that uses weighted least connections 
+            load balancing, a real server that is placed in service 
+            initially has no connections, and could therefore be 
+            assigned so many new connections that it becomes 
+            overloaded.  To prevent such an overload, the slow 
+            start feature controls the number of new connections
+            that are directed to a real server that has just been 
+            placed in service.
+
+            This object is applicable if value of 
+            slbServerFarmPredictor is 'leastConns'."
+        REFERENCE
+            "slbServerFarmPredictor is a coulmnar
+            object in slbServerFarmTable defined
+            in CISCO-SLB-MIB."
+        DEFVAL          { 0 }
+        ::= { cslbxServerFarmTableEntry 9 }
+
+cslbxServerFarmHashHeaderName OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..255))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object specifies the HTTP header name.
+            This object is applicable only if the value 
+            of slbServerFarmPredictor is 'headerHash'.
+
+            Following set of Header Name values are supported
+            for this  object:
+                 Accept
+                 Accept-Charset 
+                 Accept-Encoding 
+                 Accept-Language   
+                 Authorization
+                 Cache-Control
+                 Connection
+                 Content-MD5
+                 Expect, From, Host, If-Match
+                 Pragma, Referrer, Transfer-Encoding
+                 User-Agent, Via."
+        REFERENCE
+            "RFC 2616 Hypertext Transfer Protocol -- HTTP/1.1
+             Section 5.3."
+        ::= { cslbxServerFarmTableEntry 10 }
+
+cslbxServerFarmHashCookieName OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..255))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object is used for configuring the 
+            HTTP Cookie Name.  This object is applicable 
+            only if the value of slbSererFarmPredictor is
+            'cookieHash'."
+        DEFVAL { "" }
+        ::= { cslbxServerFarmTableEntry 11 }
+
+cslbxServerFarmUrlPatternBegin OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..255))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "The sub-string within the URL string at which to
+            start the hashing operation.  The hash result
+            will be used in the server farm with predictor
+            'urlHash'(slbServerFarmPredictor = 'urlHash').
+            An empty string indicates hashing should
+            start from the beginning of the URL."
+        DEFVAL { "" }
+        ::= { cslbxServerFarmTableEntry 12 }
+
+cslbxServerFarmUrlPatternEnd OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..64))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "The sub-string within the URL string at which to
+            end the hashing operation.  The hash result
+            will be used in the server farm with predictor
+            'urlHash'(slbServerFarmPredictor = 'urlHash').
+            An empty string indicates hashing should
+            stop at the end of the URL."
+        DEFVAL { "" }
+        ::= { cslbxServerFarmTableEntry 13 }
+
+cslbxServerFarmDescription OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..64))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object is used for configuring the
+            description  of the server farm."
+        DEFVAL { "" }
+        ::= { cslbxServerFarmTableEntry 14 }
+
+cslbxServerFarmType OBJECT-TYPE
+    SYNTAX    INTEGER {
+                  redirect (1),
+                  host     (2)
+              }
+   MAX-ACCESS read-create
+   STATUS     current
+   DESCRIPTION
+       "This object identifies the type of the serverfarm.
+       The possible values are :
+         redirect(1): Specifies that this server farm is just used for
+                      redirecting traffic to new virtual server
+                      equivalent.
+         host   (2): Specifies typical server farm offering services.
+
+       This object cannot be changed when the slbServerFarmRowStatus
+       value is 'active'."
+    DEFVAL { host }
+    ::= { cslbxServerFarmTableEntry 15 }	
 
 --  *************************************************************
 --  *                                                           *
@@ -1041,6 +1409,152 @@ cslbxServerFarmProbeRowStatus             OBJECT-TYPE
                 following the RowStatus textual convention."
         ::= { cslbxServerFarmProbeTableEntry 3 }
 
+---
+--   HTTP ReturnCode support in Server Farm
+--
+
+cslbxSfarmHttpReturnCodeTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF CslbxSfarmHttpReturnCodeEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "This table contains the objects that are related
+                to HTTP return code checking in a server farm."
+        ::= { cslbxServerFarms 4 }
+
+cslbxSfarmHttpReturnCodeEntry OBJECT-TYPE
+        SYNTAX          CslbxSfarmHttpReturnCodeEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Information about HTTP return code checking
+                for each server farm.  The entry contains information
+                on HTTP Retur Code range, Reset Timer and thresholds
+                for taking actions."
+        INDEX { slbEntity,
+                slbServerFarmName,
+                cslbxSfarmHttpRetCodeMinValue
+              }
+        ::= { cslbxSfarmHttpReturnCodeTable 1 }
+
+CslbxSfarmHttpReturnCodeEntry ::= SEQUENCE {
+        cslbxSfarmHttpRetCodeMinValue    CiscoHTTPResponseStatusCode,
+        cslbxSfarmHttpRetCodeMaxValue    CiscoHTTPResponseStatusCode,
+        cslbxSfarmHttpRetCodeActionType  SlbProbeAction,
+        cslbxSfarmHttpRetCodeThreshold   Unsigned32,
+        cslbxSfarmHttpRetCodeResetTimer  TimeInterval,
+        cslbxSfarmHttpRetCodeStorageType StorageType,
+        cslbxSfarmHttpRetCodeRowStatus   RowStatus
+}
+
+cslbxSfarmHttpRetCodeMinValue OBJECT-TYPE
+        SYNTAX          CiscoHTTPResponseStatusCode
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "This object is used for configuring the minimum 
+           value for HTTP return code checking.
+           When HTTP return code checking is configured, 
+           the HTTP responses are monitored for all the 
+           balanced HTTP connections. 
+           By using return code checking, one can ensure 
+           that good content is delivered."
+        REFERENCE
+            "RFC 2616 Section 6.1.1 Status Code and Reason Phrase."
+        ::= { cslbxSfarmHttpReturnCodeEntry 1 }
+
+cslbxSfarmHttpRetCodeMaxValue  OBJECT-TYPE
+        SYNTAX          CiscoHTTPResponseStatusCode
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+           "This object is used for configuring the maximum 
+           value for HTTP return error code checking.
+           When HTTP return code checking is configured, 
+           the HTTP responses are monitored for all the 
+           balanced HTTP connections. 
+           By using return code checking, one can ensure 
+           that good content is delivered."
+        REFERENCE
+            "RFC 2616 Section 6.1.1 Status Code and Reason Phrase."
+        DEFVAL          { 100 }
+        ::= { cslbxSfarmHttpReturnCodeEntry 2 }
+
+cslbxSfarmHttpRetCodeActionType OBJECT-TYPE
+        SYNTAX        SlbProbeAction
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+            "This object defines what actions will be taken
+            if the HTTP return error code checking is done.
+
+            The value 'countAction' increments the statistics of
+            the number of occurrences of return codes received.
+
+            The value 'logAction' specifies where syslog messages are 
+            sent when a threshold is reached.
+
+            The value 'removeAction' specifies where the syslog messages
+            are sent when a threshold is reached and the server
+            is removed from the service."
+        ::= { cslbxSfarmHttpReturnCodeEntry 3 }
+
+cslbxSfarmHttpRetCodeThreshold OBJECT-TYPE
+        SYNTAX          Unsigned32
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object is used for configuring the number of
+            return code occurrences before the action specified
+            in cslbxServerFarmRetCodeActionType is taken.
+
+            This object is applicable only if the value of
+            cslbxServerFarmRetCodeActionType is 'logAction'
+            or 'removeAction'." 
+        DEFVAL { 0 }
+        ::= { cslbxSfarmHttpReturnCodeEntry 4 }
+
+cslbxSfarmHttpRetCodeResetTimer OBJECT-TYPE
+        SYNTAX          TimeInterval
+        UNITS           "seconds"
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "The wait time interval before the processing can resume.
+            This object is applicable if the value of
+            This object is applicable only if the value of
+            cslbxServerFarmRetCodeActionType is 'logAction'
+            or 'removeAction'." 
+        ::= { cslbxSfarmHttpReturnCodeEntry 5 }
+
+cslbxSfarmHttpRetCodeStorageType OBJECT-TYPE
+        SYNTAX     StorageType
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The storage type for this conceptual row."
+        DEFVAL      { nonVolatile }
+        ::= { cslbxSfarmHttpReturnCodeEntry 6 }
+        
+cslbxSfarmHttpRetCodeRowStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The object is used for adding/deleting entries in
+            the table.
+
+            An entry MUST NOT exist in the active state unless all
+            objects in the entry have an appropriate value, as described
+            in the description clause for each writable object.
+
+            This object may be modified if the associated
+            instance of this object is equal to active(1),
+            notInService(2), or notReady(3).  All other writable objects
+            may be modified if the associated instance of this object is
+            equal to notInService(2) or notReady(3)."
+        ::= { cslbxSfarmHttpReturnCodeEntry 7 }
+
 
 --  *************************************************************
 --  *                                                           *
@@ -1169,7 +1683,10 @@ CslbxStickyGroupEntry ::= SEQUENCE {
         cslbxStickyGroupMaskAddress               InetAddress,
         cslbxStickyGroupCookieName                SnmpAdminString,
         cslbxStickyGroupStickyTimer               Unsigned32,
-        cslbxStickyGroupRowStatus                 RowStatus
+        cslbxStickyGroupRowStatus                 RowStatus,
+        cslbxStickyGroupHeaderName                SnmpAdminString,
+        cslbxStickyGroupTimeoutActiveConn         TruthValue,
+        cslbxStickyGroupReplicate                 TruthValue
 }
 
 cslbxStickyGroupId                        OBJECT-TYPE
@@ -1238,6 +1755,40 @@ cslbxStickyGroupRowStatus                 OBJECT-TYPE
                 cslbxStickyGroupTable following the RowStatus
                 textual convention."
         ::= { cslbxStickyGroupEntry 7 }
+
+cslbxStickyGroupHeaderName                OBJECT-TYPE
+        SYNTAX          SnmpAdminString (SIZE(0..64))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object identifies the HTTP Header name.
+            This is applicable only if the value of 
+            cslbxStickyGroupType is 'httpHeaderSticky'."
+        ::= { cslbxStickyGroupEntry 8 }
+
+cslbxStickyGroupTimeoutActiveConn                OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "This object specifies whether the sticky 
+                entries to be timed out if active connections
+                exist once the sticky timer expires.
+               If set to 'true', sticky entries will timeout
+               even if connections exist. If set to 'false'
+               sticky entries will not time out if there exist
+               any active connections."
+        ::= { cslbxStickyGroupEntry 9 }
+
+cslbxStickyGroupReplicate                OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "This object enables/disables sticky replication
+               in a  redundant configuration."
+        ::= { cslbxStickyGroupEntry 10 }
+
 
 
 --  *************************************************************
@@ -1342,6 +1893,97 @@ cslbxStickyObjectRealPort                 OBJECT-TYPE
                 this sticky entry."
         ::= { cslbxStickyObjectTableEntry 7 }
 
+--
+-- Sticky Group Extension Table
+--
+
+cslbxStickyGroupExtTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CslbxStickyGroupExtEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An extension to cslbxStickyGroupTable.
+        This table contains additional objects
+        related to sticky group."
+    ::= { cslbxStickyObjects 3 }
+
+cslbxStickyGroupExtEntry OBJECT-TYPE
+    SYNTAX          CslbxStickyGroupExtEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry in this table.
+        Each entry contains offset,
+        value, secondary cookie etc."
+    AUGMENTS { cslbxStickyGroupEntry }
+    ::= { cslbxStickyGroupExtTable 1 }
+
+CslbxStickyGroupExtEntry ::= SEQUENCE {
+       cslbxStickyOffset              Unsigned32,
+       cslbxStickyLength              Unsigned32,
+       cslbxStickyCookieInsertEnable  TruthValue,
+       cslbxStickyCookieSecondary     SnmpAdminString,
+       cslbxStickyCookieExpiryDate    DateAndTime
+}
+
+cslbxStickyOffset OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This object represents the offset value to specify
+        portion of the cookie/header/SSL-ID to use to 'stick'
+         connections.
+         This object is applicable to following values of
+         cslbxStickyGroupType:
+              'httpCookieSticky'
+              'sslSticky'
+              'httpHeaderSticky'."
+    ::= { cslbxStickyGroupExtEntry 1 }
+  
+cslbxStickyLength OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "Bytes"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This object represents the length
+        of the value specified in cslbxStickyOffset
+        to maintain sticky connections."
+    ::= { cslbxStickyGroupExtEntry 2 }
+
+cslbxStickyCookieSecondary OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This object is used for configuring the alternate 
+        cookie name appearing in URL string to stick
+        a connection."
+    DEFVAL { "" }
+    ::= { cslbxStickyGroupExtEntry 3 }
+
+cslbxStickyCookieInsertEnable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This object enables/disables inserting a cookie.
+        The cookie insert feature enables the device
+        to insert a cookie in the 'Set-Cookie' header in the
+        HTTP response."
+    ::= { cslbxStickyGroupExtEntry 4 }
+
+cslbxStickyCookieExpiryDate OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This object identifies the valid life time of the cookie.
+        This is the value sent in 'expires=' attribute of
+        'Set-Cookie' header in the HTTP response."
+    ::= { cslbxStickyGroupExtEntry 5 }
+
 
 --  *************************************************************
 --  *                                                           *
@@ -1439,7 +2081,8 @@ CslbxHttpExpressionTableEntry ::= SEQUENCE {
         cslbxHttpExpressionIndex                  Unsigned32,
         cslbxHttpExpressionFieldName              SlbRegularExpression,
         cslbxHttpExpressionValue                  SlbRegularExpression,
-        cslbxHttpExpressionRowStatus              RowStatus
+        cslbxHttpExpressionRowStatus              RowStatus,
+        cslbxHttpExpressionRequestMethod          SnmpAdminString
 }
 
 cslbxHttpExpressionMapName                OBJECT-TYPE
@@ -1489,6 +2132,18 @@ cslbxHttpExpressionRowStatus              OBJECT-TYPE
                 or delete the row entry in cslbxHttpExpressionTable
                 following the RowStatus textual convention."
         ::= { cslbxHttpExpressionTableEntry 5 }
+
+cslbxHttpExpressionRequestMethod          OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The expression string to match against the HTTP
+                request method type string. Some of the standard
+                request methods are: 'GET', 'HEAD', 'POST', 'PUT',
+                'DELETE', 'TRACE', 'CONNECT', 'OPTIONS'."
+        DEFVAL          { ''H }
+        ::= { cslbxHttpExpressionTableEntry 6 }
 
 
 --  *************************************************************
@@ -1549,6 +2204,8 @@ cslbxHttpReturnCodeMinValue               OBJECT-TYPE
         STATUS          current
         DESCRIPTION
                 "The minimum HTTP return code that this rule matches."
+        REFERENCE
+            "RFC 2616 Section 6.1.1 Status Code and Reason Phrase."
         ::= { cslbxHttpReturnCodeEntry 2 }
 
 cslbxHttpReturnCodeMaxValue               OBJECT-TYPE
@@ -1557,6 +2214,8 @@ cslbxHttpReturnCodeMaxValue               OBJECT-TYPE
         STATUS          current
         DESCRIPTION
                 "The maximum HTTP return code that this rule matches."
+        REFERENCE
+            "RFC 2616 Section 6.1.1 Status Code and Reason Phrase."
         DEFVAL          { 0 }
         ::= { cslbxHttpReturnCodeEntry 3 }
 
@@ -1578,6 +2237,7 @@ cslbxHttpReturnCodeThreshold              OBJECT-TYPE
 
 cslbxHttpReturnCodeResetTimer             OBJECT-TYPE
         SYNTAX          TimeInterval
+        UNITS           "seconds"
         MAX-ACCESS      read-create
         STATUS          current
         DESCRIPTION
@@ -1609,428 +2269,6 @@ cslbxHttpReturnCodeRowStatus              OBJECT-TYPE
                 cslbxHttpReturnCodeTable following the
                 RowStatus textual convention."
         ::= { cslbxHttpReturnCodeEntry 7 }
-
-
---  *************************************************************
---  *                                                           *
---  * SLB-EXT - Probe Configuration Table                       *
---  *                                                           *
---  *************************************************************
-
-cslbxProbeCfgTable                        OBJECT-TYPE
-        SYNTAX          SEQUENCE OF CslbxProbeCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The probing function monitors the health of
-                real servers.  The SLB device actively probes
-                real servers to determine if they are healthy.  
-                This table is for configuring the parameters
-                of probes."
-        ::= { cslbxServerProbes 1 }
-
-cslbxProbeCfgEntry                        OBJECT-TYPE
-        SYNTAX          CslbxProbeCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "This entry provides the basic configuration of a
-                probe of a particular name, served by a particular
-                SLB entity. This entry may be of any probe type."
-        INDEX   {
-                slbEntity, 
-                cslbxProbeName 
-        }
-        ::= { cslbxProbeCfgTable 1 }
-
-CslbxProbeCfgEntry  ::= SEQUENCE {
-        cslbxProbeName                            SlbServerString,
-        cslbxProbeType                            SlbProbeType,
-        cslbxProbeInterval                        TimeInterval,
-        cslbxProbeRetries                         Unsigned32,
-        cslbxProbeFailedInterval                  TimeInterval,
-        cslbxProbeReceiveTimeout                  TimeInterval,
-        cslbxProbeTcpOpenTimeout                  TimeInterval,
-        cslbxProbeAlternateDestAddrType           InetAddressType,
-        cslbxProbeAlternateDestAddr               InetAddress,
-        cslbxProbeDnsDomainName                   SnmpAdminString,
-        cslbxProbeHttpRequestMethod               SnmpAdminString,
-        cslbxProbeHttpRequestUrl                  SlbUrlString,
-        cslbxProbeRowStatus                       RowStatus
-}
-
-cslbxProbeName                            OBJECT-TYPE
-        SYNTAX          SlbServerString
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The name of the probe."
-        ::= { cslbxProbeCfgEntry 1 }
-
-cslbxProbeType                            OBJECT-TYPE
-        SYNTAX          SlbProbeType
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The type of probe."
-        ::= { cslbxProbeCfgEntry 2 }
-
-cslbxProbeInterval                        OBJECT-TYPE
-        SYNTAX          TimeInterval
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "Time between health checks.  It is from the end of
-                previous check to the beginning of the next check."
-        DEFVAL { 12000 }
-        ::= { cslbxProbeCfgEntry 3 }
-
-cslbxProbeRetries                         OBJECT-TYPE
-        SYNTAX          Unsigned32
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The number of consecutive retries without a successful
-                probe before marking the real server as 'failed'."
-        DEFVAL { 3 }
-        ::= { cslbxProbeCfgEntry 4 }
-
-cslbxProbeFailedInterval                  OBJECT-TYPE
-        SYNTAX          TimeInterval
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "Time before retrying a 'failed' real
-                server to see if it has recovered yet."
-        DEFVAL { 30000 }
-        ::= { cslbxProbeCfgEntry 5 }
-
-cslbxProbeReceiveTimeout                  OBJECT-TYPE
-        SYNTAX          TimeInterval
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "Maximum time to wait for a reply from a real
-                server before considering this probe attempt
-                to have failed."
-        DEFVAL { 1000 }
-        ::= { cslbxProbeCfgEntry 6 }
-
-cslbxProbeTcpOpenTimeout                  OBJECT-TYPE
-        SYNTAX          TimeInterval
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "Maximum time to wait for a TCP SYN/ACK frame
-                from the real server.  This entry is only valid
-                for probes employing TCP, such as SMTP and HTTP
-                probes."
-        DEFVAL { 1000 }
-        ::= { cslbxProbeCfgEntry 7 }
-
-cslbxProbeAlternateDestAddrType           OBJECT-TYPE
-        SYNTAX          InetAddressType
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The type of address stored in
-                cslbxProbeAlternateDestAddr."
-        DEFVAL { ipv4 }
-        ::= { cslbxProbeCfgEntry 8 }
-
-cslbxProbeAlternateDestAddr               OBJECT-TYPE
-        SYNTAX          InetAddress (SIZE (0..20))
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The alternative destination IP address to be used with
-                the probing packet.  Probe frames are normally sent to
-                a real server IP address. If the setting is not
-                '0.0.0.0', probe frames are sent to the IP address
-                given by this object.  This entry is only valid with
-                the ICMP probe type."
-        DEFVAL { '00000000'H } -- 0.0.0.0
-        ::= { cslbxProbeCfgEntry 9 }
-
-cslbxProbeDnsDomainName                   OBJECT-TYPE
-        SYNTAX          SnmpAdminString
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The domain name string use with the DNS probe. (Only
-                applicable to DNS probes.)"
-        ::= { cslbxProbeCfgEntry 10 }
-
-cslbxProbeHttpRequestMethod               OBJECT-TYPE
-        SYNTAX          SnmpAdminString (SIZE (0..64))
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The request method type string to be used in the
-                HTTP probe packets. (Only applicable to HTTP
-                probes.)"
-        DEFVAL          { "get" }
-        ::= { cslbxProbeCfgEntry 11 }
-
-cslbxProbeHttpRequestUrl                  OBJECT-TYPE
-        SYNTAX          SlbUrlString
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The URI string in the HTTP request of HTTP probe
-                packets. (Only applicable to HTTP probes.)"
-        DEFVAL          { "" }
-        ::= { cslbxProbeCfgEntry 12 }
-
-cslbxProbeRowStatus                       OBJECT-TYPE
-        SYNTAX          RowStatus
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The row status is used by a management station to
-                create or delete the row entry in cslbxProbeCfgTable
-                following the RowStatus textual convention."
-        ::= { cslbxProbeCfgEntry 13 }
-
-
---  *************************************************************
---  *                                                           *
---  * SLB-EXT - DNS Probe Expected IP Configuration Table       *
---  *                                                           *
---  *************************************************************
-
-cslbxDnsProbeIpTable                      OBJECT-TYPE
-        SYNTAX          SEQUENCE OF CslbxDnsProbeIpEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The probing function monitors the health of
-                real servers.  The SLB device actively probes
-                real servers to determine if they are healthy.  
-                This table is for configuring the parameters
-                of DNS probes. In a DNS probe, resolution of a
-                specific domain name is requested, and the
-                resulting IP address must match one of a list of
-                'expected IP addresses' configured for that
-                probe. This table stores the list of expected IP
-                addresses for each DNS probe."
-        ::= { cslbxServerProbes 2 }
-
-cslbxDnsProbeIpEntry                      OBJECT-TYPE
-        SYNTAX          CslbxDnsProbeIpEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The IP address in this entry is a valid response
-                to a request for resolution of the domain name
-                associated with the DNS probe in this entry."
-        INDEX   {
-                slbEntity, 
-                cslbxDnsProbeIpProbeName,
-                cslbxDnsProbeIpAddressType,
-                cslbxDnsProbeIpAddress
-        }
-        ::= { cslbxDnsProbeIpTable 1 }
-
-CslbxDnsProbeIpEntry  ::= SEQUENCE {
-        cslbxDnsProbeIpProbeName                  SlbServerString,
-        cslbxDnsProbeIpAddressType                InetAddressType,
-        cslbxDnsProbeIpAddress                    InetAddress,
-        cslbxDnsProbeIpRowStatus                  RowStatus
-}
-
-cslbxDnsProbeIpProbeName                  OBJECT-TYPE
-        SYNTAX          SlbServerString
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The name of the DNS probe."
-        ::= { cslbxDnsProbeIpEntry 1 }
-
-cslbxDnsProbeIpAddressType                OBJECT-TYPE
-        SYNTAX          InetAddressType
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The type of address stored in
-                cslbxDnsProbeIpAddress."
-        ::= { cslbxDnsProbeIpEntry 2 }
-
-cslbxDnsProbeIpAddress                    OBJECT-TYPE
-        SYNTAX          InetAddress (SIZE (1..20))
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The IP address that may be expected in response
-                to a DNS probe from a 'healthy' real DNS server."
-        ::= { cslbxDnsProbeIpEntry 3 }
-
-cslbxDnsProbeIpRowStatus                  OBJECT-TYPE   
-        SYNTAX          RowStatus
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The object used by a management station to create
-                or delete the row entry in cslbxDnsProbeIpTable
-                following the RowStatus textual convention."
-        ::= { cslbxDnsProbeIpEntry 4 }
-
-
---  *************************************************************
---  *                                                           *
---  * SLB-EXT - HTTP Probe Header Table                         *
---  *                                                           *
---  *************************************************************
-
-cslbxProbeHeaderCfgTable                  OBJECT-TYPE
-        SYNTAX          SEQUENCE OF CslbxProbeHeaderCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The probing function monitors the health of
-                real servers.  The SLB device actively probes
-                real servers to determine if they are healthy.  
-                This table is for configuring the parameters
-                of HTTP probes. In particular, each HTTP probe
-                request may be sent with a number of fixed HTTP
-                headers. This table defines such fixed HTTP
-                headers sent with HTTP probes."
-        ::= { cslbxServerProbes 3 }
-
-cslbxProbeHeaderCfgEntry                  OBJECT-TYPE
-        SYNTAX          CslbxProbeHeaderCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "This entry defines the HTTP header value
-                of a particular HTTP header name sent with a
-                particular HTTP probe, served by a particular SLB
-                entity."
-        INDEX   {
-                slbEntity, 
-                cslbxProbeHeaderProbeName,
-                cslbxProbeHeaderFieldName 
-        }
-        ::= { cslbxProbeHeaderCfgTable 1 }
-
-CslbxProbeHeaderCfgEntry  ::= SEQUENCE {
-        cslbxProbeHeaderProbeName                 SlbServerString,
-        cslbxProbeHeaderFieldName                 SnmpAdminString,
-        cslbxProbeHeaderFieldValue                SnmpAdminString,
-        cslbxProbeHeaderRowStatus                 RowStatus
-}
-
-cslbxProbeHeaderProbeName                 OBJECT-TYPE
-        SYNTAX          SlbServerString
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The name of the HTTP probe."
-        ::= { cslbxProbeHeaderCfgEntry 1 }
-
-cslbxProbeHeaderFieldName                 OBJECT-TYPE
-        SYNTAX          SnmpAdminString (SIZE (1..64))
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "An HTTP header of this name is transmitted in the
-                HTTP request sent by this probe."
-        ::= { cslbxProbeHeaderCfgEntry 2 }
-
-cslbxProbeHeaderFieldValue                OBJECT-TYPE
-        SYNTAX          SnmpAdminString
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The HTTP header value associated with the HTTP header
-                name given by cslbxProbeHeaderFieldName."
-        ::= { cslbxProbeHeaderCfgEntry 3 }
-
-cslbxProbeHeaderRowStatus                 OBJECT-TYPE   
-        SYNTAX          RowStatus
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The object used by a management station to create
-                or delete the row entry in cslbxProbeHeaderTable
-                following the RowStatus textual convention."
-        ::= { cslbxProbeHeaderCfgEntry 4 }
-
-
---  *************************************************************
---  *                                                           *
---  * SLB-EXT - Probe Expect Status Codes Configuration Table   *
---  *                                                           *
---  *************************************************************
-
-cslbxProbeExpectStatusCfgTable            OBJECT-TYPE
-        SYNTAX          SEQUENCE OF CslbxProbeExpectStatusCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The probing function monitors the health of
-                real servers.  The SLB device actively probes
-                real servers to determine if they are healthy.  
-                This table is for configuring the expect status
-                codes returned by a server."
-        ::= { cslbxServerProbes 4 }
-
-cslbxProbeExpectStatusCfgEntry            OBJECT-TYPE
-        SYNTAX          CslbxProbeExpectStatusCfgEntry
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "This entry provides the configuration of a range of
-                expect status codes for a particular probe, served by
-                a particular SLB entity."
-        INDEX   {
-                slbEntity, 
-                cslbxProbeExpectStatusProbeName,
-                cslbxProbeExpectStatusMinValue
-        }
-        ::= { cslbxProbeExpectStatusCfgTable 1 }
-
-CslbxProbeExpectStatusCfgEntry  ::= SEQUENCE {
-        cslbxProbeExpectStatusProbeName           SlbServerString,
-        cslbxProbeExpectStatusMinValue            Unsigned32,
-        cslbxProbeExpectStatusMaxValue            Unsigned32,
-        cslbxProbeExpectStatusRowStatus           RowStatus
-}
-
-cslbxProbeExpectStatusProbeName           OBJECT-TYPE
-        SYNTAX          SlbServerString
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The name of the probe."
-        ::= { cslbxProbeExpectStatusCfgEntry 1 }
-
-cslbxProbeExpectStatusMinValue            OBJECT-TYPE
-        SYNTAX          Unsigned32
-        MAX-ACCESS      not-accessible
-        STATUS          current
-        DESCRIPTION
-                "The starting value of the expect status code range."
-        ::= { cslbxProbeExpectStatusCfgEntry 2 }
-
-cslbxProbeExpectStatusMaxValue            OBJECT-TYPE
-        SYNTAX          Unsigned32
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The ending value of the expect status code range."
-        ::= { cslbxProbeExpectStatusCfgEntry 3 }
-
-cslbxProbeExpectStatusRowStatus           OBJECT-TYPE   
-        SYNTAX          RowStatus
-        MAX-ACCESS      read-create
-        STATUS          current
-        DESCRIPTION
-                "The object used by a management station to create
-                or delete the row entry in 
-                cslbxProbeExpectStatusCfgTable following the 
-                RowStatus textual convention."
-        ::= { cslbxProbeExpectStatusCfgEntry 4 }
 
 
 --  *************************************************************
@@ -2071,7 +2309,10 @@ CslbxPolicyTableEntry ::= SEQUENCE {
         cslbxPolicyDscpEnabled                    TruthValue,
         cslbxPolicyDscpStamping                   Unsigned32,
         cslbxPolicyFarmName                       SlbObjectNameString,
-        cslbxPolicyRowStatus                      RowStatus
+        cslbxPolicyRowStatus                      RowStatus,
+        cslbxPolicyBackupFarmName                 SlbObjectNameString,
+        cslbxPolicyBkFarmStickyEnabled            TruthValue,
+        cslbxPolicyReverseStickyGroup             Unsigned32
 }
 
 cslbxPolicyName                           OBJECT-TYPE
@@ -2176,6 +2417,37 @@ cslbxPolicyRowStatus                      OBJECT-TYPE
                 the RowStatus textual convention."
         ::= { cslbxPolicyTableEntry 11 }
 
+cslbxPolicyBackupFarmName                 OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The backup server farm to be used in case the primary
+                server farm has no active server."
+        DEFVAL          { ''H }
+        ::= { cslbxPolicyTableEntry 12 }
+
+cslbxPolicyBkFarmStickyEnabled            OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The current setting for enabling sticky option on
+                the backup server farm."
+        DEFVAL          { false }
+        ::= { cslbxPolicyTableEntry 13 }
+
+cslbxPolicyReverseStickyGroup             OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..65535 )
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The group number of the sticky group to be used when
+                inserting reverse sticky entry.  The value of zero
+                indicates that reverse sticky is not enabled."
+        DEFVAL { 0 }
+        ::= { cslbxPolicyTableEntry 14 }
+
 
 --  *************************************************************
 --  *                                                           *
@@ -2188,7 +2460,7 @@ cslbxVirtualServerTable                   OBJECT-TYPE
         MAX-ACCESS      not-accessible
         STATUS          current
         DESCRIPTION
-                "Table of virtual servers.  It contains addtional 
+                "Table of virtual servers.  It contains additional 
                 configurations for the slbVirtualServerTable."
         ::= { cslbxVirtualServers 1 }
 
@@ -2211,7 +2483,15 @@ CslbxVirtualServerTableEntry ::= SEQUENCE {
         cslbxVirtualL7MaxParseLength              Unsigned32,
         cslbxVirtualHttpPersistenceSlb            TruthValue,
         cslbxVirtualURLHashBeginString            SlbRegularExpression,
-        cslbxVirtualURLHashEndString              SlbRegularExpression
+        cslbxVirtualURLHashEndString              SlbRegularExpression,
+        cslbxVirtualMaxConns                      Unsigned32,
+        cslbxVirtualOwnerName                     SlbObjectNameString,
+        cslbxVirtualFlowMode                      SlbDirectionalMode,
+        cslbxVirtualSSLStickyOffset               Unsigned32,
+        cslbxVirtualSSLStickyLength               Unsigned32,
+        cslbxVirtualReverseStickyGroup            Unsigned32,
+        cslbxVirtualBackupFarmName                SlbObjectNameString,
+        cslbxVirtualBkFarmStickyEnabled           TruthValue
 }
 
 cslbxVirtualAdvertiseOption                  OBJECT-TYPE
@@ -2251,6 +2531,7 @@ cslbxVirtualReplicationMode                  OBJECT-TYPE
 
 cslbxVirtualPendingTimer                     OBJECT-TYPE
         SYNTAX          TimeInterval
+        UNITS           "seconds"
         MAX-ACCESS      read-create
         STATUS          current
         DESCRIPTION
@@ -2311,6 +2592,90 @@ cslbxVirtualURLHashEndString                 OBJECT-TYPE
         DEFVAL { "" }
         ::= { cslbxVirtualServerTableEntry 8 }
 
+cslbxVirtualMaxConns                         OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..4294967295 )
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The maximum number of connections can be concurrently
+                opened to this virtual server. The value of zero
+                indicates that there is no upper limit of
+                connections to this virtual server."
+        DEFVAL          { 0 }
+        ::= { cslbxVirtualServerTableEntry 9 }
+
+cslbxVirtualOwnerName                        OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The name of the associated Owner."
+        DEFVAL          { ''H }
+        ::= { cslbxVirtualServerTableEntry 10 }
+
+cslbxVirtualFlowMode                         OBJECT-TYPE
+        SYNTAX          SlbDirectionalMode
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The direction of the traffic flowing through the
+                SLB device."
+        DEFVAL          { defdirectional }
+        ::= { cslbxVirtualServerTableEntry 11 }
+
+cslbxVirtualSSLStickyOffset                  OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..127 )
+        UNITS           "bytes"
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The number of bytes offset into the SSL session ID
+                where the sticky data started."
+        DEFVAL { 0 }
+        ::= { cslbxVirtualServerTableEntry 12 }
+
+cslbxVirtualSSLStickyLength                  OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..128 )
+        UNITS           "bytes"
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The number of bytes of SSL session ID to be used as
+                sticky data."
+        DEFVAL { 32 }
+        ::= { cslbxVirtualServerTableEntry 13 }
+
+cslbxVirtualReverseStickyGroup               OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..65535 )
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The group number of the sticky group to be used when
+                inserting reverse sticky entry.  The value of zero
+                indicates that reverse sticky is not enabled."
+        DEFVAL { 0 }
+        ::= { cslbxVirtualServerTableEntry 14 }
+
+cslbxVirtualBackupFarmName                   OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The backup server farm to be used in case the primary
+                server farm has no active server."
+        DEFVAL          { ''H }
+        ::= { cslbxVirtualServerTableEntry 15 }
+
+cslbxVirtualBkFarmStickyEnabled              OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The current setting for enabling sticky option on
+                the backup server farm."
+        DEFVAL          { false }
+        ::= { cslbxVirtualServerTableEntry 16 }
+
 
 --  *************************************************************
 --  *                                                           *
@@ -2355,7 +2720,11 @@ CslbxRuleEntry ::= SEQUENCE {
         cslbxRuleHCTotalClientPackets             Counter64,
         cslbxRuleTotalServerPackets               Counter32,
         cslbxRuleHCTotalServerPackets             Counter64,
-        cslbxRuleRowStatus                        RowStatus
+        cslbxRuleRowStatus                        RowStatus,
+        cslbxRuleTotalClientOctets                Counter32,
+        cslbxRuleHCTotalClientOctets              Counter64,
+        cslbxRuleTotalServerOctets                Counter32,
+        cslbxRuleHCTotalServerOctets              Counter64
 }
 
 cslbxRuleVirtualServerName                OBJECT-TYPE
@@ -2441,7 +2810,7 @@ cslbxRuleHCTotalServerPackets             OBJECT-TYPE
                 "The total number of packets ever sent by the server
                 to the client on a connection that matched this
                 SLB policy.  This is the 64-bit version of
-                cslbxRuleTotalClientPackets."
+                cslbxRuleTotalServerPackets."
         ::= { cslbxRuleEntry 9 }
 
 cslbxRuleRowStatus                        OBJECT-TYPE
@@ -2453,6 +2822,52 @@ cslbxRuleRowStatus                        OBJECT-TYPE
                 or delete the row entry in cslbxRuleTable following
                 the RowStatus textual convention."
         ::= { cslbxRuleEntry 10 }
+
+cslbxRuleTotalClientOctets                OBJECT-TYPE
+        SYNTAX          Counter32
+        UNITS           "octets"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The total number of octets ever sent by the client
+                to the server on a connection that matched this SLB
+                policy."
+        ::= { cslbxRuleEntry 11 }
+
+cslbxRuleHCTotalClientOctets              OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "octets"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The total number of octets ever sent by the client
+                to the server on a connection that matched this SLB
+                policy.  This is the 64-bit version of
+                cslbxRuleTotalClientOctets."
+        ::= { cslbxRuleEntry 12 }
+
+cslbxRuleTotalServerOctets                OBJECT-TYPE
+        SYNTAX          Counter32
+        UNITS           "octets"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The total number of octets ever sent by the server
+                to the client on a connection that matched this SLB
+                policy."
+        ::= { cslbxRuleEntry 13 }
+
+cslbxRuleHCTotalServerOctets             OBJECT-TYPE
+        SYNTAX          Counter64
+        UNITS           "octets"
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The total number of octets ever sent by the server
+                to the client on a connection that matched this
+                SLB policy.  This is the 64-bit version of
+                cslbxRuleTotalServerOctets."
+        ::= { cslbxRuleEntry 14 }
 
 
 --  *************************************************************
@@ -2845,6 +3260,7 @@ cslbxFtPriority                           OBJECT-TYPE
 
 cslbxFtHeartBeatTimer                     OBJECT-TYPE
         SYNTAX          TimeInterval
+        UNITS           "seconds"
         MAX-ACCESS      read-create
         STATUS          current
         DESCRIPTION
@@ -3061,7 +3477,11 @@ CslbxXmlConfigTableEntry ::= SEQUENCE {
         cslbxXmlConfigEnabled                      TruthValue,
         cslbxXmlConfigVlanId                       Unsigned32,
         cslbxXmlConfigListeningPort                CiscoPort,
-        cslbxXmlConfigRowStatus                    RowStatus
+        cslbxXmlConfigRowStatus                    RowStatus,
+        cslbxXmlConfigUserName                     SlbObjectNameString,
+        cslbxXmlConfigPassword                     SlbPasswordString,
+        cslbxXmlConfigClientGroupNumber            Unsigned32,
+        cslbxXmlConfigClientGroupName              SlbObjectNameString
 }
 
 cslbxXmlConfigEnabled                     OBJECT-TYPE
@@ -3105,6 +3525,45 @@ cslbxXmlConfigRowStatus                   OBJECT-TYPE
                 create or delete the row entry in cslbxXmlConfigTable
                 following the RowStatus textual convention."
         ::= { cslbxXmlConfigTableEntry 4 }
+
+cslbxXmlConfigUserName                    OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The required username for the purpose of validating
+                 the XML request."
+        DEFVAL          { ''H }
+        ::= { cslbxXmlConfigTableEntry 5 }
+
+cslbxXmlConfigPassword                    OBJECT-TYPE
+        SYNTAX          SlbPasswordString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The required password for the purpose of validating
+                 the XML request."
+        DEFVAL          { ''H }
+        ::= { cslbxXmlConfigTableEntry 6 }
+
+cslbxXmlConfigClientGroupNumber           OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..65535 )
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The group number of the associated client access
+                 list."
+        DEFVAL          { 0 }
+        ::= { cslbxXmlConfigTableEntry 7 }
+
+cslbxXmlConfigClientGroupName             OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The group name of the associated client access list."
+        DEFVAL          { ''H }
+        ::= { cslbxXmlConfigTableEntry 8 }
 
 
 --  *************************************************************
@@ -3288,6 +3747,229 @@ cslbxConnState                            OBJECT-TYPE
 
 --  *************************************************************
 --  *                                                           *
+--  * SLB-EXT - Owner Table                                     *
+--  *                                                           *
+--  *************************************************************
+
+cslbxOwnerTable                           OBJECT-TYPE
+        SYNTAX          SEQUENCE OF CslbxOwnerTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Table of Owners of the load balancing objects."
+        ::= { cslbxOwnerObjects 1 }
+
+cslbxOwnerTableEntry                      OBJECT-TYPE
+        SYNTAX          CslbxOwnerTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Information about a particular Owner configured on
+                a particular local SLB entity."
+        INDEX   {
+                slbEntity,
+                cslbxOwnerName
+        }
+        ::= { cslbxOwnerTable 1 }
+
+CslbxOwnerTableEntry ::= SEQUENCE {
+        cslbxOwnerName                            SlbObjectNameString,
+        cslbxOwnerContactInfo                     SnmpAdminString,
+        cslbxOwnerBillingInfo                     SnmpAdminString,
+        cslbxOwnerMaxConns                        Unsigned32,
+        cslbxOwnerRowStatus                       RowStatus
+}
+
+cslbxOwnerName                            OBJECT-TYPE
+        SYNTAX          SlbObjectNameString
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "The name of the owner of the configured SLB objects."
+        ::= { cslbxOwnerTableEntry 1 }
+
+cslbxOwnerContactInfo                     OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The contact information for this Owner."
+        DEFVAL { ''H }
+        ::= { cslbxOwnerTableEntry 2 }
+
+cslbxOwnerBillingInfo                     OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The billing information for this Owner."
+        DEFVAL { ''H }
+        ::= { cslbxOwnerTableEntry 3 }
+
+cslbxOwnerMaxConns                        OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0..4294967295 )
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The maximum of connections can be opened to the
+                virtual servers associated with this Owner. The
+                value of zero indicates that there is no upper
+                limit of connections associated with this Owner."
+        DEFVAL          { 0 }
+        ::= { cslbxOwnerTableEntry 4 }
+
+cslbxOwnerRowStatus                       OBJECT-TYPE   
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The object used by a management station to create
+                or delete the row entry in cslbxOwnerTable following
+                the RowStatus textual convention."
+        ::= { cslbxOwnerTableEntry 5 }
+
+
+--  *************************************************************
+--  *                                                           *
+--  * SLB-EXT - Script File Table                               *
+--  *                                                           *
+--  *************************************************************
+
+cslbxScriptFileTable                      OBJECT-TYPE
+        SYNTAX          SEQUENCE OF CslbxScriptFileTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Table of Script files to be downloaded into a
+                particular SLB device.  The content of these text
+                files can be excuted by the SLB device to provide
+                additional health check functionality."
+        ::= { cslbxScriptObjects 1 }
+
+cslbxScriptFileTableEntry                      OBJECT-TYPE
+        SYNTAX          CslbxScriptFileTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Information about a particular Script file configured
+                on a particular local SLB entity."
+        INDEX   {
+                slbEntity,
+                cslbxScriptFileIndex
+        }
+        ::= { cslbxScriptFileTable 1 }
+
+CslbxScriptFileTableEntry ::= SEQUENCE {
+        cslbxScriptFileIndex                      Unsigned32,
+        cslbxScriptFileUrl                        SnmpAdminString,
+        cslbxScriptFileRowStatus                  RowStatus
+}
+
+cslbxScriptFileIndex                      OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 1..65535 )
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "The Script file index."
+        ::= { cslbxScriptFileTableEntry 1 }
+
+cslbxScriptFileUrl                        OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The name and location of the Script file."
+        DEFVAL          { ''H }
+        ::= { cslbxScriptFileTableEntry 2 }
+
+cslbxScriptFileRowStatus                       OBJECT-TYPE   
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The object used by a management station to create
+                or delete the row entry in cslbxScriptFileTable
+                following the RowStatus textual convention."
+        ::= { cslbxScriptFileTableEntry 3 }
+
+
+--  *************************************************************
+--  *                                                           *
+--  * SLB-EXT - Script Task Table                               *
+--  *                                                           *
+--  *************************************************************
+
+cslbxScriptTaskTable                      OBJECT-TYPE
+        SYNTAX          SEQUENCE OF CslbxScriptTaskTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Table of Script tasks to be executed by the SLB
+                device when it is online.  The scripts from the
+                cslbxScriptFileTable are referenced in this table
+                by the named labels."
+        ::= { cslbxScriptObjects 2 }
+
+cslbxScriptTaskTableEntry                      OBJECT-TYPE
+        SYNTAX          CslbxScriptTaskTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "Information about a particular Script task configured
+                on a particular local SLB entity."
+        INDEX   {
+                slbEntity,
+                cslbxScriptTaskIndex
+        }
+        ::= { cslbxScriptTaskTable 1 }
+
+CslbxScriptTaskTableEntry ::= SEQUENCE {
+        cslbxScriptTaskIndex                      Unsigned32,
+        cslbxScriptTaskScriptName                 SlbFunctionNameString,
+        cslbxScriptTaskScriptArguments            SnmpAdminString,
+        cslbxScriptTaskRowStatus                  RowStatus
+}
+
+cslbxScriptTaskIndex                      OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 1..65535 )
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "The Script task index."
+        ::= { cslbxScriptTaskTableEntry 1 }
+
+cslbxScriptTaskScriptName                 OBJECT-TYPE
+        SYNTAX          SlbFunctionNameString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The name of the function to be executed."
+        DEFVAL          { ''H }
+        ::= { cslbxScriptTaskTableEntry 2 }
+
+cslbxScriptTaskScriptArguments            OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The argument parameters passed into the executable
+                 Script."
+        DEFVAL          { ''H }
+        ::= { cslbxScriptTaskTableEntry 3 }
+
+cslbxScriptTaskRowStatus                       OBJECT-TYPE   
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "The object used by a management station to create
+                or delete the row entry in cslbxScriptTaskTable
+                following the RowStatus textual convention."
+        ::= { cslbxScriptTaskTableEntry 4 }
+
+
+--  *************************************************************
+--  *                                                           *
 --  * Notification Truth Values                                 *
 --  *                                                           *
 --  *************************************************************
@@ -3336,7 +4018,7 @@ cslbxMIBGroups      OBJECT IDENTIFIER ::=
 -- Compliance
 
 cslbxMIBCompliance MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated -- superceded by cslbxMIBComplianceRev1
         DESCRIPTION
                 "The compliance statement for entities which implement
                 the Cisco SLB EXT MIB.  The Content Switching Module
@@ -3391,16 +4073,6 @@ cslbxMIBCompliance MODULE-COMPLIANCE
                         IPv4 addresses."
 
                 OBJECT  cslbxStickyGroupMaskAddress
-                DESCRIPTION
-                        "An implementation is only required to support
-                        IPv4 addresses."
-
-                OBJECT  cslbxProbeAlternateDestAddrType
-                DESCRIPTION
-                        "An implementation is only required to support
-                        IPv4 addresses."
-
-                OBJECT  cslbxProbeAlternateDestAddr
                 DESCRIPTION
                         "An implementation is only required to support
                         IPv4 addresses."
@@ -3493,14 +4165,6 @@ cslbxMIBCompliance MODULE-COMPLIANCE
                         "This group supports the client NAT feature
                          for a SLB device."
 
-                GROUP   cslbxServerProbesGroup
-                DESCRIPTION
-                        "This group supports the Health Probe feature
-                         within a SLB device.  An implementation is
-                         only required to support IPv4 address
-                         instances for the table cslbxDnsProbeIpTable
-                         in this group."
-
                 GROUP   cslbxVlansGroup
                 DESCRIPTION
                         "This group supports the VLAN configuration
@@ -3545,6 +4209,508 @@ cslbxMIBCompliance MODULE-COMPLIANCE
                         product."
 
         ::= { cslbxMIBCompliances 1 }
+
+cslbxMIBComplianceRev1 MODULE-COMPLIANCE
+        STATUS deprecated -- superceded by cslbxMIBComplianceRev2
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                the Cisco SLB EXT MIB.  The Content Switching Module
+                (CSM) product supports this revision."
+
+        MODULE -- this module
+
+--      Unconditionally Mandatory Groups 
+
+                MANDATORY-GROUPS {
+                        cslbxStickyGroupsGroupRev2,
+                        cslbxMapsGroup,
+                        cslbxPoliciesGroup,
+                        cslbxVirtualServersGroup
+                }
+
+--      Relaxation on IP addressing
+
+                OBJECT  cslbxServerFarmHashMaskAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxServerFarmHashMaskAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolStartAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolStartAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolEndAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolEndAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyGroupMaskAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyGroupMaskAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanMaskAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanMaskAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInDestAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInDestAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInSourceAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInSourceAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutDestAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutDestAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutSourceAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutSourceAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyObjectRealAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyObjectRealAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+--      Optional Groups 
+
+                GROUP   cslbxStatsGroup
+                DESCRIPTION
+                        "This group supports the load-balancing
+                         statistics for the Content Switching Module
+                         (CSM) product."
+
+                GROUP   cslbxServerFarmsGroup
+                DESCRIPTION
+                        "This group supports the HTTP redirect servers
+                         in a SLB server farm."
+
+                GROUP   cslbxClientNatPoolsGroup
+                DESCRIPTION
+                        "This group supports the client NAT feature
+                         for a SLB device."
+
+                GROUP   cslbxVlansGroup
+                DESCRIPTION
+                        "This group supports the VLAN configuration
+                         for the Content Switching Module (CSM)
+                         product.  An implementation is
+                         only required to support IPv4 address
+                         instances for the table cslbxAliasAddrTable,
+                         cslbxStaticRouteTable in this group."
+
+                GROUP   cslbxFaultToleranceGroup
+                DESCRIPTION
+                        "This group supports the Fault Tolerance
+                         feature for the Content Switching Module
+                         (CSM) product."
+
+                GROUP   cslbxNotifControlGroup
+                DESCRIPTION
+                        "This group supports the setting for enabling
+                         the notifications of state changed in
+                         a SLB device."
+
+                GROUP   cslbxNotifGroup
+                DESCRIPTION
+                        "This group supports the notifications of
+                         state changed in a SLB device."
+
+                GROUP   cslbxConnsGroup
+                DESCRIPTION
+                        "This group supports the Connection table for
+                        the Content Switching Module (CSM) product."
+
+                GROUP   cslbxStickyObjectsGroup
+                DESCRIPTION
+                        "This group supports the Sticky Object table
+                        for the Content Switching Module (CSM)
+                        product."
+
+                GROUP   cslbxXmlConfigGroup
+                DESCRIPTION
+                        "This group supports the XML Config table
+                        for the Content Switching Module (CSM)
+                        product."
+
+                GROUP   cslbxXmlUserAccessGroup
+                DESCRIPTION
+                        "This group supports additional configurations
+                        for controlling the user access to the XML
+                        management interface in an SLB device."
+
+                GROUP   cslbxOwnerGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        defining Owner object in an SLB device."
+
+                GROUP   cslbxBackupServerGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        defining the Backup ServerFarms in an SLB
+                        device."
+
+                GROUP   cslbxScriptedProbeGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        Scripted Probe objects in an SLB device."
+
+                GROUP   cslbxReverseStickyGroup
+                DESCRIPTION
+                        "This group supports the configurations of
+                        Reverse Sticky option in the Content Switching
+                        Module (CSM) product."
+
+                GROUP   cslbxVirtualServersExtGroup
+                DESCRIPTION
+                        "This group supports additional counters and
+                        configurations to control the traffic coming 
+                        into an Virtual Server object in a SLB device."
+
+                GROUP   cslbxMapsRev2Group
+                DESCRIPTION
+                        "This group supports configurations of the
+                        matching criterion in a SLB device.  This
+                        second revision includes the configuration
+                        of a HTTP request method matching string."
+
+                GROUP   cslbxServerFarmsExtGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems
+                        which support HTTP Cookie and HTTP URL
+                        attritbutes in the server farms."
+
+                GROUP   cslbxCookieStickyGroup 
+                DESCRIPTION
+                        "This group is mandatory for the systems
+                        which support cookie attributes
+                        in sticky configuration."
+
+                GROUP   cslbxServerFarmsHttpRetCodeGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems
+                        with return code map can be configured
+                        on the server farm."
+
+                GROUP   cslbxStatsHCGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems 
+                        which support counter64 SLB statistics."
+
+        ::= { cslbxMIBCompliances 2 }
+
+cslbxMIBComplianceRev2 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                the Cisco SLB EXT MIB."
+
+        MODULE -- this module
+
+--      Unconditionally Mandatory Groups 
+
+                MANDATORY-GROUPS {
+                        cslbxStatsGroup,
+                        cslbxServerFarmsGroup,
+                        cslbxStickyGroupsGroupRev2,
+                        cslbxMapsGroup,
+                        cslbxPoliciesGroup,
+                        cslbxVirtualServersGroup
+                }
+
+--      Relaxation on IP addressing
+
+                OBJECT  cslbxServerFarmHashMaskAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxServerFarmHashMaskAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolStartAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolStartAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolEndAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxNatPoolEndAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyGroupMaskAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyGroupMaskAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanMaskAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxVlanMaskAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInDestAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInDestAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInSourceAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnInSourceAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutDestAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutDestAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutSourceAddrType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxConnOutSourceAddr
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyObjectRealAddressType
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+                OBJECT  cslbxStickyObjectRealAddress
+                DESCRIPTION
+                        "An implementation is only required to support
+                        IPv4 addresses."
+
+--      Optional Groups 
+
+                GROUP   cslbxClientNatPoolsGroup
+                DESCRIPTION
+                        "This group supports the client NAT feature
+                         for a SLB device."
+
+                GROUP   cslbxVlansGroup
+                DESCRIPTION
+                        "This group supports the VLAN configuration
+                         for the Content Switching Module.
+                         An implementation is only required to 
+                         support IPv4 address instances for the table 
+                         cslbxAliasAddrTable, cslbxStaticRouteTable in 
+                         this group."
+
+                GROUP   cslbxFaultToleranceGroup
+                DESCRIPTION
+                        "This group supports the Fault Tolerance
+                         feature for the Content Switching Module
+                         (CSM) product."
+
+                GROUP   cslbxNotifControlGroup
+                DESCRIPTION
+                        "This group supports the setting for enabling
+                         the notifications of state changed in
+                         a SLB device."
+
+                GROUP   cslbxNotifGroup
+                DESCRIPTION
+                        "This group supports the notifications of
+                         state changed in a SLB device."
+
+                GROUP   cslbxConnsGroup
+                DESCRIPTION
+                        "This group is mandatory for those modules
+                        which support SLB connections."
+
+                GROUP   cslbxStickyObjectsGroup
+                DESCRIPTION
+                        "This group is mandatory for those modules
+                        which supports the Sticky Object configuration."
+
+                GROUP   cslbxXmlConfigGroup
+                DESCRIPTION
+                        "This group is mandatory for those modules
+                        which support parameters that will be used for
+                        configuration using XML."
+
+                GROUP   cslbxXmlUserAccessGroup
+                DESCRIPTION
+                        "This group supports additional configurations
+                        for controlling the user access to the XML
+                        management interface in an SLB device."
+
+                GROUP   cslbxOwnerGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        defining Owner object in an SLB device."
+
+                GROUP   cslbxBackupServerGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        defining the Backup ServerFarms in an SLB
+                        device."
+
+                GROUP   cslbxScriptedProbeGroup
+                DESCRIPTION
+                        "This group supports the configurations for
+                        Scripted Probe objects in an SLB device."
+
+                GROUP   cslbxReverseStickyGroup
+                DESCRIPTION
+                        "This group is mandatory for those modules
+                        which supports reverse sticky options."
+
+                GROUP   cslbxVirtualServersExtGroup
+                DESCRIPTION
+                        "This group supports additional counters and
+                        configurations to control the traffic coming 
+                        into an Virtual Server object in a SLB device."
+
+                GROUP   cslbxMapsRev2Group
+                DESCRIPTION
+                        "This group supports configurations of the
+                        matching criterion in a SLB device.  This
+                        second revision includes the configuration
+                        of a HTTP request method matching string."
+
+                GROUP   cslbxServerFarmsExtGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems
+                        which support HTTP Cookie and HTTP URL
+                        attritbutes in the server farms."
+
+                GROUP   cslbxCookieStickyGroup 
+                DESCRIPTION
+                        "This group is mandatory for the systems
+                        which support cookie attributes
+                        in sticky configuration."
+
+                GROUP   cslbxServerFarmsHttpRetCodeGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems
+                        with return code map can be configured
+                        on the server farm."
+
+                GROUP   cslbxStatsHCGroup
+                DESCRIPTION
+                        "This group is mandatory for those systems 
+                        which support counter64 SLB statistics."
+
+        ::= { cslbxMIBCompliances 3 }
 
 -- Units of Conformance
 
@@ -3635,7 +4801,7 @@ cslbxStickyGroupsGroup  OBJECT-GROUP
                 cslbxStickyGroupStickyTimer,
                 cslbxStickyGroupRowStatus
          }
-        STATUS current
+        STATUS deprecated -- replaced by cslbxStickyGroupsGroupRev2
         DESCRIPTION
                 "The SLB sticky group objects."
         ::= { cslbxMIBGroups 4 }
@@ -3671,31 +4837,6 @@ cslbxMapsGroup  OBJECT-GROUP
         DESCRIPTION
                 "The SLB map objects."
         ::= { cslbxMIBGroups 6 }
-
-cslbxServerProbesGroup  OBJECT-GROUP
-        OBJECTS {
-                cslbxProbeType,
-                cslbxProbeInterval,
-                cslbxProbeRetries,
-                cslbxProbeFailedInterval,
-                cslbxProbeReceiveTimeout,
-                cslbxProbeTcpOpenTimeout,
-                cslbxProbeAlternateDestAddrType,
-                cslbxProbeAlternateDestAddr,
-                cslbxProbeDnsDomainName,
-                cslbxProbeHttpRequestMethod,
-                cslbxProbeHttpRequestUrl,
-                cslbxProbeRowStatus,
-                cslbxDnsProbeIpRowStatus,
-                cslbxProbeHeaderFieldValue,
-                cslbxProbeHeaderRowStatus,
-                cslbxProbeExpectStatusMaxValue,
-                cslbxProbeExpectStatusRowStatus
-        }
-        STATUS current
-        DESCRIPTION
-                "The SLB server health probe objects."
-        ::= { cslbxMIBGroups 7 }
 
 cslbxPoliciesGroup  OBJECT-GROUP
         OBJECTS {
@@ -3844,7 +4985,189 @@ cslbxNotifGroup  NOTIFICATION-GROUP
             entity that are required to support."
         ::= { cslbxMIBGroups 15 }
 
+cslbxXmlUserAccessGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxXmlConfigUserName,
+                cslbxXmlConfigPassword,
+                cslbxXmlConfigClientGroupNumber,
+                cslbxXmlConfigClientGroupName
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of additional objects used to
+                further control the access to the SLB XML
+                management interface."
+        ::= { cslbxMIBGroups 16 }
+
+cslbxOwnerGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxVirtualOwnerName,
+                cslbxOwnerContactInfo,
+                cslbxOwnerBillingInfo,
+                cslbxOwnerMaxConns,
+                cslbxOwnerRowStatus
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of objects used to define the
+                Owner information of an SLB Virtual Server
+                object."
+        ::= { cslbxMIBGroups 17 }
+        
+cslbxBackupServerGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxPolicyBackupFarmName,
+                cslbxPolicyBkFarmStickyEnabled,
+                cslbxVirtualBackupFarmName,
+                cslbxVirtualBkFarmStickyEnabled
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of objects used to define the SLB
+                 Backup Server Farm option."
+        ::= { cslbxMIBGroups 18 }
+
+cslbxScriptedProbeGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxScriptFileUrl,
+                cslbxScriptFileRowStatus,
+                cslbxScriptTaskScriptName,
+                cslbxScriptTaskScriptArguments,
+                cslbxScriptTaskRowStatus
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of objects to configure executable
+                Script in an SLB device."
+        ::= { cslbxMIBGroups 19 }
+
+cslbxReverseStickyGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxPolicyReverseStickyGroup,
+                cslbxVirtualReverseStickyGroup
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of objects used to configure
+                 the Reverse Sticky option."
+        ::= { cslbxMIBGroups 20 }
+
+cslbxVirtualServersExtGroup  OBJECT-GROUP
+        OBJECTS {
+                cslbxVirtualMaxConns,
+                cslbxVirtualFlowMode,
+                cslbxVirtualSSLStickyOffset,
+                cslbxVirtualSSLStickyLength,
+                cslbxRuleTotalClientOctets,
+                cslbxRuleHCTotalClientOctets,
+                cslbxRuleTotalServerOctets,
+                cslbxRuleHCTotalServerOctets
+        }
+        STATUS current
+        DESCRIPTION
+                "The collection of additional objects used to
+                 define SSL sticky option, packet counters and
+                 flow control for a SLB Virtual Server."
+        ::= { cslbxMIBGroups 22 }
+ 
+cslbxMapsRev2Group  OBJECT-GROUP
+        OBJECTS {
+                cslbxMapType,
+                cslbxMapRowStatus,
+                cslbxHttpExpressionFieldName,
+                cslbxHttpExpressionValue,
+                cslbxHttpExpressionRowStatus,
+                cslbxHttpExpressionRequestMethod,
+                cslbxHttpReturnCodeMaxValue,
+                cslbxHttpReturnCodeThreshold,
+                cslbxHttpReturnCodeResetTimer,
+                cslbxHttpReturnCodeType,
+                cslbxHttpReturnCodeRowStatus                
+        }
+        STATUS current
+        DESCRIPTION
+                "The second revision of collection of objects
+                used to define a SLB matching criteria."
+        ::= { cslbxMIBGroups 23 }
+
+cslbxServerFarmsExtGroup  OBJECT-GROUP
+        OBJECTS {
+            cslbxServerFarmTransparent,
+            cslbxServerFarmSlowStart,
+            cslbxServerFarmHashHeaderName,
+            cslbxServerFarmHashCookieName,
+            cslbxServerFarmUrlPatternBegin,
+            cslbxServerFarmUrlPatternEnd,
+            cslbxServerFarmDescription,
+            cslbxServerFarmType
+        }
+        STATUS current
+        DESCRIPTION
+                "A collection of objects related to server farm."
+        ::= { cslbxMIBGroups 24 }
+
+cslbxServerFarmsHttpRetCodeGroup  OBJECT-GROUP
+        OBJECTS {
+            cslbxSfarmHttpRetCodeMaxValue,
+            cslbxSfarmHttpRetCodeActionType,
+            cslbxSfarmHttpRetCodeThreshold,
+            cslbxSfarmHttpRetCodeResetTimer,
+            cslbxSfarmHttpRetCodeStorageType,
+            cslbxSfarmHttpRetCodeRowStatus
+        }
+        STATUS current
+        DESCRIPTION
+                "A collection of objects related to HTTP Return Codes
+                in server farm."
+        ::= { cslbxMIBGroups 25 }
+
+cslbxStickyGroupsGroupRev2  OBJECT-GROUP
+        OBJECTS {
+                cslbxStickyGroupType,
+                cslbxStickyGroupMaskAddressType,
+                cslbxStickyGroupMaskAddress,
+                cslbxStickyGroupCookieName,
+                cslbxStickyGroupStickyTimer,
+                cslbxStickyGroupRowStatus,
+                cslbxStickyGroupHeaderName,
+                cslbxStickyGroupTimeoutActiveConn,
+                cslbxStickyGroupReplicate,
+                cslbxStickyOffset,
+                cslbxStickyLength
+         }
+        STATUS current
+        DESCRIPTION
+                "The collection of objects for sticky features."
+        ::= { cslbxMIBGroups 26 }
+
+cslbxCookieStickyGroup OBJECT-GROUP
+    OBJECTS {
+       cslbxStickyCookieInsertEnable,
+       cslbxStickyCookieSecondary,
+       cslbxStickyCookieExpiryDate
+    }
+    STATUS current
+    DESCRIPTION
+        "This group contains objects related to
+        static Cookie."
+    ::= { cslbxMIBGroups 27 }
+        
+
+cslbxStatsHCGroup  OBJECT-GROUP
+        OBJECTS {
+             cslbxStatsL4PolicyHCConns,
+             cslbxStatsL7PolicyHCConns,
+             cslbxStatsDroppedL4PolicyHCConns,
+             cslbxStatsDroppedL7PolicyHCConns,
+             cslbxStatsNoMatchPolicyHCRejects,
+             cslbxStatsNoCfgPolicyHCRejects,
+             cslbxStatsAclDenyHCRejects,
+             cslbxStatsVerMismatchHCRejects
+        }
+        STATUS current
+        DESCRIPTION
+                "A collection of objects providing information
+                specific to counter64 objects for SLB statistics."
+        ::= { cslbxMIBGroups 35 }
 
 END
-
-

@@ -1,10 +1,11 @@
 -- *********************************************************************
--- CISCO-VSAN-MIB.my: Virtual Storage Area Network Mib
+-- CISCO-VSAN-MIB.my: Virtual Storage Area Network MIB
 --
 -- September 2002, Vinay Gaonkar
 -- September 2003, Arul Mozhi 
+-- May 2005,       John Fan
 --
--- Copyright (c) 2002, 2003 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2003, 2004, 2005, 2006 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -18,7 +19,7 @@ IMPORTS
         MODULE-COMPLIANCE, OBJECT-GROUP,  
         NOTIFICATION-GROUP                      FROM SNMPv2-CONF
         TEXTUAL-CONVENTION, RowStatus,
-        TruthValue, TimeStamp                   FROM SNMPv2-TC            
+        TruthValue, TimeStamp                   FROM SNMPv2-TC 
         SnmpAdminString                         FROM SNMP-FRAMEWORK-MIB
         ifIndex, InterfaceIndex                 FROM IF-MIB
         ciscoMgmt                               FROM CISCO-SMI 
@@ -27,7 +28,7 @@ IMPORTS
         FcNameId, VsanIndex                     FROM CISCO-ST-TC; 
 
 ciscoVsanMIB MODULE-IDENTITY
-        LAST-UPDATED "200402180000Z"
+        LAST-UPDATED "200602060000Z"
         ORGANIZATION "Cisco Systems Inc. "
         CONTACT-INFO
                 "     Cisco Systems
@@ -42,34 +43,65 @@ ciscoVsanMIB MODULE-IDENTITY
             Networks (VSANs) within the frame  work of Cisco's VSAN 
             Architecture.  This MIB enables the users to configure 
             and monitor VSAN parameters."
-        
+
+        REVISION    "200602060000Z"
+        DESCRIPTION
+            "Enhanced the description of vsanInterOperValue object." 
+        REVISION    "200512070000Z"
+        DESCRIPTION
+            "Added new object group vsanGroupRev3 to contain
+             vsanFcFeElementName object-type.
+             Added new compliance vsanMIBCompliance7 to include new compliance
+             group vsanGroupRev3. Updated comments section for
+             vsanFcFeElementName."
+
+        REVISION    "200510070000Z"
+        DESCRIPTION
+            "Added new notification vsanPortMembershipChange for 
+            port-vsan changes for interfaces. Added new compliance 
+            vsanMIBCompliance6 to include new compliance group 
+            vsanNotificationGroupRev1."
+
+        REVISION    "200506070000Z"
+        DESCRIPTION
+            " Extended the vsanMembershipSummaryTable to contain not
+            just static assignments but also dynamic assignments.
+            Added new compliance vsanMIBCompliance5 to include
+            new compliance group vsanMembershipSummaryGroupRev1."
+
         REVISION    "200402180000Z"
         DESCRIPTION
             "Added two new objects vsanInorderDelivery and 
             vsanNetworkDropLatency to vsanTable. 
             Added a new compliance statement vsanMIBCompliance4."
+
         REVISION    "200312020000Z"
         DESCRIPTION
             "Added a conformance for the range of vsanInterOperValue.
             Added a new table 'vsanFcTimerTable', to configure FC timer
             values for VSANs." 
+
         REVISION    "200305070000Z"
         DESCRIPTION
             "Deprecated vsanInterOperMode object which is 
             superceded by a new object vsanInterOperValue.
             Added new compliance statement vsanMIBCompliance1."
+
         REVISION    "200304230000Z"
         DESCRIPTION
             "Added a new table vsanMembershipSummaryTable."
+
         REVISION    "200212180000Z"
         DESCRIPTION
             "Use CiscoMilliSeconds instead MilliSeconds from CISCO-TC."
+
         REVISION    "200211040000Z"
         DESCRIPTION
             "Changed the MIB descriptors fcSwitchLatency and 
             fcNetworkLatency to fcSwitchDropLatency and 
             fcNetworkDropLatency respectively.
             MAX-ACCESS for fcSwitchLatency is changed to read-write."
+
         REVISION    "200209230000Z"
         DESCRIPTION
             "Initial version of this MIB module."
@@ -81,6 +113,7 @@ vsanConfiguration   OBJECT IDENTIFIER ::= { ciscoVsanMIBObjects 1 }
 vsanMembership      OBJECT IDENTIFIER ::= { ciscoVsanMIBObjects 2 }
 vsanNotification    OBJECT IDENTIFIER ::= { ciscoVsanMIBObjects 3 }
 vsanFcConfiguration OBJECT IDENTIFIER ::= { ciscoVsanMIBObjects 4 }
+vsanStats           OBJECT IDENTIFIER ::= { ciscoVsanMIBObjects 5 }
 vsanNotifications   OBJECT IDENTIFIER ::= { vsanNotification 0 }
 
 -- Textual Conventions
@@ -128,12 +161,12 @@ VsanLoadBalancingType ::= TEXTUAL-CONVENTION
         DESCRIPTION
              "Type of load balancing.
 
-             srcIdDestId - based on only source Id (S_ID) and
-                           destination Id (D_ID).
-             srcIdDestIdOxId - Originator exchange Id (OX_ID)
+             srcIdDestId - based on only source ID (S_ID) and
+                           destination ID (D_ID).
+             srcIdDestIdOxId - Originator exchange ID (OX_ID)
                             is also used for load balancing in
                             addition to S_ID and D_ID.
-             OX_ID is an exchange Id assigned by the originator
+             OX_ID is an exchange ID assigned by the originator
              Interconnect Port for an exchange with the target
              Interconnect Port."
         REFERENCE
@@ -174,7 +207,7 @@ vsanTable  OBJECT-TYPE
         MAX-ACCESS not-accessible
         STATUS     current
         DESCRIPTION
-               "This table lists all the VSAN configured on this device. 
+               "This table lists all the VSAN configured on this device.
                This table allows users to create, delete and manage the 
                VSANs on local device."
         ::= { vsanConfiguration 3 }
@@ -209,7 +242,7 @@ vsanIndex OBJECT-TYPE
         MAX-ACCESS  not-accessible 
         STATUS      current             
         DESCRIPTION
-                "The id of the VSAN."
+                "The ID of the VSAN."
         ::= { vsanEntry 1 }
 
 vsanName OBJECT-TYPE
@@ -230,7 +263,7 @@ vsanMediaType OBJECT-TYPE
         STATUS      current
         DESCRIPTION
                 "The network media type on which this VSAN is defined."
-        DEFVAL {fibreChannel}
+        DEFVAL { fibreChannel }
         ::= { vsanEntry 3 }
 
 vsanAdminState  OBJECT-TYPE
@@ -238,8 +271,15 @@ vsanAdminState  OBJECT-TYPE
         MAX-ACCESS  read-create
         STATUS      current
         DESCRIPTION                                
-                "The state of this VSAN."     
-        DEFVAL {active}
+                "Represents the configurable state of this VSAN. 
+                The value 'active' for this object represents the 
+                VSAN is configured and services for the VSAN is 
+                activated.
+                The value 'suspended' for this object represents the 
+                VSAN is configured but services for the VSAN is 
+                de-activated. User can use this state to preconfigure 
+                all the VSAN parameters for the whole fabric."
+        DEFVAL { active }
         ::= { vsanEntry 4 }
 
 vsanMtu  OBJECT-TYPE
@@ -259,7 +299,7 @@ vsanLoadBalancingType  OBJECT-TYPE
         STATUS      current
         DESCRIPTION
                 "The type of load balancing used on this VSAN." 
-        DEFVAL {srcIdDestIdOxId}
+        DEFVAL { srcIdDestIdOxId }
         ::= { vsanEntry 6 }
    
 vsanInterOperMode  OBJECT-TYPE
@@ -271,7 +311,7 @@ vsanInterOperMode  OBJECT-TYPE
                 VSAN. This object indicates if this device can 
                 inter-operate with devices from other vendors on this 
                 VSAN."
-        DEFVAL {false}
+        DEFVAL { false }
         ::= { vsanEntry 7 }
 
 vsanOperState  OBJECT-TYPE
@@ -279,7 +319,8 @@ vsanOperState  OBJECT-TYPE
         MAX-ACCESS  read-only
         STATUS      current
         DESCRIPTION
-                "The operational state of the VSAN."
+                "The operational state of the VSAN. Indicates whether 
+                traffic can pass thru this VSAN."
         ::= { vsanEntry 8 }
 
 vsanRowStatus OBJECT-TYPE
@@ -295,11 +336,21 @@ vsanInterOperValue  OBJECT-TYPE
         MAX-ACCESS  read-create
         STATUS      current
         DESCRIPTION
-                "The interoperability value configured for the local 
-                switch on this VSAN.
+                "This object is used for configuring the 
+                interoperability value of the VSAN, to 
+                inter-operate with different vendor devices. 
+                
                 If the value of this object is 0, then the 
-                interoperability is disabled."
-        DEFVAL {0}
+                interoperability is disabled.
+
+                If the value of this object is 1, then the VSAN
+                can inter-operate with all the Fibre Channel 
+                vendor devices.
+
+                The value '2' to '4' for this object represents the 
+                interoperability with specific Fibre Channel vendor 
+                devices for basic to advanced functionalities."
+        DEFVAL { 0 }
         ::= { vsanEntry 10 }
 
 vsanInorderDelivery  OBJECT-TYPE
@@ -308,9 +359,9 @@ vsanInorderDelivery  OBJECT-TYPE
         STATUS      current
         DESCRIPTION
                 "The InorderDelivery guarantee flag for the local 
-                switch on this vsan.
+                switch on this VSAN.
                 If the value of the object is 'true', then the 
-                inorder delivery is guaranteed. If 'false', it is not
+                in-order delivery is guaranteed. If 'false', it is not
                 guaranteed.
                 When the value of fcInorderDelivery is changed, the 
                 value of this object will be set to the new value of 
@@ -319,12 +370,12 @@ vsanInorderDelivery  OBJECT-TYPE
         ::= { vsanEntry 11 }
 
 vsanNetworkDropLatency OBJECT-TYPE
-        SYNTAX      CiscoMilliSeconds (0..60000)
+        SYNTAX      CiscoMilliSeconds (500..60000)
         UNITS       "msec"
         MAX-ACCESS  read-create
         STATUS      current
         DESCRIPTION
-                "Network latency of this switch on this vsan. This is 
+                "Network latency of this switch on this VSAN. This is 
                 the time interval after which the frames are dropped if
                 they are not delivered in the order they were 
                 transmitted.
@@ -344,7 +395,7 @@ notifyVsanIndex OBJECT-TYPE
         MAX-ACCESS  accessible-for-notify
         STATUS      current
         DESCRIPTION
-                "The id of the VSAN.
+                "The ID of the VSAN.
                 This object is to be used only as an object in the 
                 notification. We cannot use the vsanIndex in a 
                 notification as it is defined to not-accessible in the 
@@ -404,7 +455,7 @@ vsanWwnListTable OBJECT-TYPE
                 allowed on any interface.
                 Here is an example :
 
-                listIndex      wwnIndex   WWN
+                listIndex  wwnIndex   WWN
                 1             1       WWN1 
                 1             2       WWN2 
                 1             3       WWN3 
@@ -416,8 +467,7 @@ vsanWwnListTable OBJECT-TYPE
                 3             3       WWN9 
                 4             1       WWN10 
                 5             1       WWN11 
-                5             2       WWN12 
-                ."
+                5             2       WWN12"
         ::= { vsanMembership 3 }
 
 vsanWwnListEntry OBJECT-TYPE
@@ -527,12 +577,12 @@ vsanIfEntry OBJECT-TYPE
                 denied fabric login on that interface.
                 The table contains membership information only for 
                 E_port and Fx_ports."
-        INDEX { ifIndex}
+        INDEX { ifIndex }
         ::= { vsanIfTable 1 }
 
 VsanIfEntry ::= SEQUENCE {
              vsanIfVsan                           VsanIndex, 
-             vsanIfDenyList                        ListIndexOrZero  
+             vsanIfDenyList                       ListIndexOrZero  
 }
 
 vsanIfVsan  OBJECT-TYPE
@@ -542,7 +592,7 @@ vsanIfVsan  OBJECT-TYPE
         DESCRIPTION
                 "Index of the VSAN to which this interface is 
                 statically assigned." 
-        DEFVAL {1}
+        DEFVAL { 1 }
         ::= { vsanIfEntry 1 }
 
 vsanIfDenyList  OBJECT-TYPE
@@ -567,8 +617,8 @@ vsanDynamicListNumber  OBJECT-TYPE
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-            "The number of  WWN lists configured for dynamic 
-            membership.This is the number of rows in the 
+            "The number of WWN lists configured for dynamic 
+            membership. This is the number of rows in the 
             vsanDynamicTable."
         ::= { vsanMembership 6 }
 
@@ -594,8 +644,7 @@ vsanDynamicTable OBJECT-TYPE
                     1            3
                     2            3
                     3            3
-                    5            4
-                ."
+                    5            4"
         ::= { vsanMembership 7 }
 
 vsanDynamicEntry OBJECT-TYPE
@@ -623,7 +672,7 @@ vsanDynamicVsan  OBJECT-TYPE
                 Nx_port tries to login into the fabric with a Port WWN
                 contained in this list, then the interface connected 
                 to that port is assigned to this VSAN."    
-        DEFVAL {1}        
+        DEFVAL { 1 }        
         ::= { vsanDynamicEntry 1 }
 
 vsanDynamicRowStatus OBJECT-TYPE
@@ -645,9 +694,12 @@ vsanMembershipSummaryTable OBJECT-TYPE
         STATUS     current              
         DESCRIPTION
                "The VSAN membership summary table. vsanIfTable provides
-               static VSAN membership of each of the interfaces. This 
-               table lists all statically assigned member interfaces of
-               each of the VSANs configured on local device.
+               static VSAN membership of each of the interfaces whereas
+               cdpvmDynPortsTable provides dynamic VSAN membership.
+               This table lists all interfaces which are
+               statically or dynamically assigned to VSANs on
+               the local device.
+
                Following is an example for this table:
 
                 vsanIndex    SummaryInterface    
@@ -655,8 +707,10 @@ vsanMembershipSummaryTable OBJECT-TYPE
                     1            4311
                     1            56544
                     2            7665
-                    3            76542
-                ."
+                    3            76542"
+        REFERENCE
+               "For information on cdpvmDynPortsTable, refer to
+               CISCO-DPVM-MIB."
         ::= { vsanMembership 8 }
 
 vsanMembershipSummaryEntry OBJECT-TYPE
@@ -672,7 +726,8 @@ vsanMembershipSummaryEntry OBJECT-TYPE
         ::= { vsanMembershipSummaryTable 1 }
 
 VsanMembershipSummaryEntry ::= SEQUENCE {
-             vsanMembershipSummaryInterface  InterfaceIndex
+             vsanMembershipSummaryInterface  InterfaceIndex,
+             vsanMembershipSummaryIntfType   INTEGER
 }
 
 vsanMembershipSummaryInterface OBJECT-TYPE
@@ -684,6 +739,19 @@ vsanMembershipSummaryInterface OBJECT-TYPE
                VSAN."
         ::= { vsanMembershipSummaryEntry 1 }
 
+vsanMembershipSummaryIntfType OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        unknown(1),
+                        static(2),
+                        dynamic(3)
+                      }
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+               "Indicate how this interface (represented by
+               vsanMembershipSummaryInterface) was assigned to
+               this VSAN."
+        ::= { vsanMembershipSummaryEntry 2 }
 
 -- Global Fibre Channel Timers, which are common for all VSANs
 --
@@ -700,6 +768,7 @@ fcTimerRatov OBJECT-TYPE
                represents E_D_TOV (fcTimerEdtov) plus twice the
                maximum time that a frame may be delayed within the 
                Fabric and still be delivered.
+
                Note that all switches in a fabric should be configured
                with the same value of this timeout." 
         REFERENCE
@@ -718,6 +787,7 @@ fcTimerEdtov OBJECT-TYPE
                the timeout value for detecting an error condition. 
                Note that all switches in a fabric should be configured
                with the same value of this timeout.
+
                Note that value of this object must be less than value
                of fcTimerDstov." 
         REFERENCE
@@ -747,7 +817,7 @@ fcTimerDstov OBJECT-TYPE
         STATUS      current 
         DESCRIPTION
                "The Distributed_Services_Timeout Value which indicates
-               how long a distributed service requestor will 
+               how long a distributed services requester will 
                wait for a response." 
         REFERENCE
                "Section 3.1.25 in FC-SW2 (Fibre Channel - 
@@ -756,7 +826,7 @@ fcTimerDstov OBJECT-TYPE
         ::= { vsanFcConfiguration 4 }
 
 fcNetworkDropLatency OBJECT-TYPE
-        SYNTAX      CiscoMilliSeconds (0..60000)
+        SYNTAX      CiscoMilliSeconds (500..60000)
         UNITS       "msec"
         MAX-ACCESS  read-write
         STATUS      current
@@ -791,9 +861,9 @@ fcInorderDelivery  OBJECT-TYPE
         DESCRIPTION
                 "The InorderDelivery guarantee flag of device.
                 If the value of the object is 'true', then the 
-                inorder delivery is guaranteed. If 'false', it is not
+                in-order delivery is guaranteed. If 'false', it is not
                 guaranteed."
-        DEFVAL {false}
+        DEFVAL { false }
         ::= { vsanFcConfiguration 7 }
 
 -- VSAN Fibre Channel Timers
@@ -807,7 +877,8 @@ vsanFcTimerTable OBJECT-TYPE
                 "This table allows the different FC timer values 
                 to be configured per VSAN basis.
                 To set a particular type of 'FC Timeout Value',
-                the VSAN should be in 'suspended' admin state." 
+                the VSAN should be in 'suspended' administrative 
+                state." 
         ::= { vsanFcConfiguration 8 }
 
 vsanFcTimerEntry OBJECT-TYPE
@@ -848,8 +919,8 @@ vsanFcTimerForceFlag  OBJECT-TYPE
                 The value of each bit governs the agent's 
                 behavior when the corresponding FC timer-value 
                 object is modified for a VSAN when that VSAN's 
-                admin state is 'active'.  Specifically, if a 
-                VSAN's admin state is 'active', then:
+                administrative state is 'active'.  Specifically, if a 
+                VSAN's administrative state is 'active', then:
 
                 - an attempt to change a VSAN's value of 
                   vsanFcTimerRatov, vsanFcTimerEdtov or 
@@ -862,6 +933,7 @@ vsanFcTimerForceFlag  OBJECT-TYPE
                   and/or vsanFcTimerDstov will cause the VSAN to be 
                   temporarily suspended while the timer value is 
                   changed, and then re-activated again.
+
                 The default value of this object will have all 
                 the bits reset." 
         ::= { vsanFcTimerEntry 1 }
@@ -877,16 +949,16 @@ vsanFcTimerRatov OBJECT-TYPE
                 when to reuse an NxPort resource such as a 
                 Recovery_Qualifier. It represents E_D_TOV 
                 (vsanFcTimerEdtov) plus twice the maximum time 
-                that a frame may be delayed within the Fabric 
+                that a frame may be delayed within the fabric 
                 and still be delivered.
-                Note that all switches in a vsan should be 
+                Note that all switches in a VSAN should be 
                 configured with the same value of this timeout. 
                
-                If the corresponding VSAN admin state is 'active', 
-                then the 'SET' operation on this object results 
-                in error. However to force the value of 
+                If the corresponding VSAN administrative state is 
+                'active', then the 'SET' operation on this object 
+                results in error. However to force the value of 
                 'Resource Allocation Timeout Value', when the 
-                VSAN admin state is 'active', the corresponding
+                VSAN administrative state is 'active', the corresponding
                 instance of 'vsanFcTimerForceFlag' bit position 0 
                 should be set." 
         REFERENCE
@@ -904,18 +976,18 @@ vsanFcTimerEdtov OBJECT-TYPE
                 "The Error_Detect_Timeout Value used for FxPorts 
                 as the timeout value for detecting an error 
                 condition. 
-                Note that all switches in a vsan should be 
+                Note that all switches in a VSAN should be 
                 configured with the same value of this timeout.
                 Note that value of this object must be less than 
                 value of vsanFcTimerDstov. 
              
-                If the corresponding VSAN admin state is 'active', 
-                then the 'SET' operation on this object results in 
-                error. However to force the value of 'Error Detect 
-                Timeout Value', when the VSAN admin state is 
-                'active', the corresponding instance of 
-                'vsanFcTimerForceFlag' bit position 1 should be
-                set." 
+                If the corresponding VSAN administrative state is 
+                'active', then the 'SET' operation on this object 
+                results in error. However to force the value of 
+                'Error Detect Timeout Value', when the VSAN 
+                administrative state is 'active', the corresponding 
+                instance of 'vsanFcTimerForceFlag' bit position 1 should
+                be set." 
         REFERENCE
                 "Section 29.2.1.2 E_D_TOV in FC-PH (Fibre Channel - 
                 Physical and Signaling Interface) Rev 4.3."    
@@ -930,15 +1002,15 @@ vsanFcTimerDstov OBJECT-TYPE
         DESCRIPTION
                 "The Distributed_Services_Timeout Value which 
                 indicates how long a distributed services 
-                requestor will wait for a response. 
+                requester will wait for a response. 
             
-                If the corresponding VSAN admin state is 'active', 
-                then the 'SET' operation on this object results in 
-                error. However to force the value of 'Distributed 
-                Services Timeout Value', when the VSAN admin state 
-                is 'active', the corresponding instance of 
-                'vsanFcTimerForceFlag' bit position 2 should be 
-                set." 
+                If the corresponding VSAN administrative state is 
+                'active', then the 'SET' operation on this object 
+                results in error. However to force the value of 
+                'Distributed Services Timeout Value', when the VSAN 
+                administrative state is 'active', the corresponding 
+                instance of 'vsanFcTimerForceFlag' bit position 2 
+                should be set." 
         REFERENCE
                 "Section 3.1.25 in FC-SW2 (Fibre Channel - 
                 Switch Fabric) Rev 5.4."
@@ -953,17 +1025,29 @@ vsanFcTimerFstov OBJECT-TYPE
         DESCRIPTION
                 "The Fabric_Stability_Timeout Value used to ensure 
                 that Fabric stability has been achieved during Fabric 
-                Configuration.The value of this object is common 
+                Configuration. The value of this object is common 
                 across all VSANs." 
         REFERENCE
                 "Section 3.1.40 F_S_TOV in FC-SW2 (Fibre Channel - 
                 Switch Fabric) Rev 5.4."
         ::= { vsanFcTimerEntry 5 }
 
+-- objects that are sent with notifications
+
+vsanFcFeElementName OBJECT-TYPE
+        SYNTAX      FcNameId
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+              "This object is part of vsanPortMembershipChange notification.
+                It is the Switch World-Wide Name (WWN) of the switch which is
+                generating this notification."
+        ::= { vsanStats 1 }
+
 -- Notifications
 
 vsanStatusChange NOTIFICATION-TYPE
-        OBJECTS     { notifyVsanIndex, vsanAdminState, vsanOperState}
+        OBJECTS     { notifyVsanIndex, vsanAdminState, vsanOperState }
         STATUS      current
         DESCRIPTION
                 "A state change notification is generated whenever
@@ -971,6 +1055,18 @@ vsanStatusChange NOTIFICATION-TYPE
                 the VSAN after the change, are included as variables 
                 in the notification."
     ::= { vsanNotifications 1 }
+
+vsanPortMembershipChange NOTIFICATION-TYPE
+        OBJECTS     { vsanFcFeElementName, ifIndex, notifyVsanIndex}
+        STATUS      current
+        DESCRIPTION
+                "A membership change notification is generated whenever
+                port-vsan membership of a port is changed. The switch 
+                wwn, interface index and new port-vsan after the change,
+                are included as variables in the notification. Change in
+                vsanIfEntry object of vsanIfTable triggers this 
+                notification."
+    ::= { vsanNotifications 2 }
 
 -- Conformance
 
@@ -1014,7 +1110,8 @@ vsanMIBCompliance MODULE-COMPLIANCE
         SYNTAX     INTEGER {             
                      active(1),
                      createAndGo(4),
-                     destroy(6)}
+                     destroy(6) }
+        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only three values 'createAndGo', 'destroy' and 
                 'active' out of the six enumerated values need to be
@@ -1066,7 +1163,8 @@ vsanMIBCompliance1 MODULE-COMPLIANCE
         SYNTAX     INTEGER {             
                      active(1),
                      createAndGo(4),
-                     destroy(6)}
+                     destroy(6) }
+        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only three values 'createAndGo', 'destroy' and 
                 'active' out of the six enumerated values need to be
@@ -1118,7 +1216,8 @@ vsanMIBCompliance2 MODULE-COMPLIANCE
         SYNTAX     INTEGER {             
                      active(1),
                      createAndGo(4),
-                     destroy(6)}
+                     destroy(6) }
+        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only three values 'createAndGo', 'destroy' and 
                 'active' out of the six enumerated values need to be
@@ -1170,7 +1269,8 @@ vsanMIBCompliance3 MODULE-COMPLIANCE
         SYNTAX     INTEGER {             
                      active(1),
                      createAndGo(4),
-                     destroy(6)}
+                     destroy(6) }
+        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only three values 'createAndGo', 'destroy' and 
                 'active' out of the six enumerated values need to be
@@ -1186,10 +1286,10 @@ vsanMIBCompliance3 MODULE-COMPLIANCE
         SYNTAX     Integer32 (0..3)
         DESCRIPTION 
                 "Only values from 0 to 3 need to be supported." 
-        ::= {vsanMIBCompliances 4 }
+        ::= { vsanMIBCompliances 4 }
 
 vsanMIBCompliance4 MODULE-COMPLIANCE
-        STATUS   current
+        STATUS   deprecated -- superceded by vsanMIBCompliance5
         DESCRIPTION
                 "The compliance statement for entities which
                  implement the VSANs."
@@ -1226,7 +1326,8 @@ vsanMIBCompliance4 MODULE-COMPLIANCE
         SYNTAX     INTEGER {             
                      active(1),
                      createAndGo(4),
-                     destroy(6)}
+                     destroy(6) }
+        MIN-ACCESS read-create
         DESCRIPTION 
                 "Only three values 'createAndGo', 'destroy' and 
                 'active' out of the six enumerated values need to be
@@ -1242,7 +1343,181 @@ vsanMIBCompliance4 MODULE-COMPLIANCE
         SYNTAX     Integer32 (0..3)
         DESCRIPTION 
                 "Only values from 0 to 3 need to be supported." 
-        ::= {vsanMIBCompliances 5 }
+        ::= { vsanMIBCompliances 5 }
+
+vsanMIBCompliance5 MODULE-COMPLIANCE
+        STATUS   deprecated -- superceded by vsanMIBCompliance6
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the VSANs."
+        MODULE MANDATORY-GROUPS { vsanGroupRev2, 
+                                  vsanMembershipGroup,
+                                  vsanStaticMembershipGroup,
+                                  vsanNotificationGroup,
+                                  vsanFcTimerGroupRev1,
+                                  vsanFcLatencyGroup,
+                                  vsanVsanMembershipSummaryGroup,
+                                  vsanMembershipSummaryGroupRev1 }
+
+        GROUP  vsanDynamicMembershipGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs."
+
+        GROUP   vsanWWNListGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs 
+                based on WWNs."
+        
+        OBJECT vsanMediaType 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+
+        OBJECT vsanMtu 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+                                           
+        OBJECT vsanRowStatus             
+        SYNTAX     INTEGER {             
+                     active(1),
+                     createAndGo(4),
+                     destroy(6) }
+        MIN-ACCESS read-create
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and 
+                'active' out of the six enumerated values need to be
+                supported."
+                                           
+        OBJECT vsanIfDenyList             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only access need to be supported if system 
+                does not support dynamic membership of VSANs."
+
+        OBJECT vsanInterOperValue
+        SYNTAX     Integer32 (0..3)
+        DESCRIPTION 
+                "Only values from 0 to 3 need to be supported." 
+        ::= { vsanMIBCompliances 6 }
+
+vsanMIBCompliance6 MODULE-COMPLIANCE
+        STATUS   deprecated -- superceded by vsanMIBCompliance7
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the VSANs."
+        MODULE MANDATORY-GROUPS { vsanGroupRev2, 
+                                  vsanMembershipGroup,
+                                  vsanStaticMembershipGroup,
+                                  vsanNotificationGroupRev1,
+                                  vsanFcTimerGroupRev1,
+                                  vsanFcLatencyGroup,
+                                  vsanVsanMembershipSummaryGroup,
+                                  vsanMembershipSummaryGroupRev1 }
+
+        GROUP  vsanDynamicMembershipGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs."
+
+        GROUP   vsanWWNListGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs 
+                based on WWNs."
+        
+        OBJECT vsanMediaType 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+
+        OBJECT vsanMtu 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+                                           
+        OBJECT vsanRowStatus             
+        SYNTAX     INTEGER {             
+                     active(1),
+                     createAndGo(4),
+                     destroy(6) }
+        MIN-ACCESS read-create
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and 
+                'active' out of the six enumerated values need to be
+                supported."
+                                           
+        OBJECT vsanIfDenyList             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only access need to be supported if system 
+                does not support dynamic membership of VSANs."
+
+        OBJECT vsanInterOperValue
+        SYNTAX     Integer32 (0..3)
+        DESCRIPTION 
+                "Only values from 0 to 3 need to be supported." 
+        ::= { vsanMIBCompliances 7 }
+
+vsanMIBCompliance7 MODULE-COMPLIANCE
+        STATUS   current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the VSANs."
+        MODULE MANDATORY-GROUPS { vsanGroupRev3, 
+                                  vsanMembershipGroup,
+                                  vsanStaticMembershipGroup,
+                                  vsanNotificationGroupRev1,
+                                  vsanFcTimerGroupRev1,
+                                  vsanFcLatencyGroup,
+                                  vsanVsanMembershipSummaryGroup,
+                                  vsanMembershipSummaryGroupRev1 }
+
+        GROUP  vsanDynamicMembershipGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs."
+
+        GROUP   vsanWWNListGroup
+        DESCRIPTION
+                "Implementation of this group is mandatory for all
+                systems that support dynamic membership of VSANs 
+                based on WWNs."
+        
+        OBJECT vsanMediaType 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+
+        OBJECT vsanMtu 
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only need to be supported."
+                                           
+        OBJECT vsanRowStatus             
+        SYNTAX     INTEGER {             
+                     active(1),
+                     createAndGo(4),
+                     destroy(6) }
+        MIN-ACCESS read-create
+        DESCRIPTION 
+                "Only three values 'createAndGo', 'destroy' and 
+                'active' out of the six enumerated values need to be
+                supported."
+                                           
+        OBJECT vsanIfDenyList             
+        MIN-ACCESS read-only
+        DESCRIPTION 
+                "Only read-only access need to be supported if system 
+                does not support dynamic membership of VSANs."
+
+        OBJECT vsanInterOperValue
+        SYNTAX     Integer32 (0..3)
+        DESCRIPTION 
+                "Only values from 0 to 3 need to be supported." 
+        ::= { vsanMIBCompliances 8 }
 
 -- Units of Conformance
 
@@ -1250,7 +1525,7 @@ vsanGroup OBJECT-GROUP
         OBJECTS { vsanNumber, vsanLastChange, vsanName, vsanMediaType, 
                   vsanMtu, vsanAdminState,  vsanLoadBalancingType, 
                   vsanInterOperMode, vsanOperState, vsanRowStatus, 
-                  notifyVsanIndex, fcInorderDelivery}
+                  notifyVsanIndex, fcInorderDelivery }
         STATUS   deprecated -- superceded by vsanGroupRev1
         DESCRIPTION
                 "A collection of objects for configuring and
@@ -1266,7 +1541,7 @@ vsanMembershipGroup   OBJECT-GROUP
         ::= { vsanMIBGroups 3 }
 
 vsanStaticMembershipGroup   OBJECT-GROUP
-        OBJECTS  { vsanIfNumber, vsanIfVsan , vsanIfDenyList} 
+        OBJECTS  { vsanIfNumber, vsanIfVsan , vsanIfDenyList } 
         STATUS   current
         DESCRIPTION
                 "A collection of objects for displaying and
@@ -1293,7 +1568,7 @@ vsanDynamicMembershipGroup   OBJECT-GROUP
 
 vsanNotificationGroup   NOTIFICATION-GROUP
         NOTIFICATIONS  { vsanStatusChange }
-        STATUS   current
+        STATUS   deprecated -- superceded by vsanNotificationGroupRev1
         DESCRIPTION
                 "A collection of objects for status change monitoring 
                 and notifications."
@@ -1327,7 +1602,7 @@ vsanGroupRev1 OBJECT-GROUP
         OBJECTS { vsanNumber, vsanLastChange, vsanName, vsanMediaType, 
                   vsanMtu, vsanAdminState,  vsanLoadBalancingType, 
                   vsanOperState, vsanRowStatus, vsanInterOperValue,
-                  notifyVsanIndex, fcInorderDelivery}
+                  notifyVsanIndex, fcInorderDelivery }
         STATUS   deprecated -- superceded by vsanGroupRev2
         DESCRIPTION
                 "A collection of objects for configuring and
@@ -1357,10 +1632,38 @@ vsanGroupRev2 OBJECT-GROUP
                   vsanOperState, vsanRowStatus, vsanInterOperValue,
                   notifyVsanIndex, fcInorderDelivery, 
                   vsanInorderDelivery, vsanNetworkDropLatency }
-        STATUS   current
+        STATUS   deprecated -- superceded by vsanGroupRev3
         DESCRIPTION
                 "A collection of objects for configuring and
                 displaying information on VSANs."
         ::= { vsanMIBGroups 13 }
-END
 
+vsanMembershipSummaryGroupRev1   OBJECT-GROUP
+        OBJECTS  { vsanMembershipSummaryIntfType }
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for VSAN membership
+                interface type."
+        ::= { vsanMIBGroups 14 }
+
+vsanNotificationGroupRev1   NOTIFICATION-GROUP
+        NOTIFICATIONS  { vsanStatusChange, vsanPortMembershipChange }
+        STATUS   current
+        DESCRIPTION
+           "A collection of notifications for VSAN management." 
+        ::= { vsanMIBGroups 15 }
+
+vsanGroupRev3 OBJECT-GROUP
+        OBJECTS { vsanNumber, vsanLastChange, vsanName, vsanMediaType, 
+                  vsanMtu, vsanAdminState,  vsanLoadBalancingType, 
+                  vsanOperState, vsanRowStatus, vsanInterOperValue,
+                  notifyVsanIndex, fcInorderDelivery, 
+                  vsanInorderDelivery, vsanNetworkDropLatency,
+                  vsanFcFeElementName}
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for configuring and
+                displaying information on VSANs."
+        ::= { vsanMIBGroups 16 }
+
+END

@@ -3,7 +3,7 @@
 --
 -- September 2002 H K Vivek
 --
--- Copyright (c) 2002-2003 by cisco Systems, Inc.
+-- Copyright (c) 2002-2003, 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- 
 -- *********************************************************************
@@ -30,7 +30,7 @@ IMPORTS
 
 
 ciscoZsMIB  MODULE-IDENTITY
-        LAST-UPDATED  "200504070000Z"
+        LAST-UPDATED  "200511100000Z"
         ORGANIZATION  "Cisco Systems Inc."
         CONTACT-INFO
                 "     Cisco Systems
@@ -53,8 +53,37 @@ ciscoZsMIB  MODULE-IDENTITY
                  Glossary of terms used
                  ----------------------
 
-                 VSAN  -  Virtual Storage Area Network."
+                 VSAN  -  Virtual Storage Area Network.
 
+                 Zone Merge - When the ISL (Inter Switch Link)
+                              between 2 switches is brought up,
+                              the zoning databases on the 2
+                              switches are compared by means of
+                              the Zone Merge protocol. If the
+                              2 databases can be merged, the
+                              ISL is brought up. Otherwise,
+                              the link is isolated."
+
+        REVISION  "200511100000Z"
+        DESCRIPTION
+                "Added new enum 'ipAddrv6' to ZoneMemberType TC.
+                 Added description to the object zoneMemberID
+                 corresponding to this enum.
+                 Added zoneSetZoneListTable and
+                 zoneSetEnforcedZoneListTable to increase the
+                 number of zones that can be associated with 
+                 a zoneset to 8192 from 2048. 
+                 Changed the upper limit of zoneIndex and
+                 zoneMemberParentIndex objects to 8192 from
+                 2048.
+                 Added zoneCompactTable and zoneCompactNotify.
+                 Added new enum 'deviceAlias' to ZoneMemberType TC.
+                 Deprecated zoneCopyActiveToFullOnVsan object.
+                 Added new objects zoneCopyActToFullSpinLock,
+                 zoneCopyActToFullMode and zoneCopyActToFullVsan.
+                 Enhanced zoneMergeFailure notification to
+                 include information regarding the details of
+                 merge failure."
         REVISION  "200504070000Z"
         DESCRIPTION
                 "Added zoneDbHardZoningEnabled to zoneDbTable.
@@ -159,7 +188,12 @@ ZoneMemberType ::= TEXTUAL-CONVENTION
                              iSCSI zoning.
             intf(6) - interface format.
             domainIntf(7) - Domain and Interface format.
-            ipAddr(8) - IP address format."
+            ipAddr(8) - IPv4 address format.
+            ipAddrv6(9) - IPv6 address format.
+            deviceAlias(10) - Device Alias. This is a human
+                              readable string used to alias
+                              a World Wide Name (WWN). It is 
+                              defined in CISCO-FC-DEVICE-ALIAS-MIB."
 
         SYNTAX   INTEGER {
                     wwn(1),
@@ -169,7 +203,9 @@ ZoneMemberType ::= TEXTUAL-CONVENTION
                     symNodeName(5),
                     intf(6),
                     domainIntf(7),
-                    ipAddr(8)
+                    ipAddr(8),
+                    ipAddrv6(9),
+                    deviceAlias(10)
                  }
 
 FcZoneServerRejReasonExpl ::= TEXTUAL-CONVENTION
@@ -390,6 +426,83 @@ ZoneQosPriorityLevel ::= TEXTUAL-CONVENTION
                    low(2),
                    medium(3),
                    high(4)
+                }
+
+ZoneMergeFailCause ::= TEXTUAL-CONVENTION
+        STATUS  current
+        DESCRIPTION
+                "Specifies the reason for zone merge failure.
+                 When the Zone Merge takes place, the local
+                 database is compared with the database of
+                 the adjacent switch. The following
+                 errors/mismatches can take place:
+
+                 other - reason other than those specified
+                         below.
+
+                 zoningModeMismatch - mismatch in zoning modes
+                                      between the 2 switches.
+
+                 qosNotEnabled - qos is not enabled on one of
+                                 the switches and qos
+                                 attribute is present in one
+                                 of the zones.
+
+                 qosConflict - conflict between VSAN based Qos
+                               and zone attribute qos.
+
+                 bcastNotEnabled - broadcast service has not
+                                   been enabled on one of the
+                                   switches and broadcast
+                                   attribute is present in
+                                   one of the zones.
+
+                 mergeCtrlMismatch - there is a mismatch in the 
+                                     merge control flag value. 
+
+                 defZoneMismatch - there is a mismatch in the
+                                   default zone policy.
+
+                 qosAttrMissing - qos attribute is missing.
+
+
+                 bcastAttrMissing - broadcast attribute is
+                                    missing.
+
+                 rdonlyAttrMissing - read only attribute is
+                                     missing.
+
+                 memberMismatch - there is a mismatch in the
+                                  members.
+
+                 invPayloadFormat - the payload format is
+                                    invalid.
+
+                 sizeExceeded - the payload exceeded the
+                                maximum size.
+
+                 unlicensedMember - a member is unlicensed.
+
+                 nonInteropZoneset - a zone attribute/member
+                                     which cannot be supported
+                                     in the current interop
+                                     mode of the switch."
+        SYNTAX  INTEGER {
+                   other(1),
+                   zoningModeMismatch(2),
+                   qosNotEnabled(3),
+                   qosConflict(4),
+                   bcastNotEnabled(5),
+                   mergeCtrlMismatch(6),
+                   defZoneMismatch(7), 
+                   qosAttrMissing(8),
+                   bcastAttrMissing(9),
+                   rdonlyAttrMissing(10),
+                   memberMismatch(11),
+                   invPayloadFormat(12),
+                   sizeExceeded(13),
+                   unlicensedMember(14),
+                   nonInteropZoneset(15)
                 }
 --
 -- zoneDefaultZoneTable
@@ -919,7 +1032,7 @@ ZoneEntry ::= SEQUENCE {
 }
 
 zoneIndex  OBJECT-TYPE
-        SYNTAX        Unsigned32 (1..2048)
+        SYNTAX        Unsigned32 (1..8192)
         MAX-ACCESS    not-accessible
         STATUS        current
         DESCRIPTION
@@ -1278,7 +1391,7 @@ zoneMemberTypeIndex  OBJECT-TYPE
         ::= { zoneMemberEntry 1 }
 
 zoneMemberParentIndex  OBJECT-TYPE
-        SYNTAX        Unsigned32 (1..2048)
+        SYNTAX        Unsigned32 (1..8192)
         MAX-ACCESS    not-accessible
         STATUS        current
         DESCRIPTION
@@ -1371,6 +1484,17 @@ zoneMemberID OBJECT-TYPE
                  this object will contain a 4 octet IP address
                  value followed by an optional 4 octets of
                  subnet mask.
+
+                 If the value of corresponding instance of
+                 zoneMemberFormat object is 'ipAddrv6', then
+                 this object will contain a 16 octet IPv6 address
+                 value followed by an optional 4 octets of
+                 prefix length encoded in network byte order.
+
+                 If the value of the corresponding instance of
+                 zoneMemberFormat object is 'deviceAlias', then
+                 this object contains a Device Alias which
+                 could be of length 1 to 64 bytes.
 
                  This object cannot be modified while the 
                  corresponding value of zoneMemberRowStatus object
@@ -1864,7 +1988,13 @@ zoneMergeFailRecoverResult OBJECT-TYPE
 zoneCopyActiveToFullOnVsan OBJECT-TYPE
         SYNTAX        VsanIndex
         MAX-ACCESS    read-write
-        STATUS        current
+        STATUS        deprecated 
+        -- This object has been deprecated because in
+        -- addition to setting the VSAN on which the
+        -- copy has to take place, a mode also has
+        -- been introduced. The objects to be used
+        -- are zoneCopyActToFullSpinLock,
+        -- zoneCopyActToFullMode and zoneCopyActToFullVsan.
         DESCRIPTION
                 "The VSAN on which the enforced zone set 
                  (active zone set) needs to be copied to the
@@ -2323,7 +2453,27 @@ zoneMergeSuccessVSANNum OBJECT-TYPE
                  this object will contain the value of 0."
         ::= { zoneInformation 4 }
 
+zoneMergeFailureObject OBJECT-TYPE
+        SYNTAX        SnmpAdminString
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION
+                "This object contains the name of the zoning
+                 database object which was the cause of the 
+                 merge failure. In cases where it is not
+                 applicable, this object will contain the
+                 null string."
+        ::= { zoneInformation 5 }
 
+zoneMergeFailureReason OBJECT-TYPE
+        SYNTAX        ZoneMergeFailCause 
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION
+                "This object contains the reason for the 
+                 the merge failure."
+        ::= { zoneInformation 6 }
+ 
 -- Notification control objects
 
 zoneServiceReqRejNotifyEnable OBJECT-TYPE
@@ -2774,6 +2924,358 @@ zoneSwitchWwn OBJECT-TYPE
                  notification zoneActivateNotify."
         ::= { zoneConfiguration 37 }
 
+zoneSetZoneListTable OBJECT-TYPE
+        SYNTAX         SEQUENCE OF ZoneSetZoneListEntry
+        MAX-ACCESS     not-accessible
+        STATUS         current
+        DESCRIPTION
+                "This table is an extension to the
+                 zoneSetTable defined above. 
+                 The object zoneSetZoneList in zoneSetTable
+                 represents the set of zones that form a 
+                 zoneset. However, this object has the
+                 limitation of being able to represent
+                 only 2048 zones. This table which extends
+                 the zoneSetTable overcomes this limitation
+                 and the number of zones that form a 
+                 zoneset is increased to 8192."
+        ::= { zoneConfiguration 38 }
+
+zoneSetZoneListEntry OBJECT-TYPE
+        SYNTAX         ZoneSetZoneListEntry
+        MAX-ACCESS     not-accessible
+        STATUS         current
+        DESCRIPTION
+                "An entry (conceptual row) in this table
+                 represents a set of 6144 zones that can be
+                 associated with the zoneset represented by
+                 zoneSetIndex on VSAN represented by
+                 vsanIndex."
+        AUGMENTS { zoneSetEntry }
+        ::= { zoneSetZoneListTable 1 }
+
+ZoneSetZoneListEntry ::= SEQUENCE {
+        zoneSetZoneListBmap4k      FcList,
+        zoneSetZoneListBmap6k      FcList,
+        zoneSetZoneListBmap8k      FcList
+}
+
+zoneSetZoneListBmap4k  OBJECT-TYPE
+        SYNTAX        FcList
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+                "The set of zones from ids 2049 to 4096 which form 
+                 this zone set on this VSAN. The zones are
+                 identified by zoneIndex object in the 
+                 zoneTable.
+
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string.
+
+                 The default value is the zero length string."
+        DEFVAL { ''H }
+        ::= { zoneSetZoneListEntry 1 }
+
+zoneSetZoneListBmap6k  OBJECT-TYPE 
+        SYNTAX        FcList
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION    
+                "The set of zones from ids 4097 to 6144 which form
+                 this zone set on this VSAN. The zones are
+                 identified by zoneIndex object in the
+                 zoneTable.
+
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string.
+
+                 The default value is the zero length string."
+        DEFVAL { ''H }
+        ::= { zoneSetZoneListEntry 2 }
+
+zoneSetZoneListBmap8k  OBJECT-TYPE 
+        SYNTAX        FcList
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION    
+                "The set of zones from ids 6145 to 8192 which form
+                 this zone set on this VSAN. The zones are
+                 identified by zoneIndex object in the
+                 zoneTable.
+
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string.
+
+                 The default value is the zero length string."
+        DEFVAL { ''H }
+        ::= { zoneSetZoneListEntry 3 }
+
+zoneSetEnforcedZoneListTable OBJECT-TYPE
+        SYNTAX         SEQUENCE OF ZoneSetEnforcedZoneListEntry
+        MAX-ACCESS     not-accessible
+        STATUS         current
+        DESCRIPTION    
+                "This table is an extension to the
+                 zoneEnforcedZoneSetTable defined above. 
+                 The object zoneEnforcedZoneSetZoneList in 
+                 zoneEnforcedZoneSetTable represents the
+                 set of enforced zones that form an
+                 enforced zoneset. However, this object has the 
+                 limitation of being able to represent
+                 only 2048 zones. This table which extends
+                 the zoneEnforcedZoneSetTable overcomes this 
+                 limitation and the number of enforced zones that 
+                 form an enforced zoneset is increased to
+                 8192."
+        ::= { zoneConfiguration 39 }
+        
+zoneSetEnforcedZoneListEntry OBJECT-TYPE
+        SYNTAX         ZoneSetEnforcedZoneListEntry
+        MAX-ACCESS     not-accessible
+        STATUS         current
+        DESCRIPTION    
+                "An entry (conceptual row) in this table
+                 represents a set of upto 6144 enforced zones 
+                 that can be associated with the enforced
+                 zoneset on VSAN represented by vsanIndex."
+        AUGMENTS { zoneEnforcedZoneSetEntry }
+        ::= { zoneSetEnforcedZoneListTable 1 }
+        
+ZoneSetEnforcedZoneListEntry ::= SEQUENCE {
+        zoneSetEnforcedZoneListBmap4k      FcList,
+        zoneSetEnforcedZoneListBmap6k      FcList,
+        zoneSetEnforcedZoneListBmap8k      FcList
+}       
+
+zoneSetEnforcedZoneListBmap4k  OBJECT-TYPE
+        SYNTAX        FcList
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   
+                "The set of zones from ids 2049 to 4096 which form
+                 the enforced  zone set on this VSAN. The enforced 
+                 zones are identified by zoneIndex object in the
+                 zoneEnforcedZoneTable. 
+                 
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string."
+        ::= { zoneSetEnforcedZoneListEntry 1 }
+
+zoneSetEnforcedZoneListBmap6k  OBJECT-TYPE
+        SYNTAX        FcList
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION
+                "The set of zones from ids 4097 to 6144 which form
+                 the enforced  zone set on this VSAN. The enforced 
+                 zones are identified by zoneIndex object in the
+                 zoneEnforcedZoneTable.
+
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string."
+        ::= { zoneSetEnforcedZoneListEntry 2 }
+
+zoneSetEnforcedZoneListBmap8k  OBJECT-TYPE
+        SYNTAX        FcList
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION
+                "The set of zones from ids 6145 to 8192 which form
+                 the enforced  zone set on this VSAN. The enforced 
+                 zones are identified by zoneIndex object in the
+                 zoneEnforcedZoneTable.
+
+                 If a particular bit has a value of '1', then the
+                 corresponding zone is a part of this zone set.
+                 All other zones have '0' in their positions or
+                 not present in the string."
+        ::= { zoneSetEnforcedZoneListEntry 3 }
+
+zoneCompactTable OBJECT-TYPE
+        SYNTAX        SEQUENCE OF ZoneCompactEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+                "The zoneSetZoneList object and the
+                 zoneSetZoneListTable allow upto 8192
+                 zones to be associated with a zoneset.
+                 This is done with the help of 4 bitmaps
+                 each of which represent 2048 zones. There
+                 may exist a situation where the 'lowest'
+                 bitmap may not be fully populated but
+                 'higher' bitmaps may have bits set in them.
+                 Semantically what this means is: the lowest
+                 2048 zones have not been fully associated,
+                 but zones with higher ids have been
+                 associated. This kind of a situation causes
+                 problems for management stations which are
+                 only aware of older versions of this MIB. They
+                 are only aware of zoneSetZoneList object and
+                 hence only the 'lowest' 2048 zones that are
+                 associated with a zoneset. In the above
+                 situation, the total number of zones
+                 associated with the zoneset could be less
+                 than 2048. But by virtue of being distributed
+                 in the 'higher' bitmaps, those zones will
+                 not be seen by those management stations as
+                 they are not aware of the new objects in
+                 zoneSetZoneListTable. In such a situation,
+                 a management station which is aware of this
+                 version of the MIB, can choose to compact
+                 the zones associated with zonesets on a 
+                 VSAN, so that the holes in the lowest 2048
+                 zones are filled.
+
+                 Note that this table facilitates compaction
+                 of only the first 2048 zones and not zones
+                 belonging to 'higher' bitmaps."
+        ::= { zoneConfiguration 40 }
+
+zoneCompactEntry OBJECT-TYPE
+        SYNTAX        ZoneCompactEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+                "An entry allows compaction to be carried
+                 out on a VSAN."
+        INDEX { vsanIndex }
+        ::= { zoneCompactTable 1 }
+
+ZoneCompactEntry ::= SEQUENCE {
+        zoneCompactFirst2k    INTEGER
+}
+
+zoneCompactFirst2k OBJECT-TYPE
+        SYNTAX       INTEGER {
+                        compact(1),
+                        noop(2)
+                     }
+        MAX-ACCESS   read-write
+        STATUS       current
+        DESCRIPTION
+                "Setting this object to 'compact' will
+                 result in compaction of the lowest
+                 2048 zones that are associated to
+                 zonesets on this VSAN. Zones present
+                 in higher bitmaps will be moved down
+                 so that the holes in the lowest 2048
+                 zones are filled. As a result of this,
+                 the ids of the corresponding zones are
+                 changed and a management station should
+                 re-read the zoneTable. If such a 
+                 compaction is not possible or the
+                 lowest 2048 zones are already compacted,
+                 the SET operation will result in error.
+
+                 If a compaction operation goes through
+                 successfully, then the notification
+                 zoneCompactNotify is generated.
+
+                 Setting this object to 'noop', will
+                 result in no action being taken.
+
+                 The value of this object when read is
+                 always 'noop'."
+        ::= { zoneCompactEntry 1 }
+
+zoneCompactVsan OBJECT-TYPE
+        SYNTAX      VsanIndex
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION
+                "This object represents the VSAN on which
+                 a successful zone compaction has taken place.
+                 It is used in the notification
+                 zoneCompactNotify."
+        ::= { zoneConfiguration 41 }
+
+zoneCopyActToFullSpinLock OBJECT-TYPE
+        SYNTAX        TestAndIncr
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "This object is used to facilitate modification
+                 of zoneCopyActToFullMode and zoneCopyActToFullOnVsan
+                 by multiple managers.
+                 The procedure for modifying these objects is
+                 as follows:
+
+                 1. Determine new values for
+                    zoneCopyActToFullMode, zoneCopyActToFullOnVsan.
+
+                 2. Retrieve the value of zoneCopyActToFullSpinLock.
+
+                 3. Set the value of zoneCopyActToFullSpinLock to
+                    the retrieved value, and (in the same PDU) the value
+                    of zoneCopyActToFullMode to the new
+                    value. If the set fails for zoneCopyActToFullSpinLock,
+                    go back to step 2.
+
+                 4. Set the value of zoneCopyActToFullSpinLock to
+                    the retrieved value plus one, and (in the same PDU)
+                    the value of zoneCopyActToFullOnVsan to the new
+                    value. If the set fails for
+                    zoneCopyActToFullSpinLock object, go back to step
+                    2.
+
+                    Note that if it's possible to include
+                    zoneCopyActToFullOnVsan in the (Set Req) 
+                    PDU of the earlier step, then step 4 can be
+                    eliminated."
+        ::= { zoneConfiguration 42 }
+
+zoneCopyActToFullMode OBJECT-TYPE
+        SYNTAX        INTEGER {
+                         includeAutoZones(1),
+                         excludeAutoZones(2),
+                         noop(3)
+                      }
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "Setting this object to 'includeAutoZones', results
+                 in certain internal zones created by Zone Server being
+                 copied along with the enforced database to the full
+                 zoneset database.
+
+                 Setting this object to 'excludeAutoZones', does not
+                 copy those zones.
+
+                 Setting this object to 'noop' results in no action 
+                 being taken.
+
+                 The value of this object when read is always
+                 'noop'." 
+        ::= { zoneConfiguration 43 }
+
+zoneCopyActToFullVsan OBJECT-TYPE
+        SYNTAX        VsanIndex
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "The VSAN on which the enforced zone set
+                 (active zone set) needs to be copied to the
+                 zone set database (full zone set). Setting
+                 this object to a valid VSAN will trigger a
+                 copy of the enforced zone set on that VSAN
+                 to the zone set database on the same VSAN.
+
+                 Setting this object to an invalid VSAN-id
+                 will result in an error and no copy will
+                 take place."
+        ::= { zoneConfiguration 44 }
+
 -- Notifications
 
 
@@ -2795,7 +3297,9 @@ zoneServiceReqRejNotify NOTIFICATION-TYPE
         ::= { zoneNotifications 1 }
 
 zoneMergeFailureNotify NOTIFICATION-TYPE
-        OBJECTS  { ifIndex, zoneMergeFailureVSANNum }
+        OBJECTS  { ifIndex, zoneMergeFailureVSANNum,
+                   zoneMergeFailureObject,
+                   zoneMergeFailureReason }
         STATUS   current
         DESCRIPTION
                 "This notification is generated whenever there is 
@@ -2804,7 +3308,11 @@ zoneMergeFailureNotify NOTIFICATION-TYPE
                  If all VSANs on a link have a zone-merge failure
                  at the same time, then just one notification is
                  generated in which zoneMergeFailureVSANNum object
-                 has a zero value."
+                 has a zero value.
+
+                 The zoneMergeFailureObject and 
+                 zoneMergeFailureReason assist in providing
+                 information regarding the point of merge failure."
         ::= { zoneNotifications 2 }        
 
 zoneMergeSuccessNotify NOTIFICATION-TYPE
@@ -2854,6 +3362,15 @@ zoneActivateNotify NOTIFICATION-TYPE
                  The zoneSwitchWwn object represents the
                  WWN of the local device."
         ::= { zoneNotifications 6 }
+
+zoneCompactNotify NOTIFICATION-TYPE
+        OBJECTS  { zoneCompactVsan }
+        STATUS   current
+        DESCRIPTION
+                "This notification is generated whenever a
+                 zone compaction on the VSAN specified by
+                 zoneCompactVsan happens successfully."
+        ::= { zoneNotifications 7 }
 
 -- Conformance
 
@@ -3388,7 +3905,8 @@ zoneServerMIBComplianceRev6 MODULE-COMPLIANCE
         ::= { zoneServerMIBCompliances 7 }
 
 zoneServerMIBComplianceRev7 MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated
+             -- superceded by zoneServerMIBComplianceRev8 
         DESCRIPTION
                 "The compliance statement for entities which
                  implement the Zone Server."
@@ -3469,6 +3987,106 @@ zoneServerMIBComplianceRev7 MODULE-COMPLIANCE
                 "Only IPv4 support is required."
 
         ::= { zoneServerMIBCompliances 8 }
+
+zoneServerMIBComplianceRev8 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which
+                 implement the Zone Server."
+        MODULE MANDATORY-GROUPS {zoneConfigurationGroup7,
+                                 zoneStatisticsGroup,
+                                 zoneNotificationControlGroup1,
+                                 zoneNotificationGroup2,
+                                 zoneNotificationControlGroup1Sup1,
+                                 zoneConfigGroupSup2}
+
+        GROUP      zoneLunStatsGroup
+        DESCRIPTION
+                "Only entities that support LUN zoning need to
+                 support this group."
+
+        GROUP      zoneConfigGroupSup1
+        DESCRIPTION
+                "Only entities that need to associate more than
+                 2048 zones per zoneset need to support this
+                 group."
+
+        GROUP      zoneNotificationControlGroup1Sup2
+        DESCRIPTION
+                "Only entities that support more than 2048
+                 zones per zoneset need to support this group."
+
+        GROUP      zoneNotificationGroup2Sup1
+        DESCRIPTION
+                "Only entities that support more than 2048
+                 zones per zoneset need to support this group."
+
+        OBJECT     zoneSetRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneSetActivateRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneAliasRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneMemberRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneCopyRowStatus
+        SYNTAX     INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+        DESCRIPTION
+                "Only three values 'createAndGo', 'destroy' and
+                'active' out of the six enumerated values need to be
+                supported."
+
+        OBJECT     zoneCopyServerAddrType
+        SYNTAX     INTEGER { ipv4(1) }
+        DESCRIPTION
+                "Only IPv4 support is required."
+
+        ::= { zoneServerMIBCompliances 9 }
 
 -- Units of Conformance                                  
 
@@ -3809,7 +4427,8 @@ zoneNotificationGroup1 NOTIFICATION-GROUP
                        zoneMergeSuccessNotify,
                        zoneDefZoneBehaviourChngNotify,
                        zoneUnsuppMemInIntOpModeNotify}
-        STATUS        current
+        STATUS        deprecated
+                      -- superceded by zoneNotificationGroup2 
         DESCRIPTION
                 "A collection of notification(s) for monitoring 
                  Zone Server request rejection, zone merge
@@ -4054,7 +4673,8 @@ zoneConfigurationGroup6 OBJECT-GROUP
                  zoneZoneSetDistributeVsan,
                  zoneZoneSetDistributeResult,
                  zoneZoneSetDistributeFailReason}
-        STATUS   current
+        STATUS   deprecated
+               -- superceded by zoneConfigurationGroup7 
         DESCRIPTION
                 "A collection of objects for displaying and configuring
                  Zone Membership and deleting the local zone server
@@ -4086,6 +4706,141 @@ zoneNotificationControlGroup1Sup1 OBJECT-GROUP
                  zoneNotificationControlGroup1 with additional
                  object(s)."
         ::= { zoneServerMIBGroups 15 }
+
+zoneConfigGroupSup1 OBJECT-GROUP
+        OBJECTS       { zoneSetZoneListBmap4k,
+                        zoneSetZoneListBmap6k,
+                        zoneSetZoneListBmap8k,
+                        zoneSetEnforcedZoneListBmap4k,
+                        zoneSetEnforcedZoneListBmap6k,
+                        zoneSetEnforcedZoneListBmap8k,
+                        zoneCompactFirst2k }
+        STATUS  current
+        DESCRIPTION
+                "A collection of objects to associate zones
+                 to zonesets and facilitate compaction of
+                 first 2k zones associated with zonesets."
+        ::= { zoneServerMIBGroups 16 }
+
+zoneNotificationControlGroup1Sup2 OBJECT-GROUP
+        OBJECTS {
+                  zoneCompactVsan,
+                  zoneMergeFailureObject,
+                  zoneMergeFailureReason
+                }
+        STATUS  current
+        DESCRIPTION
+                "A group that supplements
+                 zoneNotificationControlGroup1 with additional
+                 notification information object(s)."
+        ::= { zoneServerMIBGroups 17 }
+
+zoneNotificationGroup2Sup1 NOTIFICATION-GROUP
+        NOTIFICATIONS { zoneCompactNotify }
+        STATUS  current
+        DESCRIPTION
+                "A group that supplements zoneNotificationGroup2
+                 with additional notification(s)."
+        ::= { zoneServerMIBGroups 18 }
+
+zoneConfigGroupSup2 OBJECT-GROUP
+        OBJECTS {
+                   zoneCopyActToFullSpinLock,
+                   zoneCopyActToFullMode,
+                   zoneCopyActToFullVsan
+                }
+        STATUS  current
+        DESCRIPTION
+                "A collection of objects to copy active zonesets to
+                 full zonesets on a VSAN."
+        ::= { zoneServerMIBGroups 19 }
+
+zoneConfigurationGroup7 OBJECT-GROUP
+        OBJECTS {zoneSetPropagationMode,
+                 zoneDefaultZoneBehaviour,
+                 zoneDefaultZoneReadOnly,
+                 zoneDefaultZoneQos,
+                 zoneDefaultZoneQosPriority,
+                 zoneDefaultZoneBroadcast,
+                 zoneSetNumber,
+                 zoneSetName,
+                 zoneSetZoneList,
+                 zoneSetLastChange,
+                 zoneSetRowStatus,
+                 zoneSetClone,
+                 zoneSetActivate,
+                 zoneSetActivateResult,
+                 zoneSetDeActivate,
+                 zoneSetActivateRowStatus,
+                 zoneSetFailCause,
+                 zoneSetFailDomId,
+                 zoneNumber,
+                 zoneName,
+                 zoneMemberList,
+                 zoneAliasList,
+                 zoneLastChange,
+                 zoneRowStatus,
+                 zoneReadOnly,
+                 zoneQos,
+                 zoneQosPriority,
+                 zoneBroadcast,
+                 zoneClone,
+                 zoneAliasNumber,
+                 zoneAliasName,
+                 zoneAliasMemberList,
+                 zoneAliasRowStatus,
+                 zoneAliasLastChange,
+                 zoneAliasClone,
+                 zoneMemberNumber,
+                 zoneMemberFormat,
+                 zoneMemberID,
+                 zoneMemberLunID,
+                 zoneMemberRowStatus,
+                 zoneEnforcedZoneSetNumber,
+                 zoneEnforcedZoneSetName,
+                 zoneEnforcedZoneSetZoneList,
+                 zoneEnforcedZoneSetActivateTime,
+                 zoneEnforcedZoneNumber,
+                 zoneEnforcedZoneName,
+                 zoneEnforcedZoneMemberList,
+                 zoneEnforcedZoneAliasList,
+                 zoneEnforcedZoneActivateTime,
+                 zoneEnforcedZoneReadOnly,
+                 zoneEnforcedZoneQos,
+                 zoneEnforcedZoneQosPriority,
+                 zoneEnforcedZoneBroadcast,
+                 zoneEnforcedZoneMemberNumber,
+                 zoneEnforcedZoneMemberFormat,
+                 zoneEnforcedZoneMemberID,
+                 zoneEnforcedZoneMemberLunID,
+                 zoneMergeFailRecoverSpinLock,
+                 zoneMergeFailRecoverInterface,
+                 zoneMergeFailRecoverVsan,
+                 zoneMergeFailRecoverOper,
+                 zoneMergeFailRecoverResult,
+                 zoneDbClearDb,
+                 zoneDbEnforcedEqualsLocal,
+                 zoneDbHardZoningEnabled,
+                 zoneCopyProto,
+                 zoneCopyDestFileType,
+                 zoneCopyServerAddrType,
+                 zoneCopyServerAddr,
+                 zoneCopyDestFileName,
+                 zoneCopyUserName,
+                 zoneCopyUserPassword,
+                 zoneCopyStartCopy,
+                 zoneCopyState,
+                 zoneCopyRowStatus,
+                 zoneZoneSetDistributeVsan,
+                 zoneZoneSetDistributeResult,
+                 zoneZoneSetDistributeFailReason}
+        STATUS   current
+        DESCRIPTION
+                "A collection of objects for displaying and configuring
+                 Zone Membership and deleting the local zone server
+                 database."
+        ::= { zoneServerMIBGroups 20 }
+
 
 END
 

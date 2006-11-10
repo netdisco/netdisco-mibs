@@ -3,7 +3,7 @@
 --
 -- September 1996  Hongchi Shih
 --
--- Copyright (c) 1996-1999,2000-2003 by cisco Systems, Inc.
+-- Copyright (c) 1996-1999,2000-2003,2004,2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -15,7 +15,8 @@ IMPORTS
         NOTIFICATION-TYPE,
         IpAddress,
         Gauge32,
-        Integer32
+        Integer32,
+        Unsigned32
                 FROM SNMPv2-SMI
         TEXTUAL-CONVENTION,
         DisplayString,
@@ -57,7 +58,7 @@ IMPORTS
 
 
 ciscoVoiceDialControlMIB MODULE-IDENTITY
-        LAST-UPDATED    "200401200000Z"
+        LAST-UPDATED    "200507250000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -76,6 +77,73 @@ ciscoVoiceDialControlMIB MODULE-IDENTITY
                  peers on both a circuit-switched telephony network,
                  and an IP data network.
                 "
+        REVISION        "200507250000Z"
+        DESCRIPTION
+        "[1] Add new objects to cvVoIPCallActiveTable and
+             cvVoIPCallHistoryTable for GSM AMR-NB codec support:
+             Frame type, Bit rates, Mode change period,
+             Mode change neighbor, Max payload time, CRC,
+             Robust sorting, Encapsulation, Payload time
+             channels, for call active and history table.
+         [2] Add new objects to cvVoIPPeerCfgTable for GSM AMR-NB
+             codec support:
+             Frame type, Bit rates and CRC.
+         [3] Created groups cvVoIPCallAmrNbGroup and
+             cvdcVoIPCfgAmrNbGroup, for GSM AMR-NB
+             specific objects.
+         [4] Created a module-compliance cvdcMIBComplianceRev13
+             and made cvVoIPCallAmrNbGroup and cvdcVoIPCfgAmrNbGroup
+             as non mandatory.
+         [5] Created following textual conventions:
+             CvAmrNbBitRateMode and CvAmrNbRtpEncap.
+        "
+        REVISION  "200503020000Z"
+        DESCRIPTION
+                "The following values were added to the
+                cvVoicePeerCfgEchoCancellerTest object:
+                echoCancellerG168Test5,
+                echoCancellerG168Test7
+                "
+        REVISION  "200503010000Z"
+        DESCRIPTION
+                "Modified DESCRIPTION of cvVoIPCallHistoryFallbackLoss 
+                 object. 
+                "
+        REVISION  "200404300000Z"
+        DESCRIPTION
+                "Added object 
+                 Added cvVoIPCallHistoryRemSigIPAddrT and
+                 cvVoIPCallHistoryRemSigIPAddr to the 
+                 cvdcFallbackNotification ."
+
+        REVISION  "200404160000Z"
+        DESCRIPTION
+                "Added object cvVoIPCallHistoryFallbackIcpif, 
+                 cvVoIPCallHistoryFallbackLoss and 
+                 cvVoIPCallHistoryFallbackDelay
+                 to the cvVoIPCallHistoryTable.
+                 Added cvdcFallbackNotification for the 
+                 fallback notification.
+                 Added cvGeneralFallbackNotificationEnable to
+                 enable/disable cvdcFallbackNotification."
+
+        REVISION  "200403090000Z"
+        DESCRIPTION
+                "Added new objects for handling the following features:
+                 [1] The number of DS0s with voice calls up.
+                     cvCallActiveDS0s
+                 [2] The threshold number of DS0s above which a
+                     Notification will be triggered.
+                     cvCallActiveDS0sHighThreshold
+                 [3] The threshold number of DS0s below which a
+                     Notification will be triggered.
+                     cvCallActiveDS0sLowThreshold
+                 [4] Objects to enable the above two notifications.
+                     cvCallActiveDS0sHighNotifyEnable, 
+                     cvCallActiveDS0sLowNotifyEnable.
+                 [5] Notifications for the above two thresholds.
+                     cvdcActiveDS0sHighNotification, 
+                     cvdcActiveDS0sLowNotification."
         REVISION  "200401200000Z"
         DESCRIPTION
                 "Added object cvVoIPCallActiveSRTPEnable to 
@@ -297,6 +365,48 @@ CvCasGroup ::= TEXTUAL-CONVENTION
              disabled.
             "
         SYNTAX      Integer32 (-1..30)
+
+
+--
+--  GSM AMR-NB Bit rate modes
+--
+CvAmrNbBitRateMode ::= TEXTUAL-CONVENTION
+        STATUS      current
+        DESCRIPTION
+        "Represents GSM AMR-NB bit rate modes.
+
+         CodecMode             Bit-rate (kbps)
+         0                     4.75
+         1                     5.15
+         2                     5.90
+         3                     6.70
+         4                     7.40
+         5                     7.95
+         6                     10.2
+         7                     12.2
+        "
+        SYNTAX      BITS {
+            amrBitRateMode0(0),
+            amrBitRateMode1(1),
+            amrBitRateMode2(2),
+            amrBitRateMode3(3),
+            amrBitRateMode4(4),
+            amrBitRateMode5(5),
+            amrBitRateMode6(6),
+            amrBitRateMode7(7)
+                    }
+
+
+--
+--  GSM AMR-NB Encapsulation types
+--
+CvAmrNbRtpEncap ::= TEXTUAL-CONVENTION
+        STATUS      current
+        DESCRIPTION
+            "Represents GSM AMR-NB codec RTP encapsulation type."
+        SYNTAX      INTEGER {
+            rfc3267  (1)
+        }
 
 
 --
@@ -535,6 +645,19 @@ cvGeneralPoorQoVNotificationEnable OBJECT-TYPE
             over IP peers having set to 'true'."
         DEFVAL      { false }
         ::= { cvGeneralConfiguration 1 }
+
+cvGeneralFallbackNotificationEnable OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "This object indicates whether cvdcFallbackNotification 
+            traps should be generated for fallback.
+            If the value of this object is 'true',
+            cvdcFallbackNotification traps will be generated
+            for all voice over IP peers."
+        DEFVAL      { false }
+        ::= { cvGeneralConfiguration 2 }
 
 
 --*********************************************************************
@@ -886,7 +1009,9 @@ cvVoicePeerCfgEchoCancellerTest OBJECT-TYPE
             echoCancellerG168Test3C     (8),
             echoCancellerG168Test4      (9),
             echoCancellerG168Test6     (10),
-            echoCancellerG168Test9     (11)        
+            echoCancellerG168Test9     (11),
+            echoCancellerG168Test5     (12),
+            echoCancellerG168Test7     (13)
             }
         MAX-ACCESS  read-write
         STATUS      current
@@ -902,7 +1027,9 @@ cvVoicePeerCfgEchoCancellerTest OBJECT-TYPE
              echoCancellerG168Test3B  - run ITU-T G.168 Test 3B.
              echoCancellerG168Test3C  - run ITU-T G.168 Test 3C.
              echoCancellerG168Test4   - run ITU-T G.168 Test 4.
+             echoCancellerG168Test5   - run ITU-T G.168 Test 5.
              echoCancellerG168Test6   - run ITU-T G.168 Test 6.
+             echoCancellerG168Test7   - run ITU-T G.168 Test 7.
              echoCancellerG168Test9   - run ITU-T G.168 Test 9.
              "
         REFERENCE
@@ -967,7 +1094,10 @@ CvVoIPPeerCfgEntry ::= SEQUENCE {
             cvVoIPPeerCfgMediaSetting               INTEGER,
             cvVoIPPeerCfgDesiredQoSVideo            QosService,
             cvVoIPPeerCfgMinAcceptableQoSVideo      QosService,
-            cvVoIPPeerCfgRedirectip2ip              TruthValue
+            cvVoIPPeerCfgRedirectip2ip              TruthValue,
+            cvVoIPPeerCfgOctetAligned               TruthValue,
+            cvVoIPPeerCfgBitRates                   CvAmrNbBitRateMode,
+            cvVoIPPeerCfgCRC                        TruthValue
         }
 
 cvVoIPPeerCfgSessionProtocol OBJECT-TYPE
@@ -1350,6 +1480,48 @@ cvVoIPPeerCfgRedirectip2ip  OBJECT-TYPE
             "
         DEFVAL      { false }
         ::= { cvVoIPPeerCfgEntry 26 }
+
+cvVoIPPeerCfgOctetAligned OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value true(1) octet align operation
+             is used, and if the value is false(2), bandwidth efficient
+             operation is used. This object is not instantiated when
+             the object cvVoIPPeerCfgCoderRate is not equal to
+             gsmAmrNb enum."
+        DEFVAL { true }
+        ::= { cvVoIPPeerCfgEntry 27 }
+
+cvVoIPPeerCfgBitRates OBJECT-TYPE
+        SYNTAX      CvAmrNbBitRateMode
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "This object indicates modes of Bit rates. One or more
+             upto four modes can be configured at the same time as
+             bit rates can be changed dynamically for AMR-NB codec.
+             This object is not instantiated when the object
+             cvVoIPPeerCfgCoderRate is not equal to gsmAmrNb enum."
+        DEFVAL { { amrBitRateMode3, amrBitRateMode4, amrBitRateMode6,
+                   amrBitRateMode7 } }
+        ::= { cvVoIPPeerCfgEntry 28 }
+
+cvVoIPPeerCfgCRC OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), frame CRC will be
+             included in the payload and if the value is false(2),
+             frame CRC will not be included in the payload.
+             This object is applicable only when RTP frame type
+             is octet aligned. This object is not instantiated when
+             the object cvVoIPPeerCfgCoderRate is not equal to
+             gsmAmrNb enum."
+        DEFVAL { false }
+        ::= { cvVoIPPeerCfgEntry 29 }
 
 --
 -- Voice specific common Peer Configuration Table
@@ -1859,7 +2031,7 @@ CvVoIPCallActiveEntry ::=
         SEQUENCE {
             cvVoIPCallActiveConnectionId             CvcGUid,
             cvVoIPCallActiveRemoteIPAddress          IpAddress,
-            cvVoIPCallActiveRemoteUDPPort            INTEGER,
+            cvVoIPCallActiveRemoteUDPPort            Integer32,
             cvVoIPCallActiveRoundTripDelay           Gauge32,
             cvVoIPCallActiveSelectedQoS              QosService,
             cvVoIPCallActiveSessionProtocol          CvSessionProtocol,
@@ -1875,17 +2047,28 @@ CvVoIPCallActiveEntry ::=
             cvVoIPCallActiveVADEnable                TruthValue,
             cvVoIPCallActiveCoderTypeRate            CvcCoderTypeRate,
             cvVoIPCallActiveLostPackets              AbsoluteCounter32,
-            cvVoIPCallActiveLatePackets              AbsoluteCounter32,
             cvVoIPCallActiveEarlyPackets             AbsoluteCounter32,
+            cvVoIPCallActiveLatePackets              AbsoluteCounter32,
             cvVoIPCallActiveUsername                 SnmpAdminString,
             cvVoIPCallActiveProtocolCallId           OCTET STRING,
             cvVoIPCallActiveRemSigIPAddrT            InetAddressType,
             cvVoIPCallActiveRemSigIPAddr             InetAddress,
-            cvVoIPCallActiveRemSigPort               INTEGER,
+            cvVoIPCallActiveRemSigPort               Integer32,
             cvVoIPCallActiveRemMediaIPAddrT          InetAddressType,
             cvVoIPCallActiveRemMediaIPAddr           InetAddress,
-            cvVoIPCallActiveRemMediaPort             INTEGER,
-            cvVoIPCallActiveSRTPEnable               TruthValue
+            cvVoIPCallActiveRemMediaPort             Integer32,
+            cvVoIPCallActiveSRTPEnable               TruthValue,
+            cvVoIPCallActiveOctetAligned             TruthValue,
+            cvVoIPCallActiveBitRates                 CvAmrNbBitRateMode,
+            cvVoIPCallActiveModeChgPeriod            Integer32,
+            cvVoIPCallActiveModeChgNeighbor          TruthValue,
+            cvVoIPCallActiveMaxPtime                 Integer32,
+            cvVoIPCallActiveCRC                      TruthValue,
+            cvVoIPCallActiveRobustSorting            TruthValue,
+            cvVoIPCallActiveEncap                    CvAmrNbRtpEncap,
+            cvVoIPCallActiveInterleaving             Integer32,
+            cvVoIPCallActivePtime                    Integer32,
+            cvVoIPCallActiveChannels                 Integer32
         }
 
 cvVoIPCallActiveConnectionId OBJECT-TYPE
@@ -1907,7 +2090,7 @@ cvVoIPCallActiveRemoteIPAddress OBJECT-TYPE
         ::= { cvVoIPCallActiveEntry 2 }
 
 cvVoIPCallActiveRemoteUDPPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      deprecated -- by ...Rem[Sig|Media]Port
         DESCRIPTION
@@ -2161,7 +2344,7 @@ cvVoIPCallActiveRemSigIPAddr OBJECT-TYPE
         ::= { cvVoIPCallActiveEntry 24 }
 
 cvVoIPCallActiveRemSigPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      current
         DESCRIPTION
@@ -2188,7 +2371,7 @@ cvVoIPCallActiveRemMediaIPAddr OBJECT-TYPE
         ::= { cvVoIPCallActiveEntry 27 }
 
 cvVoIPCallActiveRemMediaPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      current
         DESCRIPTION
@@ -2205,7 +2388,212 @@ cvVoIPCallActiveSRTPEnable OBJECT-TYPE
              was enabled for the voice call."
         ::= { cvVoIPCallActiveEntry 29  }
 
+cvVoIPCallActiveOctetAligned OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value true(1) octet align operation
+             is used, and if the value is false(2), bandwidth efficient
+             operation is used. This object is not instantiated when
+             the object cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 30 }
 
+cvVoIPCallActiveBitRates OBJECT-TYPE
+        SYNTAX      CvAmrNbBitRateMode
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "This object indicates modes of Bit rates.
+             This object is not instantiated when the object
+             cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 31 }
+
+cvVoIPCallActiveModeChgPeriod OBJECT-TYPE
+        SYNTAX      Integer32 (1..100)
+        UNITS       "frame-blocks"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the interval (N frame-blocks) at which
+             codec mode changes are allowed. This object is not
+             instantiated when the object cvVoIPCallActiveCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 32 }
+
+cvVoIPCallActiveModeChgNeighbor OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), mode changes will be
+             made to only neighboring modes set to
+             cvVoIPCallActiveBitRates object. If the value is false(2),
+             mode changes will be allowed to any modes set to
+             cvVoIPCallActiveBitRates object. This object is not
+             instantiated when the object cvVoIPCallActiveCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 33 }
+
+cvVoIPCallActiveMaxPtime OBJECT-TYPE
+        SYNTAX      Integer32 (20..100)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the maximum amount of media that
+             can be encapsulated in a payload. Supported value is
+             20 msec. This object is not instantiated when the
+             object cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 34 }
+
+cvVoIPCallActiveCRC OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), frame CRC will be
+             included in the payload and if the value is false(2),
+             frame CRC will not be included in the payload.
+             This object is applicable only when RTP frame type
+             is octet aligned. This object is not instantiated when
+             the object cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 35 }
+
+cvVoIPCallActiveRobustSorting OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), payload employs
+             robust sorting and if the value is false(2), payload
+             does not employ robust sorting. This object is applicable
+             only when RTP frame type is octet aligned. This object
+             is not instantiated when the object
+             cvVoIPCallActiveCoderTypeRate is not equal to gsmAmrNb
+             enum."
+        ::= { cvVoIPCallActiveEntry 36 }
+
+cvVoIPCallActiveEncap OBJECT-TYPE
+        SYNTAX      CvAmrNbRtpEncap
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the RTP encapsulation type.
+             Supported RTP encapsulation type is RFC3267.
+             This object is not instantiated when the object
+             cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 37 }
+
+cvVoIPCallActiveInterleaving OBJECT-TYPE
+        SYNTAX      Integer32 (1..50)
+        UNITS       "frame-blocks"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the maximum number of frame-blocks
+             allowed in an interleaving group. It indicates that
+             frame-block level interleaving will be used for that
+             session. If this object is not set, interleaving
+             is not used. This object is applicable only when
+             RTP frame type is octet aligned. This object is not
+             instantiated when the object cvVoIPCallActiveCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 38 }
+
+cvVoIPCallActivePtime OBJECT-TYPE
+        SYNTAX      Integer32 (20..100)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the length of the time in milliseconds
+             represented by the media of the packet. Supported value is
+             20 milliseconds. This object is not instantiated when the
+             object cvVoIPCallActiveCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 39 }
+
+cvVoIPCallActiveChannels OBJECT-TYPE
+        SYNTAX      Integer32 (1..6)
+        UNITS       "channels"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the number of audio channels.
+             Supported value is 1. This object is not instantiated
+             when the object cvVoIPCallActiveCoderTypeRate is not equal
+             to gsmAmrNb enum."
+        ::= { cvVoIPCallActiveEntry 40 }
+
+cvCallActiveDS0s OBJECT-TYPE
+        SYNTAX      Gauge32
+        UNITS       "interfaces"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The current number of DS0 interfaces used for the
+             active calls."
+        ::= { cvGatewayCallActive 3 }
+
+cvCallActiveDS0sHighThreshold OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..100)
+        UNITS       "percent"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "A high threshold used to determine when to generate the
+             cvdcActiveDS0sHighNotification. This object 
+             represents the percentage of active DS0s in total number 
+             of DS0s."
+        ::= { cvGatewayCallActive 4 }
+
+cvCallActiveDS0sLowThreshold OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..100)
+        UNITS       "percent"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "A low threshold used to determine when to generate the
+             cvdcActiveDS0sLowNotification notification. This object 
+             represents the percentage of active DS0s in total number 
+             of DS0s."
+        ::= { cvGatewayCallActive 5 }
+
+cvCallActiveDS0sHighNotifyEnable OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "Specifies whether or not cvdcActiveDS0sHighNotification
+             should be generated.
+
+             'true' : Indicates that the cvdcActiveDS0sHighNotification
+                      generation is enabled.
+
+             'false': Indicates that cvdcActiveDS0sHighNotification
+                      generation is disabled."
+        ::= { cvGatewayCallActive 6 }
+
+cvCallActiveDS0sLowNotifyEnable OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "Specifies whether or not cvdcActiveDS0sLowNotification
+             should be generated.
+
+             'true' : Indicates that the cvdcActiveDS0sLowNotification
+                      generation is enabled.
+
+             'false': Indicates that cvdcActiveDS0sLowNotification
+                      generation is disabled."
+        ::= { cvGatewayCallActive 7 }
 
 --*********************************************************************
 -- Voice Dial Control Gateway Call History Group
@@ -2439,7 +2827,7 @@ CvVoIPCallHistoryEntry ::=
         SEQUENCE {
             cvVoIPCallHistoryConnectionId             CvcGUid,
             cvVoIPCallHistoryRemoteIPAddress          IpAddress,
-            cvVoIPCallHistoryRemoteUDPPort            INTEGER,
+            cvVoIPCallHistoryRemoteUDPPort            Integer32,
             cvVoIPCallHistoryRoundTripDelay           Gauge32,
             cvVoIPCallHistorySelectedQoS              QosService,
             cvVoIPCallHistorySessionProtocol          CvSessionProtocol,
@@ -2456,17 +2844,31 @@ CvVoIPCallHistoryEntry ::=
             cvVoIPCallHistoryCoderTypeRate            CvcCoderTypeRate,
             cvVoIPCallHistoryIcpif                    Integer32,
             cvVoIPCallHistoryLostPackets              AbsoluteCounter32,
-            cvVoIPCallHistoryLatePackets              AbsoluteCounter32,
             cvVoIPCallHistoryEarlyPackets             AbsoluteCounter32,
+            cvVoIPCallHistoryLatePackets              AbsoluteCounter32,
             cvVoIPCallHistoryUsername                 SnmpAdminString,
             cvVoIPCallHistoryProtocolCallId           OCTET STRING,
             cvVoIPCallHistoryRemSigIPAddrT            InetAddressType,
             cvVoIPCallHistoryRemSigIPAddr             InetAddress,
-            cvVoIPCallHistoryRemSigPort               INTEGER,
+            cvVoIPCallHistoryRemSigPort               Integer32,
             cvVoIPCallHistoryRemMediaIPAddrT          InetAddressType,
             cvVoIPCallHistoryRemMediaIPAddr           InetAddress,
-            cvVoIPCallHistoryRemMediaPort             INTEGER,
-            cvVoIPCallHistorySRTPEnable               TruthValue
+            cvVoIPCallHistoryRemMediaPort             Integer32,
+            cvVoIPCallHistorySRTPEnable               TruthValue,
+            cvVoIPCallHistoryFallbackIcpif            Integer32,
+            cvVoIPCallHistoryFallbackLoss             AbsoluteCounter32,
+            cvVoIPCallHistoryFallbackDelay            Gauge32,
+            cvVoIPCallHistoryOctetAligned             TruthValue,
+            cvVoIPCallHistoryBitRates                CvAmrNbBitRateMode,
+            cvVoIPCallHistoryModeChgPeriod            Integer32,
+            cvVoIPCallHistoryModeChgNeighbor          TruthValue,
+            cvVoIPCallHistoryMaxPtime                 Integer32,
+            cvVoIPCallHistoryCRC                      TruthValue,
+            cvVoIPCallHistoryRobustSorting            TruthValue,
+            cvVoIPCallHistoryEncap                    CvAmrNbRtpEncap,
+            cvVoIPCallHistoryInterleaving             Integer32,
+            cvVoIPCallHistoryPtime                    Integer32,
+            cvVoIPCallHistoryChannels                 Integer32
         }
 
 cvVoIPCallHistoryConnectionId OBJECT-TYPE
@@ -2488,7 +2890,7 @@ cvVoIPCallHistoryRemoteIPAddress OBJECT-TYPE
         ::= { cvVoIPCallHistoryEntry 2 }
 
 cvVoIPCallHistoryRemoteUDPPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      deprecated -- by ...Rem[Sig|Media]Port
         DESCRIPTION
@@ -2694,7 +3096,6 @@ cvVoIPCallHistoryIcpif OBJECT-TYPE
             "
         ::= { cvVoIPCallHistoryEntry 18 }
 
-
 cvVoIPCallHistoryLostPackets OBJECT-TYPE
         SYNTAX      AbsoluteCounter32
         UNITS       "packets"
@@ -2765,7 +3166,7 @@ cvVoIPCallHistoryRemSigIPAddr OBJECT-TYPE
         ::= { cvVoIPCallHistoryEntry 25 }
 
 cvVoIPCallHistoryRemSigPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      current
         DESCRIPTION
@@ -2792,7 +3193,7 @@ cvVoIPCallHistoryRemMediaIPAddr OBJECT-TYPE
         ::= { cvVoIPCallHistoryEntry 28 }
 
 cvVoIPCallHistoryRemMediaPort OBJECT-TYPE
-        SYNTAX      INTEGER (0..65535)
+        SYNTAX      Integer32 (0..65535)
         MAX-ACCESS  read-only
         STATUS      current
         DESCRIPTION
@@ -2808,6 +3209,189 @@ cvVoIPCallHistorySRTPEnable OBJECT-TYPE
             "The object indicates whether or not the SRTP (Secured RTP)
              was enabled for the voice call."
         ::= { cvVoIPCallHistoryEntry 30  }
+
+cvVoIPCallHistoryFallbackIcpif OBJECT-TYPE
+        SYNTAX      Integer32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The Calculated Planning Impairment Factor (Icpif) of the
+             call  that is associated to this call leg.
+             The value in this object is computed by the following
+             equation.
+             Icpif of the fallback probe =
+             Itotal (total impairment value)  - configured fallback
+             (Expectation Factor).
+             A value of 0 implies that Icpif was not calculated and is
+             meaningless for this attempt.
+            "
+        ::= { cvVoIPCallHistoryEntry 31 }
+
+cvVoIPCallHistoryFallbackLoss OBJECT-TYPE
+        SYNTAX      AbsoluteCounter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "FallbackLoss is the percentage of loss packets based on
+             the total packets sent."
+        ::= { cvVoIPCallHistoryEntry 32  }
+
+cvVoIPCallHistoryFallbackDelay OBJECT-TYPE
+        SYNTAX      Gauge32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The FallbackDelay is calculated as follows - 
+             Take the sum of the round trips for all the probes, 
+             divide by the number of probes, 
+             and divide by two to get the one-way delay.  
+             Then add in jitter_in or jiter_out,
+             which ever is higher."
+        ::= { cvVoIPCallHistoryEntry 33  }
+
+
+cvVoIPCallHistoryOctetAligned OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value true(1) octet align operation
+             is used, and if the value is false(2), bandwidth efficient
+             operation is used. This object is not instantiated when
+             the object cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 34 }
+
+cvVoIPCallHistoryBitRates OBJECT-TYPE
+        SYNTAX      CvAmrNbBitRateMode
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "This object indicates modes of Bit rates.
+             This object is not instantiated when the object
+             cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 35 }
+
+cvVoIPCallHistoryModeChgPeriod OBJECT-TYPE
+        SYNTAX      Integer32 (1..100)
+        UNITS       "frame-blocks"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the interval (N frame-blocks) at which
+             codec mode changes are allowed. This object is not
+             instantiated when the object cvVoIPCallHistoryCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 36 }
+
+cvVoIPCallHistoryModeChgNeighbor OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), mode changes will be
+             made to only neighboring modes set to
+             cvVoIPCallHistoryBitRates object. If the value is false(2),
+             mode changes will be allowed to any modes set to
+             cvVoIPCallHistoryBitRates object. This object is not
+             instantiated when the object cvVoIPCallHistoryCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 37 }
+
+cvVoIPCallHistoryMaxPtime OBJECT-TYPE
+        SYNTAX      Integer32 (20..100)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the maximum amount of media that
+             can be encapsulated in a payload. Supported value is
+             20 msec. This object is not instantiated when the
+             object cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 38 }
+
+cvVoIPCallHistoryCRC OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), frame CRC will be
+             included in the payload and if the value is false(2),
+             frame CRC will not be included in the payload.
+             This object is applicable only when RTP frame type
+             is octet aligned. This object is not instantiated when
+             the object cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 39 }
+
+cvVoIPCallHistoryRobustSorting OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "If the object has a value of true(1), payload employs
+             robust sorting and if the value is false(2), payload
+             does not employ robust sorting. This object is applicable
+             only when RTP frame type is octet aligned. This object
+             is not instantiated when the object
+             cvVoIPCallHistoryCoderTypeRate is not equal to gsmAmrNb
+             enum."
+        ::= { cvVoIPCallHistoryEntry 40 }
+
+cvVoIPCallHistoryEncap OBJECT-TYPE
+        SYNTAX      CvAmrNbRtpEncap
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the RTP encapsulation type.
+             Supported RTP encapsulation type is RFC3267.
+             This object is not instantiated when the object
+             cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 41 }
+
+cvVoIPCallHistoryInterleaving OBJECT-TYPE
+        SYNTAX      Integer32 (1..50)
+        UNITS       "frame-blocks"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the maximum number of frame-blocks
+             allowed in an interleaving group. It indicates that
+             frame-block level interleaving will be used for that
+             session. If this object is not set, interleaving
+             is not used. This object is applicable only when
+             RTP frame type is octet aligned. This object is not
+             instantiated when the object cvVoIPCallHistoryCoderTypeRate
+             is not equal to gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 42 }
+
+cvVoIPCallHistoryPtime OBJECT-TYPE
+        SYNTAX      Integer32 (20..100)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the length of the time in milliseconds
+             represented by the media of the packet. Supported value is
+             20 milliseconds. This object is not instantiated when the
+             object cvVoIPCallHistoryCoderTypeRate is not equal to
+             gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 43 }
+
+cvVoIPCallHistoryChannels OBJECT-TYPE
+        SYNTAX      Integer32 (1..6)
+        UNITS       "channels"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+            "The object indicates the number of audio channels.
+             Supported value is 1. This object is not instantiated
+             when the object cvVoIPCallHistoryCoderTypeRate is not equal
+             to gsmAmrNb enum."
+        ::= { cvVoIPCallHistoryEntry 44 }
 
 --*********************************************************************
 -- Notifications
@@ -2852,6 +3436,49 @@ cvdcPoorQoVNotificationRev1 NOTIFICATION-TYPE
             associated peer."
      ::= { cvdcMIBNotifications 2 }
 
+cvdcActiveDS0sHighNotification NOTIFICATION-TYPE
+        OBJECTS     { cvCallActiveDS0s,
+                      cvCallActiveDS0sHighThreshold
+                    }
+        STATUS       current
+        DESCRIPTION
+            "The cvdcActiveDS0sHighNotification is sent when the 
+             percentage of active DS0s exceeds 
+             cvCallActiveDS0sHighThreshold value."
+        ::= { cvdcMIBNotifications 3 }
+
+cvdcActiveDS0sLowNotification NOTIFICATION-TYPE
+        OBJECTS     { cvCallActiveDS0s,
+                      cvCallActiveDS0sLowThreshold
+                    }
+        STATUS       current
+        DESCRIPTION
+            "The cvdcActiveDS0sLowNotification is sent when the 
+             percentage of active DS0s is less than 
+             cvCallActiveDS0sLowThreshold value."
+        ::= { cvdcMIBNotifications 4 }
+
+cvdcFallbackNotification NOTIFICATION-TYPE
+        OBJECTS {
+            cvVoIPCallHistoryConnectionId,
+            cvVoIPCallHistoryFallbackIcpif,
+            cvVoIPCallHistoryFallbackLoss,
+            cvVoIPCallHistoryFallbackDelay,
+            cvVoIPCallHistoryRemSigIPAddrT,
+            cvVoIPCallHistoryRemSigIPAddr,
+            cvVoIPCallHistoryRemMediaIPAddrT,
+            cvVoIPCallHistoryRemMediaIPAddr,
+            cCallHistoryCallOrigin,
+            cvCommonDcCallHistoryCoderTypeRate
+        }
+        STATUS      current
+        DESCRIPTION
+            "This cvdcFallbackNotificaion is sent out, 
+	     when the destination
+             IP address of call fallback probe fails. This probe
+             generated for beginning of each call, 
+             with exception of existing cached entry."
+     ::= { cvdcMIBNotifications 5 }
 
 cvdcMIBConformance OBJECT IDENTIFIER ::=
                                 { ciscoVoiceDialControlMIB 3 }
@@ -3237,7 +3864,7 @@ cvdcMIBComplianceRev10 MODULE-COMPLIANCE
         ::= { cvdcMIBCompliances 11 }
 
 cvdcMIBComplianceRev11 MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated -- superceded by cvdcMIBComplianceRev12 
         DESCRIPTION
             "The compliance statement for entities which
              implement the CISCO VOICE DIAL CONTROL MIB"
@@ -3269,6 +3896,160 @@ cvdcMIBComplianceRev11 MODULE-COMPLIANCE
              and call history via IP network.
             "
         ::= { cvdcMIBCompliances 12 }
+
+cvdcMIBComplianceRev12 MODULE-COMPLIANCE
+        STATUS      deprecated -- superceded by cvdcMIBComplianceRev13
+        DESCRIPTION
+            "The compliance statement for entities which
+             implement the CISCO VOICE DIAL CONTROL MIB"
+        MODULE      -- this module
+        MANDATORY-GROUPS
+            { cvdcGeneralCfgGroupRev5 }
+
+        GROUP cvdcVoiceCfgGroupRev2
+        DESCRIPTION
+            "This group is mandatory for voice dial control
+             configuration which is related to GSTN(General Switched
+             Telephony Network).
+             GSTN encompasses analog, ISDN, Cellular - essentially
+             anything circuit switched over the TDM infrastructure.
+            "
+        GROUP cvdcVoIPCfgGroupRev4
+        DESCRIPTION
+            "This group is mandatory for VoIP dial control configuration
+             which is related to transmit voice packet via IP network.
+            "
+        GROUP cvCallGroupRev5
+        DESCRIPTION
+            "This group is mandatory for all voice related active call
+             and call history via GSTN.
+            "
+        GROUP cvVoIPCallGroupRev5
+        DESCRIPTION
+            "This group is mandatory for all VoIP related active call
+             and call history via IP network.
+            "
+        ::= { cvdcMIBCompliances 13 }
+
+cvdcMIBComplianceRev13 MODULE-COMPLIANCE
+        STATUS      deprecated -- superceded by cvdcMIBComplianceRev14
+        DESCRIPTION
+            "The compliance statement for entities which
+             implement the CISCO VOICE DIAL CONTROL MIB"
+        MODULE      -- this module
+        MANDATORY-GROUPS
+            { cvdcGeneralCfgGroupRev6 }
+
+        GROUP cvdcVoiceCfgGroupRev2
+        DESCRIPTION
+            "This group is mandatory for voice dial control
+             configuration which is related to GSTN(General Switched
+             Telephony Network).
+             GSTN encompasses analog, ISDN, Cellular - essentially
+             anything circuit switched over the TDM infrastructure.
+            "
+        GROUP cvdcVoIPCfgGroupRev4
+        DESCRIPTION
+            "This group is mandatory for VoIP dial control configuration
+             which is related to transmit voice packet via IP network.
+            "
+        GROUP cvCallGroupRev5
+        DESCRIPTION
+            "This group is mandatory for all voice related active call
+             and call history via GSTN.
+            "
+        GROUP cvVoIPCallGroupRev6
+        DESCRIPTION
+            "This group is mandatory for all VoIP related active call
+             and call history via IP network.
+            "
+        ::= { cvdcMIBCompliances 14 }
+
+cvdcMIBComplianceRev14 MODULE-COMPLIANCE
+        STATUS      deprecated -- superceded by cvdcMIBComplianceRev15
+        DESCRIPTION
+            "The compliance statement for entities which
+             implement the CISCO VOICE DIAL CONTROL MIB"
+        MODULE      -- this module
+        MANDATORY-GROUPS
+            { cvdcGeneralCfgGroupRev6 }
+
+        GROUP cvdcVoiceCfgGroupRev2
+        DESCRIPTION
+            "This group is mandatory for voice dial control
+             configuration which is related to GSTN(General Switched
+             Telephony Network).
+             GSTN encompasses analog, ISDN, Cellular - essentially
+             anything circuit switched over the TDM infrastructure.
+            "
+        GROUP cvdcVoIPCfgGroupRev4
+        DESCRIPTION
+            "This group is mandatory for VoIP dial control configuration
+             which is related to transmit voice packet via IP network.
+            "
+        GROUP cvCallGroupRev5
+        DESCRIPTION
+            "This group is mandatory for all voice related active call
+             and call history via GSTN.
+            "
+        GROUP cvVoIPCallGroupRev6
+        DESCRIPTION
+            "This group is mandatory for all VoIP related active call
+             and call history via IP network.
+            "
+        GROUP cvdcNotificationGroupRev3
+        DESCRIPTION
+            "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB."
+        ::= { cvdcMIBCompliances 15 }
+
+cvdcMIBComplianceRev15 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION
+            "The compliance statement for entities which
+             implement the CISCO VOICE DIAL CONTROL MIB"
+        MODULE      -- this module
+        MANDATORY-GROUPS
+            { cvdcGeneralCfgGroupRev6 }
+
+        GROUP cvdcVoiceCfgGroupRev2
+        DESCRIPTION
+            "This group is mandatory for voice dial control
+             configuration which is related to GSTN(General Switched
+             Telephony Network).
+             GSTN encompasses analog, ISDN, Cellular - essentially
+             anything circuit switched over the TDM infrastructure.
+            "
+        GROUP cvdcVoIPCfgGroupRev4
+        DESCRIPTION
+            "This group is mandatory for VoIP dial control configuration
+             which is related to transmit voice packet via IP network.
+            "
+        GROUP cvCallGroupRev5
+        DESCRIPTION
+            "This group is mandatory for all voice related active call
+             and call history via GSTN.
+            "
+        GROUP cvVoIPCallGroupRev6
+        DESCRIPTION
+            "This group is mandatory for all VoIP related active call
+             and call history via IP network.
+            "
+        GROUP cvdcNotificationGroupRev3
+        DESCRIPTION
+            "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB.
+            "
+        GROUP cvdcVoIPCfgAmrNbGroup
+        DESCRIPTION
+            "This group is mandatory only for those platforms
+             which support GSM AMR-NB codec configuration.
+            "
+        GROUP cvVoIPCallAmrNbGroup
+        DESCRIPTION
+             "This group is mandatory only for those platforms
+              which support GSM AMR-NB codec.
+             "
+        ::= { cvdcMIBCompliances 16 }
+
 -- units of conformance
 
 
@@ -3811,7 +4592,7 @@ cvdcNotificationGroupRev1 NOTIFICATION-GROUP
         NOTIFICATIONS{
             cvdcPoorQoVNotificationRev1
         }
-        STATUS      current
+        STATUS    deprecated -- superceded by cvdcNotificationGroupRev2
         DESCRIPTION
             "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB"
         ::= { cvdcMIBGroups 20 }
@@ -3861,7 +4642,7 @@ cvdcGeneralCfgGroupRev5 OBJECT-GROUP
             cvPeerCommonCfgSourceTrunkGrpLabel,
             cvPeerCommonCfgTargetTrunkGrpLabel
         }
-        STATUS      current
+        STATUS      deprecated -- superceded by cvdcGeneralCfgGroupRev6
         DESCRIPTION
             "A collection of objects providing the general
              Voice Gateway Call Dial Control configuration
@@ -3973,7 +4754,7 @@ cvCallGroupRev4 OBJECT-GROUP
             cvCallHistoryAccountCode,
             cvCallActiveERLLevelRev1
           }
-        STATUS      current
+        STATUS      deprecated -- superceded by cvCallGroupRev5
         DESCRIPTION
             "A collection of objects providing the GSTN (General
              Switched Telephony Network Voice Dial Control configuration
@@ -4038,12 +4819,213 @@ cvVoIPCallGroupRev5 OBJECT-GROUP
             cvVoIPCallHistoryRemMediaPort,
             cvVoIPCallHistorySRTPEnable
         }
-        STATUS      current
+        STATUS      deprecated -- superceded by cvVoIPCallGroupRev6
         DESCRIPTION
             "A collection of objects providing the VoIP Call
              capability."
         ::= { cvdcMIBGroups 26 }
+
+cvCallGroupRev5 OBJECT-GROUP
+        OBJECTS {
+            cvCallActiveDS0s,
+            cvCallActiveDS0sHighThreshold,
+            cvCallActiveDS0sLowThreshold,
+            cvCallActiveDS0sHighNotifyEnable,
+            cvCallActiveDS0sLowNotifyEnable,
+            cvCallActiveConnectionId,
+            cvCallActiveTxDuration,
+            cvCallActiveVoiceTxDuration,
+            cvCallActiveFaxTxDuration,
+            cvCallActiveCoderTypeRate,
+            cvCallActiveNoiseLevel,
+            cvCallActiveACOMLevel,
+            cvCallActiveOutSignalLevel,
+            cvCallActiveInSignalLevel,
+            cvCallActiveSessionTarget,
+            cvCallActiveImgPageCount,
+            cvCallActiveCallingName,
+            cvCallActiveCallerIDBlock,
+            cvCallActiveEcanReflectorLocation,
+            cvCallActiveAccountCode,
+            cvCallHistoryConnectionId,
+            cvCallHistoryTxDuration,
+            cvCallHistoryVoiceTxDuration,
+            cvCallHistoryFaxTxDuration,
+            cvCallHistoryCoderTypeRate,
+            cvCallHistoryNoiseLevel,
+            cvCallHistoryACOMLevel,
+            cvCallHistorySessionTarget,
+            cvCallHistoryImgPageCount,
+            cvCallHistoryCallingName,
+            cvCallHistoryCallerIDBlock,
+            cvCallHistoryAccountCode,
+            cvCallActiveERLLevelRev1
+          }
+        STATUS      current
+        DESCRIPTION
+            "A collection of objects providing the GSTN (General
+             Switched Telephony Network Voice Dial Control configuration
+             capability.
+             GSTN (General Switched Telephony Network), which is
+             supposed to encompass analog, ISDN, Cellular - essentially
+             anything circuit switched over the TDM infrastructure."
+        ::= { cvdcMIBGroups 27 }
+
+cvdcNotificationGroupRev2 NOTIFICATION-GROUP
+        NOTIFICATIONS{
+            cvdcPoorQoVNotificationRev1,
+            cvdcActiveDS0sHighNotification,
+            cvdcActiveDS0sLowNotification
+        }
+        STATUS    deprecated -- superceded by cvdcNotificationGroupRev3
+        DESCRIPTION
+            "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB"
+        ::= { cvdcMIBGroups 28 }
+
+cvVoIPCallGroupRev6 OBJECT-GROUP
+        OBJECTS {
+            cvVoIPCallActiveConnectionId,
+            cvVoIPCallActiveRoundTripDelay,
+            cvVoIPCallActiveSelectedQoS,
+            cvVoIPCallActiveSessionProtocol,
+            cvVoIPCallActiveSessionTarget,
+            cvVoIPCallActiveOnTimeRvPlayout,
+            cvVoIPCallActiveGapFillWithSilence,
+            cvVoIPCallActiveGapFillWithPrediction,
+            cvVoIPCallActiveGapFillWithInterpolation,
+            cvVoIPCallActiveGapFillWithRedundancy,
+            cvVoIPCallActiveHiWaterPlayoutDelay,
+            cvVoIPCallActiveLoWaterPlayoutDelay,
+            cvVoIPCallActiveReceiveDelay,
+            cvVoIPCallActiveLostPackets,
+            cvVoIPCallActiveLatePackets,
+            cvVoIPCallActiveEarlyPackets,
+            cvVoIPCallActiveUsername,
+            cvVoIPCallActiveProtocolCallId,
+            cvVoIPCallActiveRemSigIPAddrT,
+            cvVoIPCallActiveRemSigIPAddr,
+            cvVoIPCallActiveRemSigPort,
+            cvVoIPCallActiveRemMediaIPAddrT,
+            cvVoIPCallActiveRemMediaIPAddr,
+            cvVoIPCallActiveRemMediaPort,
+            cvVoIPCallActiveSRTPEnable,
+            cvVoIPCallHistoryConnectionId,
+            cvVoIPCallHistoryRoundTripDelay,
+            cvVoIPCallHistorySelectedQoS,
+            cvVoIPCallHistorySessionProtocol,
+            cvVoIPCallHistorySessionTarget,
+            cvVoIPCallHistoryOnTimeRvPlayout,
+            cvVoIPCallHistoryGapFillWithSilence,
+            cvVoIPCallHistoryGapFillWithPrediction,
+            cvVoIPCallHistoryGapFillWithInterpolation,
+            cvVoIPCallHistoryGapFillWithRedundancy,
+            cvVoIPCallHistoryHiWaterPlayoutDelay,
+            cvVoIPCallHistoryLoWaterPlayoutDelay,
+            cvVoIPCallHistoryReceiveDelay,
+            cvVoIPCallHistoryIcpif,
+            cvVoIPCallHistoryLostPackets,
+            cvVoIPCallHistoryLatePackets,
+            cvVoIPCallHistoryEarlyPackets,
+            cvVoIPCallHistoryUsername,
+            cvVoIPCallHistoryProtocolCallId,
+            cvVoIPCallHistoryRemSigIPAddrT,
+            cvVoIPCallHistoryRemSigIPAddr,
+            cvVoIPCallHistoryRemSigPort,
+            cvVoIPCallHistoryRemMediaIPAddrT,
+            cvVoIPCallHistoryRemMediaIPAddr,
+            cvVoIPCallHistoryRemMediaPort,
+            cvVoIPCallHistorySRTPEnable,
+            cvVoIPCallHistoryFallbackIcpif,
+            cvVoIPCallHistoryFallbackLoss,
+            cvVoIPCallHistoryFallbackDelay
+        }
+        STATUS      current
+        DESCRIPTION
+            "A collection of objects providing the VoIP Call
+             capability."
+        ::= { cvdcMIBGroups 29 }
+
+cvdcGeneralCfgGroupRev6 OBJECT-GROUP
+        OBJECTS {
+            cvGeneralPoorQoVNotificationEnable,
+            cvGeneralFallbackNotificationEnable,
+            cvPeerCfgIfIndex,
+            cvPeerCfgType,
+            cvPeerCfgRowStatus,
+            cvPeerCfgPeerType,
+            cvPeerCommonCfgIncomingDnisDigits,
+            cvPeerCommonCfgMaxConnections,
+            cvPeerCommonCfgApplicationName,
+            cvPeerCommonCfgPreference,
+            cvPeerCommonCfgHuntStop,
+            cvPeerCommonCfgDnisMappingName,
+            cvPeerCommonCfgSourceCarrierId,
+            cvPeerCommonCfgTargetCarrierId,
+            cvPeerCommonCfgSourceTrunkGrpLabel,
+            cvPeerCommonCfgTargetTrunkGrpLabel
+        }
+        STATUS      current
+        DESCRIPTION
+            "A collection of objects providing the general
+             Voice Gateway Call Dial Control configuration
+             capability."
+        ::= { cvdcMIBGroups 30 }
+
+cvdcNotificationGroupRev3 NOTIFICATION-GROUP
+        NOTIFICATIONS{
+            cvdcPoorQoVNotificationRev1,
+            cvdcActiveDS0sHighNotification,
+            cvdcActiveDS0sLowNotification,
+            cvdcFallbackNotification
+        }
+        STATUS      current
+        DESCRIPTION
+            "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB"
+        ::= { cvdcMIBGroups 31 }
+
+cvdcVoIPCfgAmrNbGroup OBJECT-GROUP
+        OBJECTS {
+            cvVoIPPeerCfgOctetAligned,
+            cvVoIPPeerCfgBitRates,
+            cvVoIPPeerCfgCRC
+        }
+        STATUS      current
+        DESCRIPTION
+            "A collection of objects providing the VoIP Dial Control
+             configuration capability for GSM AMR-NB codec.
+            "
+        ::= { cvdcMIBGroups 32 }
+
+cvVoIPCallAmrNbGroup OBJECT-GROUP
+        OBJECTS {
+            cvVoIPCallActiveOctetAligned,
+            cvVoIPCallActiveBitRates,
+            cvVoIPCallActiveModeChgPeriod,
+            cvVoIPCallActiveModeChgNeighbor,
+            cvVoIPCallActiveMaxPtime,
+            cvVoIPCallActiveCRC,
+            cvVoIPCallActiveRobustSorting,
+            cvVoIPCallActiveEncap,
+            cvVoIPCallActiveInterleaving,
+            cvVoIPCallActivePtime,
+            cvVoIPCallActiveChannels,
+            cvVoIPCallHistoryOctetAligned,
+            cvVoIPCallHistoryBitRates,
+            cvVoIPCallHistoryModeChgPeriod,
+            cvVoIPCallHistoryModeChgNeighbor,
+            cvVoIPCallHistoryMaxPtime,
+            cvVoIPCallHistoryCRC,
+            cvVoIPCallHistoryRobustSorting,
+            cvVoIPCallHistoryEncap,
+            cvVoIPCallHistoryInterleaving,
+            cvVoIPCallHistoryPtime,
+            cvVoIPCallHistoryChannels
+        }
+        STATUS      current
+        DESCRIPTION
+            "A collection of objects providing GSM AMR-NB
+             codec related information."
+        ::= { cvdcMIBGroups 33 }
+
 END
-
-
 

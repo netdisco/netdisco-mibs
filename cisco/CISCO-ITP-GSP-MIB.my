@@ -1,9 +1,11 @@
+
+	
 -- *****************************************************************   
 -- CISCO-ITP-GSP-MIB: Itp Signalling Point 
 --                       
 -- August 2002,  John Linton, Shekhar Acharya
 --
--- Copyright (c) 2002-2003 by Cisco Systems, Inc.
+-- Copyright (c) 2002-2003, 2005 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -20,7 +22,7 @@ IMPORTS
              FROM SNMPv2-SMI
                 
         SnmpAdminString 
-              	FROM SNMP-FRAMEWORK-MIB
+             FROM SNMP-FRAMEWORK-MIB
 
         InetAddressType, 
         InetAddress,
@@ -60,7 +62,7 @@ IMPORTS
              FROM CISCO-SMI;        
 
 ciscoGspMIB MODULE-IDENTITY
-        LAST-UPDATED    "200307160000Z"
+        LAST-UPDATED    "200510210000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems, Inc
@@ -134,6 +136,18 @@ ciscoGspMIB MODULE-IDENTITY
           TSRC  - Signalling routing control 
           TTC   - The Japanese Telecommunications Technology 
                   Committee"
+          
+        REVISION        "200510210000Z"
+        DESCRIPTION
+                "Added new set of enums (from timerMtp2T01 to 
+                 timerMtp2T07) to TC CgspTimerNumbers for 
+                 MTP2 timers specified in ITU Q.703." 
+
+        REVISION        "200502240000Z"
+        DESCRIPTION
+                "Added new ciscoGspIsolation notification to indicate
+                 when MTP3 node becomes isolated."
+                
           
         REVISION        "200307160000Z"
         DESCRIPTION
@@ -401,7 +415,15 @@ CgspTimerNumbers ::= TEXTUAL-CONVENTION
                        -- Procedure B
      timerLinkTest(35), -- Signalling Link test acknowledgement timer
      timerLinkMessag1(36), -- Interval timer for sending test messages
-     timerLinkActRetry(37) -- Link activation retry timer.
+     timerLinkActRetry(37), -- Link activation retry timer.
+     timerMtp2T01(38), -- Link alignment ready timer
+     timerMtp2T02(39), -- Link not aligned timer
+     timerMtp2T03(40), -- Link aligned timer
+     timerMtp2T04N(41), -- Link proving normal timer 
+     timerMtp2T04E(42), -- Link proving emergency timer
+     timerMtp2T05(43), -- Sending SIB timer
+     timerMtp2T06(44), -- Remote congestion timer
+     timerMtp2T07(45)  -- Excessive delay of ACK timer
     }
     
 CgspTimerValue ::= TEXTUAL-CONVENTION
@@ -1601,7 +1623,7 @@ cgspLinkState                     OBJECT-TYPE
             'unavailable': The linkset is currently unable to support
                            traffic. Activation of this linkset will 
                            occur as required by protocol."
-			   
+                           
     ::= { cgspLinkTableEntry  3 }
 
 cgspLinkReason                    OBJECT-TYPE
@@ -1632,14 +1654,14 @@ cgspLinkReason                    OBJECT-TYPE
                                        cardInserted(23),
                                        falseLinkCongestion(24),
                                        configDownload(25),
-				       localInhibit(26),
-				       localUninhibit(27),
-				       remoteInhibit(28),
-				       remoteUninhibit(29),
-				       localBlocked(30),
-				       localUnBlocked(31),
-				       remoteBlocked(32),
-				       remoteUnblocked(33) 
+                                       localInhibit(26),
+                                       localUninhibit(27),
+                                       remoteInhibit(28),
+                                       remoteUninhibit(29),
+                                       localBlocked(30),
+                                       localUnBlocked(31),
+                                       remoteBlocked(32),
+                                       remoteUnblocked(33) 
                                   }
     MAX-ACCESS                    read-only
     STATUS                        current
@@ -3065,6 +3087,21 @@ cgspLinkUtilNotifEnabled          OBJECT-TYPE
                       utilization has been disabled."
      DEFVAL { false }
      ::= { cgspNotificationsEnable  4 }
+     
+cgspIsolationNotifEnabled         OBJECT-TYPE
+     SYNTAX                       TruthValue
+     MAX-ACCESS                   read-write
+     STATUS                       current
+     DESCRIPTION 
+             "The isolation notification truth value.
+              'true'  Indicates that the notification of 
+                      isolation has been enabled.  That is, 
+                      the notification generation is enabled.
+                     
+              'false' Indicates that the notification  
+                      of isolation has been disabled."
+     DEFVAL { false }
+     ::= { cgspNotificationsEnable  5 }
 
      
 
@@ -3157,7 +3194,25 @@ ciscoGspLinkSentUtilChange NOTIFICATION-TYPE
               the cgspLinkUtilStateSent changes states."
               
      ::= { ciscoGspMIBNotifs 5 }
+     
 
+ciscoGspIsolation NOTIFICATION-TYPE
+     OBJECTS {
+             cgspEventSequenceNumber,
+             cgspCLLICode,
+             cgspInstDisplayName,
+             cgspInstDescription
+     }        
+     STATUS  current
+     DESCRIPTION
+             "This notification indicates the instance specified
+              by cgspInstDisplayName and cgspInstDescription has 
+              become isolated. All linkset used to connect MTP3 node
+              (instance) are unavailable.  Isloation is ended when 
+              any linkset supported by this instance reaches the
+              active state."
+              
+     ::= { ciscoGspMIBNotifs 6 }
 --
 -- Conformance Information
 --
@@ -3170,7 +3225,7 @@ ciscoGspMIBCompliance MODULE-COMPLIANCE
         STATUS deprecated -- replaced by ciscoGspMIBComplianceRev1
         DESCRIPTION
                 "The compliance statement for entities which implement
-                 the CISCO-ITP-SP1-MIB"
+                 the CISCO-ITP-GSP-MIB"
         MODULE -- this module
                 MANDATORY-GROUPS {
                         ciscoGspScalarsGroup,
@@ -3479,10 +3534,10 @@ ciscoGspMIBCompliance MODULE-COMPLIANCE
         ::= { ciscoGspMIBCompliances 1 }
         
 ciscoGspMIBComplianceRev1 MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated -- replace by ciscoGspMIBComplianceRev2
         DESCRIPTION
                 "The compliance statement for entities which implement
-                 the CISCO-ITP-SP1-MIB"
+                 the CISCO-ITP-GSP-MIB"
         MODULE -- this module
                 MANDATORY-GROUPS {
                         ciscoGspScalarsGroup,
@@ -3791,6 +3846,321 @@ ciscoGspMIBComplianceRev1 MODULE-COMPLIANCE
         ::= { ciscoGspMIBCompliances 2 }
         
 
+ciscoGspMIBComplianceRev2 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                 the CISCO-ITP-SP-MIB"
+        MODULE -- this module
+                MANDATORY-GROUPS {
+                        ciscoGspScalarsGroup,
+                        ciscoGspProfileGroup,
+                        ciscoGspInstanceGroup,
+                        ciscoGspInstTimerGroup,
+                        ciscoGspPointCodeGroup,
+                        ciscoGspLinksetGroup,
+                        ciscoGspLinksetTimerGroup,
+                        ciscoGspLinkTimerGroup,
+                        ciscoGspLinkRemoteIpGroup,
+                        ciscoGspLinkUtilGroup,
+                        ciscoGspNotificationsEnableGroup,
+                        ciscoGspNotificationsGroup,
+                        ciscoGspLinkGroupRev1,
+                        ciscoGspNotificationsEnableGroupSup1,
+                        ciscoGspNotificationsGroupSup1
+                }
+        
+        
+--       *** Scalars objects ***************************************
+         OBJECT           cgspCLLICode
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspUtilSampleInterval
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspUtilThreshold
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspUtilAbateDelta
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspPlanCapacityDefault
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** Profile objects ***************************************
+         OBJECT           cgspProfileVariant
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspProfileMtp2BundleTimer
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspProfileMtp2SendQueueDepth
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspProfileRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** Profile Timer objects *********************************
+         OBJECT           cgspProfileTimerValue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspProfileTimerRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** cgspInstanceTable *************************************    
+
+         OBJECT           cgspInstNetworkIndicator
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstVariant
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+                          
+         OBJECT           cgspInstDisplayName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstDescription
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstTFR
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstCongestionsLevels
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstFastRestart
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstDistSccpUnseq
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstSummaryRoutingException
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+                              
+         OBJECT           cgspInstRouteTableName 
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspInstRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** cgspInstTimer *****************************************   
+         
+         OBJECT           cgspInstTimerValue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         OBJECT           
+                          cgspInstTimerRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** cgspPointCodeTable ************************************
+         
+         OBJECT           cgspPointCodeType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspPointCodeRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** cgspLinksetTable **************************************
+         
+         OBJECT           cgspLinksetSourcePointCode    
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetAdjacentPointCode  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetInboundAcl         
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetOutboundAcl        
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetAccountingMtp3     
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetAccountingGtt
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetActPriority        
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetDisplayName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetDescription
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetRotateSlsEnable                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetRotateSlsShift                   
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetProfileName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetRowStatus                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** cgspLinksetTimerTable **********************************
+         
+         OBJECT           cgspLinksetTimerValue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinksetTimerRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         
+--       *** cgspLinkTable ***************************************** 
+         OBJECT           cgspLinkDescription                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkType                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkifIndex               
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkXmitQueueDepthHigh
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionAbate1      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionAbate2      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionAbate3      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionOnset1      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionOnset2      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkCongestionOnset3      
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkSigLinkTest           
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkLocalPeerPort             
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkRemotePeerPort            
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkQosClass                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkDisplayName
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkPlanCapacityRcvd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkUtilThresholdRcvd
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkPlanCapacitySent
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkUtilThresholdSent
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkRowStatus                  
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+
+--       *** cgspLinkTimerTable ************************************
+         
+         OBJECT           cgspLinkTimerValue
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkTimerRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+--       *** cgspLinkRemoteIpTable *********************************
+         
+         OBJECT           cgspLinkRemoteIpAddrType
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkRemoteIpAddress
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+         OBJECT           cgspLinkRemoteIpAddrRowStatus
+         MIN-ACCESS       read-only
+         DESCRIPTION      "Create/Write access is not required."
+         
+        ::= { ciscoGspMIBCompliances 3 }
+        
+        
 -- Units of Conformance
 
 ciscoGspScalarsGroup OBJECT-GROUP
@@ -4055,7 +4425,7 @@ ciscoGspNotificationsGroup NOTIFICATION-GROUP
         }                      
         STATUS current
         DESCRIPTION
-                "SP notification objects."
+                "SP notifications."
         ::= { ciscoGspMIBGroups 13 }
         
 ciscoGspLinkGroupRev1 OBJECT-GROUP
@@ -4153,6 +4523,25 @@ ciscoGspLinkGroupRev1 OBJECT-GROUP
         DESCRIPTION
                 "SP link objects."
         ::= { ciscoGspMIBGroups 14 }
+
+ciscoGspNotificationsEnableGroupSup1 OBJECT-GROUP
+        OBJECTS { cgspIsolationNotifEnabled
+        }
+        STATUS current
+        DESCRIPTION
+                " Isolation notification enable."
+        ::= { ciscoGspMIBGroups 15 }
+        
+ciscoGspNotificationsGroupSup1 NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                ciscoGspIsolation
+        }                      
+        STATUS current
+        DESCRIPTION
+                " Isolation notification."
+        ::= { ciscoGspMIBGroups 16 }
+        
 END
 
+ 
 

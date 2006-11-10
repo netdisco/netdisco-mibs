@@ -1,9 +1,9 @@
 -- *****************************************************************
 -- CISCO-SSG-MIB.my:  MIB file for SSG Multi-service Gateway
 --
--- January 2002, Thamilarasu K
+-- January 2002, Thamilarasu K,  October 2003, Sheetal Tilve
 --
--- Copyright (c) 1996, 2002 by cisco Systems, Inc.
+-- Copyright (c) 1996, 2002, 2003, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -14,6 +14,7 @@ IMPORTS
         OBJECT-TYPE,
         Counter32,
         Gauge32,
+        Unsigned32,
         NOTIFICATION-TYPE
             FROM SNMPv2-SMI
         MODULE-COMPLIANCE,
@@ -21,6 +22,7 @@ IMPORTS
         OBJECT-GROUP
             FROM SNMPv2-CONF
         TimeInterval,
+        DateAndTime,
         TruthValue,
         DisplayString,
         RowStatus
@@ -30,14 +32,13 @@ IMPORTS
             FROM INET-ADDRESS-MIB
         InterfaceIndex
             FROM IF-MIB
-        Unsigned32,
         CiscoPort
             FROM CISCO-TC
         ciscoMgmt
             FROM CISCO-SMI;
 
 ciscoSsgMIB MODULE-IDENTITY
-        LAST-UPDATED        "200203250000Z"
+        LAST-UPDATED        "200512220000Z"
         ORGANIZATION        "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -67,7 +68,14 @@ ciscoSsgMIB MODULE-IDENTITY
                 SESM  Subscriber Edge Service Manager
                 GGSN  Gateway GPRS Support Node
                 APN   Access Point Name"
-                
+        REVISION        "200512220000Z"
+        DESCRIPTION  
+                "Imported Unsigned32 from SNMPv2-SMI instead 
+                 of CISCO-TC."
+        REVISION        "200310170000Z"
+        DESCRIPTION
+                "Added new objects for Transparent Auto-Logon
+                 feature."
         REVISION        "200203250000Z"
         DESCRIPTION
                 "Initial version of this MIB module."
@@ -86,6 +94,7 @@ cssgTcpRedirect         OBJECT IDENTIFIER ::=  { ciscoSsgMIBObjects 6 }
 cssgServiceIfBinds      OBJECT IDENTIFIER ::=  { ciscoSsgMIBObjects 7 }
 cssgRadiusClients       OBJECT IDENTIFIER ::=  { ciscoSsgMIBObjects 8 }
 cssgPortMap             OBJECT IDENTIFIER ::=  { ciscoSsgMIBObjects 9 }
+cssgTal                 OBJECT IDENTIFIER ::=  { ciscoSsgMIBObjects 10 }
 
 cssgCfgSsgEnabled OBJECT-TYPE
     SYNTAX      TruthValue
@@ -341,6 +350,16 @@ cssgCfgAAAServerDownNotifEnabled OBJECT-TYPE
         connectivity to AAA is lost or if it goes down."
     DEFVAL        { false }
     ::= { cssgCfgObjects 26 }
+
+cssgCfgTalEnabled OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "An indication of whether Transparent Auto Logon feature
+         is enabled on SSG." 
+    DEFVAL        { false }
+    ::= { cssgCfgObjects 27 }
 
 cssgStatsLoginAttempts OBJECT-TYPE
     SYNTAX       Counter32
@@ -1326,6 +1345,257 @@ cssgPortMapRowStatus OBJECT-TYPE
         To delete a row, set this object to 'destroy'."
     ::= { cssgPortMapEntry 5 }
 
+cssgTalWaitingForAuthUsers OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of currently existing users waiting for
+         authorization."
+    ::= { cssgTal 1 }
+
+cssgTalUnidentifiedUsers OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of currently existing unidentified users. These
+         are users for which there was no response received from AAA
+         and hence it is not clear if they are valid users."
+    ::= { cssgTal 2 }
+
+cssgTalSuspectUsers OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of currently existing Suspect Users."
+    ::= { cssgTal 3 }
+
+cssgTalPassthroughUsers OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of currently existing transparent pass-through
+         users."
+    ::= { cssgTal 4 }
+
+cssgTalMaxAuthRate OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Maximum rate of authorization requests per second.
+         At a given time, the maximum rate of authorization requests
+         will overwrite the previous value."
+    ::= { cssgTal 5 }
+
+cssgTalMaxAuthRateTimestamp OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This is the local time on the SSG when the Maximum rate
+         of authorization requests per second, indicated by 
+         cssgTalMaxAuthRate, was recorded."
+    ::= { cssgTal 6 }
+
+cssgTalMinAuthRate OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Minimum rate of authorization requests per second.
+         At a given time, the minimum rate of authorization
+         requests will overwrite the previous value."
+    ::= { cssgTal 7 }
+
+cssgTalMinAuthRateTimestamp OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This is the local time on the SSG when the Minimum rate
+         of authorization requests per second, indicated by 
+         cssgTalMinAuthRate, was recorded."
+    ::= { cssgTal 8 }
+
+cssgTalCurrentAuthRate OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The last recorded rate of authorization requests per second, 
+         on SSG." 
+    ::= { cssgTal 9 }
+
+cssgTalCurrentAuthRateTimestamp OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This is the local time on the SSG when cssgTalCurrentAuthRate,
+         was recorded."
+    ::= { cssgTal 10 }
+
+cssgTalResetAuthRates OBJECT-TYPE
+    SYNTAX      INTEGER {
+                   unknown(1),
+                   reset(2)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Setting this variable to 'reset' indicates that the Minimum
+         and Maximum rates of authorization would be reset to the 
+         last recorded rate of authorization requests per second.
+         Setting it to 'unknown' will not result in any changes.
+         An snmp-get on this value will always return 'unknown'."
+    ::= { cssgTal 11 }
+
+cssgTalMaxPendingAuthReqs OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The maximum number of outstanding TAL authorization 
+         requests allowed on SSG. If the number of authorization 
+         requests goes beyond this value, SSG does a SYS log 
+         message and any packets received that would result in 
+         SSG sending a new radius request will be dropped at the 
+         CEF path itself. 
+         When this value is set, it will be applicable from that 
+         point onwards. If the number of existing requests exceeds 
+         the new values, these requests will not be discarded."
+    ::= { cssgTal 12 }
+
+cssgTalMaxAuthReqsRate OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The maximum number of authorization requests per second 
+         allowed on SSG. If this value is set, SSG throttles the 
+         authorization requests sent per second as per this value."
+    ::= { cssgTal 13 }
+
+cssgTalDropPakDuringAuthorization OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value 'true' indicates that any packets that are 
+         received from the user during user authorization would 
+         be dropped. The value 'false' indicates that the packets 
+         will not be dropped." 
+    DEFVAL      { false }
+    ::= { cssgTal 14 }
+
+cssgTalUnidentifiedUserAllowTraff OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value 'true' indicates that traffic from/to 
+         unidentified users would be allowed. A value of 'false' 
+         indicates that traffic from/to unidentified users will 
+         not be allowed."
+    DEFVAL      { false }
+    ::= { cssgTal 15 }
+
+cssgTalMaxSuspectUsers OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The maximum number of suspect users allowed."
+    DEFVAL      { 5000 }
+    ::= { cssgTal 16 }
+
+cssgTalSuspectUserTimeout OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The timeout value for a suspect user in minutes.
+         If a packet is received for a suspect user, then packets
+         from/to this user will be dropped/tcp-redirected, until 
+         a value of cssgTalSuspectUserTimeout is reached. 
+         After this timeout, any new traffic received by SSG from the 
+         suspect user will trigger the TAL procedure all over again."
+    DEFVAL      { 60 }
+    ::= { cssgTal 17 }
+
+cssgTalUnidentifiedUserTimeout OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The timeout value for an unidentified user in minutes.
+         After this time expiry, authorization will be done again 
+         when a packet is received from this user."
+    DEFVAL      { 10 }
+    ::= { cssgTal 18 }
+
+cssgTalUserInfoTable OBJECT-TYPE
+         SYNTAX      SEQUENCE OF CssgTalUserInfoEntry
+         MAX-ACCESS  not-accessible
+         STATUS      current
+         DESCRIPTION
+                 "A list of all the transparent users, along with 
+                  their user-state."
+         ::= { cssgTal 19 }
+
+cssgTalUserInfoEntry OBJECT-TYPE
+         SYNTAX      CssgTalUserInfoEntry
+         MAX-ACCESS  not-accessible
+         STATUS      current
+         DESCRIPTION
+                 "A conceptual row in the TAL user info table."
+         INDEX { cssgTalUserIPAddressType, cssgTalUserIPAddress }
+         ::= { cssgTalUserInfoTable 1 }
+
+CssgTalUserInfoEntry ::=
+         SEQUENCE {
+             cssgTalUserIPAddressType InetAddressType,
+             cssgTalUserIPAddress     InetAddress,
+             cssgTalUserState         INTEGER
+         }
+
+cssgTalUserIPAddressType OBJECT-TYPE
+         SYNTAX      InetAddressType
+         MAX-ACCESS  not-accessible
+         STATUS      current
+         DESCRIPTION
+                 "This is the IP address type of a particular
+                  transparent user and is used as index (together with
+                  cssgTalUserIPAddress) to identify a unique entry in
+                  the Tal User Info table."
+         ::= { cssgTalUserInfoEntry 1 }
+
+cssgTalUserIPAddress OBJECT-TYPE
+    SYNTAX       InetAddress
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "IP Address of the transparent user."
+    ::= { cssgTalUserInfoEntry 2 }
+
+cssgTalUserState OBJECT-TYPE
+         SYNTAX      INTEGER {
+                        other(1),
+                        authorizing(2),
+                        unidentified(3),
+                        suspect(4),
+                        passthrough(5)
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current
+         DESCRIPTION
+                 "The state of the transparent user."
+         ::= { cssgTalUserInfoEntry 3 }
+
 -- Notifications
 
 ciscoSsgMIBNotifications OBJECT IDENTIFIER ::= { ciscoSsgMIB 0 }
@@ -1352,7 +1622,7 @@ ciscoSsgMIBGroups      OBJECT IDENTIFIER ::= { ciscoSsgMIBConformance 2}
 -- Conformance
 
 ciscoSsgMIBCompliance MODULE-COMPLIANCE
-    STATUS current
+    STATUS  deprecated -- superceded by ciscoSsgMIBComplianceRev1
     DESCRIPTION
         "The compliance statement for entities which implement
         CISCO-SSG-MIB."
@@ -1370,6 +1640,27 @@ ciscoSsgMIBCompliance MODULE-COMPLIANCE
 
         }
     ::= { ciscoSsgMIBCompliances 1 }
+
+ciscoSsgMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        CISCO-SSG-MIB."
+    MODULE
+        MANDATORY-GROUPS {
+            ciscoSsgCfgGroupRev1,
+            ciscoSsgStatsGroup,
+            ciscoSsgServicesGroup,
+            ciscoSsgExclusionsGroup,
+            ciscoSsgTcpRedirectGroup,
+            ciscoSsgServiceInterfaceGroup,
+            ciscoSsgRadiusClientsGroup,
+            ciscoSsgPortMapGroup,
+            ciscoSsgNotificationGroup,
+            ciscoSsgTalUserInfoGroup
+
+        }
+    ::= { ciscoSsgMIBCompliances 2 }
 
 -- Units of Conformance
 
@@ -1402,7 +1693,7 @@ ciscoSsgCfgGroup OBJECT-GROUP
         cssgCfgRadiusClntRbtNotifEnabled,
         cssgCfgAAAServerDownNotifEnabled
     }
-    STATUS current
+    STATUS deprecated -- superceded by ciscoSsgCfgGroupRev1
     DESCRIPTION
         "A collection of configurable parameters in SSG MIB."
     ::= { ciscoSsgMIBGroups 1 }
@@ -1511,4 +1802,69 @@ ciscoSsgNotificationGroup NOTIFICATION-GROUP
         "A collection of notifications generated by SSG."
     ::= { ciscoSsgMIBGroups 9 }
 
+ciscoSsgCfgGroupRev1 OBJECT-GROUP
+    OBJECTS {
+        cssgCfgSsgEnabled,
+        cssgCfgAutoDomainMode,
+        cssgCfgLocalForwardingEnabled,
+        cssgCfgAutoLogOffMode,
+        cssgCfgRadiusProxyEnabled,
+        cssgCfgTcpRedirectEnabled,
+        cssgCfgAutoDomainNatEnabled,
+        cssgCfgPortBundleHostKeyEnabled,
+        cssgCfgTransPassThroughEnabled,
+        cssgCfgAutoLogOffInterval,
+        cssgCfgAutoLogOffIcmpRetries,
+        cssgCfgMaxServicesPerUser,
+        cssgCfgAccountingEnabled,
+        cssgCfgDefaultNetworkType,
+        cssgCfgDefaultNetwork,
+        cssgCfgRadiusAuthenPort,
+        cssgCfgRadiusAccountingPort,
+        cssgCfgRadiusFwdAcctPktsEnabled,
+        cssgCfgAccountingInterval,
+        cssgCfgTCPRedirGrpForUnAuthUsers,
+        cssgCfgTCPRedirGrpForUnAuthServ,
+        cssgCfgTcpRedirGrpForSMTP,
+        cssgCfgTcpRedirGrpForInitialCapt,
+        cssgCfgTcpRedirGrpForAdvCapt,
+        cssgCfgRadiusClntRbtNotifEnabled,
+        cssgCfgAAAServerDownNotifEnabled,
+        cssgCfgTalEnabled
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of configurable parameters in SSG MIB."
+    ::= { ciscoSsgMIBGroups 10 }
+
+ciscoSsgTalUserInfoGroup OBJECT-GROUP
+    OBJECTS {
+        cssgTalWaitingForAuthUsers,
+        cssgTalUnidentifiedUsers,
+        cssgTalSuspectUsers,
+        cssgTalPassthroughUsers,
+        cssgTalMaxAuthRate,
+        cssgTalMaxAuthRateTimestamp,
+        cssgTalMinAuthRate,
+        cssgTalMinAuthRateTimestamp,
+        cssgTalCurrentAuthRate,
+        cssgTalCurrentAuthRateTimestamp,
+        cssgTalResetAuthRates,
+        cssgTalMaxPendingAuthReqs,
+        cssgTalMaxAuthReqsRate,
+        cssgTalDropPakDuringAuthorization,
+        cssgTalUnidentifiedUserAllowTraff,
+        cssgTalMaxSuspectUsers,
+        cssgTalSuspectUserTimeout,
+        cssgTalUnidentifiedUserTimeout,
+
+        cssgTalUserState
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects pertaining to 
+         Transparent Auto-Logon Group."
+    ::= { ciscoSsgMIBGroups 11 }
+
 END
+    

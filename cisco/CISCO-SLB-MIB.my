@@ -3,7 +3,7 @@
 --
 -- December 1999, Jason Cox
 --
--- Copyright (c) 1999, 2002, 2004, 2005 by cisco Systems, Inc.
+-- Copyright (c) 1999, 2002, 2004, 2006 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 --
@@ -28,7 +28,8 @@ IMPORTS
         TruthValue,
         DateAndTime,
         TEXTUAL-CONVENTION,
-        RowStatus
+        RowStatus,
+        StorageType
                 FROM SNMPv2-TC
 
         MODULE-COMPLIANCE,
@@ -38,7 +39,8 @@ IMPORTS
 
         InetAddressType,
         InetAddress,
-        InetPortNumber
+        InetPortNumber,
+        InetAddressPrefixLength
                 FROM INET-ADDRESS-MIB
 
         SnmpAdminString
@@ -48,7 +50,7 @@ IMPORTS
                 FROM CISCO-SMI;
 
 ciscoSlbMIB MODULE-IDENTITY
-        LAST-UPDATED    "200503310000Z"
+        LAST-UPDATED    "200601130000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -83,12 +85,36 @@ ciscoSlbMIB MODULE-IDENTITY
 
                 Acronyms and terms:
                 
+                  DFP    Dynamic Feedback Protocol
+                  SASP   Server to Application State Protocol
                   GGSN   Gateway GPRS Support Node
                   GPRS   General Packet Radio Service
                   GTP    GPRS Tunneling Protocol
                   SASP   Server/Application State Protocol
                   SGSN   Serving GPRS Support Node
                 "
+        REVISION        "200601130000Z"
+        DESCRIPTION
+                "- Added following enums to SlbPredictor TC
+                   leastLoaded
+                   httpCookieHash
+                   httpHeaderHash.
+
+                - Increased the range for SlbServerString TC
+                  from 1..15 to 1..96.
+
+                - Added following Tables:
+                  slbVServerInfoTable
+                  slbVServerIPTable
+
+                - Added following Notifications:
+                  ciscoSlbVServerStateChange
+                  ciscoSlbVServerVIPStateChange
+
+                - Added cSlbVServerStateChangeNotifEnabled object
+
+                - Added following in Compliance/Conformance
+                  ciscoSlbMIBComplianceRev3."
 
         REVISION        "200503310000Z"
         DESCRIPTION
@@ -146,7 +172,7 @@ SlbServerString ::= TEXTUAL-CONVENTION
         STATUS          current
         DESCRIPTION
                 "The configured name associated with an SLB object."
-        SYNTAX OCTET STRING (SIZE (1..15))
+        SYNTAX OCTET STRING (SIZE (1..96))
 
 SlbPasswordString ::= TEXTUAL-CONVENTION
         STATUS          current
@@ -217,15 +243,26 @@ SlbPredictor ::= TEXTUAL-CONVENTION
                 'forward'     : forward the connection to the
                                 appropriate next-hop as determined by
                                 a routing lookup on the destination
-                                IP address."
+                                IP address.
+                'leastLoaded' : assign to a real server that is
+                                least loaded/busy.  The load
+                                information is available from
+                                agents(DFP, SASP etc).
+                'httpCookieHash' : assign based on the hash value of
+                                   the HTTP Cookie value.
+                'httpHeaderHash' : assign based on the hash value of
+                                   the HTTP Header Name."
         SYNTAX INTEGER {
-                roundRobin(1),
-                leastConns(2),
-                ipHash(3),
-                ipHashSrc(4),
-                ipHashDest(5),
-                urlHash(6),
-                forward(7)
+                roundRobin     (1),
+                leastConns     (2),
+                ipHash         (3),
+                ipHashSrc      (4),
+                ipHashDest     (5),
+                urlHash        (6),
+                forward        (7),
+                leastLoaded    (8),
+                httpCookieHash (9),
+                httpHeaderHash (10)
         }
 
 SlbRealServerState ::= TEXTUAL-CONVENTION
@@ -589,7 +626,8 @@ slbEntity                               OBJECT-TYPE
         DESCRIPTION
                 "The SLB instance reference number for this server.
                 This allows multiple SLB's to exist on the same SNMP
-                system."
+                system.  This object's value generally corresponds to 
+                the slot number where the module resides."
         ::= { slbStatsTableEntry 1 }
 
 slbStatsUnassistedSwitchingPkts         OBJECT-TYPE
@@ -1381,6 +1419,246 @@ slbVirtualMask                          OBJECT-TYPE
         ::= { slbVirtualServerTableEntry 20 }
 
 
+-- Virtual Server Info table
+
+slbVServerInfoTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF SlbVServerInfoTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "This table provides information on virtual servers."
+        ::= { slbVirtualServers 2 }
+
+slbVServerInfoTableEntry              OBJECT-TYPE
+        SYNTAX          SlbVServerInfoTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "An entry in virtual server table.  An entry
+                gets created when class map is associated with
+                policy map.  An entry gets deleted when a class-map
+                is disassociated with the policy-map."
+        INDEX   { slbEntity, slbVServerIndex }
+        ::= { slbVServerInfoTable 1 }
+
+SlbVServerInfoTableEntry ::= SEQUENCE {
+        slbVServerIndex                    Unsigned32,
+        slbVServerClassMap                 SnmpAdminString,
+        slbVServerPolicyMap                SnmpAdminString,
+        slbVServerState                    SlbVirtualServState,
+        slbVServerStateChangeDescr         SnmpAdminString,
+        slbVServerNumberOfConnections      Gauge32,
+        slbVServerTotalConnections         Counter32
+}
+
+slbVServerIndex OBJECT-TYPE
+        SYNTAX          Unsigned32 (1..4294967295)
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "An unique identifier for the virtual server.
+                This value is unique for a combination of
+                class map and a policy map."
+        ::= { slbVServerInfoTableEntry  1 }
+
+slbVServerClassMap  OBJECT-TYPE
+        SYNTAX     SnmpAdminString
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                "This object contains the class map 
+                in which this virtual server is
+                associated with it.  A class-map is 
+                used to classify a set of traffic 
+                with which actions may be associated."
+        ::= { slbVServerInfoTableEntry  2 }
+
+slbVServerPolicyMap OBJECT-TYPE
+        SYNTAX          SnmpAdminString
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+            "This object identifies the policy map.
+            A policy-map can be used to identify
+            various policies such as security policies or
+           load balancing policies.  A class map
+           can be associated with a policy map."
+        ::= { slbVServerInfoTableEntry  3 }
+
+slbVServerState  OBJECT-TYPE
+        SYNTAX     SlbVirtualServState
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                "The state of virtual server."
+        ::= { slbVServerInfoTableEntry  4 }
+
+slbVServerStateChangeDescr OBJECT-TYPE         
+    SYNTAX     SnmpAdminString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "This object contains the descriptive
+        text qualifying the reason for the
+        value in slbVServerState.
+
+         Examples:
+           OK
+           Policy not configured
+           Server Farm failed
+           Real Server failed."
+        ::= { slbVServerInfoTableEntry  5 }
+
+slbVServerNumberOfConnections OBJECT-TYPE
+        SYNTAX          Gauge32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of currently assigned connections being
+                handled by this virtual server."
+        ::= { slbVServerInfoTableEntry  6 }
+
+slbVServerTotalConnections OBJECT-TYPE
+        SYNTAX          Counter32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The number of assigned connections handled by this
+                virtual server since this server was configured."
+        ::= { slbVServerInfoTableEntry  7 }
+
+
+-- IP Address table for Virtual Server 
+
+slbVServerIPTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF SlbVServerIPTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "This table contains the IP Addresses 
+                configured for virtual servers.  A virtual
+                server can have more than one IP Address
+                configured in it."
+        ::= { slbVirtualServers 3 }
+
+slbVServerIPTableEntry              OBJECT-TYPE
+        SYNTAX          SlbVServerIPTableEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+                "An entry in the virtual server IP table.
+                Each entry contains virtual server attributes 
+                that are used for server loadbalancing decisions."
+        INDEX   {
+                slbEntity,
+                slbVServerIndex,
+                slbVServerObjectIndex
+        }
+        ::= { slbVServerIPTable 1 }
+
+SlbVServerIPTableEntry ::= SEQUENCE {
+        slbVServerObjectIndex      Unsigned32,
+        slbVServerIpAddressType    InetAddressType,
+        slbVServerIpAddress        InetAddress,
+        slbVServerIpMask           InetAddressPrefixLength,
+        slbVServerProtocol         CiscoIpProtocol,
+        slbVServerPortLow          InetPortNumber,
+        slbVServerPortHigh         InetPortNumber,
+        slbVServerStorageType      StorageType,
+        slbVServerRowStatus        RowStatus
+}
+
+slbVServerObjectIndex OBJECT-TYPE
+        SYNTAX     Unsigned32 (1..4294967295)
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "The index identifying an entry applicable to
+                the same virtual server identified by slbVServerIndex."
+        ::= { slbVServerIPTableEntry 1 }
+
+slbVServerIpAddressType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "The type of IP address configured
+                in slbVServerIpAddress."
+        DEFVAL {ipv4}
+        ::= { slbVServerIPTableEntry 2 }
+
+slbVServerIpAddress OBJECT-TYPE
+        SYNTAX      InetAddress
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION
+                "The IP address of the virtual server.
+                The type of IP address is provided in
+                slbVServerIpAddressType."
+        ::= { slbVServerIPTableEntry 3 }
+
+slbVServerIpMask     OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "This object is subnet mask for the slbVServerIpAddress.
+                The IP subnet mask is applied to the address 
+                of this virtual server for traffic filtering.
+                The value 0 is used to specifiy that the address
+                mask of the virtual server is unknown or not used."
+        DEFVAL { 0 }
+        ::= { slbVServerIPTableEntry 4 }
+
+slbVServerProtocol OBJECT-TYPE
+        SYNTAX     CiscoIpProtocol
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "The protocol for the virtual server IP address."
+        ::= { slbVServerIPTableEntry 5 }
+
+slbVServerPortLow OBJECT-TYPE
+        SYNTAX     InetPortNumber
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "This object identifies the port number of the
+                virtual server that is used in loadbalancing decisions.
+                This has to be less than or equal to slbVServerPortHigh."
+        DEFVAL {0}
+        ::= { slbVServerIPTableEntry 6 }
+
+slbVServerPortHigh OBJECT-TYPE
+        SYNTAX     InetPortNumber
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "This object identifies the upper bound of 
+                the port number of the virtual server that is
+                used in loadbalancing decisions. 
+                This has to be greater than or equal to slbVServerPortLow."
+        DEFVAL {0}
+        ::= { slbVServerIPTableEntry 7 }
+
+slbVServerStorageType OBJECT-TYPE
+        SYNTAX     StorageType
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION 
+            "The storage type for this conceptual row."
+        DEFVAL      { volatile }
+        ::= { slbVServerIPTableEntry 8 }
+
+slbVServerRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+                "This object is used to create/delete entries in
+                this table."
+        ::= { slbVServerIPTableEntry 9 }
+        
 --  *************************************************************
 --  *                                                           *
 --  * SLB - Connection Table                                    *
@@ -1735,6 +2013,25 @@ cSlbRealStateChangeNotifEnabled OBJECT-TYPE
                         notification generation is disabled."
         DEFVAL { false }
         ::= { slbNotificationObjects 2 }
+
+cSlbVServerStateChangeNotifEnabled OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION 
+                "The virtual server notification truth value.
+                This object controls the generation of following
+                notifications:
+                    ciscoSlbVServerStateChange
+                    ciscoSlbVServerVIPStateChange
+ 
+                'true'  Indicates whether notification is to be
+                        generated when the state changes. That is, 
+                        the notification generation is enabled.
+                'false' Indicates notification should not be generated.
+                        That is, the notification generation is disabled."
+        DEFVAL { false }
+        ::= { slbNotificationObjects 3 }
 
 --  *************************************************************
 --  *                                                           *
@@ -2729,6 +3026,7 @@ slbSaspStatsRxSetMemStateMsgs           OBJECT-TYPE
                 a failure."
         ::= { slbSaspStatsTableEntry 11 }
 
+
 --
 -- Notifications
 --
@@ -2779,6 +3077,36 @@ ciscoSlbSaspAgentStateChange NOTIFICATION-TYPE
                 "The notification generated when a SASP Agent changes
                 to a new state."
         ::= { ciscoSlbMIBNotifications 4 }
+
+ciscoSlbVServerStateChange NOTIFICATION-TYPE
+        OBJECTS {
+                slbVServerState,
+                slbVServerStateChangeDescr,
+                slbVServerClassMap,
+                slbVServerPolicyMap
+        }
+        STATUS  current
+        DESCRIPTION
+                "The notification generated when a virtual
+                server state is changed."
+        ::= { ciscoSlbMIBNotifications 5 }
+
+ciscoSlbVServerVIPStateChange NOTIFICATION-TYPE
+        OBJECTS {
+                slbVServerState,
+                slbVServerStateChangeDescr,
+                slbVServerClassMap,
+                slbVServerPolicyMap,
+                slbVServerIpAddressType,
+                slbVServerIpAddress,
+                slbVServerProtocol
+        }
+        STATUS  current
+        DESCRIPTION
+                "The notification generated when configuration
+                or association of virtual server IP address(VIP)
+                changes."
+        ::= { ciscoSlbMIBNotifications 6 }
 
 --
 -- Conformance Information
@@ -3149,7 +3477,7 @@ ciscoSlbMIBComplianceRev1 MODULE-COMPLIANCE
         ::= { ciscoSlbMIBCompliances 2 }
 
 ciscoSlbMIBComplianceRev2 MODULE-COMPLIANCE
-        STATUS current
+        STATUS deprecated -- replaced by ciscoSlbMIBComplianceRev3
         DESCRIPTION
                 "The compliance statement for entities which implement
                 the Cisco SLB MIB"
@@ -3332,6 +3660,234 @@ ciscoSlbMIBComplianceRev2 MODULE-COMPLIANCE
                 DESCRIPTION     "Write access is not required."
 
         ::= { ciscoSlbMIBCompliances 3 }
+
+ciscoSlbMIBComplianceRev3 MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+                "The compliance statement for entities which implement
+                the Cisco SLB MIB"
+        MODULE -- this module
+                MANDATORY-GROUPS {
+                        ciscoSlbStatsGroup,
+                        ciscoSlbDfpPasswordGroup,
+                        ciscoSlbServerFarmsGroup,
+                        ciscoSlbRealServersGroup,
+                        ciscoSlbConnectionsGroup,
+                        ciscoSlbStickyObjectsGroup,
+                        ciscoSlbDfpAgentGroup,
+                        ciscoSlbDfpRealGroup,
+                        ciscoSlbNotifEnabledGroup,
+                        ciscoSlbNotifGroup,
+                        ciscoSlbSaspGroup,
+                        ciscoSlbSaspAgentGroup,
+                        ciscoSlbSaspGroupGroup,
+                        ciscoSlbSaspMemberGroup,
+                        ciscoSlbSaspStatsGroup,
+                        ciscoSlbSaspNotifGroup
+                }
+
+
+                GROUP   ciscoSlbVirtualServersGroup
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server is identified by 
+                    name."
+
+                GROUP ciscoSlbVirtualClientsGroup
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server is identified by 
+                    name."
+
+                GROUP   ciscoSlbVServerInfoGroup
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server is identified by
+                    vserver identifier."
+
+                GROUP ciscoSlbVServerIPGroup 
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server is identified by
+                    vserver identifier."
+
+                GROUP    ciscoSlbVServerNotifEnabledGroup
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server notifications
+                    identify virtual server and 
+                    virtual servers are associated with
+                    class maps and policy maps." 
+
+                GROUP    ciscoSlbVServerNotifGroup
+                DESCRIPTION
+                    "The implmentation of this group is
+                    mandatory for those systems where
+                    virtual server is identified by the
+                    virtual server identifier."
+
+                OBJECT          slbServerFarmNat
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbServerFarmNumberOfRealServers
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbServerFarmBindId
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbServerFarmRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealState
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealMaxConnections
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealAdminWeight
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealReassign
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealRetryInterval
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealFailedConnections
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealFailedClients
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbRealRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualServerState
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualIpAddress
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualPort
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualProtocol
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualService
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualAdvertise
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualFarmName
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualDelayTimer
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualIdleTimer
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualStickyTimer
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualStickyGroup
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualSynguardCount
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualSynguardPeriod
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualClientExclude
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbVirtualClientRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbStickyObjectRealIpAddress
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbStickyObjectRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpPasswordPending
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpPasswordTimeout
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpPasswordRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpAgentTimeout
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpAgentRetryCount
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpAgentInterval
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpAgentRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpRealWeight
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+                OBJECT          slbDfpRealRowStatus
+                MIN-ACCESS      read-only
+                DESCRIPTION     "Write access is not required."
+
+        ::= { ciscoSlbMIBCompliances 4 }
 
 -- Units of Conformance
 
@@ -3597,6 +4153,59 @@ ciscoSlbSaspNotifGroup NOTIFICATION-GROUP
         DESCRIPTION
             "A collection of objects providing SASP notifications."
         ::= { ciscoSlbMIBGroups 19 }
+
+ciscoSlbVServerInfoGroup OBJECT-GROUP
+        OBJECTS {
+                slbVServerClassMap,
+                slbVServerPolicyMap,
+                slbVServerState ,
+                slbVServerStateChangeDescr,
+                slbVServerNumberOfConnections,
+                slbVServerTotalConnections
+        }
+        STATUS current
+        DESCRIPTION
+                "The list of objects that are applicable to
+                virtual server statistics."
+        ::= { ciscoSlbMIBGroups 21 }
+
+ciscoSlbVServerIPGroup OBJECT-GROUP
+        OBJECTS {
+                slbVServerIpAddressType,
+                slbVServerIpAddress,
+                slbVServerIpMask,
+                slbVServerProtocol,
+                slbVServerPortLow,
+                slbVServerPortHigh,
+                slbVServerStorageType,
+                slbVServerRowStatus
+        }
+        STATUS current
+        DESCRIPTION
+                "The list of objects that are applicable to
+                virtual server identified by IP Address/Port."
+        ::= { ciscoSlbMIBGroups 22 }
+
+ciscoSlbVServerNotifEnabledGroup  OBJECT-GROUP
+        OBJECTS {
+                cSlbVServerStateChangeNotifEnabled
+        }
+        STATUS current
+        DESCRIPTION
+                "The object used for enabling/disabling
+                Virtual Server notifications."
+        ::= { ciscoSlbMIBGroups 23 }
+
+ciscoSlbVServerNotifGroup NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                ciscoSlbVServerStateChange,
+                ciscoSlbVServerVIPStateChange
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing Virtual Server
+            notifications."
+        ::= { ciscoSlbMIBGroups 24 }
 
 END
 

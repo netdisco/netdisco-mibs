@@ -1,9 +1,9 @@
 -- *********************************************************************
 -- CISCO-CFS-MIB.my: Cisco Fabric Service MIB
 --
--- September 2004, John Fan, Sanjeev C Joshi, H K Vivek
+-- September 2004, John Fan, Sanjeev C Joshi, H K Vivek, 
 --
--- Copyright (c) 2004 by cisco Systems, Inc.
+-- Copyright (c) 2004, 2005 by cisco Systems, Inc.
 -- All rights reserved.
 --
 -- *********************************************************************
@@ -30,7 +30,7 @@ IMPORTS
        FROM CISCO-SMI;
 
 ciscoCFSMIB MODULE-IDENTITY
-    LAST-UPDATED        "200412240000Z"
+    LAST-UPDATED        "200511300000Z"
     ORGANIZATION        "Cisco Systems, Inc."
     CONTACT-INFO
         "       Cisco Systems
@@ -181,6 +181,19 @@ ciscoCFSMIB MODULE-IDENTITY
          
          "
 
+    REVISION  "200511300000Z"
+    DESCRIPTION
+        "Added the following: 
+          - cfsDistCtrlTable table
+          - cfsFeatureOpAttribs object to cfsFeatureOpTable
+         "
+
+    REVISION  "200504270000Z"
+    DESCRIPTION
+        "Added an enumeration value of 'partialSuccess' 
+         to the 'CiscoCFSFeatureActionResult' TC.
+         "
+         
     REVISION  "200412240000Z"
     DESCRIPTION
         "Added the cfsDistCtrl object to control 
@@ -205,7 +218,6 @@ ciscoCFSMIB MODULE-IDENTITY
           
          Added notification:
           - ciscoCFSDiscoveryCompleteNotif
-          
          "
 
     REVISION  "200409150000Z"
@@ -287,21 +299,25 @@ CiscoCFSFeatureActionResult ::= TEXTUAL-CONVENTION
     DESCRIPTION
         "Result of the action performed on a CFS capable feature.
 
-            'none'         - No previous action was performed
+            'none'           - No previous action was performed
 
-            'success'      - Execution of the action triggered
-                             is completed Successfully
+            'success'        - Execution of the action triggered
+                               is completed Successfully
 
-            'failed'       - Execution of the action has failed
+            'failed'         - Execution of the action has failed
 
-            'inProgress'   - Execution of the action triggered
-                             is in progress
+            'inProgress'     - Execution of the action triggered
+                               is in progress
+                             
+            'partialSuccess' - Execution of the action triggered has
+                               succeeded partially in the fabric
          "
     SYNTAX         INTEGER {
         none(1),
         success(2),
         failed(3),
-        inProgress(4)
+        inProgress(4),
+        partialSuccess(5)
     }
 
 CiscoCFSScopeType ::= TEXTUAL-CONVENTION
@@ -383,7 +399,8 @@ CfsFeatureOpEntry ::=
         cfsFeatureOpLastActionResult    CiscoCFSFeatureActionResult,
         cfsFeatureOpLastFailureReason   SnmpAdminString,
         cfsFeatureOpShowCfgOption       INTEGER,
-        cfsFeatureOpStatus              CiscoCFSFeatureStatus
+        cfsFeatureOpStatus              CiscoCFSFeatureStatus,
+        cfsFeatureOpAttribs             BITS
 }
 
 cfsFeatureOpName     OBJECT-TYPE
@@ -560,6 +577,35 @@ cfsFeatureOpStatus OBJECT-TYPE
         "The current operating status of the feature.
          "
     ::= { cfsFeatureOpEntry 11 }
+    
+cfsFeatureOpAttribs OBJECT-TYPE
+    SYNTAX         BITS {
+         fcFabric(0),
+         ipNetwork(1),
+         vsanScope(2)
+    }
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "The value of this object represents the attributes of 
+         a CFS capable feature as registered with the CFS 
+         infrastructure.
+         
+         'fcFabric'           - indicates that the CFS based 
+                                distribution for a feature spans the
+                                entire FC (Fibre Channel) fabric
+         
+         'ipNetwork'          - indicates that the CFS based 
+                                distribution for a feature spans the
+                                entire IP network
+
+         'vsanScope'          - indicates that the CFS based 
+                                distribution for a feature is done 
+                                on per VSAN basis and restricted to a
+                                specific VSAN in a FC (Fibre Channel) 
+                                fabric
+         "
+    ::= { cfsFeatureOpEntry 12 }        
  
 cfsPendingConfOwnerTable    OBJECT-TYPE
     SYNTAX         SEQUENCE OF CfsPendingConfOwnerEntry
@@ -636,7 +682,7 @@ cfsPendingConfOwnerAddrType OBJECT-TYPE
     ::= { cfsPendingConfOwnerEntry 3 }
 
 cfsPendingConfOwnerAddr OBJECT-TYPE
-    SYNTAX        InetAddress (SIZE(0..32))
+    SYNTAX        InetAddress
     MAX-ACCESS    read-only
     STATUS        current
     DESCRIPTION
@@ -1284,8 +1330,98 @@ cfsDistCtrl OBJECT-TYPE
          The value of the object when read, reflects the current 
          operating state of the CFS.
          "
-    DEFVAL { enable }
-	::= { cfsDistCtrlObjects 1 }     
+    ::= { cfsDistCtrlObjects 1 }     
+
+cfsDistCtrlTable    OBJECT-TYPE
+    SYNTAX         SEQUENCE OF CfsDistCtrlEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "The table to control CFS for distribution over IP.
+        "
+    ::= { cfsDistCtrlObjects 2 }
+
+cfsDistCtrlEntry    OBJECT-TYPE
+    SYNTAX         CfsDistCtrlEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "An entry (conceptual row) in the cfsDistCtrlTable. Each row 
+        represents a configuration set required to control CFS for 
+        distribution over IP on each of the address families.
+        "
+    INDEX          { cfsDistCtrlAddrType }
+    ::= { cfsDistCtrlTable 1 }
+
+CfsDistCtrlEntry ::=
+    SEQUENCE { 
+        cfsDistCtrlAddrType         InetAddressType, 
+        cfsDistCtrlAddr             InetAddress, 
+        cfsDistCtrlAction           INTEGER
+}
+
+cfsDistCtrlAddrType  OBJECT-TYPE
+    SYNTAX        InetAddressType
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+        "The type of multicast address to which the CFS distribution
+         is restricted. Only the entries corresponding to the 'ipv4'
+         and 'ipv6' internet address types exist in this table.
+        "
+    ::= { cfsDistCtrlEntry  1 }
+
+cfsDistCtrlAddr   OBJECT-TYPE
+    SYNTAX        InetAddress
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION 
+        "The multicast address domain to which the CFS distribution
+        is restricted.
+
+        The type of this address is determined by the instance 
+        identifier value of the cfsDistCtrlAddrType.
+
+        There is a default multicast address for both IPv4 and IPv6
+        through which the Keep-alive messages are sent and received
+        to discover the CFS capable switches over IP. All switches
+        with similar multicast address form one CFS-over-IP fabric.
+
+        The default multicast address for IPv4 is 239.255.70.83 and
+        range supported is [239.255.0.0 - 239.255.255.255]
+
+        The default multicast address for IPv6 is ff13::7743:4653 and
+        the supported range is [ff13::0000:0000 - ff13::ffff:ffff]
+
+        The value of this object can only be modified when the 
+        value of the corresponding instance of cfsDistCtrlAction is
+        'disable'.
+        "
+    ::= { cfsDistCtrlEntry  2 }
+
+cfsDistCtrlAction OBJECT-TYPE
+    SYNTAX         INTEGER { enable(1), disable(2) }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION 
+        "This object specifies the current operating 
+         mode employed in CFS for distribution over the
+         corresponding type of Internet address.
+
+         By setting the value of this object to 'enable', CFS will
+         enable its capability to distribute the application data 
+         across the fabric over the corresponding type of Internet 
+         address.
+         
+         By setting the value of this object to 'disable', CFS will
+         disable its capability to distribute the data across the 
+         fabric over the corresponding type of Internet address. 
+         
+         Only one instance of this object can have the value of
+         'enable' among all the conceptual rows.
+         "
+    DEFVAL { disable }
+    ::= { cfsDistCtrlEntry  3 }
 
 --
 -- Objects for Notification only
@@ -1425,7 +1561,7 @@ ciscoCFSMIBCompliance     MODULE-COMPLIANCE
     ::= { ciscoCFSMIBCompliances 1 }
 
 ciscoCFSMIBComplianceRev1     MODULE-COMPLIANCE
-    STATUS         current
+    STATUS         deprecated --Superseded by ciscoCFSMIBComplianceRev2
     DESCRIPTION
         "The compliance statement for entities which implement the
          CISCO-CFS-MIB.
@@ -1465,6 +1601,56 @@ ciscoCFSMIBComplianceRev1     MODULE-COMPLIANCE
          "         
 
     ::= { ciscoCFSMIBCompliances 2 }
+
+ciscoCFSMIBComplianceRev2     MODULE-COMPLIANCE
+    STATUS         current
+    DESCRIPTION
+        "The compliance statement for entities which implement the
+         CISCO-CFS-MIB.
+         "
+    MODULE
+       MANDATORY-GROUPS {
+           cfsFeatureOpGroupRev2,
+           cfsPendingConfOwnerGroup,
+           cfsFeatureActionNotifGroup,
+           cfsMembersGroup,
+           cfsPeerDiscoveryNotifGroup,
+           cfsFeatureOpExtGroup
+       }
+    GROUP          cfsFeatureNotifObjectsGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports notifications as defined in the
+         'cfsMergeFailNotifGroup'.
+         "
+         
+    GROUP          cfsMergeFailNotifGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports fabric merge.
+         "
+         
+    GROUP          cfsDistCtrlGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports CFS distribution control.
+         "         
+
+    GROUP          cfsDistCtrlInetGroup
+    DESCRIPTION
+        "This group is conditionally mandatory and must be
+         implemented by the agent of the managed entity only
+         if the CFS implementation on the managed entity
+         supports per Internet address type CFS distribution
+         control.
+         "         
+    ::= { ciscoCFSMIBCompliances 3 }
 
 --
 -- Units of Conformance
@@ -1586,7 +1772,7 @@ cfsFeatureOpGroupRev1  OBJECT-GROUP
         cfsFeatureOpStatus,
         cfsMergeStatusValue
     }
-    STATUS         current
+    STATUS         deprecated  -- superseded by cfsFeatureOpGroupRev2
     DESCRIPTION
         "A collection of objects for configurations of the CFS capable
          features.
@@ -1598,9 +1784,42 @@ cfsDistCtrlGroup  OBJECT-GROUP
     STATUS         current
     DESCRIPTION
         "A collection of objects for controlling the distribution
-         capabilities of CFS
+         capabilities of CFS.
         "
     ::= { ciscoCFSMIBGroups 10 }    
 
+cfsDistCtrlInetGroup  OBJECT-GROUP
+    OBJECTS { 
+        cfsDistCtrlAddr,
+        cfsDistCtrlAction
+    }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for controlling the per Internet
+         address type distribution capabilities of CFS.
+        "
+    ::= { ciscoCFSMIBGroups 11 }   
+    
+cfsFeatureOpGroupRev2  OBJECT-GROUP
+    OBJECTS {
+        cfsFeatureOpAction,
+        cfsFeatureOpScopeType,
+        cfsFeatureOpScopeVal,
+        cfsFeatureOpLastAction,
+        cfsFeatureOpLastScopeType,
+        cfsFeatureOpLastScopeVal,
+        cfsFeatureOpLastActionResult,
+        cfsFeatureOpLastFailureReason,
+        cfsFeatureOpStatus,
+        cfsMergeStatusValue,
+        cfsFeatureOpAttribs
+    }
+    STATUS         current
+    DESCRIPTION
+        "A collection of objects for configurations of the CFS capable
+         features.
+        "
+    ::= { ciscoCFSMIBGroups 12 }    
+    
 END
 

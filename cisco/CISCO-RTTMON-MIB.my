@@ -6,8 +6,6 @@
 -- Copyright (c) 1995-2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
---
- 
 
 CISCO-RTTMON-MIB DEFINITIONS ::= BEGIN
 
@@ -31,7 +29,8 @@ IMPORTS
   TruthValue,
   RowStatus,
   TimeInterval,
-  TimeStamp
+  TimeStamp,
+  TEXTUAL-CONVENTION
     FROM SNMPv2-TC
 
   ciscoMgmt
@@ -42,24 +41,10 @@ IMPORTS
 
   SnmpAdminString
     FROM SNMP-FRAMEWORK-MIB
-
-  RttReset,
-  RttMonOperation,
-  RttResponseSense,
-  RttMonRttType,
-  RttMplsVpnMonRttType,
-  RttMplsVpnMonLpdFailureSense,
-  RttMplsVpnMonLpdGrpStatus,
-  RttMonProtocol,
-  RttMonCodecType,
-  RttMonLSPPingReplyMode,
-  RttMonTargetAddress,
-  RttMonReactVar
-    FROM CISCO-RTTMON-TC-MIB
 ;
             
 ciscoRttMonMIB MODULE-IDENTITY
-  LAST-UPDATED "200508110000Z"
+  LAST-UPDATED "200504210000Z"
   ORGANIZATION "Cisco IOS"
   CONTACT-INFO
        "Cisco Systems, Inc.
@@ -220,14 +205,23 @@ ciscoRttMonMIB MODULE-IDENTITY
               Statistics capture table will omit them to
               prevent skewed results."
 
-  REVISION  "200508110000Z"
-  DESCRIPTION
-        "- TEXTUAL Conventions previously defined in the MIB are defined
-           in CISCO-RTTMON-TC-MIB."
-         
   REVISION  "200504210000Z"
   DESCRIPTION
-	  "- Added new objects given in ciscoCtrlGroupRev4 to 
+         "- Added following enumerations to RttMonRttType TC
+            lspTrace, lspPing and icmpjitter.
+          - Added following enumerations to RttMonReactVar TC:
+            successivePacketLoss, maxOfLatencyDS, maxOfLatencySD, 
+            latencyDSAvg, latencySDAvg, packetLoss, iaJitterSD, 
+            mosCQSD and rFactorSD.
+          - Added following new tables:
+            rttMonLatestIcmpJitterOperTable and 
+            rttMonIcmpJitterStatsTable.
+            ICMP Jitter operations are initiated in 
+            rttMonCtrlAdminTable.
+	  - Added new objects given in ciscoStatsGroupRev9 to
+            rttMonLatestRtpOperTable, rttMonRtpStatsTable to support
+	    Source to Destination direction statistics.
+	  - Added new objects given in ciscoCtrlGroupRev4 to 
             rttMonGrpScheduleAdminTable.
           - Changed description of object rttMonHTTPStatsRTTMax."
  
@@ -241,6 +235,8 @@ ciscoRttMonMIB MODULE-IDENTITY
         Added and modified descriptions of some objects in
         rttMplsVpnMonCtrlTable, rttMplsVpnMonTypeTable and
         rttMplsVpnMonReactTable for LSP Path Discovery.
+        Added rttMonLatestRtpOperTable and rttMonRtpStatsTable
+        statistics table for rtp.
         Added 6 options in the rttMonReactVar.
         Added rttMonEchoAdminSourceVoicePort and
         rttMonEchoAdminCallDuration in rttMonEchoAdminTable."
@@ -361,6 +357,675 @@ ciscoRttMonMIB MODULE-IDENTITY
   REVISION  "9906150000Z"
   DESCRIPTION "created rttMonAuthTable."
   ::= { ciscoMgmt 42 } 
+
+--
+-- Textual Conventions
+--
+
+--
+--  Reset textual convention
+--
+
+RttReset ::= TEXTUAL-CONVENTION
+  STATUS      current
+  DESCRIPTION
+       "Represents the reset control object.
+
+       When this object is set to reset, the defined
+       reset operation will take place.
+
+       When this object is read (with a get), during the
+       the reset operation the value 'reset' will be
+       returned.  At all other times the value 'ready'
+       will be returned."
+  SYNTAX      INTEGER
+  {
+    ready(1),
+    reset(2)
+  }
+
+--
+-- RttMonOperation textual convention
+--
+
+RttMonOperation ::= TEXTUAL-CONVENTION
+  STATUS      current
+  DESCRIPTION
+       "The following are specific RTT operations for a 
+       particular probe type:
+       notApplicable(0)         - This object is not applicable for the
+                                  probe type.
+       httpGet(1)               - HTTP get request
+       httpRaw(2)               - HTTP request with user defined payload
+       ftpGet(3)                - FTP get request
+       ftpPassive(4)            - FTP passive mode
+       ftpActive(5)             - FTP active mode
+       voipDTAlertRinging(6)    - Voip post dial delay detect point:
+                                  Alerting / Ringing
+       voipDTConnectOK(7)       - Voip post dial delay detect point:
+                                  Connect /OK"
+  SYNTAX      INTEGER
+  {
+   notApplicable(0),
+   httpGet(1),
+   httpRaw(2),
+   ftpGet(3),
+   ftpPassive(4),
+   ftpActive(5),
+   voipDTAlertRinging(6),
+   voipDTConnectOK(7)
+  }
+
+--
+-- Round Trip Time (RTT) operation completion sense code
+--  textual convention
+--
+
+RttResponseSense ::= TEXTUAL-CONVENTION
+  STATUS      current
+  DESCRIPTION
+       "These are the defined values for a completion status
+       of a RTT operation.  
+
+       other(0)         - the operation is not started or completed
+                           or this object is not applicable for
+                           the probe type.  
+       ok(1)            - a valid completion occurred and
+                           timed successfully
+       disconnected(2)  - the operation did not occur because
+                           the connection to the target
+                           was lost
+       overThreshold(3) - a valid completion was received but
+                           the completion time exceeded a
+                           threshold value
+       timeout(4)       - an operation timed out; no completion
+                           time recorded
+       busy(5)          - the operation did not occur because a
+                           previous operation is still
+                           outstanding
+       notConnected(6)  - the operation did not occur because no
+                           connection (session) exists with the
+                           target
+       dropped(7)       - the operation did not occur due to lack
+                           of internal resource
+       sequenceError(8) - a completed operation did not contain 
+                           the correct sequence id; no completion
+                           time recorded
+       verifyError(9)   - a completed operation was received, but
+                           the data it contained did not match
+                           the expected data; no completion time 
+                           recorded
+       applicationSpecific(10) 
+                        - the application generating the operation
+                           had a specific error
+       dnsServerTimeout(11) 
+                        - DNS Server Timeout
+       tcpConnectTimeout(12)
+                        - TCP Connect Timeout
+       httpTransactionTimeout(13)
+                        - HTTP Transaction Timeout
+       dnsQueryError(14)
+                        - DNS Query error (because of unknown address 
+                          etc.,)
+       httpError(15)
+                        - HTTP Response StatusCode is not OK (200),
+                          or permenent redirect(301), temporary redirect
+                          (302) then HTTP error is set.
+       error(16)
+                        - if there are socket failures or some other 
+                          errors not relavant to the actual probe, they 
+                          are recorded under this error
+       mplsLspEchoTxError(17)
+                        - MPLS echo request transmission failure.
+       mplsLspUnreachable(18)
+                        - MPLS Target FEC not reachable or unsupported
+                          mpls echo reply code.
+       mplsLspMalformedReq(19)
+                        - MPLS echo request was malformalformed, pointed
+                          out by the reply router.
+       mplsLspReachButNotFEC(20)
+                        - MPLS echo request processed by the downstream
+                          router but not the target."
+  SYNTAX      INTEGER
+  {
+   other(0),
+   ok(1),
+   disconnected(2),
+   overThreshold(3),
+   timeout(4),
+   busy(5),
+   notConnected(6),
+   dropped(7),
+   sequenceError(8),
+   verifyError(9),
+   applicationSpecific(10),
+   dnsServerTimeout(11),
+   tcpConnectTimeout(12),
+   httpTransactionTimeout(13),
+   dnsQueryError(14),
+   httpError(15),
+   error(16),
+   mplsLspEchoTxError(17),
+   mplsLspUnreachable(18),
+   mplsLspMalformedReq(19),
+   mplsLspReachButNotFEC(20)
+  }
+
+--
+-- Round Trip Time (RTT) operation type textual convention
+--
+
+RttMonRttType ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "Specifies the type of RTT operation to be performed.
+
+       The value 'echo' will cause the RTT application to
+       perform a timed echo request/response operation directed
+       at the 'RttMonTargetAddress'.
+
+       The value 'pathEcho' will cause the RTT application
+       to perform path discovery to the 'RttMonTargetAddress', 
+       then it will perform a timed echo request/response 
+       operation directed at the each hop along the path.  
+       This operation will provide two types of information, 
+       first the path and second the time delay along the path.
+
+       NOTE:  The 'pathEcho' time delay operation is a heuristic
+              measurement because an intermediate hop may forward
+              the different echo request/response at different
+              rates.  Thus the time delay difference between two
+              hops along a path may contain very little 'true'
+              statistical meaning. 
+      
+       The value 'fileIO' will cause the RTT application to 
+       write, read, or write/read a file to a preconfigured 
+       file server.
+
+       The value 'script' will cause the RTT application to
+       execute a preconfigured script.
+
+       The value 'udpEcho' will cause the RTT application
+       to perform a timed udp packet send/receive operation 
+       directed at the 'RttMonTargetAddress'.
+       
+       The value 'tcpConnect' will cause the RTT application
+       to perform a timed tcp connect operation directed at the 
+       'RttMonTargetAddress'.
+       
+       The value 'http' will cause the RTT application
+       to perform a download of the object specified in the URL.
+       
+       The value 'dns' will cause the RTT application
+       to perform a name lookup of an IP Address or a hostname.
+       
+       The value 'jitter' will cause the RTT application
+       to perform delay variance analysis.
+       
+       The value 'dlsw' will cause the RTT application
+       to perform a keepalive operation to measure the response 
+       time of a DLSw peer.
+       
+       The value 'dhcp' will cause the RTT application
+       to perform an IP Address lease request/teardown operation.
+
+       The value 'voip' will cause the RTT application
+       to perform call set up operation to measure the response.
+
+       The value 'rtp' will cause the RTT application to perform
+       delay variance analysis for RTP packet.
+
+       The value 'lspGroup' will cause the RTT application to logically
+       group Label Switched Paths discovered as part of LSP Path
+       Discovery to the target and perform an RTT operation end to end
+       over each path in the Group. The type of operation configured
+       is determined by rttMplsVpnMonCtrlRttType.
+
+       The value 'icmpjitter' will cause the RTT application
+       to perform delay variance analysis using ICMP timestamp packets.
+
+       The value of 'lspPing' will cause the RTT application to
+       perform ping over LSP path.
+
+       The value of 'lspTrace' will cause the RTT application to
+       perform trace over LSP path."
+  SYNTAX        INTEGER
+  {
+    echo(1),
+    pathEcho(2),
+    fileIO(3),
+    script(4),
+    udpEcho(5),
+    tcpConnect(6),
+    http(7),
+    dns(8),
+    jitter(9),
+    dlsw(10),
+    dhcp(11),
+    ftp(12),
+    voip(13),
+    rtp(14),
+    lspGroup(15),
+    icmpjitter(16),
+    lspPing(17),
+    lspTrace(18)
+  }
+
+--
+-- Round Trip Time (RTT) operation type for Auto SAA L3 MPLS VPN
+-- textual convention
+--
+
+RttMplsVpnMonRttType ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "Specifies the type of RTT operation to be performed for
+       Auto SAA L3 MPLS VPN.
+
+       The value 'jitter' will cause the Auto SAA L3 MPLS VPN to
+       automatically configure jitter operations."
+       
+  SYNTAX        INTEGER
+  {
+    jitter(1),
+    echo(2),
+    pathEcho(3)
+  }
+
+--
+-- Round Trip Time (RTT) Auto SAA L3 MPLS VPN LSP Path Discovery
+-- Failure Cause textual convention
+--
+
+RttMplsVpnMonLpdFailureSense ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "These are the defined values for the causes of failure in
+       LSP Path Discovery.
+
+       unknown(1)                      - The cause of failure for the
+                                         LSP Path Discovery cannot be
+                                         determined. The discovery for
+                                         the target PE may not have 
+                                         started.
+       noPath(2)                       - No paths were found to the
+                                         target FEC while doing the
+                                         LSP Path Discovery.
+       allPathsBroken(3)               - All paths to the target FEC
+                                         are broken. This means an
+                                         untagged interface on the LSP
+                                         to the target.
+       allPathsUnexplorable(4)         - All paths to the target FEC are
+                                         unexplorable. This identifies
+                                         a case where there is some
+                                         problem in reaching the next
+                                         hop while doing Discovery.
+       allPathsBrokenOrUnexplorable(5) - All paths to the target FEC are
+                                         are either broken or
+                                         unexplorable.
+       timeout(6)                      - The LSP Path Discovery could
+                                         not be completed for the
+                                         target FEC within the
+                                         configured time.
+       error(7)                        - Error occurred while
+                                         performing LSP Path Discovery.
+                                         It might be also due to some
+                                         reasons unrelated to LSP Path
+                                         Discovery."
+  SYNTAX        INTEGER
+  {
+   unknown(1),
+   noPath(2),
+   allPathsBroken(3),
+   allPathsUnexplorable(4),
+   allPathsBrokenOrUnexplorable(5),
+   timeout(6),
+   error(7)
+  }
+
+--
+-- Round Trip Time (RTT) Auto SAA L3 MPLS VPN LPD Group Status
+-- textual convention
+--
+
+RttMplsVpnMonLpdGrpStatus ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "These are the defined values for the status of the LPD Group.
+
+       unknown(1) - This indicates that some/all of the probes which are
+                    part of the LPD group have not completed even
+                    a single operation, so the group status cannot be
+                    identified.
+            up(2) - This state indicates that all the probes which are
+                    part of the LPD group are up with latest return
+                    code as 'ok'.
+       partial(3) - This state indicates that some probes are up and
+                    running fine and some are not 'ok'.
+          down(4) - This state indicates that all the probes to the
+                    target are not running fine. This state indicates
+                    that there is connectivity problem to the target
+                    PE."
+  SYNTAX        INTEGER
+  {
+    unknown(1),
+    up(2),
+    partial(3),
+    down(4)
+  }
+
+--
+-- Round Trip Time (RTT) protocol textual convention
+--
+
+RttMonProtocol ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "Specifies the protocol to be used to perform the timed
+       echo request/response.  The following protocols are
+       defined:
+
+       NOTE: All protocols that end in 'Appl' will support
+             the asymetric request/response (ARR) protocol.  
+             See the DESCRIPTION for ciscoRttMonMIB for a
+             complete description of the asymetric 
+             request/response protocol.
+
+       notApplicable     - no protocol is defined
+       ipIcmpEcho        - uses Echo Request/Reply as defined
+                            in RFC792 for Internet Protocol
+                            networks
+       ipUdpEchoAppl     - uses the UDP based echo server
+       snaRUEcho         - uses the REQECHO and ECHOTEST RU's
+                            to an SSCP over an SNA LU-SSCP
+                            session
+       snaLU0EchoAppl    - uses test RU's sent to the Echo 
+                            Server over an SNA LU0-LU0 session
+       snaLU2EchoAppl    - uses test RU's sent to the Echo 
+                            Server over an SNA LU2-LU2 session
+       snaLU62Echo       - uses the native appn ping ie. aping 
+       snaLU62EchoAppl   - uses test RU's sent to the ARR
+                            Echo Server over an SNA LU6.2-LU6.2
+                            session
+       appleTalkEcho     - uses Echo Request/Reply as defined
+                            for appleTalk networks
+       appleTalkEchoAppl - uses the appleTalk based echo
+                            server
+       decNetEcho        - uses Echo Request/Reply as defined
+                            for DECNet networks
+       decNetEchoAppl    - uses the DECnet based echo server
+       ipxEcho           - uses Echo Request/Reply as defined
+                            for Novell IPX networks
+       ipxEchoAppl       - uses the Novel IPX based echo
+                            server
+       isoClnsEcho       - uses Echo Request/Reply as defined
+                            for ISO CLNS networks
+       isoClnsEchoAppl   - uses the ISO CLNS based echo
+                            server
+       vinesEcho         - uses Echo Request/Reply as defined
+                            for VINES networks
+       vinesEchoAppl     - uses the VINES based echo server
+       xnsEcho           - uses Echo Request/Reply as defined
+                            for XNS networks
+       xnsEchoAppl       - uses the XNS based echo server
+       apolloEcho        - uses Echo Request/Reply as defined
+                            for APOLLO networks
+       apolloEchoAppl    - uses the APOLLO based echo
+                            server
+       netbiosEchoAppl   - uses the netbios based echo
+                            server
+       ipTcpConn         - uses the tcp's connect mechanism
+       httpAppl          - uses udp for name resolution, 
+                           tcp connect and tcp data transfer
+                           mechanisms for HTTP data download
+                           from a particular HTTP Server
+       dnsAppl           - uses udp for name resolution
+       jitterAppl        - uses udp for packet transfers
+       dlswAppl          - uses tcp for sending keepalives
+       dhcpAppl          - uses udp for sending dhcp requests
+       ftpAppl           - uses tcp for connect & data transfer
+       mplsLspPingAppl   - uses MPLS Echo Request/Response as per
+                           draft-ietf-mpls-lsp-ping-04 ietf
+                           standard
+       voipAppl          - uses Symphony infrastructure to measure
+                           H.323/SIP call set up time
+       rtpAppl           - uses Symphony infrastructure to measure
+                           rtp packets delay variance.
+       icmpJitterAppl    - uses ICMP Timestamp for packet transfer 
+                           to measure jitter."
+  SYNTAX       INTEGER
+  {
+    notApplicable(1),
+    ipIcmpEcho(2),
+    ipUdpEchoAppl(3),
+    snaRUEcho(4),
+    snaLU0EchoAppl(5),
+    snaLU2EchoAppl(6),
+    snaLU62Echo(7),
+    snaLU62EchoAppl(8),
+    appleTalkEcho(9),
+    appleTalkEchoAppl(10),
+    decNetEcho(11),
+    decNetEchoAppl(12),
+    ipxEcho(13),
+    ipxEchoAppl(14),
+    isoClnsEcho(15),
+    isoClnsEchoAppl(16),
+    vinesEcho(17),
+    vinesEchoAppl(18),
+    xnsEcho(19),
+    xnsEchoAppl(20),
+    apolloEcho(21),
+    apolloEchoAppl(22),
+    netbiosEchoAppl(23),
+    ipTcpConn(24),
+    httpAppl(25),
+    dnsAppl(26),
+    jitterAppl(27),
+    dlswAppl(28),
+    dhcpAppl(29),
+    ftpAppl(30),
+    mplsLspPingAppl(31),
+    voipAppl(32),
+    rtpAppl(33),
+    icmpJitterAppl(34)
+  }
+
+RttMonCodecType ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+        "Specifies the codec type to be used with the jitter probe.
+        The following codec types are defined:
+
+        notApplicable     - no CodecType is defined
+        g711ulaw          - uses G.711 U Law 64000 bps
+        g711alaw          - uses G.711 A Law 64000 bps
+        g729a             - uses G.729 8000 bps"
+  SYNTAX       INTEGER
+  {
+        notApplicable(0),
+        g711ulaw(1),
+        g711alaw(2),
+        g729a(3)
+  }
+
+RttMonLSPPingReplyMode ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+        "Specifies the Reply mode for the MPLS LSP Echo request
+         packets. The following reply modes are supported:
+
+        replyIpv4Udp(1)         - an mpls echo request will normally
+                                  have reply via IPv4 UDP packets.
+        replyIpv4UdpRA(2)       - reply via IPv4 UDP Router Alert. Used
+                                  when IPv4 return path is deemed 
+                                  unreliable."
+  SYNTAX       INTEGER
+  {
+        replyIpv4Udp(1),
+        replyIpv4UdpRA(2)
+  }
+
+--
+-- Round Trip Time (RTT) target address textual convention
+--
+
+RttMonTargetAddress ::= TEXTUAL-CONVENTION
+  STATUS       current
+  DESCRIPTION
+       "A string which specifies the address of the target for 
+       the RTT operation; a value of RttMonTargetAddress
+       which corresponds to a 'broadcast' address is disallowed.
+
+       The interpretation of this string depends on the type of
+       RTT operation selected, as specified by RttMonProtocol; 
+       consequently, this object cannot be created until 
+       RttMonProtocol has been created (or must be in the same 
+       PDU).
+
+       SNA addresses will be provided in ASCII, but will be
+       converted to EBCDIC
+
+       It is interpreted as follows, for the specified values of
+       RttMonProtocol:
+
+       ipIcmpEcho, ipUdpEchoAppl, ipTcpConn, jitterAppl, dlswAppl,
+       dnsAppl, httpAppl, and dhcpAppl
+            - 4 octets
+       snaRUEcho
+            - N octets, containing the value of the sna
+               HOSTNAME of which the SSCP LU will be used
+               for the operation.  For many systems this value
+               can be empty, and the system will use the
+               implied SSCP LU.  For example 'NSPECHO'.
+       snaLU0EchoAppl and snaLU2EchoAppl 
+            - N octets, the first x octets are the HOSTNAME
+               (Alternatively, this could be a PU name defined
+               to transport to the desired HOST), the second
+               y octets are the APPLID, and the last z octets 
+               are the MODENAME of the Echo Server (blank 
+               for a MODENAME default). The address will be 
+               encoded with a size byte preceding each of 
+               the x y and z called s. For example sxsysz 
+               as in '0x06CWBC060x07NSPECHO0x00' where 
+               HOSTNAME = CWBC06, APPLID = NSPECHO, and 
+               MODENAME is defaulted to 8 blanks.  
+               NOTE: MODENAME is either size 0 or 8.
+       snaLU62Echo and snaLU62EchoAppl
+            - N octets, the first x octets are the LU-NAME,
+               the second y octets are the TP-NAME, and the 
+               last z octets are the MODENAME of the Echo 
+               Server.  The address will be encoded with a size
+               byte preceding each of the x y and z called s.
+               For example sxsysz (zero size before z for a
+               MODENAME default).  The LU-NAME is composed of
+               8 bytes '.' 8 bytes.  The Transaction Program
+               name (TP-NAME) is 1-64 bytes.  The MODENAME
+               is 8 bytes.
+       appleTalkEcho, appleTalkEchoAppl
+       decNetEcho, decNetEchoAppl
+       ipxEcho, ipxEchoAppl
+       isoClnsEcho, isoClnsEchoAppl
+       vinesEcho, vinesEchoAppl
+       xnsEcho, xnsEchoAppl
+       apolloEcho, apolloEchoAppl
+       netbiosEchoAppl, voipAppl
+               - unsupported protocols.
+       mplsLspPingAppl
+               - 8 octets, the first 4 octets are the FEC address
+               and the next 4 octets are the FEC address mask."
+  SYNTAX       OCTET STRING
+
+
+--
+-- RttMonReactVar textual convention
+--
+
+RttMonReactVar  ::= TEXTUAL-CONVENTION
+  STATUS      current
+  DESCRIPTION
+       "The following are specific Reaction variables for a
+        particular probe type:
+         rtt(1)            - Round Trip Time
+         jitterSDAvg(2)    - Jitter average from source to Destination
+         jitterDSAvg(3)    - Jitter average from destination to source
+         packetLossSD(4)   - Packet loss from source to destination
+         packetLossDS(5)   - Packet loss from destination to source
+         mos(6)            - Mean Opinion Score
+         timeout(7)        - Timeout of the Operation
+         connectionLoss(8) - Connection Failed to the destination
+         verifyError(9)    - Data corruption occurs
+         jitterAvg(10)     - Jitter Average in both the directions
+         icpif(11)         - Calculated Planning Impairment Factor
+         packetMIA(12)     - Missing In Action
+         packetLateArrival(13)   - Packets arriving Late
+         packetOutOfSequence(14) - Packets arriving out of sequence
+         maxOfPositiveSD(15)     - Maximum positive jitter from
+                                   Source to Destination
+         maxOfNegativeSD(16)     - Maximum negative jitter from
+                                   Source to Destination
+         maxOfPositiveDS(17)     - Maximum positive jitter from
+                                   Destination to Source
+         maxOfNegativeDS(18)     - Maximum negative jitter from
+                                   Destination to Source.
+         iaJitterDS(19)          - Inter arrival jitter from
+                                   Destination to Source
+         frameLossDS(20)         - Number of frame loss recorded
+                                   at source DSP
+         mosLQDS(21)             - Listener quality MOS at Source
+         mosCQDS(22)             - Conversational quality MOS at source
+         rFactorDS(23)           - R-Factor value at Destination.
+         successivePacketLoss(24)- Successive Dropped Packet
+         maxOfLatencyDS(25)      - Maximum Latency from Destination 
+                                   to Source
+         maxOfLatencySD(26)      - Maximum Latency from Source 
+                                   to Destination
+         latencyDSAvg(27)        - Latency average from Destination 
+                                   to Source
+         latencySDAvg(28)        - Latency average from Source 
+                                   to Destination
+         packetLoss(29)          - Packets loss in both directions
+         iaJitterSD(30)          - Inter arrival jitter from
+                                   Source to Destination
+         mosCQSD(31)             - Conversational quality MOS at 
+                                   Destination
+         rFactorSD(32)           - R-Factor value at Destination."
+
+  SYNTAX      INTEGER
+  {
+         rtt(1),
+         jitterSDAvg(2),
+         jitterDSAvg(3),
+         packetLossSD(4),
+         packetLossDS(5),
+         mos(6),
+         timeout(7),
+         connectionLoss(8),
+         verifyError(9),
+         jitterAvg(10),
+         icpif(11),
+         packetMIA(12),
+         packetLateArrival(13),
+         packetOutOfSequence(14),
+         maxOfPositiveSD(15),
+         maxOfNegativeSD(16),
+         maxOfPositiveDS(17),
+         maxOfNegativeDS(18),
+         iaJitterDS(19),
+         frameLossDS(20),
+         mosLQDS(21),
+         mosCQDS(22),
+         rFactorDS(23),
+         successivePacketLoss(24),
+         maxOfLatencyDS(25),
+         maxOfLatencySD(26),
+         latencyDSAvg(27),
+         latencySDAvg(28),
+         packetLoss(29),
+         iaJitterSD(30),
+         mosCQSD(31),
+         rFactorSD(32)
+  }
 
 --
 -- Round Trip Time (RTT) Monitor MIB Objects
@@ -3955,6 +4620,290 @@ rttMonLatestJitterOperUnSyncRTs  OBJECT-TYPE
         configured tolerance level."
   ::= { rttMonLatestJitterOperEntry 52 }
 
+--
+--    LatestRtpOper Table
+--
+
+rttMonLatestRtpOperTable OBJECT-TYPE
+  SYNTAX SEQUENCE OF RttMonLatestRtpOperEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A table which contains the status of latest RTP
+       operation."
+  ::= { rttMonLatestOper 3 }
+
+rttMonLatestRtpOperEntry OBJECT-TYPE
+  SYNTAX      RttMonLatestRtpOperEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A list of objects that record the latest RTP
+       operation."
+  INDEX { rttMonCtrlAdminIndex
+        }
+  ::= { rttMonLatestRtpOperTable 1 }
+
+RttMonLatestRtpOperEntry  ::= SEQUENCE
+{   
+    rttMonLatestRtpOperRTT                        Gauge32,
+    rttMonLatestRtpOperIAJitterDS                 Gauge32,
+    rttMonLatestRtpOperPacketLossDS               Gauge32,
+    rttMonLatestRtpOperPacketLateDS               Gauge32,
+    rttMonLatestRtpOperPacketEarlyDS              Gauge32,
+    rttMonLatestRtpOperPacketOOSDS                Gauge32,
+    rttMonLatestRtpOperFrameLossDS                Gauge32,
+    rttMonLatestRtpOperRFactorDS                  Gauge32,
+    rttMonLatestRtpOperMOSCQDS                    Gauge32,
+    rttMonLatestRtpOperMOSLQDS                    Gauge32,
+    rttMonLatestRtpOperSense                      RttResponseSense,
+    rttMonLatestRtpErrorSenseDescription          DisplayString,
+    rttMonLatestRtpOperIAJitterSD		  Gauge32,
+    rttMonLatestRtpOperPacketLossSD		  Gauge32,
+    rttMonLatestRtpOperPacketsMIA		  Gauge32,
+    rttMonLatestRtpOperRFactorSD		  Gauge32,
+    rttMonLatestRtpOperMOSCQSD		  	  Gauge32,
+    rttMonLatestRtpOperMinOWSD		  	  Gauge32,
+    rttMonLatestRtpOperMaxOWSD		  	  Gauge32,
+    rttMonLatestRtpOperAvgOWSD		  	  Gauge32,
+    rttMonLatestRtpOperMinOWDS		  	  Gauge32,
+    rttMonLatestRtpOperMaxOWDS		  	  Gauge32,
+    rttMonLatestRtpOperAvgOWDS		  	  Gauge32,
+    rttMonLatestRtpOperTotalPaksSD		  Gauge32,
+    rttMonLatestRtpOperTotalPaksDS		  Gauge32
+}
+
+rttMonLatestRtpOperRTT OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Round trip time for RTP packet."
+  ::= { rttMonLatestRtpOperEntry 1 }
+
+rttMonLatestRtpOperIAJitterDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter arrival Jitter at source for the latest operation."
+  ::= { rttMonLatestRtpOperEntry 2 }
+
+rttMonLatestRtpOperPacketLossDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of packets lost from destination to source for the
+        latest operation."
+  ::= { rttMonLatestRtpOperEntry 3 }
+
+rttMonLatestRtpOperPacketLateDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of late packets at source for the latest operation."
+  ::= { rttMonLatestRtpOperEntry 4 }
+
+rttMonLatestRtpOperPacketEarlyDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of early packets at source for the latest operation."
+  ::= { rttMonLatestRtpOperEntry 5 }
+
+rttMonLatestRtpOperPacketOOSDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of out of sequence packets at source for the
+        latest operation."
+  ::= { rttMonLatestRtpOperEntry 6 }
+
+rttMonLatestRtpOperFrameLossDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of codec frame loss events at source for
+        latest operation."
+  ::= { rttMonLatestRtpOperEntry 7 }
+
+rttMonLatestRtpOperRFactorDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Computed value of R factor at source for latest operation."
+  ::= { rttMonLatestRtpOperEntry 8 }
+
+rttMonLatestRtpOperMOSCQDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Estimated Mean Opinion Score for conversational
+        quality at source for latest operation."
+  ::= { rttMonLatestRtpOperEntry 9 }
+
+rttMonLatestRtpOperMOSLQDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Estimated Mean Opinion Score for listening quality at source
+        for latest operation."
+  ::= { rttMonLatestRtpOperEntry 10 }
+
+rttMonLatestRtpOperSense OBJECT-TYPE
+  SYNTAX      RttResponseSense
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "An application specific sense code for the completion status
+        of the latest RTP operation."
+  ::= { rttMonLatestRtpOperEntry 11 }
+
+rttMonLatestRtpErrorSenseDescription OBJECT-TYPE
+  SYNTAX      DisplayString
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "An sense description for the completion status
+       of the latest RTP operation."
+  ::= { rttMonLatestRtpOperEntry 12 }
+
+rttMonLatestRtpOperIAJitterSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter-arrival jitter at destination for latest operation."
+  ::= { rttMonLatestRtpOperEntry 13 }
+
+rttMonLatestRtpOperPacketLossSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of packets lost from source to destination for latest
+        operation."
+  ::= { rttMonLatestRtpOperEntry 14 }
+
+rttMonLatestRtpOperPacketsMIA OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Number of packets missing in action while measuring 
+        statistics in source to destination direction"
+  ::= { rttMonLatestRtpOperEntry 15 }
+
+rttMonLatestRtpOperRFactorSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Estimated value of R-factor at destination for latest 
+        operation."
+  ::= { rttMonLatestRtpOperEntry 16 }
+
+rttMonLatestRtpOperMOSCQSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Estimated mean opinion score for conversational quality at 
+        destination for latest operation."
+  ::= { rttMonLatestRtpOperEntry 17 }
+
+rttMonLatestRtpOperMinOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum one way latency value in source to destination 
+        direction."
+  ::= { rttMonLatestRtpOperEntry 18 }
+
+rttMonLatestRtpOperMaxOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum one way latency value in source to destination
+        direction."
+  ::= { rttMonLatestRtpOperEntry 19 }
+
+rttMonLatestRtpOperAvgOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average one way latency value in source to destination
+        direction."
+  ::= { rttMonLatestRtpOperEntry 20 }
+
+rttMonLatestRtpOperMinOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum one way latency value in destination to source
+        direction."
+  ::= { rttMonLatestRtpOperEntry 21 }
+
+rttMonLatestRtpOperMaxOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum one way latency value in destination to source
+        direction."
+  ::= { rttMonLatestRtpOperEntry 22 }
+
+rttMonLatestRtpOperAvgOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average one way latency value in destination to source
+        direction"
+  ::= { rttMonLatestRtpOperEntry 23 }
+
+rttMonLatestRtpOperTotalPaksSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Total number of packets sent in source to destination
+        direction"
+  ::= { rttMonLatestRtpOperEntry 24 }
+
+rttMonLatestRtpOperTotalPaksDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Total number of packets sent in destination to source
+        direction"
+  ::= { rttMonLatestRtpOperEntry 25 }
+
 --                                    
 --   Reaction Trigger Administration Table
 --                                    
@@ -7440,6 +8389,545 @@ rttMonJitterStatsUnSyncRTs  OBJECT-TYPE
   ::= { rttMonJitterStatsEntry 65 }
 
 --
+--    StatsRtp Table
+--
+
+rttMonRtpStatsTable OBJECT-TYPE
+  SYNTAX SEQUENCE OF RttMonRtpStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A table which contains the status of latest rtp
+       operation."
+  ::= { rttMonStats 6 }
+
+rttMonRtpStatsEntry OBJECT-TYPE
+  SYNTAX      RttMonRtpStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A list of objects that record the latest rtp
+       operation."
+  INDEX { rttMonCtrlAdminIndex,
+          rttMonRtpStatsStartTimeIndex
+        }
+  ::= { rttMonRtpStatsTable 1 }
+
+RttMonRtpStatsEntry  ::= SEQUENCE
+{   
+    rttMonRtpStatsStartTimeIndex             TimeStamp,
+    rttMonRtpStatsRTTAvg                     Gauge32,
+    rttMonRtpStatsRTTMin                     Gauge32,
+    rttMonRtpStatsRTTMax                     Gauge32,
+    rttMonRtpStatsIAJitterDSAvg              Gauge32,
+    rttMonRtpStatsIAJitterDSMin              Gauge32,
+    rttMonRtpStatsIAJitterDSMax              Gauge32,
+    rttMonRtpStatsPacketLossDSAvg            Gauge32,
+    rttMonRtpStatsPacketLossDSMin            Gauge32,
+    rttMonRtpStatsPacketLossDSMax            Gauge32,
+    rttMonRtpStatsPacketLateDSAvg            Gauge32,
+    rttMonRtpStatsPacketEarlyDSAvg           Gauge32,
+    rttMonRtpStatsPacketOOSDSAvg             Gauge32,
+    rttMonRtpStatsFrameLossDSAvg             Gauge32,
+    rttMonRtpStatsFrameLossDSMin             Gauge32,
+    rttMonRtpStatsFrameLossDSMax             Gauge32,
+    rttMonRtpStatsRFactorDSAvg               Gauge32,
+    rttMonRtpStatsRFactorDSMin               Gauge32,
+    rttMonRtpStatsRFactorDSMax               Gauge32,
+    rttMonRtpStatsMOSCQDSAvg                 Gauge32,
+    rttMonRtpStatsMOSCQDSMin                 Gauge32,
+    rttMonRtpStatsMOSCQDSMax                 Gauge32,
+    rttMonRtpStatsMOSLQDSAvg                 Gauge32,
+    rttMonRtpStatsMOSLQDSMin                 Gauge32,
+    rttMonRtpStatsMOSLQDSMax                 Gauge32,
+    rttMonRtpStatsIAJitterSDAvg              Gauge32,
+    rttMonRtpStatsIAJitterSDMin              Gauge32,
+    rttMonRtpStatsIAJitterSDMax              Gauge32,
+    rttMonRtpStatsPacketLossSDAvg            Gauge32,
+    rttMonRtpStatsPacketLossSDMin            Gauge32,
+    rttMonRtpStatsPacketLossSDMax            Gauge32,
+    rttMonRtpStatsPacketsMIAAvg              Gauge32,
+    rttMonRtpStatsRFactorSDAvg               Gauge32,
+    rttMonRtpStatsRFactorSDMin               Gauge32,
+    rttMonRtpStatsRFactorSDMax               Gauge32,
+    rttMonRtpStatsMOSCQSDAvg                 Gauge32,
+    rttMonRtpStatsMOSCQSDMin                 Gauge32,
+    rttMonRtpStatsMOSCQSDMax                 Gauge32,
+    rttMonRtpStatsOperAvgOWSD                Gauge32,
+    rttMonRtpStatsOperMinOWSD                Gauge32,
+    rttMonRtpStatsOperMaxOWSD                Gauge32,
+    rttMonRtpStatsOperAvgOWDS                Gauge32,
+    rttMonRtpStatsOperMinOWDS                Gauge32,
+    rttMonRtpStatsOperMaxOWDS                Gauge32,
+    rttMonRtpStatsTotalPacketsSDAvg	     Gauge32,
+    rttMonRtpStatsTotalPacketsSDMin	     Gauge32,
+    rttMonRtpStatsTotalPacketsSDMax          Gauge32,
+    rttMonRtpStatsTotalPacketsDSAvg          Gauge32,
+    rttMonRtpStatsTotalPacketsDSMin          Gauge32,
+    rttMonRtpStatsTotalPacketsDSMax	     Gauge32
+}
+
+rttMonRtpStatsStartTimeIndex OBJECT-TYPE
+  SYNTAX      TimeStamp
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "The time when this row was created."
+  ::= { rttMonRtpStatsEntry 1 }
+
+rttMonRtpStatsRTTAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average Round trip time."
+  ::= { rttMonRtpStatsEntry 2 }
+
+rttMonRtpStatsRTTMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum Round trip time."
+  ::= { rttMonRtpStatsEntry 3 }
+
+rttMonRtpStatsRTTMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum Round trip time."
+  ::= { rttMonRtpStatsEntry 4 }
+
+rttMonRtpStatsIAJitterDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average of inter-arrival jitter at source."
+  ::= { rttMonRtpStatsEntry 5 }
+
+rttMonRtpStatsIAJitterDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum of inter-arrival jitter at source."
+  ::= { rttMonRtpStatsEntry 6 }
+
+rttMonRtpStatsIAJitterDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum of inter-arrival jitter at source."
+  ::= { rttMonRtpStatsEntry 7 }
+
+rttMonRtpStatsPacketLossDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of packets lost from destination to source."
+  ::= { rttMonRtpStatsEntry 8 }
+
+rttMonRtpStatsPacketLossDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum number of packets lost from destination to source."
+  ::= { rttMonRtpStatsEntry 9 }
+
+rttMonRtpStatsPacketLossDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum number of packets lost from destination to source."
+  ::= { rttMonRtpStatsEntry 10 }
+
+rttMonRtpStatsPacketLateDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of late packets at source."
+  ::= { rttMonRtpStatsEntry 11 }
+
+rttMonRtpStatsPacketEarlyDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of early packets at source."
+  ::= { rttMonRtpStatsEntry 12 }
+
+rttMonRtpStatsPacketOOSDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of out of sequence packets at source."
+  ::= { rttMonRtpStatsEntry 13 }
+
+rttMonRtpStatsFrameLossDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "frames"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average Number of Codec Frame loss events at Source."
+  ::= { rttMonRtpStatsEntry 14 }
+
+rttMonRtpStatsFrameLossDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "frames"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum Number of Codec Frame loss events at Source."
+  ::= { rttMonRtpStatsEntry 15 }
+
+rttMonRtpStatsFrameLossDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "frames"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum number of Codec Frame loss events at Source."
+  ::= { rttMonRtpStatsEntry 16 }
+
+rttMonRtpStatsRFactorDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average Computed value of R factor at Source."
+  ::= { rttMonRtpStatsEntry 17 }
+
+rttMonRtpStatsRFactorDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum Computed value of R factor at Source."
+  ::= { rttMonRtpStatsEntry 18 }
+
+
+rttMonRtpStatsRFactorDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum Computed value of R factor at Source."
+  ::= { rttMonRtpStatsEntry 19 }
+
+rttMonRtpStatsMOSCQDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average Estimated Mean Opinion Score for conversational
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 20 }
+
+rttMonRtpStatsMOSCQDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum Estimated Mean Opinion Score for conversational
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 21 }
+
+rttMonRtpStatsMOSCQDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum Estimated Mean Opinion Score for conversational
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 22 }
+
+rttMonRtpStatsMOSLQDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average Estimated Mean Opinion Score for listening
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 23 }
+
+rttMonRtpStatsMOSLQDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum Estimated Mean Opinion Score for listening
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 24 }
+
+rttMonRtpStatsMOSLQDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum Estimated Mean Opinion Score for listening
+        quality at Source."
+  ::= { rttMonRtpStatsEntry 25 }
+
+rttMonRtpStatsIAJitterSDAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average of inter-arrival jitter at destination."
+  ::= { rttMonRtpStatsEntry 26 }
+
+rttMonRtpStatsIAJitterSDMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum of inter-arrival jitter at destination."
+  ::= { rttMonRtpStatsEntry 27 }
+
+rttMonRtpStatsIAJitterSDMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum of inter-arrival jitter at destination."
+  ::= { rttMonRtpStatsEntry 28 }
+
+rttMonRtpStatsPacketLossSDAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of packets lost from source to destination."
+  ::= { rttMonRtpStatsEntry 29 }
+
+rttMonRtpStatsPacketLossSDMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum number of packets lost from source to destination."
+  ::= { rttMonRtpStatsEntry 30 }
+
+rttMonRtpStatsPacketLossSDMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum number of packets lost from source to destination."
+  ::= { rttMonRtpStatsEntry 31 }
+
+rttMonRtpStatsPacketsMIAAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of lost packets whose loss direction couldn't
+       be determined."
+  ::= { rttMonRtpStatsEntry 32 }
+
+rttMonRtpStatsRFactorSDAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average estimated value of R-factor at destination."
+  ::= { rttMonRtpStatsEntry 33 }
+
+rttMonRtpStatsRFactorSDMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum estimated value of R-factor at destination."
+  ::= { rttMonRtpStatsEntry 34 }
+
+rttMonRtpStatsRFactorSDMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum estimated value of R-factor at destination."
+  ::= { rttMonRtpStatsEntry 35 }
+
+rttMonRtpStatsMOSCQSDAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average estimated mean opinion score for conversational
+        quality at destination."
+  ::= { rttMonRtpStatsEntry 36 }
+
+rttMonRtpStatsMOSCQSDMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum estimated mean opinion score for conversational
+        quality at destination."
+  ::= { rttMonRtpStatsEntry 37 }
+
+rttMonRtpStatsMOSCQSDMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "voice quality"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum estimated mean opinion score for conversational
+        quality at destination."
+  ::= { rttMonRtpStatsEntry 39 }
+
+rttMonRtpStatsOperAvgOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average one way latency value from source to destination"
+  ::= { rttMonRtpStatsEntry 40 }
+
+rttMonRtpStatsOperMinOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum one way latency value from source to destination"
+  ::= { rttMonRtpStatsEntry 41 }
+
+rttMonRtpStatsOperMaxOWSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum one way latency value from source to destination"
+  ::= { rttMonRtpStatsEntry 42 }
+
+rttMonRtpStatsOperAvgOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average one way latency value from destination to source"
+  ::= { rttMonRtpStatsEntry 43 }
+
+rttMonRtpStatsOperMinOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum one way latency value from destination to source"
+  ::= { rttMonRtpStatsEntry 44 }
+
+rttMonRtpStatsOperMaxOWDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum one way latency value from destination to source"
+  ::= { rttMonRtpStatsEntry 45 }
+
+rttMonRtpStatsTotalPacketsSDAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of packets sent from source to destination"
+  ::= { rttMonRtpStatsEntry 46 }
+
+rttMonRtpStatsTotalPacketsSDMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum number of packets sent from source to destination"
+  ::= { rttMonRtpStatsEntry 47 }
+
+rttMonRtpStatsTotalPacketsSDMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum number of packets sent from source to destination"
+  ::= { rttMonRtpStatsEntry 48 }
+
+rttMonRtpStatsTotalPacketsDSAvg OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Average number of packets sent from destination to source"
+  ::= { rttMonRtpStatsEntry 49 }
+
+rttMonRtpStatsTotalPacketsDSMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Maximum number of packets sent from destination to source"
+  ::= { rttMonRtpStatsEntry 50 }
+
+rttMonRtpStatsTotalPacketsDSMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Minimum number of packets sent from destination to source"
+  ::= { rttMonRtpStatsEntry 51 }
+
+--
 -- Auto SAA L3 MPLS VPN LPD Group Stats Collection Table
 --
 
@@ -8048,6 +9536,1292 @@ rttMonHistoryCollectionSenseDescription OBJECT-TYPE
   ::= { rttMonHistoryCollectionEntry 9 }
 
 --    
+--    LatestIcmpJitterOper Table
+--    
+
+rttMonLatestIcmpJitterOperTable OBJECT-TYPE
+  SYNTAX SEQUENCE OF RttMonLatestIcmpJitterOperEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A table which contains the status of latest ICMP Jitter 
+       operation.
+
+       Each conceptual row corresponds to a ICMP jitter probe 
+       defined in rttMonCtrlAdminTable and has same index as
+       rttMonCtrlAdminTable. 
+
+       The table is created only if the rttMonCtrlAdminRttType 
+       is icmpJitter, the rttMonEchoAdminProtocol is icmpJitterAppl
+       and the rttMonEchoAdminTargetAddress is given. 
+       It will start to collect data when the corresponding 
+       conceptual RTT control row is moved into 'active' state. 
+       It will be removed when the corresponding conceptual 
+       RTT control row is destroyed." 
+
+  ::= { rttMonLatestOper 4 }
+
+rttMonLatestIcmpJitterOperEntry OBJECT-TYPE
+  SYNTAX      RttMonLatestIcmpJitterOperEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A list of objects that record the latest
+       ICMP jitter operation."
+  INDEX { rttMonCtrlAdminIndex
+        }
+  ::= { rttMonLatestIcmpJitterOperTable 1 }
+
+RttMonLatestIcmpJitterOperEntry  ::= SEQUENCE
+{
+    rttMonLatestIcmpJitterNumRTT          Gauge32,
+    rttMonLatestIcmpJitterRTTSum          Gauge32,
+    rttMonLatestIcmpJitterRTTSum2         Gauge32,
+    rttMonLatestIcmpJitterRTTMin          Gauge32,
+    rttMonLatestIcmpJitterRTTMax          Gauge32,
+    rttMonLatestIcmpJitterMinPosSD        Gauge32,
+    rttMonLatestIcmpJitterMaxPosSD        Gauge32,
+    rttMonLatestIcmpJitterNumPosSD        Gauge32,
+    rttMonLatestIcmpJitterSumPosSD        Gauge32,
+    rttMonLatestIcmpJitterSum2PosSD       Gauge32,
+    rttMonLatestIcmpJitterMinNegSD        Gauge32,
+    rttMonLatestIcmpJitterMaxNegSD        Gauge32,
+    rttMonLatestIcmpJitterNumNegSD        Gauge32,
+    rttMonLatestIcmpJitterSumNegSD        Gauge32,
+    rttMonLatestIcmpJitterSum2NegSD       Gauge32,
+    rttMonLatestIcmpJitterMinPosDS        Gauge32,
+    rttMonLatestIcmpJitterMaxPosDS        Gauge32,
+    rttMonLatestIcmpJitterNumPosDS        Gauge32,
+    rttMonLatestIcmpJitterSumPosDS        Gauge32,
+    rttMonLatestIcmpJitterSum2PosDS       Gauge32,
+    rttMonLatestIcmpJitterMinNegDS        Gauge32,
+    rttMonLatestIcmpJitterMaxNegDS        Gauge32,
+    rttMonLatestIcmpJitterNumNegDS        Gauge32,
+    rttMonLatestIcmpJitterSumNegDS        Gauge32,
+    rttMonLatestIcmpJitterSum2NegDS       Gauge32,
+    rttMonLatestIcmpJitterPktLoss         Gauge32,
+    rttMonLatestIcmpJPktOutSeqBoth        Gauge32,
+    rttMonLatestIcmpJPktOutSeqSD          Gauge32,
+    rttMonLatestIcmpJPktOutSeqDS          Gauge32,
+    rttMonLatestIcmpJitterPktSkipped      Gauge32,
+    rttMonLatestIcmpJitterSense           RttResponseSense,
+    rttMonLatestIcmpJitterPktLateA        Gauge32,
+    rttMonLatestIcmpJitterMinSucPktL      Gauge32,
+    rttMonLatestIcmpJitterMaxSucPktL      Gauge32,
+    rttMonLatestIcmpJitterOWSumSD         Gauge32,
+    rttMonLatestIcmpJitterOWSum2SD        Gauge32,
+    rttMonLatestIcmpJitterOWMinSD         Gauge32,
+    rttMonLatestIcmpJitterOWMaxSD         Gauge32,
+    rttMonLatestIcmpJitterOWSumDS         Gauge32,
+    rttMonLatestIcmpJitterOWSum2DS        Gauge32,
+    rttMonLatestIcmpJitterOWMinDS         Gauge32,
+    rttMonLatestIcmpJitterOWMaxDS         Gauge32,
+    rttMonLatestIcmpJitterNumOW           Gauge32,
+    rttMonLatestIcmpJitterAvgJitter       Gauge32,
+    rttMonLatestIcmpJitterAvgSDJ          Gauge32,
+    rttMonLatestIcmpJitterAvgDSJ          Gauge32,
+    rttMonLatestIcmpJitterOWAvgSD         Gauge32,
+    rttMonLatestIcmpJitterOWAvgDS         Gauge32,
+    rttMonLatestIcmpJitterIAJOut          Gauge32,
+    rttMonLatestIcmpJitterIAJIn           Gauge32
+}
+
+rttMonLatestIcmpJitterNumRTT OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of RTT's that were successfully measured."
+  ::= { rttMonLatestIcmpJitterOperEntry 1 }
+
+rttMonLatestIcmpJitterRTTSum OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of RTT's that are successfully measured.
+       The number of successfully measured RTT is 
+       stored in rttMonLatestIcmpJitterNumRTT."
+  ::= { rttMonLatestIcmpJitterOperEntry 2 }
+
+rttMonLatestIcmpJitterRTTSum2 OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of RTT's that are successfully measured."
+  ::= { rttMonLatestIcmpJitterOperEntry 3 }
+
+rttMonLatestIcmpJitterRTTMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of RTT's that were successfully measured."
+  ::= { rttMonLatestIcmpJitterOperEntry 4 }
+
+rttMonLatestIcmpJitterRTTMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of RTT's that were successfully measured."
+  ::= { rttMonLatestIcmpJitterOperEntry 5 }
+
+rttMonLatestIcmpJitterMinPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all positive jitter values for packets sent
+       from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 6 }
+
+rttMonLatestIcmpJitterMaxPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all positive jitter values for packets sent
+       from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 7 }
+
+rttMonLatestIcmpJitterNumPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all positive jitter values for packets
+       sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 8 }
+
+rttMonLatestIcmpJitterSumPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all positive jitter values for packets sent
+        source to destination. The number of such values
+       is stored in rttMonLatestIcmpJitterNumPosSD."
+  ::= { rttMonLatestIcmpJitterOperEntry 9 }
+
+rttMonLatestIcmpJitterSum2PosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all positive jitter values for
+       packets sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 10 }
+
+rttMonLatestIcmpJitterMinNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of absolute values of all negative jitter values
+       for packets sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 11 }
+
+rttMonLatestIcmpJitterMaxNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of absolute values of all negative jitter values
+       for packets sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 12 }
+
+rttMonLatestIcmpJitterNumNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all negative jitter values for packets
+       sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 13 }
+
+rttMonLatestIcmpJitterSumNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all negative jitter values for packets sent
+       from source to destination. The number of such values
+       is stored in rttMonLatestIcmpJitterNumNegSD."
+  ::= { rttMonLatestIcmpJitterOperEntry 14 }
+
+rttMonLatestIcmpJitterSum2NegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all negative jitter values for
+       packets sent from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 15 }
+
+rttMonLatestIcmpJitterMinPosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all positive jitter values for packets sent
+       from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 16 }
+
+rttMonLatestIcmpJitterMaxPosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all positive jitter values for packets sent
+       from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 17 }
+
+rttMonLatestIcmpJitterNumPosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all positive jitter values for packets
+       sent from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 18 }
+
+rttMonLatestIcmpJitterSumPosDS OBJECT-TYPE 
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all positive jitter values for packets sent
+       from destination to source. The number of such values
+       is stored in rttMonLatestIcmpJitterNumPosDS."
+  ::= { rttMonLatestIcmpJitterOperEntry 19 }
+
+rttMonLatestIcmpJitterSum2PosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all positive jitter values for
+       packets sent from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 20 }
+
+rttMonLatestIcmpJitterMinNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all negative jitter values for packets sent
+       from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 21 }
+
+rttMonLatestIcmpJitterMaxNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all negative jitter values for packets sent
+       from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 22 }
+
+rttMonLatestIcmpJitterNumNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all negative jitter values for packets
+       sent from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 23 }
+
+rttMonLatestIcmpJitterSumNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all negative jitter values for packets sent
+       from destination to source. The number of such values
+       is stored in rttMonLatestIcmpJitterNumNegDS."
+  ::= { rttMonLatestIcmpJitterOperEntry 24 }
+
+rttMonLatestIcmpJitterSum2NegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all negative jitter values for
+        packets sent from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 25 }
+
+rttMonLatestIcmpJitterPktLoss OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets lost."
+  ::= { rttMonLatestIcmpJitterOperEntry 26 }
+
+rttMonLatestIcmpJPktOutSeqBoth OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in both
+       source-to-destination and destination-to-source direction."
+  ::= { rttMonLatestIcmpJitterOperEntry 27 }
+
+rttMonLatestIcmpJPktOutSeqSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in the 
+       direction of source-to-destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 28 }
+
+rttMonLatestIcmpJPktOutSeqDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in the
+       direction of destination-to-source."
+  ::= { rttMonLatestIcmpJitterOperEntry 29 }
+
+rttMonLatestIcmpJitterPktSkipped OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets in the operation that could not be 
+        initiated due to an internal error."
+  ::= { rttMonLatestIcmpJitterOperEntry 30 }
+
+rttMonLatestIcmpJitterSense OBJECT-TYPE
+  SYNTAX      RttResponseSense
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "An application specific sense code for the completion status."
+  ::= { rttMonLatestIcmpJitterOperEntry 31 }
+
+rttMonLatestIcmpJitterPktLateA OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets that arrived after the timeout."
+  ::= { rttMonLatestIcmpJitterOperEntry 32 }
+
+rttMonLatestIcmpJitterMinSucPktL OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum successive lost packets."
+  ::= { rttMonLatestIcmpJitterOperEntry 33 }
+
+rttMonLatestIcmpJitterMaxSucPktL OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum successive lost packets." 
+  ::= { rttMonLatestIcmpJitterOperEntry 34 }
+
+rttMonLatestIcmpJitterOWSumSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of one way trip time from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 35 }
+
+rttMonLatestIcmpJitterOWSum2SD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from source to
+       destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 36 }
+
+rttMonLatestIcmpJitterOWMinSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all one way trip time from 
+       source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 37 }
+
+rttMonLatestIcmpJitterOWMaxSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all one way trip time from 
+       source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 38 }
+
+rttMonLatestIcmpJitterOWSumDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of one way trip time from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 39 }
+
+rttMonLatestIcmpJitterOWSum2DS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from 
+       destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 40 }
+
+rttMonLatestIcmpJitterOWMinDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all one way trip time from 
+       destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 41 }
+
+rttMonLatestIcmpJitterOWMaxDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all one way trip time from 
+       destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 42 }
+
+rttMonLatestIcmpJitterNumOW OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of successful one way trip time measurements."
+  ::= { rttMonLatestIcmpJitterOperEntry 43 }
+
+rttMonLatestIcmpJitterAvgJitter  OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter values
+       in Source-to-Destionation and Destination-to-Source
+       direction."
+  ::= { rttMonLatestIcmpJitterOperEntry 44 }
+
+rttMonLatestIcmpJitterAvgSDJ  OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter values
+        from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 45 }
+
+rttMonLatestIcmpJitterAvgDSJ  OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter values
+        from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 46 }
+
+rttMonLatestIcmpJitterOWAvgSD  OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average one way trip time from source to destination."
+  ::= { rttMonLatestIcmpJitterOperEntry 47 }
+
+rttMonLatestIcmpJitterOWAvgDS  OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average one way trip time from destination to source."
+  ::= { rttMonLatestIcmpJitterOperEntry 48 }
+
+rttMonLatestIcmpJitterIAJOut OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter-arrival jitter (RFC 1889) at responder."
+  REFERENCE
+       "Refer to the following documents for the definition: 
+       RFC 1889, Section 6.3.1"
+  ::= { rttMonLatestIcmpJitterOperEntry 49 }
+
+rttMonLatestIcmpJitterIAJIn OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter-arrival jitter (RFC 1889) at source."
+  REFERENCE
+       "Refer to the following documents for the definition: 
+       RFC 1889, Section 6.3.1"
+  ::= { rttMonLatestIcmpJitterOperEntry 50 }
+
+
+--    
+--   ICMP Jitter Statistics Table
+--    
+
+rttMonIcmpJitterStatsTable OBJECT-TYPE
+  SYNTAX      SEQUENCE OF RttMonIcmpJitterStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "The ICMP Jitter statistics table contains summarized 
+       information of the results for a conceptual RTT control 
+       row. A rolling accumulated history of this information 
+       is maintained in a series of hourly 'group(s)'.
+
+       When rttMonIcmpJitterStatsStartTimeId groups exceeds 
+       the rttMonStatisticsAdminNumHourGroups value, the 
+       oldest corresponding hourly group will be deleted and will 
+       be replaced with the new rttMonIcmpJitterStatsStartTimeId 
+       hourly group.
+
+       The table is created only if the rttMonCtrlAdminRttType
+       is icmpJitter and the rttMonEchoAdminProtocol is 
+       icmpJitterAppl. It will be removed when the corresponding 
+       conceptual RTT control row is destroyed. 
+
+       The operation of this table is same as that of
+       rttMonStatsCaptureTable."
+  ::= { rttMonStats 8 }
+
+rttMonIcmpJitterStatsEntry OBJECT-TYPE
+  SYNTAX      RttMonIcmpJitterStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "A list of objects which accumulate the results of a
+       series of RTT operations over a 60 minute time period 
+       or a time period stored in rttMonScheduleAdminRttLife,
+       whichever is smaller."
+  INDEX { rttMonCtrlAdminIndex,
+          rttMonIcmpJitterStatsStartTimeId
+        }
+  ::= { rttMonIcmpJitterStatsTable 1 }
+
+RttMonIcmpJitterStatsEntry  ::= SEQUENCE
+{
+    rttMonIcmpJitterStatsStartTimeId        TimeStamp,
+    rttMonIcmpJitterStatsCompletions        Counter32,
+    rttMonIcmpJStatsOverThresholds          Counter32,
+    rttMonIcmpJitterStatsNumRTTs            Counter32,
+    rttMonIcmpJitterStatsRTTSums            Counter32,
+    rttMonIcmpJStatsRTTSum2Lows             Counter32,
+    rttMonIcmpJStatsRTTSum2Highs            Counter32,
+    rttMonIcmpJitterStatsRTTMin             Gauge32,
+    rttMonIcmpJitterStatsRTTMax             Gauge32,
+    rttMonIcmpJitterStatsMinPosSD           Gauge32,
+    rttMonIcmpJitterStatsMaxPosSD           Gauge32,
+    rttMonIcmpJitterStatsNumPosSDs          Counter32,
+    rttMonIcmpJitterStatsSumPosSDs          Counter32,
+    rttMonIcmpJStatsSum2PosSDLows           Counter32,
+    rttMonIcmpJStatsSum2PosSDHighs          Counter32,
+    rttMonIcmpJitterStatsMinNegSD           Gauge32,
+    rttMonIcmpJitterStatsMaxNegSD           Gauge32,
+    rttMonIcmpJitterStatsNumNegSDs          Counter32,
+    rttMonIcmpJitterStatsSumNegSDs          Counter32,
+    rttMonIcmpJStatsSum2NegSDLows           Counter32,
+    rttMonIcmpJStatsSum2NegSDHighs          Counter32,
+    rttMonIcmpJitterStatsMinPosDS           Gauge32,
+    rttMonIcmpJitterStatsMaxPosDS           Gauge32,
+    rttMonIcmpJitterStatsNumPosDSes         Counter32,
+    rttMonIcmpJitterStatsSumPosDSes         Counter32,
+    rttMonIcmpJStatsSum2PosDSLows           Counter32,
+    rttMonIcmpJStatsSum2PosDSHighs          Counter32,
+    rttMonIcmpJitterStatsMinNegDS           Gauge32,
+    rttMonIcmpJitterStatsMaxNegDS           Gauge32,
+    rttMonIcmpJitterStatsNumNegDSes         Counter32,
+    rttMonIcmpJitterStatsSumNegDSes         Counter32,
+    rttMonIcmpJStatsSum2NegDSLows           Counter32,
+    rttMonIcmpJStatsSum2NegDSHighs          Counter32,
+    rttMonIcmpJitterStatsPktLosses          Counter32,
+    rttMonIcmpJStatsPktOutSeqBoth           Counter32,
+    rttMonIcmpJStatsPktOutSeqSDs            Counter32,
+    rttMonIcmpJStatsPktOutSeqDSes           Counter32,
+    rttMonIcmpJitterStatsPktSkippeds        Counter32,
+    rttMonIcmpJitterStatsErrors             Counter32,
+    rttMonIcmpJitterStatsBusies             Counter32,
+    rttMonIcmpJitterStatsOWSumSDs           Counter32,
+    rttMonIcmpJStatsOWSum2SDLows            Counter32,
+    rttMonIcmpJStatsOWSum2SDHighs           Counter32,
+    rttMonIcmpJitterStatsOWMinSD            Gauge32,
+    rttMonIcmpJitterStatsOWMaxSD            Gauge32,
+    rttMonIcmpJitterStatsOWSumDSes          Counter32,
+    rttMonIcmpJStatsOWSum2DSLows            Counter32,
+    rttMonIcmpJStatsOWSum2DSHighs           Counter32,
+    rttMonIcmpJitterStatsOWMinDS            Gauge32,
+    rttMonIcmpJitterStatsOWMaxDS            Gauge32,
+    rttMonIcmpJitterStatsNumOWs             Counter32,
+    rttMonIcmpJitterStatsAvgJ               Gauge32,
+    rttMonIcmpJitterStatsAvgJSD             Gauge32,
+    rttMonIcmpJitterStatsAvgJDS             Gauge32,
+    rttMonIcmpJitterMinSucPktLoss           Gauge32,
+    rttMonIcmpJitterMaxSucPktLoss           Gauge32,
+    rttMonIcmpJitterStatsIAJOut             Gauge32,
+    rttMonIcmpJitterStatsIAJIn              Gauge32,
+    rttMonIcmpJitterStatsPktLateAs          Counter32
+}
+
+rttMonIcmpJitterStatsStartTimeId OBJECT-TYPE
+  SYNTAX      TimeStamp
+  UNITS       "tenths of milliseconds"
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+       "The value of sysUpTime at the time when this 
+       row was created."
+  ::= { rttMonIcmpJitterStatsEntry 1 }
+
+rttMonIcmpJitterStatsCompletions OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "completions"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of ICMP jitter operation that have completed 
+       successfully."
+  ::= { rttMonIcmpJitterStatsEntry 2 }
+
+rttMonIcmpJStatsOverThresholds OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "over threshold numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of ICMP jitter operations that violate 
+       jitterAvg threshold which is defined in RttMonReactVar."
+  ::= { rttMonIcmpJitterStatsEntry 3 }
+
+rttMonIcmpJitterStatsNumRTTs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of RTT's that are successfully measured."
+  ::= { rttMonIcmpJitterStatsEntry 4 }
+
+rttMonIcmpJitterStatsRTTSums OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of RTT's that are successfully measured for this
+       rttMonIcmpJitterStatsStartTimeId hourly group. The number
+       of the successfully measured RTT is stored in the
+       rttMonIcmpJitterStatsNumRTT."
+  ::= { rttMonIcmpJitterStatsEntry 5 }
+
+rttMonIcmpJStatsRTTSum2Lows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of RTT's that are successfully measured
+       (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 6 }
+
+rttMonIcmpJStatsRTTSum2Highs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of RTT's that are successfully measured
+       (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 7 }
+
+rttMonIcmpJitterStatsRTTMin OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of RTT's that were successfully measured."
+  ::= { rttMonIcmpJitterStatsEntry 8 }
+
+rttMonIcmpJitterStatsRTTMax OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of RTT's that were successfully measured."
+  ::= { rttMonIcmpJitterStatsEntry 9 }
+
+rttMonIcmpJitterStatsMinPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of absolute values of all positive jitter values
+       for packets sent from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 10 }
+
+rttMonIcmpJitterStatsMaxPosSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of absolute values of all positive jitter values
+       for packets sent from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 11 }
+
+rttMonIcmpJitterStatsNumPosSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all positive jitter values for packets
+       sent from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 12 }
+
+rttMonIcmpJitterStatsSumPosSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all positive jitter values for packets sent
+       from source to destination. The number of such values
+       is stored in rttMonIcmpJitterStatsNumPosSD."
+  ::= { rttMonIcmpJitterStatsEntry 13 }
+
+rttMonIcmpJStatsSum2PosSDLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all positive jitter values for packets
+        sent from source to destination (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 14 }
+
+rttMonIcmpJStatsSum2PosSDHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all positive jitter values for packets
+        sent from source to destination (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 15 }
+
+rttMonIcmpJitterStatsMinNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all negative jitter values for packets sent
+       from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 16 }
+
+rttMonIcmpJitterStatsMaxNegSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all negative jitter values for packets sent
+       from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 17 }
+
+rttMonIcmpJitterStatsNumNegSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all negative jitter values for packets
+       sent from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 18 }
+
+rttMonIcmpJitterStatsSumNegSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all negative jitter values for packets sent
+       from source to destination. The number of such values
+       is stored in rttMonIcmpJitterStatsNumNegSD."
+  ::= { rttMonIcmpJitterStatsEntry 19 }
+
+rttMonIcmpJStatsSum2NegSDLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all negative jitter values for
+       packets sent from source to destination (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 20 }
+
+rttMonIcmpJStatsSum2NegSDHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of square of all negative jitter values for
+       packets sent from source to destination (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 21 }
+
+rttMonIcmpJitterStatsMinPosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all positive jitter values for packets sent
+       from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 22 }
+
+rttMonIcmpJitterStatsMaxPosDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all positive jitter values for packets sent
+       from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 23 }
+
+rttMonIcmpJitterStatsNumPosDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all positive jitter values for packets 
+       sent from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 24 }
+
+rttMonIcmpJitterStatsSumPosDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all positive jitter values for packets sent
+       from destination to source. The number of such values
+       is stored in rttMonIcmpJitterStatsNumPosDS."
+  ::= { rttMonIcmpJitterStatsEntry 25 }
+
+rttMonIcmpJStatsSum2PosDSLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all positive jitter values for
+       packets sent from destination to source (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 26 }
+
+rttMonIcmpJStatsSum2PosDSHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all positive jitter values for
+       packets sent from destination to source (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 27 }
+
+rttMonIcmpJitterStatsMinNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all negative jitter values for packets sent
+       from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 28 }
+
+rttMonIcmpJitterStatsMaxNegDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all negative jitter values for packets sent
+       from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 29 }
+
+rttMonIcmpJitterStatsNumNegDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "jitter numbers"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of all negative jitter values for packets
+       sent from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 30 }
+
+rttMonIcmpJitterStatsSumNegDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of all negative jitter values for packets sent
+       from destination to source. The number of such values
+       is stored in rttMonIcmpJitterStatsNumNegDS."
+  ::= { rttMonIcmpJitterStatsEntry 31 }
+
+rttMonIcmpJStatsSum2NegDSLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all negative jitter values for
+       packets sent from destination to source (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 32 }
+
+rttMonIcmpJStatsSum2NegDSHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of all negative jitter values for
+       packets sent from destination to source (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 33 }
+
+rttMonIcmpJitterStatsPktLosses OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of lost packets"
+  ::= { rttMonIcmpJitterStatsEntry 34 }
+
+rttMonIcmpJStatsPktOutSeqBoth OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in both
+       source-to-destination and destination-to-source direction."
+  ::= { rttMonIcmpJitterStatsEntry 35 }
+
+rttMonIcmpJStatsPktOutSeqSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in the 
+       direction of source-to-destination."
+  ::= { rttMonIcmpJitterStatsEntry 36 }
+
+rttMonIcmpJStatsPktOutSeqDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets arrived out of sequence in the
+       direction of destination-to-source."
+  ::= { rttMonIcmpJitterStatsEntry 37 }
+
+rttMonIcmpJitterStatsPktSkippeds OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets that are skipped per operation because 
+       the router could not send the packet out."
+  ::= { rttMonIcmpJitterStatsEntry 38 }
+
+rttMonIcmpJitterStatsErrors OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "errors"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of occasions when a ICMP jitter operation could not
+       be initiated because of an internal error" 
+  ::= { rttMonIcmpJitterStatsEntry 39 }
+
+rttMonIcmpJitterStatsBusies OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "busies"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of occasions when a ICMP jitter operation could not
+       be initiated because a previous ICMP jitter operation has not
+       been completed."
+  ::= { rttMonIcmpJitterStatsEntry 40 }
+
+rttMonIcmpJitterStatsOWSumSDs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of one way trip time from source to destination."
+  ::= { rttMonIcmpJitterStatsEntry 41 }
+
+rttMonIcmpJStatsOWSum2SDLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from source to 
+       destination (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 42 }
+
+rttMonIcmpJStatsOWSum2SDHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from source to 
+       destination (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 43 }
+
+rttMonIcmpJitterStatsOWMinSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all one way trip time from source to 
+       destination."
+  ::= { rttMonIcmpJitterStatsEntry 44 }
+
+rttMonIcmpJitterStatsOWMaxSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all one way trip time from source to 
+       destination."
+  ::= { rttMonIcmpJitterStatsEntry 45 }
+
+rttMonIcmpJitterStatsOWSumDSes OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of one way trip time from destination to source."
+  ::= { rttMonIcmpJitterStatsEntry 46 }
+
+rttMonIcmpJStatsOWSum2DSLows OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from destination 
+       to source (low order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 47 }
+
+rttMonIcmpJStatsOWSum2DSHighs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "square of milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The sum of squares of one way trip time from destination 
+       to source (high order 32 bits)."
+  ::= { rttMonIcmpJitterStatsEntry 48 }
+
+rttMonIcmpJitterStatsOWMinDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum of all one way trip time from destination 
+       to source."
+  ::= { rttMonIcmpJitterStatsEntry 49 }
+
+rttMonIcmpJitterStatsOWMaxDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum of all one way trip time from destination 
+       to source."
+  ::= { rttMonIcmpJitterStatsEntry 50 }
+
+rttMonIcmpJitterStatsNumOWs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of one way trip time that are successfully 
+        measured."
+  ::= { rttMonIcmpJitterStatsEntry 51 }
+
+rttMonIcmpJitterStatsAvgJ OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter
+       values for source-to-destination and 
+       destination-to-source direction."
+  ::= { rttMonIcmpJitterStatsEntry 52 }
+
+rttMonIcmpJitterStatsAvgJSD OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter
+        values in source-to-destination direction."
+  ::= { rttMonIcmpJitterStatsEntry 53 }
+
+rttMonIcmpJitterStatsAvgJDS OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The average of positive and negative jitter
+        values in destination-to-source direction."
+  ::= { rttMonIcmpJitterStatsEntry 54 }
+
+rttMonIcmpJitterMinSucPktLoss OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The minimum successive dropped packets."
+  ::= { rttMonIcmpJitterStatsEntry 55 }
+
+rttMonIcmpJitterMaxSucPktLoss OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The maximum successive dropped packets." 
+  ::= { rttMonIcmpJitterStatsEntry 56 }
+
+rttMonIcmpJitterStatsIAJOut OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter-arrival jitter (RFC 1889) at responder"
+  REFERENCE
+       "Refer to the following documents for the definition: 
+       RFC 1889, Section 6.3.1"
+  ::= { rttMonIcmpJitterStatsEntry 57 }
+
+rttMonIcmpJitterStatsIAJIn OBJECT-TYPE
+  SYNTAX      Gauge32
+  UNITS       "milliseconds"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "Inter-arrival jitter (RFC 1889) at sender"
+  REFERENCE
+       "Refer to the following documents for the definition: 
+       RFC 1889, Section 6.3.1"
+  ::= { rttMonIcmpJitterStatsEntry 58 }
+
+rttMonIcmpJitterStatsPktLateAs OBJECT-TYPE
+  SYNTAX      Counter32
+  UNITS       "packets"
+  MAX-ACCESS  read-only
+  STATUS      current
+  DESCRIPTION
+       "The number of packets that arrived after the timeout."
+  ::= { rttMonIcmpJitterStatsEntry 59 }
+
+--    
 --    NOTIFICATION DEFINITIONS
 --    
 --    This section defines the traps that
@@ -8232,39 +11006,235 @@ ciscoRttMonMibCompliances OBJECT IDENTIFIER
 ciscoRttMonMibGroups      OBJECT IDENTIFIER
                              ::= { ciscoRttMonMibConformance 2 }
 
---   The following OIDs which were previously used to define 
---   MODULE-COMPLIANCE statements are now obsolete:
--- ciscoRttMonMibCompliance     ...  ::= { ciscoRttMonMibCompliances 1 }
--- ciscoRttMonMibComplianceRev1 ...  ::= { ciscoRttMonMibCompliances 2 }
--- ciscoRttMonMibComplianceRev2 ...  ::= { ciscoRttMonMibCompliances 3 }
--- ciscoRttMonMibComplianceRev3 ...  ::= { ciscoRttMonMibCompliances 4 }
--- ciscoRttMonMibComplianceRev4 ...  ::= { ciscoRttMonMibCompliances 5 }
--- ciscoRttMonMibComplianceRev5 ...  ::= { ciscoRttMonMibCompliances 6 }
--- ciscoRttMonMibComplianceRev6 ...  ::= { ciscoRttMonMibCompliances 7 }
--- ciscoRttMonMibComplianceRev7 ...  ::= { ciscoRttMonMibCompliances 8 }
--- ciscoRttMonMibComplianceRev8 ...  ::= { ciscoRttMonMibCompliances 9 }
--- ciscoRttMonMibComplianceRev9 ... ::= { ciscoRttMonMibCompliances 10} 
--- ciscoRttMonMibComplianceRev10 ... ::= { ciscoRttMonMibCompliances 11}
--- ciscoRttMonMibComplianceRev11 ... ::= { ciscoRttMonMibCompliances 12}
+--
+-- Compliance Statements
+--
 
-
---   The following OIDs which were previously used to define
---   OBJECT-GROUPs are now obsolete:
--- ciscoCtrlGroup          ...   ::= { ciscoRttMonMibGroups 2 }
--- ciscoApplGroup          ...   ::= { ciscoRttMonMibGroups 1 }
--- ciscoApplGroupRev1      ...   ::= { ciscoRttMonMibGroups 9 }
--- ciscoCtrlGroupRev3      ...   ::= { ciscoRttMonMibGroups 10}
--- ciscoCtrlGroupRev5      ...   ::= { ciscoRttMonMibGroups 15}
--- ciscoStatsGroupRev2     ...   ::= { ciscoRttMonMibGroups 13}
--- ciscoNotificationGroup  ...   ::= { ciscoRttMonMibGroups 18 }
-
-
-ciscoRttMonMibComplianceRev12 MODULE-COMPLIANCE
-  STATUS current 
+ciscoRttMonMibCompliance MODULE-COMPLIANCE
+  STATUS obsolete -- superseded by ciscoRttMonMibComplianceRev1
   DESCRIPTION
-    "The compliance statement for new MIB extensions for
-    (1) supporting LSP Path Discovery for Auto SAA L3 MPLS VPN.
-    (2) Group Scheduler Enhancement."
+    "The compliance statement for the Round Trip Time (RTT)
+     Monitoring Application Architecture."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroup,
+      ciscoCtrlGroup,
+      ciscoStatsGroup,
+      ciscoHistoryGroup
+    }
+  ::= { ciscoRttMonMibCompliances 1 }
+
+ciscoRttMonMibComplianceRev1 MODULE-COMPLIANCE
+  STATUS obsolete -- superseded by ciscoRttMonMibComplianceRev2
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for 'udpEcho' and
+    'tcpConnect'"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroup,
+      ciscoCtrlGroup,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1
+    }
+  ::= { ciscoRttMonMibCompliances 2 }
+
+ciscoRttMonMibComplianceRev2 MODULE-COMPLIANCE
+  STATUS obsolete -- superseded by ciscoRttMonMibComplianceRev3
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for 'HTTP', 'DNS' 
+    and 'Jitter' probes"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroup,
+      ciscoCtrlGroup,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1
+    }
+  ::= { ciscoRttMonMibCompliances 3 }
+
+ciscoRttMonMibComplianceRev3 MODULE-COMPLIANCE
+  STATUS obsolete
+  DESCRIPTION
+    "The compliance statement for new MIB extensions without the obsolete
+    items"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroupRev1,
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoApplGroupRev2
+    }
+  ::= { ciscoRttMonMibCompliances 4 }
+
+ciscoRttMonMibComplianceRev4 MODULE-COMPLIANCE
+  STATUS obsolete -- superseded by ciscoRttMonMibComplianceRev6
+  DESCRIPTION
+    "The compliance statement for entities which implement the Cisco 
+    RTTMON MIB"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroupRev1,
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoApplGroupRev2,
+      ciscoCtrlGroupRev4
+    }
+  ::= { ciscoRttMonMibCompliances 5 }
+
+ciscoRttMonMibComplianceRev6 MODULE-COMPLIANCE
+  STATUS obsolete -- superseded by ciscoRttMonMibComplianceRev7
+  DESCRIPTION
+    "The compliance statement for entities which implement the Cisco 
+    RTTMON MIB"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoApplGroupRev1,
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoApplGroupRev2,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev5
+    }
+  ::= { ciscoRttMonMibCompliances 6 }
+
+ciscoRttMonMibComplianceRev7 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev8
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for Codec support
+    for Jitter probe."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev2,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev5,
+      ciscoCtrlGroupRev6,
+      ciscoNotificationGroup
+    }
+  ::= { ciscoRttMonMibCompliances 7 }
+
+ciscoRttMonMibComplianceRev8 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev9
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for group
+    scheduling enhancement for RTT probes."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev5,
+      ciscoCtrlGroupRev6,
+      ciscoCtrlGroupRev7,
+      ciscoNotificationGroup
+    }
+  ::= { ciscoRttMonMibCompliances 8 }
+
+ciscoRttMonMibComplianceRev9 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev10 
+  DESCRIPTION
+       "The compliance statement for new MIB extensions for
+        (1) echo operations support based on MPLS LSP Ping,
+        (2) pathEcho operations support based on MPLS LSP Ping and
+        (3) Auto SAA L3 MPLS VPN enhancement."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev5,
+      ciscoCtrlGroupRev6,
+      ciscoCtrlGroupRev7,
+      ciscoCtrlGroupRev8,
+      ciscoNotificationGroup
+    }
+  ::= { ciscoRttMonMibCompliances 9 }
+
+ciscoRttMonMibComplianceRev10 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev11
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for improving
+    jitter probe accuracy."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoCtrlGroupRev3,
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoStatsGroupRev5,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev5,
+      ciscoCtrlGroupRev6,
+      ciscoCtrlGroupRev7,
+      ciscoCtrlGroupRev9,
+      ciscoNotificationGroup
+    }
+    GROUP  ciscoCtrlGroupRev8 
+    DESCRIPTION
+      "ciscoCtrlGroupRev8 is not mandatory for IOS versions that do
+       not support MPLS"
+  ::= { ciscoRttMonMibCompliances 10 }
+
+ciscoRttMonMibComplianceRev11 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev12
+  DESCRIPTION
+    "The compliance statement for new snmp traps feature."
   MODULE
     MANDATORY-GROUPS {
       ciscoStatsGroup,
@@ -8276,6 +11246,97 @@ ciscoRttMonMibComplianceRev12 MODULE-COMPLIANCE
       ciscoStatsGroupRev3,
       ciscoStatsGroupRev4,
       ciscoStatsGroupRev5,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev6,
+      ciscoCtrlGroupRev7,
+      ciscoCtrlGroupRev9,
+      ciscoCtrlGroupRev10,
+      ciscoCtrlGroupRev11,
+      ciscoNotificationGroupRev1
+    }
+    GROUP  ciscoCtrlGroupRev8
+    DESCRIPTION
+      "ciscoCtrlGroupRev8 is only mandatory for the devices
+      that support MPLS." 
+  ::= { ciscoRttMonMibCompliances 11 }
+
+ciscoRttMonMibComplianceRev12 MODULE-COMPLIANCE
+  STATUS deprecated -- replaced by ciscoRttMonMibComplianceRev13
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for
+    (1) rtp operation and statistics.
+    (2) supporting LSP Path Discovery for Auto SAA L3 MPLS VPN."
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoStatsGroupRev5,
+      ciscoApplGroupRev2,
+      ciscoApplGroupRev3,
+      ciscoCtrlGroupRev4,
+      ciscoCtrlGroupRev6,
+      ciscoCtrlGroupRev7,
+      ciscoCtrlGroupRev9,
+      ciscoCtrlGroupRev10,
+      ciscoCtrlGroupRev11,
+      ciscoNotificationGroupRev1
+    }
+    GROUP ciscoCtrlGroupRev8
+    DESCRIPTION
+      "ciscoCtrlGroupRev8 is only mandatory for the devices
+      that support MPLS."
+    GROUP ciscoStatsGroupRev7
+    DESCRIPTION
+      "ciscoStatsGroupRev7 is only mandatory for the devices
+      that support MPLS."
+    GROUP ciscoCtrlGroupRev13
+    DESCRIPTION
+      "ciscoCtrlGroupRev13 is only mandatory for the devices
+      that support MPLS."
+    GROUP ciscoNotificationGroupRev2
+    DESCRIPTION
+      "ciscoNotificationGroupRev2 is only mandatory for the devices
+      that support MPLS."
+    GROUP ciscoApplGroupRev4
+    DESCRIPTION
+      "ciscoApplGroupRev4 is only mandatory for the devices
+      that support MPLS."
+    GROUP ciscoStatsGroupRev6
+    DESCRIPTION
+      "ciscoStatsGroupRev6 is only mandatory for the devices
+      that support voice."
+    GROUP ciscoCtrlGroupRev12
+    DESCRIPTION
+      "ciscoCtrlGroupRev12 is only mandatory for the devices
+      that support voice."
+  ::= { ciscoRttMonMibCompliances 12 }
+
+ciscoRttMonMibComplianceRev13 MODULE-COMPLIANCE
+  STATUS current
+  DESCRIPTION
+    "The compliance statement for new MIB extensions for
+    (1) ICMP Jitter operation and statistics
+    (2) Source to Destination direction stats for RTP operation"
+  MODULE
+    MANDATORY-GROUPS {
+      ciscoStatsGroup,
+      ciscoHistoryGroup,
+      ciscoCtrlGroupRev1,
+      ciscoCtrlGroupRev2,
+      ciscoLatestOperGroupRev1,
+      ciscoStatsGroupRev1,
+      ciscoStatsGroupRev3,
+      ciscoStatsGroupRev4,
+      ciscoStatsGroupRev5,
+      ciscoStatsGroupRev8,
       ciscoApplGroupRev2,
       ciscoApplGroupRev3,
       ciscoCtrlGroupRev4,
@@ -8307,11 +11368,109 @@ ciscoRttMonMibComplianceRev12 MODULE-COMPLIANCE
     DESCRIPTION
       "ciscoApplGroupRev4 is only mandatory for the devices
       that support MPLS."
+    GROUP ciscoStatsGroupRev6
+    DESCRIPTION
+      "ciscoStatsGroupRev6 is only mandatory for the devices
+      that support voice."
     GROUP ciscoCtrlGroupRev12
     DESCRIPTION
       "ciscoCtrlGroupRev12 is only mandatory for the devices
       that support voice."
-  ::= { ciscoRttMonMibCompliances 12 }
+    GROUP ciscoStatsGroupRev9
+    DESCRIPTION
+      "ciscoStatsGroupRev9 is only mandatory for the devices
+      that support voice."
+  ::= { ciscoRttMonMibCompliances 13 }
+
+ciscoApplGroup OBJECT-GROUP
+  OBJECTS {
+    rttMonApplVersion,
+    rttMonApplMaxPacketDataSize,
+    rttMonApplTimeOfLastSet,
+    rttMonApplSupportedRttTypesValid,
+    rttMonApplSupportedProtocolsValid,
+    rttMonApplNumCtrlAdminEntry,
+    rttMonApplReset,
+    rttMonApplPreConfigedReset,
+    rttMonApplPreConfigedValid,
+    rttMonApplProbeCapacity,
+    rttMonApplFreeMemLowWaterMark,
+    rttMonApplLatestSetError
+  }
+  STATUS obsolete -- superseded by ciscoApplGroupRev1
+  DESCRIPTION
+    "A collection of objects providing the RTT Monitoring
+    Application defaults.
+ 
+    This group of information is provided to the agent when
+    the Application starts." 
+  ::= { ciscoRttMonMibGroups 1 }
+
+ciscoCtrlGroup OBJECT-GROUP
+  OBJECTS {
+    rttMonCtrlAdminOwner,
+    rttMonCtrlAdminTag,
+    rttMonCtrlAdminRttType,
+    rttMonCtrlAdminThreshold,
+    rttMonCtrlAdminFrequency,
+    rttMonCtrlAdminTimeout,
+    rttMonCtrlAdminVerifyData,
+    rttMonCtrlAdminStatus,
+    rttMonEchoAdminProtocol,
+    rttMonEchoAdminTargetAddress,
+    rttMonEchoAdminPktDataRequestSize,
+    rttMonEchoAdminPktDataResponseSize,
+    rttMonFileIOAdminFilePath,
+    rttMonFileIOAdminSize,
+    rttMonFileIOAdminAction,
+    rttMonScriptAdminName,
+    rttMonScriptAdminCmdLineParams,
+    rttMonScheduleAdminRttLife,
+    rttMonScheduleAdminRttStartTime,
+    rttMonScheduleAdminConceptRowAgeout,
+    rttMonReactAdminConnectionEnable,
+    rttMonReactAdminTimeoutEnable,
+    rttMonReactAdminThresholdType,
+    rttMonReactAdminThresholdFalling,
+    rttMonReactAdminThresholdCount,
+    rttMonReactAdminThresholdCount2,
+    rttMonReactAdminActionType,
+    rttMonStatisticsAdminNumHourGroups,
+    rttMonStatisticsAdminNumPaths,
+    rttMonStatisticsAdminNumHops,
+    rttMonStatisticsAdminNumDistBuckets,
+    rttMonStatisticsAdminDistInterval,
+    rttMonHistoryAdminNumLives,
+    rttMonHistoryAdminNumBuckets,
+    rttMonHistoryAdminNumSamples,
+    rttMonHistoryAdminFilter,
+    rttMonCtrlOperModificationTime,
+    rttMonCtrlOperDiagText,
+    rttMonCtrlOperResetTime,
+    rttMonCtrlOperOctetsInUse,
+    rttMonCtrlOperConnectionLostOccurred,
+    rttMonCtrlOperTimeoutOccurred,
+    rttMonCtrlOperVerifyErrorOccurred,
+    rttMonCtrlOperOverThresholdOccurred,
+    rttMonCtrlOperNumRtts,
+    rttMonCtrlOperRttLife,
+    rttMonCtrlOperState,
+    rttMonLatestRttOperCompletionTime,
+    rttMonLatestRttOperSense,
+    rttMonLatestRttOperApplSpecificSense,
+    rttMonLatestRttOperSenseDescription,
+    rttMonLatestRttOperTime,
+    rttMonLatestRttOperAddress,
+    rttMonReactTriggerAdminStatus,
+    rttMonReactTriggerOperState
+  }
+  STATUS obsolete -- superseded by ciscoCtrlGroupRev3
+  DESCRIPTION
+    "A collection of objects providing the Administration,
+    Operational, Last Statistical values for the RTT
+    Monitoring Application." 
+  ::= { ciscoRttMonMibGroups 2 }
+
 
 ciscoStatsGroup OBJECT-GROUP
   OBJECTS {
@@ -8512,6 +11671,85 @@ ciscoStatsGroupRev1 OBJECT-GROUP
     'Jitter' probes statistics."
   ::= { ciscoRttMonMibGroups 8 }
 
+ciscoApplGroupRev1 OBJECT-GROUP
+  OBJECTS {
+    rttMonApplVersion,
+    rttMonApplMaxPacketDataSize,
+    rttMonApplTimeOfLastSet,
+    rttMonApplSupportedRttTypesValid,
+    rttMonApplSupportedProtocolsValid,
+    rttMonApplNumCtrlAdminEntry,
+    rttMonApplReset
+  }
+  STATUS obsolete -- superseded by ciscoApplGroupRev3
+  DESCRIPTION
+    "A collection of objects providing the RTT Monitoring
+    Application defaults.
+ 
+    This group of information is provided to the agent when
+    the Application starts." 
+  ::= { ciscoRttMonMibGroups 9 }
+
+ciscoCtrlGroupRev3 OBJECT-GROUP
+  OBJECTS {
+    rttMonCtrlAdminOwner,
+    rttMonCtrlAdminTag,
+    rttMonCtrlAdminRttType,
+    rttMonCtrlAdminThreshold,
+    rttMonCtrlAdminFrequency,
+    rttMonCtrlAdminTimeout,
+    rttMonCtrlAdminVerifyData,
+    rttMonCtrlAdminStatus,
+    rttMonCtrlAdminNvgen,
+    rttMonEchoAdminProtocol,
+    rttMonEchoAdminTargetAddress,
+    rttMonEchoAdminPktDataRequestSize,
+    rttMonEchoAdminPktDataResponseSize,
+    rttMonScheduleAdminRttLife,
+    rttMonScheduleAdminRttStartTime,
+    rttMonScheduleAdminConceptRowAgeout,
+    rttMonReactAdminConnectionEnable,
+    rttMonReactAdminTimeoutEnable,
+    rttMonReactAdminThresholdType,
+    rttMonReactAdminThresholdFalling,
+    rttMonReactAdminThresholdCount,
+    rttMonReactAdminThresholdCount2,
+    rttMonReactAdminActionType,
+    rttMonStatisticsAdminNumHourGroups,
+    rttMonStatisticsAdminNumPaths,
+    rttMonStatisticsAdminNumHops,
+    rttMonStatisticsAdminNumDistBuckets,
+    rttMonStatisticsAdminDistInterval,
+    rttMonHistoryAdminNumLives,
+    rttMonHistoryAdminNumBuckets,
+    rttMonHistoryAdminNumSamples,
+    rttMonHistoryAdminFilter,
+    rttMonCtrlOperModificationTime,
+    rttMonCtrlOperDiagText,
+    rttMonCtrlOperResetTime,
+    rttMonCtrlOperOctetsInUse,
+    rttMonCtrlOperConnectionLostOccurred,
+    rttMonCtrlOperTimeoutOccurred,
+    rttMonCtrlOperVerifyErrorOccurred,
+    rttMonCtrlOperOverThresholdOccurred,
+    rttMonCtrlOperNumRtts,
+    rttMonCtrlOperRttLife,
+    rttMonCtrlOperState,
+    rttMonLatestRttOperCompletionTime,
+    rttMonLatestRttOperSense,
+    rttMonLatestRttOperApplSpecificSense,
+    rttMonLatestRttOperSenseDescription,
+    rttMonLatestRttOperTime,
+    rttMonLatestRttOperAddress,
+    rttMonReactTriggerAdminStatus,
+    rttMonReactTriggerOperState
+  }
+  STATUS deprecated
+  DESCRIPTION
+    "A collection of objects providing the Administration,
+    Operational, Last Statistical values for the RTT
+    Monitoring Application." 
+  ::= { ciscoRttMonMibGroups 10 }
 
 ciscoApplGroupRev2 OBJECT-GROUP
   OBJECTS {
@@ -8540,6 +11778,19 @@ ciscoCtrlGroupRev4 OBJECT-GROUP
     functionality of the RTT application."
   ::= { ciscoRttMonMibGroups 12 }
 
+ciscoStatsGroupRev2 OBJECT-GROUP
+  OBJECTS {
+    rttMonJitterStatsOWMinSD,
+    rttMonJitterStatsOWMaxSD,
+    rttMonJitterStatsOWMinDS,
+    rttMonJitterStatsOWMaxDS
+  }
+  STATUS deprecated
+  DESCRIPTION
+    "A collection of objects that were added to enhance the 
+    functionality of the RTT application to store one way
+    'Jitter' probes statistics."
+  ::= { ciscoRttMonMibGroups 13 }
 
 ciscoStatsGroupRev3 OBJECT-GROUP
   OBJECTS {
@@ -8571,6 +11822,15 @@ ciscoStatsGroupRev3 OBJECT-GROUP
     'Jitter' probes statistics."
   ::= { ciscoRttMonMibGroups 14 }
 
+ciscoCtrlGroupRev5 OBJECT-GROUP
+  OBJECTS {
+    rttMonReactAdminVerifyErrorEnable
+  }
+  STATUS deprecated
+  DESCRIPTION
+    "A collection of objects that were added to enhance the 
+    functionality of the RTT application."
+  ::= { ciscoRttMonMibGroups 15 }
 
 ciscoCtrlGroupRev6 OBJECT-GROUP
   OBJECTS {
@@ -8602,6 +11862,17 @@ ciscoStatsGroupRev4 OBJECT-GROUP
     ICPIF for 'Jitter' probe statistics."
   ::= { ciscoRttMonMibGroups 17 }
 
+ciscoNotificationGroup NOTIFICATION-GROUP
+  NOTIFICATIONS  {
+    rttMonConnectionChangeNotification,
+    rttMonTimeoutNotification,
+    rttMonThresholdNotification,
+    rttMonVerifyErrorNotification
+  }
+  STATUS deprecated
+  DESCRIPTION
+    "A collection of notifications." 
+  ::= { ciscoRttMonMibGroups 18 }
 
 ciscoApplGroupRev3 OBJECT-GROUP
   OBJECTS {
@@ -8822,6 +12093,52 @@ ciscoCtrlGroupRev12 OBJECT-GROUP
      for the configuration of rtp operation."
   ::= { ciscoRttMonMibGroups 27 }
 
+ciscoStatsGroupRev6 OBJECT-GROUP
+  OBJECTS{
+      rttMonLatestRtpOperRTT,
+      rttMonLatestRtpOperIAJitterDS,
+      rttMonLatestRtpOperPacketLossDS,
+      rttMonLatestRtpOperPacketLateDS,
+      rttMonLatestRtpOperPacketEarlyDS,
+      rttMonLatestRtpOperPacketOOSDS,
+      rttMonLatestRtpOperFrameLossDS,
+      rttMonLatestRtpOperRFactorDS,
+      rttMonLatestRtpOperMOSCQDS,
+      rttMonLatestRtpOperMOSLQDS,
+      rttMonLatestRtpOperSense,
+      rttMonLatestRtpErrorSenseDescription,
+      rttMonRtpStatsRTTAvg,
+      rttMonRtpStatsRTTMin,
+      rttMonRtpStatsRTTMax,
+      rttMonRtpStatsIAJitterDSAvg,
+      rttMonRtpStatsIAJitterDSMin,
+      rttMonRtpStatsIAJitterDSMax,
+      rttMonRtpStatsPacketLossDSAvg,
+      rttMonRtpStatsPacketLossDSMin,
+      rttMonRtpStatsPacketLossDSMax,
+      rttMonRtpStatsPacketLateDSAvg,
+      rttMonRtpStatsPacketEarlyDSAvg,
+      rttMonRtpStatsPacketOOSDSAvg,
+      rttMonRtpStatsFrameLossDSAvg,
+      rttMonRtpStatsFrameLossDSMin,
+      rttMonRtpStatsFrameLossDSMax,
+      rttMonRtpStatsRFactorDSAvg,
+      rttMonRtpStatsRFactorDSMin,
+      rttMonRtpStatsRFactorDSMax,
+      rttMonRtpStatsMOSCQDSAvg,
+      rttMonRtpStatsMOSCQDSMin,
+      rttMonRtpStatsMOSCQDSMax,
+      rttMonRtpStatsMOSLQDSAvg,
+      rttMonRtpStatsMOSLQDSMin,
+      rttMonRtpStatsMOSLQDSMax
+  }
+  STATUS current
+  DESCRIPTION
+   "A collection of objects that are added for
+    collecting the statistics for RTP operation."
+  ::= {ciscoRttMonMibGroups 28 }
+
+
 ciscoCtrlGroupRev13 OBJECT-GROUP
   OBJECTS {
    rttMonEchoAdminLSPReplyDscp,
@@ -8905,5 +12222,171 @@ ciscoCtrlGroupRev14 OBJECT-GROUP
    "This object is added for group scheduler enhancement"
   ::= { ciscoRttMonMibGroups 33 }
 
+ciscoStatsGroupRev8 OBJECT-GROUP
+  OBJECTS {
+    rttMonLatestIcmpJitterNumRTT,
+    rttMonLatestIcmpJitterRTTSum,
+    rttMonLatestIcmpJitterRTTSum2,
+    rttMonLatestIcmpJitterRTTMin,
+    rttMonLatestIcmpJitterRTTMax,
+    rttMonLatestIcmpJitterMinPosSD,
+    rttMonLatestIcmpJitterMaxPosSD,
+    rttMonLatestIcmpJitterNumPosSD,
+    rttMonLatestIcmpJitterSumPosSD,
+    rttMonLatestIcmpJitterSum2PosSD,
+    rttMonLatestIcmpJitterMinNegSD,
+    rttMonLatestIcmpJitterMaxNegSD,
+    rttMonLatestIcmpJitterNumNegSD,
+    rttMonLatestIcmpJitterSumNegSD,
+    rttMonLatestIcmpJitterSum2NegSD,
+    rttMonLatestIcmpJitterMinPosDS,
+    rttMonLatestIcmpJitterMaxPosDS,
+    rttMonLatestIcmpJitterNumPosDS,
+    rttMonLatestIcmpJitterSumPosDS,
+    rttMonLatestIcmpJitterSum2PosDS,
+    rttMonLatestIcmpJitterMinNegDS,
+    rttMonLatestIcmpJitterMaxNegDS,
+    rttMonLatestIcmpJitterNumNegDS,
+    rttMonLatestIcmpJitterSumNegDS,
+    rttMonLatestIcmpJitterSum2NegDS,
+    rttMonLatestIcmpJitterPktLoss,
+    rttMonLatestIcmpJPktOutSeqBoth,
+    rttMonLatestIcmpJPktOutSeqSD,
+    rttMonLatestIcmpJPktOutSeqDS,
+    rttMonLatestIcmpJitterPktSkipped,
+    rttMonLatestIcmpJitterSense,
+    rttMonLatestIcmpJitterPktLateA,
+    rttMonLatestIcmpJitterMinSucPktL,
+    rttMonLatestIcmpJitterMaxSucPktL,
+    rttMonLatestIcmpJitterOWSumSD,
+    rttMonLatestIcmpJitterOWSum2SD ,
+    rttMonLatestIcmpJitterOWMinSD,
+    rttMonLatestIcmpJitterOWMaxSD,
+    rttMonLatestIcmpJitterOWSumDS,
+    rttMonLatestIcmpJitterOWSum2DS,
+    rttMonLatestIcmpJitterOWMinDS,
+    rttMonLatestIcmpJitterOWMaxDS,
+    rttMonLatestIcmpJitterNumOW,
+    rttMonLatestIcmpJitterAvgJitter,
+    rttMonLatestIcmpJitterAvgSDJ,
+    rttMonLatestIcmpJitterAvgDSJ,
+    rttMonLatestIcmpJitterOWAvgSD,
+    rttMonLatestIcmpJitterOWAvgDS,
+    rttMonLatestIcmpJitterIAJOut,
+    rttMonLatestIcmpJitterIAJIn,
+    rttMonIcmpJitterStatsCompletions,
+    rttMonIcmpJStatsOverThresholds,
+    rttMonIcmpJitterStatsNumRTTs,
+    rttMonIcmpJitterStatsRTTSums,
+    rttMonIcmpJStatsRTTSum2Lows,
+    rttMonIcmpJStatsRTTSum2Highs,
+    rttMonIcmpJitterStatsRTTMin,
+    rttMonIcmpJitterStatsRTTMax,
+    rttMonIcmpJitterStatsMinPosSD,
+    rttMonIcmpJitterStatsMaxPosSD,
+    rttMonIcmpJitterStatsNumPosSDs,
+    rttMonIcmpJitterStatsSumPosSDs,
+    rttMonIcmpJStatsSum2PosSDLows,
+    rttMonIcmpJStatsSum2PosSDHighs,
+    rttMonIcmpJitterStatsMinNegSD,
+    rttMonIcmpJitterStatsMaxNegSD,
+    rttMonIcmpJitterStatsNumNegSDs,
+    rttMonIcmpJitterStatsSumNegSDs,
+    rttMonIcmpJStatsSum2NegSDLows,
+    rttMonIcmpJStatsSum2NegSDHighs,
+    rttMonIcmpJitterStatsMinPosDS,
+    rttMonIcmpJitterStatsMaxPosDS,
+    rttMonIcmpJitterStatsNumPosDSes,
+    rttMonIcmpJitterStatsSumPosDSes,
+    rttMonIcmpJStatsSum2PosDSLows,
+    rttMonIcmpJStatsSum2PosDSHighs,
+    rttMonIcmpJitterStatsMinNegDS,
+    rttMonIcmpJitterStatsMaxNegDS,
+    rttMonIcmpJitterStatsNumNegDSes,
+    rttMonIcmpJitterStatsSumNegDSes,
+    rttMonIcmpJStatsSum2NegDSLows,
+    rttMonIcmpJStatsSum2NegDSHighs,
+    rttMonIcmpJitterStatsPktLosses,
+    rttMonIcmpJStatsPktOutSeqBoth,
+    rttMonIcmpJStatsPktOutSeqSDs,
+    rttMonIcmpJStatsPktOutSeqDSes,
+    rttMonIcmpJitterStatsPktSkippeds,
+    rttMonIcmpJitterStatsErrors,
+    rttMonIcmpJitterStatsBusies,
+    rttMonIcmpJitterStatsOWSumSDs,
+    rttMonIcmpJStatsOWSum2SDLows,
+    rttMonIcmpJStatsOWSum2SDHighs,
+    rttMonIcmpJitterStatsOWMinSD,
+    rttMonIcmpJitterStatsOWMaxSD,
+    rttMonIcmpJitterStatsOWSumDSes,
+    rttMonIcmpJStatsOWSum2DSLows,
+    rttMonIcmpJStatsOWSum2DSHighs,
+    rttMonIcmpJitterStatsOWMinDS,
+    rttMonIcmpJitterStatsOWMaxDS,
+    rttMonIcmpJitterStatsNumOWs,
+    rttMonIcmpJitterStatsAvgJ,
+    rttMonIcmpJitterStatsAvgJSD,
+    rttMonIcmpJitterStatsAvgJDS,
+    rttMonIcmpJitterMinSucPktLoss,
+    rttMonIcmpJitterMaxSucPktLoss,
+    rttMonIcmpJitterStatsIAJOut,
+    rttMonIcmpJitterStatsIAJIn,
+    rttMonIcmpJitterStatsPktLateAs
+  }
+  STATUS current
+  DESCRIPTION
+   "A collection of objects that are added for
+    collecting the statistics for ICMP Jitter Probe."
+  ::= {ciscoRttMonMibGroups 34 }
+
+ciscoStatsGroupRev9 OBJECT-GROUP
+  OBJECTS {
+    rttMonLatestRtpOperIAJitterSD,
+    rttMonLatestRtpOperPacketLossSD,
+    rttMonLatestRtpOperPacketsMIA,
+    rttMonLatestRtpOperRFactorSD,
+    rttMonLatestRtpOperMOSCQSD,
+    rttMonLatestRtpOperMinOWSD,
+    rttMonLatestRtpOperMaxOWSD,
+    rttMonLatestRtpOperAvgOWSD,
+    rttMonLatestRtpOperMinOWDS,
+    rttMonLatestRtpOperMaxOWDS,
+    rttMonLatestRtpOperAvgOWDS,
+    rttMonLatestRtpOperTotalPaksSD,
+    rttMonLatestRtpOperTotalPaksDS,
+    rttMonRtpStatsIAJitterSDAvg,
+    rttMonRtpStatsIAJitterSDMin,
+    rttMonRtpStatsIAJitterSDMax,
+    rttMonRtpStatsPacketLossSDAvg,
+    rttMonRtpStatsPacketLossSDMin,
+    rttMonRtpStatsPacketLossSDMax,
+    rttMonRtpStatsPacketsMIAAvg,
+    rttMonRtpStatsRFactorSDAvg,
+    rttMonRtpStatsRFactorSDMin,
+    rttMonRtpStatsRFactorSDMax,
+    rttMonRtpStatsMOSCQSDAvg,
+    rttMonRtpStatsMOSCQSDMin,
+    rttMonRtpStatsMOSCQSDMax,
+    rttMonRtpStatsOperAvgOWSD,
+    rttMonRtpStatsOperMinOWSD,
+    rttMonRtpStatsOperMaxOWSD,
+    rttMonRtpStatsOperAvgOWDS,
+    rttMonRtpStatsOperMinOWDS,
+    rttMonRtpStatsOperMaxOWDS,
+    rttMonRtpStatsTotalPacketsSDAvg,
+    rttMonRtpStatsTotalPacketsSDMin,
+    rttMonRtpStatsTotalPacketsSDMax,
+    rttMonRtpStatsTotalPacketsDSAvg,
+    rttMonRtpStatsTotalPacketsDSMin,
+    rttMonRtpStatsTotalPacketsDSMax
+  }
+  STATUS current
+  DESCRIPTION
+   "A collection of objects that are added for
+    supporting Source to Destination statistics for RTP Operation."
+  ::= {ciscoRttMonMibGroups 35 }
+
 END
+
+
 
