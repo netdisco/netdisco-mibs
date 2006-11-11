@@ -7,13 +7,13 @@
                FROM SNMPv2-TC
            MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
                FROM SNMPv2-CONF
-           PhysicalIndex
+           PhysicalIndex, PhysicalClass
                FROM ENTITY-MIB
            hpicfObjectModules, hpicfCommon, hpicfCommonTrapsPrefix
                FROM HP-ICF-OID;
 
        hpicfFaultFinderMib MODULE-IDENTITY
-           LAST-UPDATED "200503220707Z"  -- March 22, 2005
+           LAST-UPDATED "200505021934Z"  -- May 2, 2005	   
            ORGANIZATION "Hewlett-Packard Company,
                          Procurve Networking Business"
            CONTACT-INFO "Hewlett-Packard Company
@@ -23,9 +23,14 @@
                         managing the Fault Finder feature in web-capable
                         HP devices."
 
-           REVISION     "200307280707Z"  -- March 22, 2005
-           DESCRIPTION  "Added Transceiver related fault messages and 
-                                   jumbos/flow control fault."
+           REVISION     "200505021934Z"  -- May 2, 2005
+           DESCRIPTION  "Added 3 new Transceiver related fault messages."
+	   
+           REVISION     "200503221130Z"  -- March 22, 2005
+           DESCRIPTION  "Added Transceiver related fault messages, 
+                                   jumbos/flow control fault.  Also added 
+                                   Connection-Rate-Filtering fault type to 
+                                   extend support for virus throttling."
 
            REVISION     "200307280707Z"  -- July 28, 2003
            DESCRIPTION  "Add duplexMismatch type. Update division name."
@@ -74,7 +79,14 @@
                            flowcntlJumbosFault(22),
                            portSelftestFailure(23),
                            xcvrUnidentified(24),
-                           xcvrUnsupported(25)
+                           xcvrUnsupported(25),
+                           crfNotify(26),
+                           crfThrottled(27),
+                           crfBlocked(28),
+                           xcvrNotYetSupported(29),
+                           xcvrBRevOnly(30),
+                           xcvrNotSupportedOnPort(31)
+
                            } 
 
        HpicfFaultTolerance ::= TEXTUAL-CONVENTION
@@ -279,7 +291,10 @@
                hpicfFfLogFaultType            HpicfFaultType,
                hpicfFfLogAction               HpicfFaultAction,
                hpicfFfLogSeverity             INTEGER,
-               hpicfFfLogStatus               INTEGER
+               hpicfFfLogStatus               INTEGER,
+               hpicfFfLogPhysClass            PhysicalClass,
+               hpicfFfLogInfoType             INTEGER,
+               hpicfFfLogInfo                 OCTET STRING
            }
 
        hpicfFfLogIndex OBJECT-TYPE
@@ -363,7 +378,32 @@
                        agent should remove this fault from the log."
            ::= { hpicfFfLogEntry 7 }
 
+       hpicfFfLogPhysClass OBJECT-TYPE
+           SYNTAX      PhysicalClass
+           MAX-ACCESS  read-only
+           STATUS      current
+           DESCRIPTION "The PhysicalClass as defined by Entity MIB to 
+	                which this hpicfFfLogPhysIndex belongs. " 
+           ::= { hpicfFfLogEntry 8 }
 
+       hpicfFfLogInfoType OBJECT-TYPE
+           SYNTAX      INTEGER {
+                          ipv4Address(1),
+			  displayString(2) 
+	               }
+           MAX-ACCESS  read-only
+           STATUS      current
+           DESCRIPTION "This field can be used to indicate the class of 
+	                information that 'hpicfFfLogInfo' holds" 
+           ::= { hpicfFfLogEntry 9 }
+
+       hpicfFfLogInfo  OBJECT-TYPE
+           SYNTAX      OCTET STRING (SIZE (0..255))
+           MAX-ACCESS  read-only
+           STATUS      current
+           DESCRIPTION "This can be used to hold any relevant information 
+	                about the current fault" 
+           ::= { hpicfFfLogEntry 10 }
 
        hpicfFfFaultInfoURL OBJECT-TYPE
            SYNTAX      HpicfUrlString
@@ -463,7 +503,10 @@
                          hpicfFfLogAction,
                          hpicfFfLogSeverity,
                          hpicfFfLogStatus,
-                         hpicfFfFaultInfoURL
+                         hpicfFfFaultInfoURL,
+                         hpicfFfLogPhysClass,
+                         hpicfFfLogInfoType,
+                         hpicfFfLogInfo
                        }
            STATUS      current
            DESCRIPTION "A collection of objects for accessing the log of

@@ -11,13 +11,13 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
             FROM IF-MIB
         InetAddressType, InetAddress, InetAddressPrefixLength
             FROM INET-ADDRESS-MIB
-        ipCidrRouteEntry
+        ipCidrRouteEntry, inetCidrRouteEntry
             FROM IP-FORWARD-MIB
         hpSwitch
             FROM HP-ICF-OID;
 
     hpicfIpRouting MODULE-IDENTITY
-        LAST-UPDATED "200305130228Z" -- May 13, 2003
+        LAST-UPDATED "200508130228Z" -- Aug 08, 2005
         ORGANIZATION "Hewlett-Packard Company
                       Workgroup Networks Division"
         CONTACT-INFO "Hewlett-Packard Company
@@ -25,6 +25,9 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                       Roseville, CA 95747"
         DESCRIPTION  "This MIB module contains HP proprietary
                      objects for managing IP Routing."
+
+        REVISION     "200508130228Z" -- Aug 08, 2005
+        DESCRIPTION  "Added hpicfInetCidrRouteTable augmenting inetCidrRouteTable."
 
         REVISION     "200305130228Z" -- May 13, 2003
         DESCRIPTION  "Added static route configuration objects."
@@ -632,6 +635,52 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         DESCRIPTION "The administrative distance of this route."
         ::= { hpicfIpCidrRouteEntry 1 }
 
+    hpicfInetCidrRouteTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfInetCidrRouteEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "HP extensions to the inetCidrRouteTable."
+        ::= { hpicfIpRouteStats 2 }
+
+    hpicfInetCidrRouteEntry OBJECT-TYPE
+        SYNTAX      HpicfInetCidrRouteEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Extended information about a single route."
+        AUGMENTS    { inetCidrRouteEntry }
+        ::= { hpicfInetCidrRouteTable 1 }
+
+    HpicfInetCidrRouteEntry ::=
+        SEQUENCE {
+            hpicfInetCidrRouteDistance         Integer32,
+            hpicfInetCidrRouteInfo             OBJECT IDENTIFIER
+        }
+
+    hpicfInetCidrRouteDistance OBJECT-TYPE
+        SYNTAX      Integer32 (0..255)
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The administrative distance of this route."
+        ::= { hpicfInetCidrRouteEntry 1 }
+
+    hpicfInetCidrRouteInfo OBJECT-TYPE
+       SYNTAX   OBJECT IDENTIFIER
+       MAX-ACCESS read-only
+       STATUS   current
+       DESCRIPTION
+          "A reference to MIB definitions specific to the
+          particular  routing protocol which is responsi-
+          ble for this route, as determined by the  value
+          specified  in the route's inetCidrRouteProto value.
+          If this information is not present,  its  value
+          should be set to the OBJECT IDENTIFIER { 0 0 },
+          which is a syntactically valid object  identif-
+          ier, and any implementation conforming to ASN.1
+          and the Basic Encoding Rules must  be  able  to
+          generate and recognize this value."
+       ::= { hpicfInetCidrRouteEntry 2 }
+
+
 
     hpicfIpRoutingConformance OBJECT IDENTIFIER ::= { hpicfIpRouting 2 }
 
@@ -707,6 +756,14 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                     information about routes in the routing table."
         ::= { hpicfIpRoutingGroups 8 }
 
+    hpicfInetCidrRouteGroup OBJECT-GROUP
+        OBJECTS     { hpicfInetCidrRouteDistance,
+                      hpicfInetCidrRouteInfo }
+        STATUS      current
+        DESCRIPTION "A collection of objects for retrieving extended
+                    information about routes in the routing table."
+        ::= { hpicfIpRoutingGroups 9 }
+
 
     hpicfIpRoutingCompliances OBJECT IDENTIFIER ::=
          { hpicfIpRoutingConformance 2 }
@@ -725,22 +782,19 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 
         ::= { hpicfIpRoutingCompliances 1 }
 
---
--- causes warning (doesn't exist) removed. max 11/02/04
---
---    hpicfIcmpReplyCompliance MODULE-COMPLIANCE
---        STATUS      current
---        DESCRIPTION "The compliance statement for HP Routing switches
---                    that support ICMP Reply Limiting."
---        MODULE
---            MANDATORY-GROUPS { hpicfIcmpReplyBaseGroup }
---
---            GROUP       hpicfReplyLimitGroup
---            DESCRIPTION "This group is mandatory for implementations
---                        that allow configuring ICMP Reply Limit 
---                        configuration."
---
---        ::= { hpicfIpRoutingCompliances 2 }
+    hpicfIcmpReplyCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP Routing switches
+                    that support ICMP Reply Limiting."
+        MODULE
+            MANDATORY-GROUPS { hpicfIcmpReplyBaseGroup }
+
+            GROUP       hpicfIcmpReplyLimitGroup
+            DESCRIPTION "This group is mandatory for implementations
+                        that allow configuring ICMP Reply Limit 
+                        configuration."
+
+        ::= { hpicfIpRoutingCompliances 2 }
 
     hpicfIpRouterCompliance MODULE-COMPLIANCE
         STATUS      current
@@ -749,7 +803,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
             MANDATORY-GROUPS { hpicfRdiscBaseGroup,
                                hpicfRdiscIfCfgGroup,
                                hpicfIcmpReplyBaseGroup,
-                               --hpicfReplyLimitGroup,
+                               hpicfIcmpReplyLimitGroup,
                                hpicfIpRouteCfgGroup,
                                hpicfIpStaticRouteGroup,
                                hpicfIpStaticNeighborGroup,
