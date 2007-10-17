@@ -21,7 +21,7 @@ IMPORTS
         FROM RBTWS-ROOT-MIB;
 
 rbtwsTrapMib MODULE-IDENTITY
-    LAST-UPDATED "200702211641Z"
+    LAST-UPDATED "200705041700Z"
     ORGANIZATION "Enterasys Networks"
     CONTACT-INFO
         "www.enterasys.com"
@@ -42,8 +42,22 @@ rbtwsTrapMib MODULE-IDENTITY
         makes no warranty, either express or implied, as to the use,
         operation, condition, or performance of the Specification."
 
-    REVISION "200702210035Z"
-    DESCRIPTION "v2.1.8: Factored out four textual conventions
+    REVISION "200705040055Z"
+    DESCRIPTION "v2.6.6: added one value (3)
+                to RbtwsClientIpAddrChangeReason
+                (for 6.0 release)"
+
+    REVISION "200701090050Z"
+    DESCRIPTION "v2.6.4: Added two new traps:
+                             rbtwsMobilityDomainFailOverTrap,
+                             rbtwsMobilityDomainFailBackTrap
+                and related objects:
+                             rbtwsMobilityDomainSecondarySeedIp,
+                             rbtwsMobilityDomainPrimarySeedIp
+                (for 6.0 release)"
+
+    REVISION "200609280045Z"
+    DESCRIPTION "v2.6.2: Factored out four textual conventions
                 into a new module, Client Session TC:
                     RbtwsClientSessionState,
                     RbtwsClientAuthenProtocolType,
@@ -51,8 +65,48 @@ rbtwsTrapMib MODULE-IDENTITY
                     RbtwsUserAccessType
                 and imported them from there."
 
-    REVISION "200607280031Z"
-    DESCRIPTION "v2.1.7: Removed unused imports"
+    REVISION "200608080042Z"
+    DESCRIPTION "v2.5.2: Added new trap: rbtwsApRejectLicenseExceededTrap
+                and related object: rbtwsNumLicensedActiveAPs
+                (for 6.0 release)"
+
+    REVISION "200607310040Z"
+    DESCRIPTION "v2.5.0: Added new trap:
+                rbtwsRFDetectAdhocUserDisappearTrap
+                (for 6.0 release)"
+
+    REVISION "200607280032Z"
+    DESCRIPTION "v2.4.7: Removed unused imports"
+
+    REVISION "200607230029Z"
+    DESCRIPTION "v2.4.1: Added new trap: rbtwsRFDetectBlacklistedTrap,
+                related textual convention: RbtwsBlacklistingCause
+                and objects: rbtwsBlacklistingRemainingTime,
+                             rbtwsBlacklistingCause
+                (for 6.0 release)"
+
+    REVISION "200607120028Z"
+    DESCRIPTION "v2.4.0: Added new trap: RFDetectClientViaRogueWiredAPTrap2
+                and related object: rbtwsRFDetectRogueAPMacAddr.
+                This trap obsoletes the RFDetectClientViaRogueWiredAPTrap
+                (for 6.0 release)"
+
+    REVISION "200607070026Z"
+    DESCRIPTION "v2.3.1: Added 3 new traps:
+                rbtwsClientAssociationSuccessTrap,
+                rbtwsClientAuthenticationSuccessTrap,
+                rbtwsClientDeAuthenticationTrap
+                (for 6.0 release)"
+
+    REVISION "200607070025Z"
+    DESCRIPTION "v2.3.0: Added new trap: rbtwsClientIpAddrChangeTrap
+                and related object: RbtwsClientIpAddrChangeReason
+                (for 6.0 release)"    
+
+    REVISION "200607060023Z"
+    DESCRIPTION "v2.2.0: added two values (13, 14)
+                to RbtwsAuthenticationFailureType
+                (for 6.0 release)"
 
     REVISION "200604190022Z"
     DESCRIPTION "v2.1.6: Updated client connection failure causes and descriptions
@@ -106,7 +160,11 @@ RbtwsAuthenticationFailureType ::= TEXTUAL-CONVENTION
                                     authentication methods
      server-rejected - received reject from AAA server
      fallthru-auth-misconfig - problem with fallthru authentication
-     no-lastresort-auth - problem with last-resort authentication"
+     no-lastresort-auth - problem with last-resort authentication
+     exceeded-max-attempts - local user failed to login within allowed number
+                             of attempts resulting in account lockout
+     password-expired - user's password expired"
+
     SYNTAX      INTEGER {
             other               (1),
             user-glob-mismatch  (2),
@@ -119,7 +177,9 @@ RbtwsAuthenticationFailureType ::= TEXTUAL-CONVENTION
             authentication-type-mismatch (9),
             server-rejected     (10),
             fallthru-auth-misconfig (11),
-            no-lastresort-auth  (12)
+            no-lastresort-auth  (12),
+            exceeded-max-attempts (13),
+            password-expired (14)
         }
 
 RbtwsAuthorizationFailureType ::= TEXTUAL-CONVENTION
@@ -212,6 +272,33 @@ RbtwsRFDetectDoSType ::= TEXTUAL-CONVENTION
             de-associate-pkt-flood(23)
         }
 
+RbtwsClientIpAddrChangeReason ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Describes the reasons for client IP address changes"
+    SYNTAX      INTEGER {
+            client-connected(1),
+            other(2),
+            dhcp-to-static(3)
+        }
+
+RbtwsBlacklistingCause ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Enumeration of reasons for blacklisting a transmitter:
+            bl-configured: administrative action
+                           (explicitly added to the Black List),
+            bl-associate-pkt-flood: Association request flood detected,
+            bl-re-associate-pkt-flood: Re-association request flood detected,
+            bl-de-associate-pkt-flood: De-association request flood detected.
+        (The leading 'bl-' stands for 'Black-Listed';
+         reading it as 'Blocked' would also make sense)."
+    SYNTAX      INTEGER {
+            bl-configured(1),
+            bl-associate-pkt-flood(2),
+            bl-re-associate-pkt-flood(3),
+            bl-de-associate-pkt-flood(4)
+        }
 
 
 -- Object definitions
@@ -882,6 +969,72 @@ rbtwsClientTimeSinceLastRoam OBJECT-TYPE
         This object is used within notifications and is not accessible."
     ::= { rbtwsTemporary 68 }
 
+rbtwsClientIpAddrChangeReason OBJECT-TYPE
+    SYNTAX      RbtwsClientIpAddrChangeReason
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "Indicates the reason why client IP address changed.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 69 }
+
+rbtwsRFDetectRogueAPMacAddr OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+    "Describes the MAC address of the Rogue AP the transmitter is connected to.
+    This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 70 }
+
+rbtwsBlacklistingRemainingTime OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The time in seconds remaining until a given transmitter could be
+        removed from the Black List.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 71 }
+
+rbtwsBlacklistingCause OBJECT-TYPE
+    SYNTAX      RbtwsBlacklistingCause
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "Indicates the reason why a given transmitter is blacklisted.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 72 }
+
+rbtwsNumLicensedActiveAPs OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "Indicates the maximum (licensed) number of active APs for this AC.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 73 }
+
+rbtwsMobilityDomainSecondarySeedIp OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The secondary seed IP address to which the Mobility Domain
+        has failed over.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 79 }
+
+rbtwsMobilityDomainPrimarySeedIp OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The primary seed IP address to which the Mobility Domain
+        has failed back.
+        This object is used within notifications and is not accessible."
+    ::= { rbtwsTemporary 80 }
+
 
 -- Notification definitions
 
@@ -1251,7 +1404,7 @@ rbtwsRFDetectClientViaRogueWiredAPTrap NOTIFICATION-TYPE
           rbtwsClientVLANtag,
           rbtwsRFDetectXmtrMacAddr,
           rbtwsRFDetectListenerListInfo }
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
     "This trap is sent when a client is detected that connected
     via a rogue AP that is attached to a wired port.
@@ -1261,7 +1414,8 @@ rbtwsRFDetectClientViaRogueWiredAPTrap NOTIFICATION-TYPE
     rbtwsClientVLANtag is the VLAN tag of the client's traffic.
     rbtwsRFDetectXmtrMacAddr is the MAC address of the client.
     rbtwsRFDetectListenerListInfo is a display string of a list of
-    listener information."
+    listener information.
+    Obsoleted by rbtwsRFDetectClientViaRogueWiredAPTrap2."
     ::= { rbtwsTrapsV2 28 }
 
 rbtwsRFDetectInterferingRogueAPTrap NOTIFICATION-TYPE
@@ -1402,5 +1556,153 @@ rbtwsApOperRadioStatusTrap NOTIFICATION-TYPE
         It also contains aggregate information about the AP
         in operational state - security level and service availability."
     ::= { rbtwsTrapsV2 38 }
+
+rbtwsClientIpAddrChangeTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsUserName,
+          rbtwsClientSessionId,
+          rbtwsClientMACAddress,
+          rbtwsClientIp,
+          rbtwsClientVLANName,
+          rbtwsClientSessionState,
+          rbtwsClientAuthServerIp,
+          rbtwsClientAuthenProtocolType,
+          rbtwsClientAccessType,
+          rbtwsPortNum,
+          rbtwsAPRadioNum,
+          rbtwsDAPNum,
+          rbtwsRadioSSID,
+          rbtwsUserAccessType,
+          rbtwsLocalId,
+          rbtwsClientIpAddrChangeReason }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent when a client's IP address
+        changes. The most likely case for this is when
+        the client first connects to the network."
+    ::= { rbtwsTrapsV2 39 }
+
+rbtwsClientAssociationSuccessTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsClientMACAddress,
+          rbtwsClientAccessType,
+          rbtwsPortNum,
+          rbtwsAPRadioNum,
+          rbtwsDAPNum,
+          rbtwsRadioSSID }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent if a client association succeeds.
+        WARNING: DO NOT enable it in normal use.
+        It may impair switch performance!
+        Only recommended for debugging network issues."
+    ::= { rbtwsTrapsV2 40 }
+
+rbtwsClientAuthenticationSuccessTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsClientMACAddress,
+          rbtwsClientAccessType,
+          rbtwsPortNum,
+          rbtwsAPRadioNum,
+          rbtwsDAPNum,
+          rbtwsRadioSSID }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent if a client authentication succeeds."
+    ::= { rbtwsTrapsV2 41 }
+
+rbtwsClientDeAuthenticationTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsUserName,
+          rbtwsClientSessionId,
+          rbtwsClientMACAddress,
+          rbtwsClientIp,
+          rbtwsClientVLANName,
+          rbtwsClientAuthServerIp,
+          rbtwsClientAuthenProtocolType,
+          rbtwsClientAccessType,
+          rbtwsPortNum,
+          rbtwsAPRadioNum,
+          rbtwsDAPNum,
+          rbtwsRadioSSID }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent if a client de-authentication occured."
+    ::= { rbtwsTrapsV2 42 }
+
+rbtwsRFDetectBlacklistedTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsRFDetectXmtrMacAddr,
+          rbtwsClientAccessType,
+          rbtwsPortNum,
+          rbtwsDAPNum,
+          rbtwsBlacklistingRemainingTime,
+          rbtwsBlacklistingCause }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent if an association, re-association or de-association
+        request (packet) is detected from a blacklisted transmitter 
+        (identified by MAC: 'rbtwsRFDetectXmtrMacAddr').
+        If 'rbtwsBlacklistingCause' is 'configured',
+        then 'rbtwsBlacklistingRemainingTime' will be zero, meaning indefinite
+        time (depending on administrative actions on the Black List).
+        Otherwise, 'rbtwsBlacklistingRemainingTime' will indicate the time
+        in seconds until this transmitter's requests could be allowed."
+    ::= { rbtwsTrapsV2 43 }
+
+rbtwsRFDetectClientViaRogueWiredAPTrap2 NOTIFICATION-TYPE
+    OBJECTS     { rbtwsSourceWsIp,
+          rbtwsPortNum,
+          rbtwsClientVLANid,
+          rbtwsClientVLANtag,
+          rbtwsRFDetectXmtrMacAddr,
+          rbtwsRFDetectListenerListInfo,
+          rbtwsRFDetectRogueAPMacAddr }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent when a client is detected that connected
+        via a rogue AP that is attached to a wired port.
+        rbtwsSourceWsIp is the IP address of the AC (switch)
+        with the wired port.
+        rbtwsPortNum is the port on the AC.
+        rbtwsClientVLANid is the VLAN ID of the client's traffic.
+        rbtwsClientVLANtag is the VLAN tag of the client's traffic.
+        rbtwsRFDetectXmtrMacAddr is the MAC address of the client.
+        rbtwsRFDetectListenerListInfo is a display string of a list of
+        listener information.
+        rbtwsRFDetectRogueAPMacAddr is the MAC address of the Rogue AP (wired)
+        the client is connected to.
+        This trap obsoletes the rbtwsRFDetectClientViaRogueWiredAPTrap."
+    ::= { rbtwsTrapsV2 44 }
+
+rbtwsRFDetectAdhocUserDisappearTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsRFDetectXmtrMacAddr }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent when RF detection sweep finds that
+        an ad-hoc user disappeared.
+        rbtwsRFDetectXmtrMacAddr is the MAC address of the ad-hoc user."
+    ::= { rbtwsTrapsV2 45 }
+
+rbtwsApRejectLicenseExceededTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsNumLicensedActiveAPs }
+    STATUS      current
+    DESCRIPTION
+        "This trap is sent when an AC (wireless switch) receives a packet
+        from an inactive AP and attaching that AP would make the AC
+        exceed the maximum (licensed) number of active APs."
+    ::= { rbtwsTrapsV2 46 }
+
+rbtwsMobilityDomainFailOverTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsMobilityDomainSecondarySeedIp }
+    STATUS      current
+    DESCRIPTION
+    "This trap is sent when the Mobility Domain fails over
+    to the secondary seed."
+    ::= { rbtwsTrapsV2 50 }
+
+rbtwsMobilityDomainFailBackTrap NOTIFICATION-TYPE
+    OBJECTS     { rbtwsMobilityDomainPrimarySeedIp }
+    STATUS      current
+    DESCRIPTION
+    "This trap is sent when the Mobility Domain fails back
+    to the primary seed."
+    ::= { rbtwsTrapsV2 51 }
+
 
 END
