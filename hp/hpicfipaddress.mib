@@ -21,7 +21,8 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
             FROM TUNNEL-MIB;
         
     hpicfIpConfig MODULE-IDENTITY
-        LAST-UPDATED "200812090000Z"  -- Dec 09, 2008
+
+        LAST-UPDATED "200910020000Z"  -- October 02, 2009
         ORGANIZATION "Hewlett Packard Company,
                       ProCurve Networking Business"
         CONTACT-INFO "Hewlett Packard Company
@@ -32,6 +33,23 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                       for devices in the HP Integrated Communication Facility
                       product line."
 
+        REVISION     "200910020000Z"  -- October 02, 2009
+        DESCRIPTION  "Added hpicfIpv6InterfaceReachableTime and
+	              hpicfIpv6InterfaceRetransmitTime objects
+                      to hpicfIpv6InterfaceTable."
+
+	REVISION     "200909100000Z"  -- September 10, 2009
+        DESCRIPTION  "Added hpicfUdpTunnelMirrorTruncate object 
+                      to HpicfUdpTunnelEntry."
+
+        REVISION     "200909040000Z"  -- September 04, 2009
+        DESCRIPTION  "Added hpicfIpNetToPhysicalTableClear."
+
+        REVISION     "200907210000Z"  -- July 21, 2009
+        DESCRIPTION  "Added hpicfIpv6InterfaceDadAttempts and
+                      hpicfIpv6InterfaceDadAttemptsMode object to the 
+                      hpicfIpv6InterfaceTable."
+
         REVISION     "200812090000Z"  -- Dec 09, 2008
         DESCRIPTION  "Updated Description of
 	              hpicfIpv4InterfaceBootpGateway"
@@ -39,7 +57,7 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
         REVISION     "200810010000Z"  -- Oct 01, 2008
         DESCRIPTION  "Move ipNetToPhysicalEntry to correct IMPORT."
 
-        REVISION     "200702020000Z"  -- JUNE 06, 2007
+        REVISION     "200706060000Z"  -- JUNE 06, 2007
         DESCRIPTION  "Added hpicfIpv6NDDadAttempts to augment the 
                       hpicfIpv6GlobalConfigObjects."
 
@@ -377,6 +395,18 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
 	     physical address was learnt"
     ::= { hpicfIpNetToPhysicalEntry 1}
 
+    hpicfIpNetToPhysicalTableClear  OBJECT-TYPE
+        SYNTAX       INTEGER {
+			unknown(1),
+                        ipv4(2),
+                        ipv6(3)
+                     }
+       MAX-ACCESS    read-write
+       STATUS        current
+       DESCRIPTION   "This provides the clear options for hpicfIpNetToPhysicalTable.
+                      A value of 2 is to clear arp table. A value of 3 
+                      is to clear the ipv6 neighbor table. A get returns 'unknown' always."
+       ::= { hpicfIpAddressObjects 4 }
 
 
     -- V4 Interface Table
@@ -563,7 +593,11 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
             hpicfIpv6InterfaceAutoConfig        INTEGER,
             hpicfIpv6InterfaceDhcpRapidCommit   INTEGER,
             hpicfIpv6InterfaceDhcpRelay         INTEGER,
-            hpicfIpv6InterfaceCfgEnableStatus   INTEGER
+            hpicfIpv6InterfaceCfgEnableStatus   INTEGER,
+            hpicfIpv6InterfaceDadAttempts       Integer32,
+            hpicfIpv6InterfaceDadAttemptsMode   INTEGER,
+	    hpicfIpv6InterfaceReachableTime     Unsigned32, 
+	    hpicfIpv6InterfaceRetransmitTime    Unsigned32
         }
 
 
@@ -666,6 +700,65 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                  ipv6InterfaceEnableStatus."
     ::= { hpicfIpv6InterfaceEntry 6 }        
 
+   hpicfIpv6InterfaceDadAttempts OBJECT-TYPE
+       SYNTAX      Integer32
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION "This object indicates the maximum number
+                     of neighbor solicitation requests that will be sent
+                     while performing duplicate address detection for 
+                     this interface.
+                     Note: hpicfIpv6NDDadAttempts object's value will 
+                     be in use for dad attempts for this interface when 
+                     hpicfIpv6InterfaceDadAttemptsMode is 'global'. " 
+        ::= { hpicfIpv6InterfaceEntry 7 }
+
+   hpicfIpv6InterfaceDadAttemptsMode OBJECT-TYPE
+       SYNTAX      INTEGER {
+                    global (1),
+                    perInterface (2)
+       }
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION " This object indicates whether the
+                     value in hpicfIpv6NDDadAttempts is in use or
+                     the value in hpicfIpv6InterfaceDadAttempts 
+                     is in use for an entry in this table while
+                     performing duplicate address detection.
+                     A set to 'global' means: 
+                     - hpicfIpv6NDDadAttempts value will be used for dad 
+                        attempts.
+                     A set to 'perInterface' means:
+                     - hpicfIpv6InterfaceDadAttempts value will be used for
+                       dad attempts."
+        DEFVAL { global }             
+        ::= { hpicfIpv6InterfaceEntry 8 }
+        
+   hpicfIpv6InterfaceReachableTime OBJECT-TYPE
+       SYNTAX      Unsigned32
+       UNITS       "milliseconds"
+       MAX-ACCESS   read-write
+       STATUS       current
+       DESCRIPTION
+                    "The time a neighbor is considered reachable after
+                     receiving a reachability confirmation."
+       REFERENCE    "RFC2461, Section 6.3.2"
+        ::= { hpicfIpv6InterfaceEntry 9 }
+
+
+   hpicfIpv6InterfaceRetransmitTime OBJECT-TYPE
+       SYNTAX     Unsigned32
+       UNITS      "milliseconds"
+       MAX-ACCESS read-write
+       STATUS     current
+       DESCRIPTION
+           "The time between retransmissions of Neighbor Solicitation
+            messages to a neighbor when resolving the address or when
+            probing the reachability of a neighbor."
+       REFERENCE "RFC2461, Section 6.3.2"
+        ::= { hpicfIpv6InterfaceEntry 10 }
+
+
 -- **********************************************************************
 -- Remote mirroring tunnel Objects
 -- **********************************************************************
@@ -694,7 +787,8 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
     HpicfUdpTunnelEntry ::=
         SEQUENCE {
             hpicfUdpTunnelSrcPort                InetPortNumber,
-            hpicfUdpTunnelMirrorSessionID        Integer32
+            hpicfUdpTunnelMirrorSessionID        Integer32,
+            hpicfUdpTunnelMirrorTruncate         INTEGER
         }
 
     hpicfUdpTunnelSrcPort OBJECT-TYPE
@@ -729,6 +823,18 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                         is irrelevant for the tunnel type. "
         DEFVAL { 0 }
         ::= { hpicfUdpTunnelEntry 2 }
+
+    hpicfUdpTunnelMirrorTruncate OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        enabled(1),
+                        disabled(2)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Enables/disables truncation for remote mirroring."
+        DEFVAL { disabled }
+        ::= { hpicfUdpTunnelEntry 3 }
+
 
 
 -- **********************************************************************
@@ -805,6 +911,55 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                      state."
         ::= { hpicfIpConfigCompliances 4 }
 
+    hpicfIpConfigCompliance5 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with IP 
+                Configuration"
+       MODULE
+       GROUP  hpicfIpv6DadAttemptsGroup
+       DESCRIPTION "This group is for Dad Attempts to be configured on 
+                    a device."
+       GROUP  hpicfIpv6NDGroup
+       DESCRIPTION "This group is for configuring ipv6 ND parameters 
+                    on  a device."
+       ::= { hpicfIpConfigCompliances 5 }                
+
+    hpicfIpConfigCompliance6 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with IP 
+                Configuration"
+       MODULE
+       GROUP  hpicfIpv6IcmpGroup
+       DESCRIPTION "This group is for ipv6 icmp configuration."
+
+       ::= { hpicfIpConfigCompliances 6 }                
+
+    hpicfIpConfigCompliance7 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with IP 
+                Configuration"
+       MODULE
+       GROUP  hpicfIpNetToPhysicalTableGroup
+       DESCRIPTION "This group is for clear options provided in the switch."
+
+       ::= { hpicfIpConfigCompliances 7 }  
+              
+
+    hpicfIpConfigCompliance8 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with IP 
+                Configuration"
+       MODULE
+       GROUP  hpicfUdpTunnelMirrorGroup
+       DESCRIPTION "This group is for the Truncation option provided for
+                    remote mirroring."
+
+        ::= { hpicfIpConfigCompliances 8 }   
+
     hpicfIpAddressTableGroup OBJECT-GROUP
         OBJECTS { 
                     hpicfIpAddressPrefixLength,
@@ -818,8 +973,14 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
 
     hpicfSwitchIpAddressTableGroup OBJECT-GROUP
         OBJECTS { 
-                    hpicfSwitchIpAddressAddrType,
-                    hpicfSwitchIpAddressAddr}
+              hpicfSwitchIpAddressPrefixLength,
+              hpicfSwitchIpAddressType,
+              hpicfSwitchIpAddressOrigin,
+              hpicfSwitchIpAddressStatus,
+              hpicfSwitchIpAddressPreferredLifetime,
+              hpicfSwitchIpAddressValidLifetime,
+              hpicfSwitchIpAddressExtendedType
+             }
         STATUS      current
         DESCRIPTION "A Collection of objects providing interfaces addressing
                      information."
@@ -852,7 +1013,8 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                     hpicfIpv6InterfaceManual,
                     hpicfIpv6InterfaceAutoConfig,
                     hpicfIpv6InterfaceDhcpRapidCommit,
-                    hpicfIpv6InterfaceDhcpRelay }
+                    hpicfIpv6InterfaceDhcpRelay,
+		    hpicfIpv6InterfaceCfgEnableStatus}
         STATUS      current
         DESCRIPTION "A Collection of objects that allows IPV6 interface 
                      configuration"
@@ -863,12 +1025,62 @@ HP-ICF-IPCONFIG DEFINITIONS ::= BEGIN
                     hpicfIpv4InterfaceDhcpEnable,
                     hpicfIpv4InterfaceForwarding,
                     hpicfIpv4InterfaceProxyArp,
-                    hpicfIpv4InterfaceLocalProxyArp }
+                    hpicfIpv4InterfaceLocalProxyArp,
+		    hpicfIpv4InterfaceBootpGateway}
         STATUS      current
         DESCRIPTION "A Collection of objects that allows IPV4 interface 
                      configuration"
         ::= { hpicfIpConfigGroups 6 }
 
+   hpicfIpv6DadAttemptsGroup  OBJECT-GROUP
+        OBJECTS {
+                  hpicfIpv6NDDadAttempts,
+                  hpicfIpv6InterfaceDadAttempts,
+                  hpicfIpv6InterfaceDadAttemptsMode
+                 } 
+    STATUS      current
+    DESCRIPTION "A collection of objects that allows the number of DAD 
+                 Attempts to be configured globally and also on a per
+                 interface basis."
+        ::= { hpicfIpConfigGroups 7 }
+
+    hpicfIpv6IcmpGroup  OBJECT-GROUP
+        OBJECTS {
+	           hpicfIpv6IcmpErrorInterval,
+                   hpicfIpv6IcmpBucketsize
+                } 
+    STATUS      current
+    DESCRIPTION "Objects provided for the ipv6 icmp configuration."
+        ::= { hpicfIpConfigGroups 8 }
+
+    hpicfIpNetToPhysicalTableGroup  OBJECT-GROUP
+        OBJECTS {
+	           hpicfIpNetToPhysicalPort,
+                   hpicfIpNetToPhysicalTableClear
+                } 
+    STATUS      current
+    DESCRIPTION "Objects provided for the clear options in the device."
+        ::= { hpicfIpConfigGroups 9 }
+
  
  
+   hpicfUdpTunnelMirrorGroup  OBJECT-GROUP
+        OBJECTS {
+                  hpicfUdpTunnelMirrorTruncate
+                 } 
+    STATUS      current
+    DESCRIPTION "An object that enables or disables truncation
+                 for remote mirroring."
+        ::= { hpicfIpConfigGroups 10 }
+
+   hpicfIpv6NDGroup  OBJECT-GROUP
+        OBJECTS {
+                  hpicfIpv6InterfaceReachableTime,
+                  hpicfIpv6InterfaceRetransmitTime
+                 } 
+    STATUS      current
+    DESCRIPTION "Objects provided for configuration of ipv6 ND 
+                 parameters"
+        ::= { hpicfIpConfigGroups 11 }
+
 END

@@ -2,7 +2,7 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
 
     IMPORTS
         MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, mib-2, 
-            Counter32, Integer32 
+            Counter32, Integer32,Unsigned32,IpAddress 
                     FROM SNMPv2-SMI 
         OBJECT-TYPE, MODULE-IDENTITY, IpAddress
             FROM SNMPv2-SMI
@@ -20,7 +20,7 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
             FROM OSPF-MIB;
 
     hpicfOspf MODULE-IDENTITY
-        LAST-UPDATED "200803280339Z" -- March 28, 2008
+        LAST-UPDATED "200903050000Z" -- March 5, 2009
         ORGANIZATION "Hewlett-Packard Company,
                       Workgroup Networks Division"
         CONTACT-INFO "John Flick
@@ -35,6 +35,17 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
         DESCRIPTION  "This MIB module contains HP proprietary
                      extensions to the OSPF-MIB module."
 
+        REVISION     "200903050000Z" -- March 5, 2009
+        DESCRIPTION  "Added hpicfOspfLogTable."
+
+        REVISION     "200810150339Z" -- October 15, 2008
+        DESCRIPTION  "Added object to  
+                      1. retrieve request list of a
+                      particular interface. 
+                      2. retrieve retransmission list of a  
+                      particular interface. 
+                      3. retrieve flood list of a
+                      particular interface." 
         REVISION     "200803280339Z" -- March 28, 2008
         DESCRIPTION  "Added object to  
                       1. indicate ospf interface statistics sent,
@@ -180,7 +191,6 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
                     route is preferred over a route from some other
                     source."
         ::= { hpicfOspfGeneral 6 }
-
 
     hpicfOspfRedistTable OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpicfOspfRedistEntry
@@ -689,9 +699,540 @@ hpicfOspfSpfReason  OBJECT-TYPE
                  Only last ten SPF run's reasons will be saved."
         ::= { hpicfOspfSpfEntry 2 }
         
+
+
+ hpicfOspfReqTable OBJECT-TYPE
+       SYNTAX       SEQUENCE OF HpicfOspfReqEntry
+       MAX-ACCESS   not-accessible
+       STATUS       current
+       DESCRIPTION
+          "Request List table that contains OSPF 
+           Specific interface information." 
+      ::= { hpicfOspf 9 }
+
+  hpicfOspfReqEntry OBJECT-TYPE
+       SYNTAX   HpicfOspfReqEntry
+       MAX-ACCESS   not-accessible
+       STATUS   current
+       DESCRIPTION
+          "A Request List entries that contain fields of
+           link state advertisement."
+       INDEX { ospfIfIpAddress,
+               ospfAddressLessIf
+                }
+	::= {hpicfOspfReqTable 1 }
+
+  HpicfOspfReqEntry ::=
+       SEQUENCE {
+          hpicfOspfReqType      INTEGER,
+          hpicfOspfReqLsid      IpAddress,
+          hpicfOspfReqRouterId  IpAddress,
+          hpicfOspfReqSequence  Integer32,
+          hpicfOspfReqAge       Integer32,
+          hpicfOspfReqChecksum  Integer32
+         }
+
+
+  hpicfOspfReqType OBJECT-TYPE
+       SYNTAX       INTEGER {
+                       routerLink (1),
+                       networkLink (2),
+                       summaryLink (3),
+                       asSummaryLink (4),
+                       asExternalLink (5),
+                       multicastLink (6),
+                       nssaExternalLink (7),
+                       areaOpaqueLink (10)
+                       }
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The type of the Request List's link state advertisement.
+          Each link state type has a separate advertisement
+          format."
+       ::= { hpicfOspfReqEntry 1 }
+
+  hpicfOspfReqLsid OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The Request List's Link State ID is an LS Type Specific field
+          containing either a Router ID or an IP address;
+          it identifies the piece of the routing domain
+          that is being described by the advertisement."
+       ::= { hpicfOspfReqEntry 2 }
+
+  hpicfOspfReqRouterId OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only 
+       STATUS       current
+       DESCRIPTION
+          "The 32-bit number that uniquely identifies the
+          originating router in the Autonomous System."
+       ::= { hpicfOspfReqEntry 3 }
+
+  hpicfOspfReqSequence OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The Request List's sequence number field is a signed 32-bit
+          integer.  It starts with the value '80000001'h,
+          or -'7FFFFFFF'h, and increments until '7FFFFFFF'h.
+          Thus, a typical sequence number will be very negative.
+          It is used to detect old and duplicate Link State
+          Advertisements.  The space of sequence numbers is linearly
+          ordered.  The larger the sequence number, the more recent
+          the advertisement."
+       ::= { hpicfOspfReqEntry 4 }
+
+  hpicfOspfReqAge OBJECT-TYPE
+       SYNTAX       Integer32
+       UNITS        "seconds"
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This Request list's field is the age of the link state advertisement
+          in seconds."
+       ::= { hpicfOspfReqEntry 5 }
+
+  hpicfOspfReqChecksum OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This Request list's field is the checksum of the complete contents of
+          the advertisement, excepting the age field.  The age field
+          is excepted so that an advertisement's age can be
+          incremented without updating the checksum.  The checksum
+          used is the same that is used for ISO connectionless
+          datagrams; it is commonly referred to as the
+          Fletcher checksum."
+        ::= { hpicfOspfReqEntry 6 }
+
+ hpicfOspfRetransTable OBJECT-TYPE
+       SYNTAX       SEQUENCE OF HpicfOspfRetransEntry
+       MAX-ACCESS   not-accessible
+       STATUS       current
+       DESCRIPTION
+          "Retransmission List table that contains
+           Ospf Interface Specific infromation"
+       ::= { hpicfOspf 10}
+
+  hpicfOspfRetransEntry OBJECT-TYPE
+       SYNTAX   HpicfOspfRetransEntry
+       MAX-ACCESS   not-accessible
+       STATUS   current
+       DESCRIPTION
+          "Retransmission list entry that is  maintained
+           for an OSPF Interface"
+       INDEX { ospfIfIpAddress,
+               ospfAddressLessIf
+                }
+       ::= { hpicfOspfRetransTable 1 }
+
+ HpicfOspfRetransEntry ::=
+       SEQUENCE {
+          hpicfOspfRetransType       INTEGER,
+          hpicfOspfRetransLsid       IpAddress,
+          hpicfOspfRetransRouterId   IpAddress,
+          hpicfOspfRetransSequence   Integer32,
+          hpicfOspfRetransAge        Integer32,
+          hpicfOspfRetransChecksum   Integer32
+         }
+
+
+  hpicfOspfRetransType OBJECT-TYPE
+       SYNTAX       INTEGER {
+                       routerLink (1),
+                       networkLink (2),
+                       summaryLink (3),
+                       asSummaryLink (4),
+                       asExternalLink (5), 
+                       multicastLink (6),
+                       nssaExternalLink (7),
+                       areaOpaqueLink (10)
+                       }
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The Retransmission List LSA type.
+          Each link state type has a separate advertisement
+          format."
+       ::= { hpicfOspfRetransEntry 1 }
+
+  hpicfOspfRetransLsid OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The Retransmission List Link State ID is an LS Type Specific field
+          containing either a Router ID or an IP address;
+          it identifies the piece of the routing domain
+          that is being described by the advertisement."
+       ::= { hpicfOspfRetransEntry 2 }
+
+  hpicfOspfRetransRouterId OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The 32-bit number that uniquely identifies the
+          originating Retransmission List router in the Autonomous System."
+       ::= { hpicfOspfRetransEntry 3 }
+
+  hpicfOspfRetransSequence OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The Retransmission List sequence number field is a signed 32-bit
+          integer.  It starts with the value '80000001'h,
+          or -'7FFFFFFF'h, and increments until '7FFFFFFF'h.
+          Thus, a typical sequence number will be very negative.
+          It is used to detect old and duplicate Link State
+          Advertisements.  The space of sequence numbers is linearly
+          ordered.  The larger the sequence number, the more recent
+          the advertisement."
+       ::= { hpicfOspfRetransEntry 4 }
+
+  hpicfOspfRetransAge OBJECT-TYPE
+       SYNTAX       Integer32 
+       UNITS        "seconds"
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This Retransmission List field is the age of the link state
+           advertisement in seconds."
+       ::= { hpicfOspfRetransEntry 5 }
+
+  hpicfOspfRetransChecksum OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This Retransmission field is the checksum of the complete contents of
+          the advertisement, excepting the age field.  The age field
+          is excepted so that an advertisement's age can be
+          incremented without updating the checksum.  The checksum
+          used is the same that is used for ISO connectionless
+          datagrams; it is commonly referred to as the
+          Fletcher checksum."
+        ::= { hpicfOspfRetransEntry 6 }
+
+ hpicfOspfFloodTable OBJECT-TYPE
+       SYNTAX       SEQUENCE OF HpicfOspfFloodEntry
+       MAX-ACCESS   not-accessible
+       STATUS       current
+       DESCRIPTION
+          "Flood list table that contains
+           Ospf Interface Specific infromation"
+       ::= { hpicfOspf 11}
+
+  hpicfOspfFloodEntry OBJECT-TYPE
+       SYNTAX   HpicfOspfFloodEntry
+       MAX-ACCESS   not-accessible
+       STATUS   current
+       DESCRIPTION
+          "A Flood list informations maintained
+             for an OSPF Interface"
+       INDEX { ospfIfIpAddress,
+               ospfAddressLessIf
+                }
+       ::= { hpicfOspfFloodTable 1 }
+
+  HpicfOspfFloodEntry ::=
+       SEQUENCE {
+          hpicfOspfFloodType      INTEGER,
+          hpicfOspfFloodLsid      IpAddress,
+          hpicfOspfFloodRouterId  IpAddress,
+          hpicfOspfFloodSequence  Integer32,
+          hpicfOspfFloodAge       Integer32,
+          hpicfOspfFloodChecksum  Integer32
+         }
+
+
+  hpicfOspfFloodType OBJECT-TYPE
+       SYNTAX       INTEGER {
+                       routerLink (1),
+                       networkLink (2),
+                       summaryLink (3),
+                       asSummaryLink (4),
+                       asExternalLink (5),
+                       multicastLink (6),
+                       nssaExternalLink (7),
+                       areaOpaqueLink (10)
+                       }
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+           "The flood list LSA type .Each link state type
+            has a separate advertisement format."
+       ::= { hpicfOspfFloodEntry 1 }
+
+  hpicfOspfFloodLsid OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only 
+       STATUS       current
+       DESCRIPTION
+          "The flood list Link State ID is an LS Type Specific field
+          containing either a Router ID or an IP address;
+          it identifies the piece of the routing domain
+          that is being described by the advertisement."
+       ::= { hpicfOspfFloodEntry 2 }
+
+  hpicfOspfFloodRouterId OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only 
+       STATUS       current
+       DESCRIPTION
+          "The 32-bit number that uniquely identifies the
+          originating flood list router in the Autonomous System."
+       ::= { hpicfOspfFloodEntry 3 }
+
+  hpicfOspfFloodSequence OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The flood list sequence number field is a signed 32-bit
+          integer.  It starts with the value '80000001'h,
+          or -'7FFFFFFF'h, and increments until '7FFFFFFF'h.
+          Thus, a typical sequence number will be very negative.
+          It is used to detect old and duplicate Link State
+          Advertisements.  The space of sequence numbers is linearly
+          ordered.  The larger the sequence number, the more recent
+          the advertisement."
+       ::= { hpicfOspfFloodEntry 4 }
+
+  hpicfOspfFloodAge OBJECT-TYPE
+       SYNTAX       Integer32 -- Should be 0..MaxAge, except when
+                              -- doNotAge bit is set
+       UNITS        "seconds"
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This flood list field is the age of the link state advertisement
+          in seconds."
+       ::= { hpicfOspfFloodEntry 5 }
+
+  hpicfOspfFloodChecksum OBJECT-TYPE
+       SYNTAX       Integer32
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "This flood list field is the checksum of the complete contents of
+          the advertisement, excepting the age field.  The age field
+          is excepted so that an advertisement's age can be
+          incremented without updating the checksum.  The checksum
+          used is the same that is used for ISO connectionless
+          datagrams; it is commonly referred to as the
+          Fletcher checksum."
+        ::= { hpicfOspfFloodEntry 6 }
+
+
+
+
+  hpicfOspfSpfTimerElapsed OBJECT-TYPE
+       SYNTAX      Unsigned32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+          "The elapsed time since the last Ospf
+           Spf is run"
+        ::= { hpicfOspf 12 }
+
+    -- Logging information for OSPF routing protocols
+
+    -- Textual convention for Log Type for an event in OSPFv2/3
+       HpicfOspfLogType ::= TEXTUAL-CONVENTION
+           STATUS      current
+           DESCRIPTION "An enumerated value which indicates the
+                       rmon log type for OSPF Routing protocol."
+           SYNTAX      INTEGER {
+                           neighborAdjacencyChanges(1),
+                           other(2)
+                           }
+
+    --  Textual convention for Log Action for an event in OSPF
+       HpicfOspfLogAction ::= TEXTUAL-CONVENTION
+           STATUS      current
+           DESCRIPTION "Objects of this type are used to indicate
+                       action for every log type."
+           SYNTAX      INTEGER {
+                           enabled(1),
+                           disabled(2),
+                           enabledWithDetail(3)
+                       }
+
+       hpicfOspfLogTable OBJECT-TYPE
+           SYNTAX      SEQUENCE OF HpicfOspfLogEntry
+           MAX-ACCESS  not-accessible
+           STATUS      current
+           DESCRIPTION
+           "A table containing the configuration parameters
+            pertaining for OSPF routing protocol logging facility."
+           ::= { hpicfOspfObjects 4}
+
+       hpicfOspfLogEntry OBJECT-TYPE
+           SYNTAX      HpicfOspfLogEntry
+           MAX-ACCESS  not-accessible
+           STATUS      current
+           DESCRIPTION
+           "The configuration parameters pertaining to a OSPF
+            log entry. Each entry contains information about
+            the action and severity for a particular logType, and
+            for each version of OSPF. "
+
+           INDEX       { hpicfOspfLogType }
+           ::= { hpicfOspfLogTable 1 }
+
+       HpicfOspfLogEntry ::=
+           SEQUENCE {
+               hpicfOspfLogType                 HpicfOspfLogType,
+               hpicfOspfLogAction               HpicfOspfLogAction
+           }
+
+       hpicfOspfLogType OBJECT-TYPE
+           SYNTAX      HpicfOspfLogType
+           MAX-ACCESS  not-accessible
+           STATUS      current
+           DESCRIPTION "The type of log for every kind of
+                        event in OSPF routing protocol ."
+           ::= { hpicfOspfLogEntry 1 }
+
+       hpicfOspfLogAction OBJECT-TYPE
+           SYNTAX      HpicfOspfLogAction
+           MAX-ACCESS  read-write
+           STATUS      current
+           DESCRIPTION "The action, if any, that was taken by the agent
+                       when the event represented by hpicfOspfLogType.
+                       When enabled, brief information of the event is logged
+                       and if it is set to enabledWithDetail, provides more information,
+                       like every state changes, will get logged.
+                       If it is set to disabled, no events are logged."
+           ::= { hpicfOspfLogEntry 2 }
+
 hpicfOspfConformance OBJECT IDENTIFIER ::= { hpicfOspf 2 }
 
     hpicfOspfGroups OBJECT IDENTIFIER ::= { hpicfOspfConformance 1 }
+    hpicfOspfReqGroups OBJECT IDENTIFIER ::= { hpicfOspfConformance 3 }
+    hpicfOspfRetransGroups OBJECT IDENTIFIER ::= { hpicfOspfConformance 4 }
+    hpicfOspfFloodGroups OBJECT IDENTIFIER ::= { hpicfOspfConformance 5 }
+    
+
+    hpicfOspfReqCompliance MODULE-COMPLIANCE 
+    STATUS         current
+    DESCRIPTION     
+            "The compliance statement for show
+             Requestlist command."        
+    MODULE            --REQUEST LIST   
+    MANDATORY-GROUPS  { hpicfOspfReqManGroup } 
+    GROUP               hpicfOspfReqGroup  
+    DESCRIPTION
+              "This is conditional group."
+    ::= {hpicfOspfCompliances 2}
+
+
+    hpicfOspfFloodCompliance MODULE-COMPLIANCE 
+    STATUS         current
+    DESCRIPTION     
+            "The compliance statement for show
+             Floodlist command."        
+    MODULE            --Flood List        
+    MANDATORY-GROUPS  { hpicfOspfFloodManGroup } 
+    GROUP               hpicfOspfFloodGroup  
+    DESCRIPTION
+              "This is conditional group."
+    ::= {hpicfOspfCompliances 3}
+
+
+    hpicfOspfRetransCompliance MODULE-COMPLIANCE 
+    STATUS         current
+    DESCRIPTION     
+            "The compliance statement for show
+             Retranslist command."        
+    MODULE             --Retransmission List   
+    MANDATORY-GROUPS  { hpicfOspfRetransManGroup } 
+    GROUP               hpicfOspfRetransGroup  
+    DESCRIPTION
+              "This is conditional group."
+    ::= {hpicfOspfCompliances 4}
+
+
+     hpicfOspfReqManGroup OBJECT-GROUP
+     OBJECTS {
+           hpicfOspfReqType,
+           hpicfOspfReqLsid,
+           hpicfOspfReqRouterId
+           }
+     STATUS       current
+     DESCRIPTION 
+                "A mandatory group that displays ID information with
+                 Respect to Link state,router,interface and the LSA type"
+     ::= {hpicfOspfReqGroups 1}
+
+
+     hpicfOspfReqGroup OBJECT-GROUP
+     OBJECTS {
+     hpicfOspfReqSequence,
+     hpicfOspfReqChecksum,
+     hpicfOspfReqAge
+     }
+     STATUS       current
+     DESCRIPTION
+           "This is a normal group that gives checksum,sequence and age related information "
+::= {hpicfOspfReqGroups 2}
+
+    hpicfOspfRetransManGroup OBJECT-GROUP
+    OBJECTS {
+            hpicfOspfRetransType,
+            hpicfOspfRetransLsid,
+            hpicfOspfRetransRouterId
+        }
+     STATUS       current
+     DESCRIPTION 
+                "A mandatory group that displays ID information with
+                 Respect to Link state,router,interface and the LSA type"
+     ::= {hpicfOspfRetransGroups 1}
+
+
+    hpicfOspfRetransGroup OBJECT-GROUP
+    OBJECTS {
+    hpicfOspfRetransSequence,
+    hpicfOspfRetransChecksum,
+     hpicfOspfRetransAge
+     }
+     STATUS       current
+     DESCRIPTION
+            "This is a normal group that gives checksum,sequence and age related information "
+      ::= {hpicfOspfRetransGroups 2}
+
+     hpicfOspfFloodManGroup OBJECT-GROUP
+     OBJECTS {
+           hpicfOspfFloodType,
+           hpicfOspfFloodLsid,
+           hpicfOspfFloodRouterId
+     }
+     STATUS       current
+     DESCRIPTION 
+                "A mandatory group that displays ID information with
+                Respect to Link state,router,interface and the LSA type"
+     ::= {hpicfOspfFloodGroups 1}
+
+
+      hpicfOspfFloodGroup OBJECT-GROUP
+      OBJECTS {
+       hpicfOspfFloodSequence,
+       hpicfOspfFloodChecksum,
+       hpicfOspfFloodAge
+     }
+     STATUS       current
+     DESCRIPTION
+            "This is a normal group that gives checksum,sequence and age related information "
+     ::= {hpicfOspfFloodGroups 2}
+
 
     hpicfOspfBaseGroup OBJECT-GROUP
         OBJECTS     { hpicfOspf1583CompatibilityMode,
@@ -720,6 +1261,13 @@ hpicfOspfConformance OBJECT IDENTIFIER ::= { hpicfOspf 2 }
                     OSPF."
         ::= { hpicfOspfGroups 3 }
 
+    
+    hpicfOspfSpfTimerGroup OBJECT-GROUP
+        OBJECTS     { hpicfOspfSpfTimerElapsed }
+        STATUS      current
+        DESCRIPTION "Time taken since the last spf
+                   Run."
+        ::= { hpicfOspfGroups 5 }
     hpicfOspfStatisticGroup OBJECT-GROUP
         OBJECTS     { hpicfOspfSentHelloPkt,
                       hpicfOspfSentDDPkt,
@@ -733,10 +1281,18 @@ hpicfOspfConformance OBJECT IDENTIFIER ::= { hpicfOspf 2 }
                       hpicfOspfRcvdLSAPkt,
                       hpicfOspfIfErrorCount,
                       hpicfOspfClearCounters,
-                      hpicfOspfSpfReason }
+                      hpicfOspfSpfReason
+                      }
         STATUS      current
         DESCRIPTION "A collection of objects that contain 
                      OSPF interface and SPF statistics."
         ::= { hpicfOspfGroups 4 }
+    
+  hpicfOspfLogGroup OBJECT-GROUP
+        OBJECTS     { hpicfOspfLogAction}
+        STATUS      current
+        DESCRIPTION "A collection of objects for configuring the
+                    logging of OSPF events."
+        ::= { hpicfOspfGroups 6 }
     
 END

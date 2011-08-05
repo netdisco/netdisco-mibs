@@ -19,7 +19,7 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
 
     hpicfSyslogMIB MODULE-IDENTITY
-        LAST-UPDATED "200902180000Z"  --   February 18, 2009
+        LAST-UPDATED "201003120000Z"  --   March 12, 2010
         ORGANIZATION "Hewlett Packard Company,
                      Procurve Networking Business"
         CONTACT-INFO
@@ -32,6 +32,19 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
              The Procurve syslog application sends syslog messages."
 
+       REVISION "201003120000Z"  --   March 12, 2010
+       DESCRIPTION
+           "Added 'dhcpv6r' entry in HpicfSyslogSystemModule"
+
+       REVISION "201001270000Z"  --   January 27, 2010
+       DESCRIPTION
+           "Added an enum for ospf3 in HpicfSyslogSystemModule"
+
+       REVISION "200908190000Z"  --   August 19, 2009
+       DESCRIPTION
+           "Added 'hpicfSyslogControlSmmLog to hpicfSyslogControlEntry &
+	   'hpicfSyslogLogMsgOptions' to the hpicfSyslogObjects."
+
        REVISION "200902180000Z"  --   February 18, 2009
        DESCRIPTION
            "Added 'hpicfSyslogControlBindAddrIsOobm' MIB object to  
@@ -39,6 +52,10 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
             ''HpicfSyslogSystemModule'.
            "
 
+       REVISION "200901300000Z"  --   January 30, 2009
+       DESCRIPTION
+           "Add syslog statistics  hpicfSyslogObjects."
+       
        REVISION "200811180000Z"  --   November 18, 2008
        DESCRIPTION
            "Add 'srcip' to the available SYNTAX for 
@@ -124,8 +141,11 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        SYNTAX    INTEGER
            {
              major    (0),
+             alert    (1),
+             critical (2),
              error    (3),
              warning  (4),
+             notice   (5),
              info     (6),
              debug    (7)
            }
@@ -215,7 +235,10 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
               hpsm           (74),
 	      srcip          (75),
               policy         (76),
-              oobm           (77)
+              oobm           (77),
+              trmode         (78),
+              ospf3          (79),
+              dhcpv6r        (80)
            }
 
 
@@ -270,7 +293,9 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
            hpicfSyslogControlRowStatus
                 RowStatus,
            hpicfSyslogControlBindAddrIsOobm
-                TruthValue
+                TruthValue,
+	   hpicfSyslogControlSmmLog
+	        Integer32
         }
 
    hpicfSyslogControlIndex OBJECT-TYPE
@@ -364,6 +389,23 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
            "
        DEFVAL      {false}
        ::= { hpicfSyslogControlEntry 6 }
+
+   hpicfSyslogControlSmmLog OBJECT-TYPE
+       SYNTAX       INTEGER  {
+                         enabled  (1),
+                         disabled (2)
+                       }
+       MAX-ACCESS  read-create
+       STATUS      current     
+       DESCRIPTION
+           "This object is applicable for a device with a standby management 
+	    module like 8200zl. When the value of this object is set to enabled, 
+	    all the log messages from the standby management module(SMM) will be 
+	    sent to the syslog server. If the value is disabled, the log messages 
+	    from the standby management module will not be sent to the syslog server. 
+	    By default, this is disabled."
+       DEFVAL { disabled }
+       ::= { hpicfSyslogControlEntry 7 }
 
    -- -------------------------------------------------------------
    -- hpicfSyslogOperations
@@ -542,6 +584,223 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        ::= { hpicfSyslogPriority 4 }
 
    -- -------------------------------------------------------------
+   -- hpicfSyslogStatistics
+   -- -------------------------------------------------------------
+   
+   hpicfSyslogStatistics OBJECT IDENTIFIER
+                         ::= { hpicfSyslogObjects 4 }
+
+   -- -------------------------------------------------------------
+   -- hpicfSyslogGeneralStatistics
+   -- -------------------------------------------------------------
+   hpicfSyslogGeneralStatistics OBJECT IDENTIFIER
+                         ::= { hpicfSyslogStatistics 1 }
+
+   hpicfSyslogGeneralLogSent OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages sent by the syslog sender."            
+       ::= { hpicfSyslogGeneralStatistics 1 }
+
+   hpicfSyslogGeneralLogRecv OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages received by the syslog 
+            Server."           
+       ::= { hpicfSyslogGeneralStatistics 2 }
+
+   hpicfSyslogGeneralLogRelay OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "The number of messages processed by the syslog relay."
+       ::= { hpicfSyslogGeneralStatistics 3 }
+
+   hpicfSyslogGeneralSendError OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages that failed during the 
+            send process and this failed message will be 
+            buffered for the retransmission process." 
+       ::= { hpicfSyslogGeneralStatistics 4 }
+
+   hpicfSyslogGeneralLogResend OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages re-transmitted successfully."
+       ::= { hpicfSyslogGeneralStatistics  5}
+
+   hpicfSyslogGeneralResendError OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+            "Number of syslog messages that failed during the 
+             retransmission process.The syslog retransmission 
+             will happen if and only if syslog send failed 
+             while transmitting the buffered syslog messages."
+       ::= { hpicfSyslogGeneralStatistics 6}
+
+   hpicfSyslogGeneralLogBuffered OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Current number of buffered syslog messages that 
+            are ready to be transmitted. "
+       ::= { hpicfSyslogGeneralStatistics 7 }
+
+ -- -------------------------------------------------------------
+   -- hpicfSyslogSeverityStatistics
+   -- -------------------------------------------------------------
+   hpicfSyslogSeverityStatistics OBJECT IDENTIFIER
+                         ::= { hpicfSyslogStatistics 2 }
+
+
+   -- -------------------------------------------------------------
+   -- syslog severity counter info table
+   -- -------------------------------------------------------------
+   hpicfSyslogSeverityCounterInfoTable OBJECT-TYPE
+       SYNTAX      SEQUENCE OF HpicfSyslogSeverityCounterInfoEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           " A table containing the syslog severity statistics counter value."
+       ::= { hpicfSyslogSeverityStatistics 1 }
+
+   hpicfSyslogSeverityCounterInfoEntry OBJECT-TYPE
+       SYNTAX      HpicfSyslogSeverityCounterInfoEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           " The configuration parameters pertaining to a syslog severity
+             statistics."
+       INDEX  { hpicfSyslogSeverityTypeIndex }
+       ::= { hpicfSyslogSeverityCounterInfoTable 1 }
+
+   HpicfSyslogSeverityCounterInfoEntry ::=
+       SEQUENCE {
+           hpicfSyslogSeverityTypeIndex 
+                Integer32,
+           hpicfSyslogSeverityType
+                HpicfSyslogSeverity,        
+           hpicfSyslogSeverityCounter
+                Counter32
+        }
+
+   hpicfSyslogSeverityTypeIndex OBJECT-TYPE
+      SYNTAX    Integer32
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           " The Index that uniquely identifies the syslog
+             severity type."           
+       ::= { hpicfSyslogSeverityCounterInfoEntry 1 }
+
+   hpicfSyslogSeverityType OBJECT-TYPE
+       SYNTAX      HpicfSyslogSeverity
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           " The severity type for all the syslog messages."      
+      ::= { hpicfSyslogSeverityCounterInfoEntry 2 }
+
+   hpicfSyslogSeverityCounter OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of messages transmitted per severity."
+       ::= { hpicfSyslogSeverityCounterInfoEntry 3 }
+
+   -- -------------------------------------------------------------
+   -- hpicfSyslogFacilityStatistics
+   -- -------------------------------------------------------------
+   hpicfSyslogFacilityStatistics OBJECT IDENTIFIER
+                         ::= { hpicfSyslogStatistics 3 }
+
+   -- -------------------------------------------------------------
+   -- syslog facility counter info table
+   -- -------------------------------------------------------------
+   hpicfSyslogFacilityCounterInfoTable OBJECT-TYPE
+       SYNTAX      SEQUENCE OF HpicfSyslogFacilityCounterInfoEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           "A table containing the syslog facility statistics counter values."
+       ::= { hpicfSyslogFacilityStatistics 1 }
+
+   hpicfSyslogFacilityCounterInfoEntry OBJECT-TYPE
+       SYNTAX      HpicfSyslogFacilityCounterInfoEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           "The configuration parameters pertaining to a syslog facility
+            statistics."
+       INDEX  { hpicfSyslogfacilityCounterIndex }
+       ::= { hpicfSyslogFacilityCounterInfoTable 1 }
+
+   HpicfSyslogFacilityCounterInfoEntry ::=
+       SEQUENCE {
+           hpicfSyslogfacilityCounterIndex 
+                        Integer32,
+           hpicfSyslogfacilityType 
+                  HpicfSyslogFacility , 
+           hpicfSyslogfacilityCounter
+                  Counter32
+        }
+
+   hpicfSyslogfacilityCounterIndex OBJECT-TYPE
+       SYNTAX      Integer32
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           " The Index that uniquely identifies the syslog
+             facility."
+       ::= { hpicfSyslogFacilityCounterInfoEntry 1 }
+
+   hpicfSyslogfacilityType OBJECT-TYPE
+       SYNTAX      HpicfSyslogFacility
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           " The facility type for all the syslog messages."      
+       ::= { hpicfSyslogFacilityCounterInfoEntry 2 }
+
+   hpicfSyslogfacilityCounter OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           " Number of syslog messages transmitted per facilty."
+       ::= { hpicfSyslogFacilityCounterInfoEntry 3 }
+
+
+   hpicfSyslogLogMsgOptions  OBJECT IDENTIFIER
+                       ::= { hpicfSyslogObjects 5 }
+
+   hpicfSyslogClearLog OBJECT-TYPE
+       SYNTAX      TruthValue
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION
+           "When the value of this object is set to TRUE,
+            all the log messages will be cleared. 
+            A write operation of FALSE leads to a no operation 
+	    hence A get request for this object always returns FALSE."
+       ::= { hpicfSyslogLogMsgOptions 1 }
+
+ 
+  -- -------------------------------------------------------------
    -- Notification Information
    -- -------------------------------------------------------------
 
@@ -655,6 +914,66 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
             parameters for the OOBM aware syslog applications.
            "
        ::= { hpicfSyslogGroups 6}
+
+   hpicfSyslogGeneralStatisticsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogGeneralLogSent,
+                   hpicfSyslogGeneralLogRecv,
+                   hpicfSyslogGeneralLogRelay,
+                   hpicfSyslogGeneralSendError,
+                   hpicfSyslogGeneralLogResend,
+                   hpicfSyslogGeneralResendError,
+                   hpicfSyslogGeneralLogBuffered
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the general statistics
+            counter information."
+       ::= { hpicfSyslogGroups 7}
+
+    hpicfSyslogSeverityStatisticsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogSeverityType,
+                   hpicfSyslogSeverityCounter
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the severity statistics
+            counter information."
+       ::= { hpicfSyslogGroups 8}
+
+    hpicfSyslogFacilityStatisticsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogfacilityType,
+                   hpicfSyslogfacilityCounter
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the facility statistics
+            counter information."
+       ::= { hpicfSyslogGroups 9}
+
+    hpicfSyslogControlGroupSmm OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogControlBindAddr,
+                   hpicfSyslogControlSmmLog
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the log message for the 
+	    standby module."
+       ::= { hpicfSyslogGroups 10}
+
+    hpicfSyslogLogMsgOptionsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogClearLog
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the log message information."
+       ::= { hpicfSyslogGroups 11}
+
+
 
    -- -------------------------------------------------------------
    -- compliance statements
@@ -811,5 +1130,33 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 	    on device." 
        
        ::= { hpicfSyslogCompliances 8 }
+
+   hpicfSyslogStatisticsCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+           "The compliance statement for SNMP entities
+            which implement the syslog statistics."
+       MODULE -- this module
+       MANDATORY-GROUPS {
+           hpicfSyslogGeneralStatisticsGroup,
+           hpicfSyslogSeverityStatisticsGroup,
+           hpicfSyslogFacilityStatisticsGroup
+       }
+
+       ::= { hpicfSyslogCompliances 9 }
+
+   hpicfSyslogSmmLogMsgCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+           "The compliance statement for syslog
+            log messages for standby module."
+       MODULE -- this module
+       MANDATORY-GROUPS {
+           hpicfSyslogControlGroupSmm,
+           hpicfSyslogLogMsgOptionsGroup
+       }
+
+       ::= { hpicfSyslogCompliances 10 }
+
    END
 

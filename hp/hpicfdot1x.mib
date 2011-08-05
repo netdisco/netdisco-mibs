@@ -23,7 +23,7 @@ IMPORTS
     ;
 
 hpicfDot1xMIB MODULE-IDENTITY
-    LAST-UPDATED "200509210000Z"  -- September 21, 2005
+    LAST-UPDATED "200907080000Z"  -- July 8, 2009
     ORGANIZATION "Hewlett-Packard Company
                   ProCurve Networking Business"
     CONTACT-INFO "Hewlett-Packard Company
@@ -37,6 +37,17 @@ hpicfDot1xMIB MODULE-IDENTITY
                  retrieve status on shared-media ports, such as in
                  wireless access points or multi-supplicant mode on
                  ProCurve switches/routers." 
+
+    REVISION     "200907080000Z"  -- July 8, 2009
+    DESCRIPTION  "Added two more values for hpicfDot1xSMAuthPaeState."
+
+    
+    REVISION     "200907080000Z"  -- JULY 08, 2009
+    DESCRIPTION  "Added hpicfDot1xAuthCachedReauthPeriod."
+
+    REVISION     "200907020000Z"  -- July 02, 2009
+    DESCRIPTION  "Added two more values for hpicfDot1xSMAuthPaeState."
+ 
     REVISION     "200702020000Z"  -- February 2, 2007
     DESCRIPTION  "Added hpicfDot1xAuthAllowGvrpVlans."
 
@@ -108,7 +119,8 @@ hpicfDot1xSupplicant
     HpicfDot1xPaePortEntry ::=
          SEQUENCE {
             hpicfDot1xPaePortAuth TruthValue,
-            hpicfDot1xPaePortSupp TruthValue
+            hpicfDot1xPaePortSupp TruthValue,
+            hpicfDot1xPaePortMixed TruthValue
          }
 
     hpicfDot1xPaePortAuth OBJECT-TYPE
@@ -127,6 +139,14 @@ hpicfDot1xSupplicant
                   functionality on a port."
     ::= { hpicfDot1xPaePortEntry 2 }
 
+    hpicfDot1xPaePortMixed OBJECT-TYPE
+         SYNTAX      TruthValue
+         MAX-ACCESS  read-write
+         STATUS      current
+         DESCRIPTION "This object allows enable/disable guests
+                      on ports with authenticated clients."
+         DEFVAL { false }
+    ::= { hpicfDot1xPaePortEntry 3 }
 
 -- ---------------------------------------------------------- --
 -- The PAE Authenticator Group
@@ -172,7 +192,8 @@ hpicfDot1xSupplicant
             hpicfDot1xAuthUnauthPeriod Unsigned32,
             hpicfDot1xAuthClientLimit Unsigned32,
             hpicfDot1xAuthLogoffPeriod Unsigned32,
-            hpicfDot1xAuthClientLimit2 Unsigned32
+            hpicfDot1xAuthClientLimit2 Unsigned32,
+            hpicfDot1xAuthCachedReauthPeriod Unsigned32
          }
 
     hpicfDot1xAuthAuthVid OBJECT-TYPE
@@ -233,6 +254,18 @@ hpicfDot1xSupplicant
                       controls port as a single entity - no client limit."
          DEFVAL { 0 }
     ::= { hpicfDot1xAuthConfigEntry 6 }
+
+    hpicfDot1xAuthCachedReauthPeriod OBJECT-TYPE
+         SYNTAX      Unsigned32 (0..2147483647)
+         UNITS       "seconds"
+         MAX-ACCESS  read-write
+         STATUS      current
+         DESCRIPTION "The value indicates the period in seconds, during which 
+                      cached re-authentication is allowed on the port. If 
+                      value is zero then the period of cached
+                      re-authentication is unlimited."
+         DEFVAL { 0 }
+    ::= { hpicfDot1xAuthConfigEntry 7 }
 
 -- ---------------------------------------------------------- --
 -- The Shared-Media Authenticator Configuration Table
@@ -339,7 +372,9 @@ hpicfDot1xSMAuthPaeState OBJECT-TYPE
                     held(7),
                     forceAuth(8),
                     forceUnauth(9),
-                    restart(10)
+                    restart(10),
+		    heldNoVlan(11),
+		    heldUnauthVlan(12)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -1104,6 +1139,22 @@ hpicfDot1xAuthConfigGroup3 OBJECT-GROUP
         control of over Authenticator PAEs."
     ::= { hpicfDot1xGroups 8 }
 
+hpicfDot1xAuthConfigGroup4 OBJECT-GROUP 
+    OBJECTS {
+        hpicfDot1xAuthAuthVid,
+        hpicfDot1xAuthUnauthVid,
+        hpicfDot1xAuthUnauthPeriod,
+        hpicfDot1xAuthLogoffPeriod,
+        hpicfDot1xAuthClientLimit2,
+        hpicfDot1xAuthAllowGvrpVlans,
+        hpicfDot1xAuthCachedReauthPeriod
+    }
+    STATUS      current
+    DESCRIPTION 
+        "A collection of objects providing basic configuration
+        control of over Authenticator PAEs."
+    ::= { hpicfDot1xGroups 9 }
+
 -- ---------------------------------------------------------- --
 -- compliance statements
 -- ---------------------------------------------------------- --
@@ -1183,9 +1234,10 @@ hpicfDot1xCompliance2 MODULE-COMPLIANCE
     ::= { hpicfDot1xCompliances 2 }
 
 hpicfDot1xCompliance3 MODULE-COMPLIANCE
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
-        "The compliance statement for devices support of
+        "********* THIS COMPLIANCE IS DEPRECATED *********
+        The compliance statement for devices support of
         HP ProCurve IEEE 802.1X extensions MIB."
 
     MODULE
@@ -1215,6 +1267,43 @@ hpicfDot1xCompliance3 MODULE-COMPLIANCE
             "This group is mandatory for systems that support
             the Authenticator functions of the PAE."
 
+
     ::= { hpicfDot1xCompliances 3 }
+
+hpicfDot1xCompliance4 MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for devices support of
+        HP ProCurve IEEE 802.1X extensions MIB."
+
+    MODULE
+        GROUP   hpicfDot1xPaePortGroup
+        DESCRIPTION
+            "This group is mandatory for systems that support
+            Authenticator and/or Supplicant functions of the PAE."
+
+        GROUP   hpicfDot1xAuthConfigGroup4
+        DESCRIPTION
+            "This group is mandatory for systems that support
+            Authenticator functions of the PAE."
+
+        GROUP   hpicfDot1xSMAuthConfigGroup
+        DESCRIPTION
+            "This group is mandatory for systems that support
+            shared-media Authenticator functions of the PAE."
+      
+
+        GROUP   hpicfDot1xAuthStatsGroup
+        DESCRIPTION
+            "This group is mandatory for systems that support
+            the Authenticator functions of the PAE."
+
+        GROUP   hpicfDot1xAuthSessionStatsGroup
+        DESCRIPTION
+            "This group is mandatory for systems that support
+            the Authenticator functions of the PAE."
+
+
+    ::= { hpicfDot1xCompliances 4 }
 
  END

@@ -1,7 +1,8 @@
 HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
 
    IMPORTS
-      OBJECT-TYPE, MODULE-IDENTITY, IpAddress, Integer32, Unsigned32
+      OBJECT-TYPE, MODULE-IDENTITY, Counter32, IpAddress, Integer32,
+      Unsigned32
          FROM SNMPv2-SMI
       RowStatus, TruthValue
          FROM SNMPv2-TC
@@ -16,7 +17,6 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
  
 
    hpSntpConfigMod MODULE-IDENTITY
-      
       LAST-UPDATED "200902131230Z"  -- February 13, 2009 
       ORGANIZATION "Hewlett-Packard Company
                     Network Infrastructure Solutions"
@@ -30,6 +30,10 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
       DESCRIPTION  "Increased the range of 'hpSntpInetServerAuthKeyId' and
                     'hpSntpAuthenticationKeyId' MIB objects."
 
+      REVISION     "200902101539Z"  -- February 10, 2009
+      DESCRIPTION  "Added 'hpSntpInetServerIsOobm' MIB object
+                      in 'hpSntpInetServersTable' table."
+   
       REVISION     "200811260239Z"  -- November 26 2008  
       DESCRIPTION  "Added Objects for supporting Authentication in 
                     unicast and broadcast mode."
@@ -191,9 +195,8 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
          hpSntpInetServerAddress        InetAddress,         
          hpSntpInetServerVersion        Integer32,
          hpSntpInetServerRowStatus      RowStatus,
-         hpSntpInetServerAuthKeyId      Unsigned32,
-         hpSntpInetServerRowStatus      RowStatus,
-	 hpSntpInetServerIsOobm         TruthValue
+         hpSntpInetServerIsOobm         TruthValue,
+         hpSntpInetServerAuthKeyId      Unsigned32
       }
       
    hpSntpInetServerPriority OBJECT-TYPE
@@ -269,9 +272,8 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
       STATUS      current
             DESCRIPTION "This object is used to enable or disable SNTP
                          authentication in the switch.By default authentication
-                         is disabled.Atleast one Key-id should be configured on the
-                         device and it has to be made as trusted to enable
-                         authentication."
+                   is disabled.Atleast one Key-id and it has to be trusted
+                   to enable authentication."
       ::= { hpSntpConfig 5 }
 
 -- -------------------------------------------------------------------------
@@ -291,7 +293,7 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
     STATUS      current
     DESCRIPTION "An authentication key entry comprising key-identifiers 
                  as key-id, key-value, authentication mode(MD5), and 
-                 status of the key-id if it is trusted or not."
+                 status of the key-id if its trusted or not."
     INDEX        {  hpSntpAuthenticationKeyId }
     ::= { hpSntpAuthenticationKeyTable 1 }
 
@@ -445,7 +447,8 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
 
    hpSntpConfigCompliance MODULE-COMPLIANCE
       STATUS         deprecated
-      DESCRIPTION    "###DEPRECATED###The compliance statement for devices implementing
+      DESCRIPTION    "###DEPRECATED###The compliance statement for devices 
+                      implementing
                      the hpSntpConfig MIB."
       MODULE
          MANDATORY-GROUPS  { hpSntpConfigGroup }
@@ -468,7 +471,7 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
          MANDATORY-GROUPS  { hpSntpConfigGroup }
 
          GROUP             hpSntpInetServerConfigGroup
-         DESCRIPTION       "This group is optional if a device implemnets
+      DESCRIPTION       "This group is optional if a device implements
                            the SNTP client in broadcast mode only."
 
          GROUP             hpTimeSyncMethodGroup
@@ -477,18 +480,6 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
                            synchronization protocols."
       ::= { hpSntpConfigCompliances 2 } 
 
-   hpSntpInetConfigComplianceOobm MODULE-COMPLIANCE
-      STATUS         current
-      DESCRIPTION    "The compliance statement for devices implementing the
-                     HP SNTP Server Mib with OOBM support"
-      MODULE
-
-         GROUP             hpSntpInetServerOobmGroup
-         DESCRIPTION       "A collection of objects for configuring
-                           SNTP with OOBM."
-      ::= { hpSntpConfigCompliances 3 }
-
-  
    hpSntpAuthenticationConfigCompliance MODULE-COMPLIANCE
        STATUS         current
        DESCRIPTION    "The compliance statement for devices implementing
@@ -500,6 +491,17 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
        GROUP           hpSntpAuthenticationKeyIdConfigGroup
           DESCRIPTION   "This group is required if a device implemnets
                            the SNTP client in broadcast mode only."
+       ::= { hpSntpConfigCompliances 3 }
+
+   hpSntpInetConfigComplianceOobm MODULE-COMPLIANCE
+      STATUS         current
+      DESCRIPTION    "The compliance statement for devices implementing the
+                     HP SNTP Mib with OOBM support"
+      MODULE
+
+         GROUP             hpSntpInetServerOobmGroup
+         DESCRIPTION       "A collection of objects for configuring
+                           SNTP with OOBM."
        ::= { hpSntpConfigCompliances 4 }
 
    hpSntpConfigGroup OBJECT-GROUP
@@ -527,17 +529,23 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
 
    hpSntpInetServerConfigGroup OBJECT-GROUP
       OBJECTS     { hpSntpInetServerVersion,
-                    hpSntpInetServerPriority,
                     hpSntpInetServerRowStatus }
       STATUS      current
       DESCRIPTION "This Group defines a server table entry."
       ::= { hpSntpConfigGroups 4 }
 
    hpSntpAuthenticationKeyIdConfigGroup OBJECT-GROUP
-      OBJECTS   { hpSntpAuthenticationKeyAuthMode,
+      OBJECTS   { 
+                  hpSntpAuthenticationKeyAuthMode,
                   hpSntpAuthenticationKeyValue,
                   hpSntpAuthenticationKeyTrusted,
-                  hpSntpAuthenticationKeyRowStatus
+                  hpSntpAuthenticationKeyRowStatus,
+                  hpSntpServerStatisticsAuthFailedPkts,
+                  hpSntpStatsDroppedPkts,
+                  hpSntpStatsSentPkts,
+                  hpSntpStatsRcvdPkts,
+                  hpSntpAuthentication,
+                  hpSntpInetServerAuthKeyId 
                 }
       STATUS      current
       DESCRIPTION " This group defines SNTP authentication related information.
@@ -545,7 +553,6 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
                     whether the information is trusted or not and authentication 
                     mode(MD5) currently supported."
       ::= { hpSntpConfigGroups 5 }
-
 
    hpSntpInetServerOobmGroup OBJECT-GROUP
       OBJECTS     { hpSntpInetServerIsOobm, 
@@ -555,5 +562,4 @@ HP-SNTPclientConfiguration-MIB DEFINITIONS ::= BEGIN
                    SNTP server entry with support for OOBM
                    (Out of Band Management) interface."
       ::= { hpSntpConfigGroups 6 }
-
 END
