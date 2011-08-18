@@ -4,51 +4,50 @@
 --
 -- September 2002, John Linton, Shekhar Acharya
 --
--- Copyright (c) 2002-2003 by Cisco Systems, Inc.
+-- Copyright (c) 2002-2003, 2004, 2007-2008 by Cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 --
 -- *****************************************************************
+
 CISCO-ITP-GSP2-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-        cgspInstNetwork
-                FROM CISCO-ITP-GSP-MIB
-                
-        CItpTcAclId,
-        CItpTcPointCode,
-        CItpTcXuaName
-                FROM CISCO-ITP-TC-MIB
-       
-        ciscoMgmt
-                FROM CISCO-SMI
-                        
+    MODULE-COMPLIANCE,
+    OBJECT-GROUP
+        FROM SNMPv2-CONF
+    Counter32,
+    Counter64,
+    Integer32,
+    Unsigned32,
+    MODULE-IDENTITY,
+    OBJECT-TYPE
+        FROM SNMPv2-SMI
         InetAddressType, 
         InetAddress,
         InetPortNumber
              FROM INET-ADDRESS-MIB
-             
         SnmpAdminString
                 FROM SNMP-FRAMEWORK-MIB
-                
-        MODULE-COMPLIANCE,
-        OBJECT-GROUP
-                FROM SNMPv2-CONF
-                
         RowStatus,
         TEXTUAL-CONVENTION,
         TimeStamp 
                 FROM SNMPv2-TC
+    cgspInstNetwork
+        FROM CISCO-ITP-GSP-MIB
+    CItpTcAclId,
+    CItpTcPointCode,
+    CItpTcXuaName,
+    CItpTcLinksetId,
+    CItpTcLinkSLC,
+    CItpTcNetworkName
+        FROM CISCO-ITP-TC-MIB
+    ciscoMgmt
+        FROM CISCO-SMI;
                 
-        Counter32,
-        Integer32,
-        Unsigned32,
-        MODULE-IDENTITY,
-        OBJECT-TYPE
-                FROM SNMPv2-SMI;
                 
 ciscoGsp2MIB MODULE-IDENTITY
-        LAST-UPDATED    "200303030000Z"
+    LAST-UPDATED    "200807090000Z"
         ORGANIZATION    "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems, Inc
@@ -96,22 +95,58 @@ ciscoGsp2MIB MODULE-IDENTITY
                 set to the IP precedence or DSCP that is assigned to
                 class. Every packet forwarded over an SCTP link that
                 was provisioned for a given QoS class will have the
-                TOS byte set.
-                "
-                
+        TOS byte set."
+    REVISION        "200807090000Z"
+    DESCRIPTION
+        "Added Context Table for Probless Monitor feature."
+    REVISION        "200712180000Z"
+    DESCRIPTION
+        "Added Processor Number to cgsp2LocalPeerTable for SAMI
+        interfaces."
+    REVISION        "200405260000Z"
+    DESCRIPTION
+        "Added following object to provide information
+        related to Non-stop Operations function.
+           cgsp2OperMtp3Offload,
+           cgsp2OperRedundancy"
+    REVISION        "200308070000Z"
+    DESCRIPTION
+        "Add new table to support MTP3 errors"
         REVISION        "200303030000Z"
         DESCRIPTION
                 "Initial version of this MIB module."
         ::= { ciscoMgmt 332 } 
                                                   
--- Top-level structure of the MIB
-ciscoGsp2MIBNotifs  OBJECT IDENTIFIER ::= { ciscoGsp2MIB 0 }
-ciscoGsp2MIBObjects OBJECT IDENTIFIER ::= { ciscoGsp2MIB 1 }
-ciscoGsp2MIBConform OBJECT IDENTIFIER ::= { ciscoGsp2MIB 2 }
 
-cgsp2Events    OBJECT IDENTIFIER ::= { ciscoGsp2MIBObjects  1 }
-cgsp2Qos       OBJECT IDENTIFIER ::= { ciscoGsp2MIBObjects  2 }
-cgsp2LocalPeer OBJECT IDENTIFIER ::= { ciscoGsp2MIBObjects  3 }
+-- Top-level structure of the MIB
+
+ciscoGsp2MIBNotifs  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIB 0 }
+
+ciscoGsp2MIBObjects  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIB 1 }
+
+ciscoGsp2MIBConform  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIB 2 }
+
+cgsp2Events  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 1 }
+
+cgsp2Qos  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 2 }
+
+cgsp2LocalPeer  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 3 }
+
+cgsp2Mtp3Errors  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 4 }
+
+cgsp2Operation  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 5 }
+
+cgsp2Context  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBObjects 6 }
+
 
 -- *************************************************************
 -- *                                                           *
@@ -140,11 +175,28 @@ Cgsp2EventIndex ::= TEXTUAL-CONVENTION
              newer entries."  
         SYNTAX           Unsigned32 (1..2147483647)
 
+CItpTcContextId ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Each context is assigned an unique identifier starting with one
+        and are monotonically increased by one."
+    SYNTAX          Unsigned32 (1..4294967295)
+
+CItpTcContextType ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Indicate type or resources ...."
+    SYNTAX          INTEGER {
+                        unknown(0),
+                        cs7link(1),
+                        asp(6)
+                    }
 -- *************************************************************
 -- *                                                           *
 -- * History                                                   *
 -- *                                                           *
 -- *************************************************************
+
 cgsp2EventTable          OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2EventTableEntry
         MAX-ACCESS       not-accessible
@@ -161,8 +213,10 @@ cgsp2EventTableEntry     OBJECT-TYPE
         DESCRIPTION
             "A table of SS7 events generated and received 
              by a specific signalling point."
-        INDEX   { cgspInstNetwork,  -- shared index
-                  cgsp2EventType }
+    INDEX           {
+                        cgspInstNetwork,
+                        cgsp2EventType
+                    } 
         ::= { cgsp2EventTable 1 }
 
 Cgsp2EventTableEntry  ::= SEQUENCE {
@@ -229,11 +283,13 @@ cgsp2EventMaxEntriesAllowed OBJECT-TYPE
                  object."
         ::= { cgsp2EventTableEntry  5 }
         
+
 -- *************************************************************
 -- *                                                           *
 -- * Application Service Event History                         *
 -- *                                                           *
 -- *************************************************************
+
 cgsp2EventAsTable        OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2EventAsTableEntry
         MAX-ACCESS       not-accessible
@@ -255,9 +311,11 @@ cgsp2EventAsTableEntry OBJECT-TYPE
              object.  Once the table is full, the oldest entry is 
              removed and a new entry is created to accommodate 
              the new event."
-        INDEX   { cgspInstNetwork,        -- shared index
+    INDEX           {
+                        cgspInstNetwork,
                   cgsp2EventAsName,
-                  cgsp2EventAsIndex }
+                        cgsp2EventAsIndex
+                    } 
         ::= { cgsp2EventAsTable 1 }
 
 Cgsp2EventAsTableEntry  ::= SEQUENCE {
@@ -302,11 +360,13 @@ cgsp2EventAsTimestamp  OBJECT-TYPE
              service event was processed."
         ::= { cgsp2EventAsTableEntry 4 }
         
+
 -- *************************************************************
 -- *                                                           *
 -- * Application Service Process Event History                 *
 -- *                                                           *
 -- *************************************************************
+
 cgsp2EventAspTable       OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2EventAspTableEntry
         MAX-ACCESS       not-accessible
@@ -328,9 +388,11 @@ cgsp2EventAspTableEntry  OBJECT-TYPE
              cgsp2EventMaxEntries object.  Once the table is full,
              the oldest entry is removed and a new entry is created
              to accommodate the new event."
-        INDEX   { cgspInstNetwork,        -- shared index
+    INDEX           {
+                        cgspInstNetwork,
                   cgsp2EventAspName,
-                  cgsp2EventAspIndex }
+                        cgsp2EventAspIndex
+                    } 
         ::= { cgsp2EventAspTable 1 }
 
 Cgsp2EventAspTableEntry  ::= SEQUENCE {
@@ -381,6 +443,7 @@ cgsp2EventAspTimestamp  OBJECT-TYPE
 -- * Message Transport Protocol Level 3 Event History          *
 -- *                                                           *
 -- *************************************************************
+
 cgsp2EventMtp3Table      OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2EventMtp3TableEntry
         MAX-ACCESS       not-accessible
@@ -405,8 +468,10 @@ cgsp2EventMtp3TableEntry OBJECT-TYPE
 
              Once the table is full, the oldest entry is removed and
              a new entry is created to accommodate the new event."
-        INDEX   { cgspInstNetwork,        -- shared index
-                  cgsp2EventMtp3Index }
+    INDEX           {
+                        cgspInstNetwork,
+                        cgsp2EventMtp3Index
+                    } 
         ::= { cgsp2EventMtp3Table 1 }
 
 Cgsp2EventMtp3TableEntry  ::= SEQUENCE {
@@ -448,6 +513,7 @@ cgsp2EventMtp3Timestamp  OBJECT-TYPE
 -- * Point-code Event History                                  *
 -- *                                                           *
 -- *************************************************************
+
 cgsp2EventPcTable        OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2EventPcTableEntry
         MAX-ACCESS       not-accessible
@@ -467,9 +533,11 @@ cgsp2EventPcTableEntry  OBJECT-TYPE
              defined by the cgsp2EventMaxEntries object.  Once the
              table is full, the oldest entry is removed and a new
              entry is created to accommodate the new event."
-        INDEX   { cgspInstNetwork,        -- shared index
+    INDEX           {
+                        cgspInstNetwork,
                   cgsp2EventPc,
-                  cgsp2EventPcIndex }
+                        cgsp2EventPcIndex
+                    } 
         ::= { cgsp2EventPcTable 1 }
 
 Cgsp2EventPcTableEntry  ::= SEQUENCE {
@@ -519,6 +587,7 @@ cgsp2EventPcTimestamp  OBJECT-TYPE
 --  * Quality of Service                                        *
 --  *                                                           *
 --  *************************************************************
+
 cgsp2QosTable            OBJECT-TYPE
         SYNTAX           SEQUENCE OF Cgsp2QosTableEntry
         MAX-ACCESS       not-accessible
@@ -541,8 +610,10 @@ cgsp2QosTableEntry OBJECT-TYPE
             "Each entry define information relate to a Quality
              of Service class as needed to transport SS7 packets 
              using SCTP/IP."
-        INDEX   {  cgspInstNetwork,    -- shared index
-                   cgsp2QosClass }
+    INDEX           {
+                        cgspInstNetwork,
+                        cgsp2QosClass
+                    } 
         ::= { cgsp2QosTable 1 }
 
 Cgsp2QosTableEntry         ::= SEQUENCE {
@@ -639,6 +710,7 @@ cgsp2QosRowStatus       OBJECT-TYPE
 --  * Local Peer Table                                          *
 --  *                                                           *
 --  *************************************************************
+
 cgsp2LocalPeerTable     OBJECT-TYPE
         SYNTAX          SEQUENCE OF Cgsp2LocalPeerTableEntry 
         MAX-ACCESS      not-accessible
@@ -660,15 +732,14 @@ cgsp2LocalPeerTableEntry      OBJECT-TYPE
         STATUS                current
         DESCRIPTION
                 "A list of attributes of the local-peer."
-        INDEX   { 
-                cgsp2LocalPeerPort
-        }
+    INDEX           { cgsp2LocalPeerPort } 
         ::= { cgsp2LocalPeerTable  1 }
 
 Cgsp2LocalPeerTableEntry  ::= SEQUENCE {
         cgsp2LocalPeerPort              InetPortNumber,
         cgsp2LocalPeerSlotNumber        Integer32,
-        cgsp2LocalPeerRowStatus         RowStatus
+        cgsp2LocalPeerRowStatus       RowStatus,
+        cgsp2LocalPeerProcessorNumber Integer32
 }
 
 cgsp2LocalPeerPort           OBJECT-TYPE
@@ -702,11 +773,25 @@ cgsp2LocalPeerRowStatus      OBJECT-TYPE
                  textual convention."
         ::= { cgsp2LocalPeerTableEntry 3 }
         
+cgsp2LocalPeerProcessorNumber OBJECT-TYPE
+    SYNTAX          Integer32 (0..255)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This value is used to specify to which processor the
+        local-peer will be offloaded on the line card indicated by
+        cgsp2LocalPeerSlotNumber. For certain line cards like
+        Flexwan, this value corresponds to bay number instead of
+        processor number." 
+    ::= { cgsp2LocalPeerTableEntry 4 }
+ 
+
 --  *************************************************************
 --  *                                                           *
 --  * Local Peer IP Address Table                               *
 --  *                                                           *
 --  *************************************************************
+
 cgsp2LpIpAddrTable        OBJECT-TYPE
         SYNTAX          SEQUENCE OF Cgsp2LpIpAddrTableEntry 
         MAX-ACCESS      not-accessible
@@ -734,7 +819,7 @@ cgsp2LpIpAddrTableEntry         OBJECT-TYPE
                 "A list of attributes of the Local IP addresses for
                  the local-peer."
         INDEX   { 
-                cgsp2LocalPeerPort,  -- shared index
+                        cgsp2LocalPeerPort,
                 cgsp2LpIpAddressNumber 
         }
         ::= { cgsp2LpIpAddrTable  1 }
@@ -787,26 +872,244 @@ cgsp2LpIpAddressRowStatus    OBJECT-TYPE
     
 -- *************************************************************
 -- *                                                           *
--- * Notifications                                             *
+-- * MTP3 errors                                               *
 -- *                                                           *
 -- *************************************************************
 
+cgsp2Mtp3ErrorsTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF Cgsp2Mtp3ErrorsTableEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A table of MTP3 errors that have occurred on
+        all Signalling Point supported by this device."
+    ::= { cgsp2Mtp3Errors 1 }
+
+cgsp2Mtp3ErrorsTableEntry OBJECT-TYPE
+    SYNTAX          Cgsp2Mtp3ErrorsTableEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A list of attributes used to provide a summary
+        of the various MTP3 errors encountered by
+        the device."
+    INDEX           { cgsp2Mtp3ErrorsType } 
+    ::= { cgsp2Mtp3ErrorsTable 1 }
+
+Cgsp2Mtp3ErrorsTableEntry ::= SEQUENCE {
+        cgsp2Mtp3ErrorsType        Unsigned32,
+        cgsp2Mtp3ErrorsDescription SnmpAdminString,
+        cgsp2Mtp3ErrorsCount       Counter64
+}
+
+cgsp2Mtp3ErrorsType OBJECT-TYPE
+    SYNTAX          Unsigned32 (0..65535)
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the index for the
+        various error types." 
+    ::= { cgsp2Mtp3ErrorsTableEntry 1 }
+
+cgsp2Mtp3ErrorsDescription OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..255))
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "A brief description of the MTP3 error in text format." 
+    ::= { cgsp2Mtp3ErrorsTableEntry 2 }
+
+cgsp2Mtp3ErrorsCount OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Number of errors encountered for this type of
+        MTP3 error as described in cgsp2Mtp3ErrorsDescription
+        object." 
+    ::= { cgsp2Mtp3ErrorsTableEntry 3 }
+ 
+
+-- *************************************************************
+-- *                                                           *
+-- * Probless monitoring ContextId table                       *
+-- *                                                           *
+-- *************************************************************
+
+cgsp2ContextTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF Cgsp2ContextEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "DCS(Data Collector Server) use ContextId as index to get
+        additional information about the resource being monitoring. 
+        This table provides informations used to identify the
+        resource(link or ASP)."
+    ::= { cgsp2Context 1 }
+
+cgsp2ContextEntry OBJECT-TYPE
+    SYNTAX          Cgsp2ContextEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Each entry (conceptual row) represents a resource(Link or ASP)
+        that can be monitored by the the Probeless Monitor Feature.  
+        Each are added to deleted from this table as Link and ASP are
+        configured."
+    INDEX           { cgsp2ContextIdentifier } 
+    ::= { cgsp2ContextTable 1 }
+
+Cgsp2ContextEntry ::= SEQUENCE {
+        cgsp2ContextIdentifier  CItpTcContextId,
+        cgsp2ContextType        CItpTcContextType,
+        cgsp2ContextLinksetName CItpTcLinksetId,
+        cgsp2ContextSlc         CItpTcLinkSLC,
+        cgsp2ContextAsName      CItpTcXuaName,
+        cgsp2ContextAspName     CItpTcXuaName,
+        cgsp2ContextNetworkName CItpTcNetworkName
+}
+
+cgsp2ContextIdentifier OBJECT-TYPE
+    SYNTAX          CItpTcContextId
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The unique Id for LINK or ASP to Application" 
+    ::= { cgsp2ContextEntry 1 }
+
+cgsp2ContextType OBJECT-TYPE
+    SYNTAX          CItpTcContextType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicate the type of resource Link or ASP." 
+    ::= { cgsp2ContextEntry 2 }
+
+cgsp2ContextLinksetName OBJECT-TYPE
+    SYNTAX          CItpTcLinksetId
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The name of the Linkset in which the link is configured and
+        this object only applies when the cgsp2ContextType indicates the
+        resource is a Link." 
+    ::= { cgsp2ContextEntry 3 }
+
+cgsp2ContextSlc OBJECT-TYPE
+    SYNTAX          CItpTcLinkSLC
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The Signalling Link Code for this link.This object only applies
+        when the cgsp2ContextType indicates the resource is an Link."
+    REFERENCE
+        "ITU Q.704 Signalling network functions and messages.
+            ANSI T1.111 Telecommunications - Signalling
+        system
+            No. 7 (SS7)-Message Transfer Part (MTP)." 
+    ::= { cgsp2ContextEntry 4 }
+
+cgsp2ContextAsName OBJECT-TYPE
+    SYNTAX          CItpTcXuaName
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The Aplication server name.This object only applies when the
+        cgsp2ContextType indicates the resource is an ASP." 
+    ::= { cgsp2ContextEntry 5 }
+
+cgsp2ContextAspName OBJECT-TYPE
+    SYNTAX          CItpTcXuaName
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The Application Server Process Name.This object only applies
+        when the cgsp2ContextType indicates the resource is an ASP." 
+    ::= { cgsp2ContextEntry 6 }
+
+cgsp2ContextNetworkName OBJECT-TYPE
+    SYNTAX          CItpTcNetworkName
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The Network name configure for the instance in ITP" 
+    ::= { cgsp2ContextEntry 7 }
+ 
+
+
+-- *************************************************************
+-- *                                                           *
+-- * Operation Modes                                           *
+-- *                                                           *
+-- *************************************************************
+
+cgsp2OperMtp3Offload OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        main(1),
+                        offload(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Indicates location of MTP3 management function as
+        follows.
+        'main'    - MTP3 Management function operates only on
+                    main processor.
+        'offload' - MTP3 Management function operates on 
+                    main processor and other available 
+                    processors."
+    DEFVAL          { main } 
+    ::= { cgsp2Operation 1 }
+
+cgsp2OperRedundancy OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        local(2),
+                        distributed(3)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The redundancy capability of devices for signalling points
+        defined on this device as follows.
+
+        'none' - Device is not configured to support redundancy 
+                 features.
+
+        'local' - Device provides redundancy by using backup 
+                  processor on same device.
+
+        'distributed' - Device provides redundancy by using 
+                   processors on two or more different 
+                   physical device."
+    DEFVAL          { none } 
+    ::= { cgsp2Operation 2 }
+-- *************************************************************
+-- *                                                           *
+-- * Notifications                                             *
+-- *                                                           *
+-- *************************************************************
+--   
 
 -- *************************************************************
 -- *                                                           *
 -- * Conformance Information                                   *
 -- *                                                           *
 -- *************************************************************
-ciscoGsp2MIBCompliances OBJECT IDENTIFIER ::= 
-        { ciscoGsp2MIBConform 1 }
-ciscoGsp2MIBGroups      OBJECT IDENTIFIER ::=
-        { ciscoGsp2MIBConform 2 }
+
+ciscoGsp2MIBCompliances  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBConform 1 }
+
+ciscoGsp2MIBGroups  OBJECT IDENTIFIER
+    ::= { ciscoGsp2MIBConform 2 }
+
 
 -- ********************************************************************
 -- Compliance Statements
 -- ********************************************************************
+
 ciscoGsp2MIBCompliance MODULE-COMPLIANCE
-        STATUS current 
+    STATUS          deprecated
         DESCRIPTION
             "The compliance statement for entities which implement
              the CISCO-ITP-GSP2-MIB.my MIB"
@@ -819,77 +1122,506 @@ ciscoGsp2MIBCompliance MODULE-COMPLIANCE
                              
         OBJECT           cgsp2EventMaxEntries
         MIN-ACCESS       read-only
-        DESCRIPTION      "Write access is not required."
+    DESCRIPTION
+        "Write access is not required."
         
         OBJECT           cgsp2QosType
         MIN-ACCESS       read-only
-        DESCRIPTION      "Create/Write access is not required."
+    DESCRIPTION
+        "Create/Write access is not required."
         
         OBJECT           cgsp2QosPrecedenceValue
         MIN-ACCESS       read-only
-        DESCRIPTION      "Create/Write access is not required."
+    DESCRIPTION
+        "Create/Write access is not required."
         
         OBJECT           cgsp2QosIpDscp
         MIN-ACCESS       read-only
-        DESCRIPTION      "Create/Write access is not required."
+    DESCRIPTION
+        "Create/Write access is not required."
         
         OBJECT           cgsp2QosAclId
         MIN-ACCESS       read-only
-        DESCRIPTION      "Create/Write access is not required."
+    DESCRIPTION
+        "Create/Write access is not required."
         
         OBJECT           cgsp2QosRowStatus   
         MIN-ACCESS       read-only
-        DESCRIPTION      "Create/Write access is not required."
-        
+    DESCRIPTION
+        "Create/Write access is not required."
         ::= { ciscoGsp2MIBCompliances 1 }
         
+ciscoGsp2MIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the CISCO-ITP-GSP2-MIB.my MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoGsp2EventsGroup,
+                        ciscoGsp2QosGroup,
+                        ciscoGsp2LocalPeerGroup,
+                        ciscoGsp2Mtp3ErrorsGroup
+        }
+
+    OBJECT          cgsp2EventMaxEntries
+    MIN-ACCESS      read-only
+        DESCRIPTION
+        "Write access is not required."
+    
+    OBJECT          cgsp2QosType
+    MIN-ACCESS      read-only
+        DESCRIPTION
+        "Create/Write access is not required."
+        
+    OBJECT          cgsp2QosPrecedenceValue
+    MIN-ACCESS      read-only
+        DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosIpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosAclId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+    ::= { ciscoGsp2MIBCompliances 2 }
+
+ciscoGsp2MIBComplianceRev2 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the CISCO-ITP-GSP2-MIB.my MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoGsp2EventsGroup,
+                        ciscoGsp2QosGroup,
+                        ciscoGsp2LocalPeerGroup,
+                        ciscoGsp2Mtp3ErrorsGroup,
+                        ciscoGsp2OperationGroup
+                    }
+
+    OBJECT          cgsp2EventMaxEntries
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgsp2QosType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosPrecedenceValue
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosIpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosAclId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+    ::= { ciscoGsp2MIBCompliances 3 }
+
+ciscoGsp2MIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the CISCO-ITP-GSP2-MIB.my MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoGsp2EventsGroup,
+                        ciscoGsp2QosGroup,
+                        ciscoGsp2Mtp3ErrorsGroup,
+                        ciscoGsp2OperationGroup,
+                        ciscoGsp2LocalPeerGroupSup1
+                    }
+
+    OBJECT          cgsp2EventMaxEntries
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgsp2QosType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosPrecedenceValue
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosIpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosAclId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+    ::= { ciscoGsp2MIBCompliances 4 }
+
+ciscoGsp2MIBComplianceRev4 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the CISCO-ITP-GSP2-MIB.my MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoGsp2EventsGroup,
+                        ciscoGsp2QosGroup,
+                        ciscoGsp2LocalPeerGroup,
+                        ciscoGsp2Mtp3ErrorsGroup,
+                        ciscoGsp2OperationGroup,
+                        ciscoGsp2LocalPeerGroupSup1,
+                        ciscoGsp2ContextGroup
+                    }
+
+    OBJECT          cgsp2EventMaxEntries
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgsp2QosType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosPrecedenceValue
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosIpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosAclId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          cgsp2QosRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+    ::= { ciscoGsp2MIBCompliances 5 }
 
 -- ****************************************************************
 -- Units of Conformance
 -- ****************************************************************
-ciscoGsp2EventsGroup OBJECT-GROUP       
-        OBJECTS { cgsp2EventLoggedEvents,      
-                  cgsp2EventDroppedEvents,     
-                  cgsp2EventMaxEntries,        
-                  cgsp2EventMaxEntriesAllowed,
-                  cgsp2EventMtp3Text,
-                  cgsp2EventMtp3Timestamp,
-                  cgsp2EventAsText,
-                  cgsp2EventAsTimestamp,
-                  cgsp2EventAspText,
-                  cgsp2EventAspTimestamp,
-                  cgsp2EventPcText,
-                  cgsp2EventPcTimestamp
-        }
-        STATUS current
-        DESCRIPTION
-              "SS7 Event objects."
-        ::= { ciscoGsp2MIBGroups 1 }
+
+ciscoGsp2EventsGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2EventLoggedEvents,
+                        cgsp2EventDroppedEvents,
+                        cgsp2EventMaxEntries,
+                        cgsp2EventMaxEntriesAllowed,
+                        cgsp2EventMtp3Text,
+                        cgsp2EventMtp3Timestamp,
+                        cgsp2EventAsText,
+                        cgsp2EventAsTimestamp,
+                        cgsp2EventAspText,
+                        cgsp2EventAspTimestamp,
+                        cgsp2EventPcText,
+                        cgsp2EventPcTimestamp
+                    }
+    STATUS          current
+    DESCRIPTION
+        "SS7 Event objects."
+    ::= { ciscoGsp2MIBGroups 1 }
+
+ciscoGsp2QosGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2QosType,
+                        cgsp2QosPrecedenceValue,
+                        cgsp2QosIpDscp,
+                        cgsp2QosAclId,
+                        cgsp2QosRowStatus
+                    }
+    STATUS          current
+    DESCRIPTION
+        "SS7 Quality of Service objects."
+    ::= { ciscoGsp2MIBGroups 2 }
+
+ciscoGsp2LocalPeerGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2LocalPeerSlotNumber,
+                        cgsp2LocalPeerRowStatus,
+                        cgsp2LpIpAddressType,
+                        cgsp2LpIpAddress,
+                        cgsp2LpIpAddressRowStatus
+                    }
+    STATUS          current
+    DESCRIPTION
+        "SS7 Local Peer objects."
+    ::= { ciscoGsp2MIBGroups 3 }
+
+ciscoGsp2Mtp3ErrorsGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2Mtp3ErrorsDescription,
+                        cgsp2Mtp3ErrorsCount
+                    }
+    STATUS          current
+    DESCRIPTION
+        "SS7 MTP3 Error objects."
+    ::= { ciscoGsp2MIBGroups 4 }
+
+ciscoGsp2OperationGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2OperMtp3Offload,
+                        cgsp2OperRedundancy
+                    }
+    STATUS          current
+    DESCRIPTION
+        "SS7 operation redundancy objects."
+    ::= { ciscoGsp2MIBGroups 5 }
+
+ciscoGsp2LocalPeerGroupSup1 OBJECT-GROUP
+    OBJECTS         { cgsp2LocalPeerProcessorNumber }
+    STATUS          current
+    DESCRIPTION
+        "SS7 Local Peer supplemental object to ciscoGsp2LocalPeerGroup."
+    ::= { ciscoGsp2MIBGroups 6 }
+
+ciscoGsp2ContextGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgsp2ContextType,
+                        cgsp2ContextLinksetName,
+                        cgsp2ContextSlc,
+                        cgsp2ContextAsName,
+                        cgsp2ContextAspName,
+                        cgsp2ContextNetworkName
+                    }
+    STATUS          current
+    DESCRIPTION
+        "ContextTable object to ciscoGsp2ContextGroup."
+    ::= { ciscoGsp2MIBGroups 7 }
+
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     
-ciscoGsp2QosGroup OBJECT-GROUP       
-        OBJECTS {
-              cgsp2QosType,
-              cgsp2QosPrecedenceValue,
-              cgsp2QosIpDscp,
-              cgsp2QosAclId,
-              cgsp2QosRowStatus 
-        }
-        STATUS current
-        DESCRIPTION
-              "SS7 Quality of Service objects."
-        ::= { ciscoGsp2MIBGroups 2 }
-        
-ciscoGsp2LocalPeerGroup OBJECT-GROUP       
-        OBJECTS {
-                cgsp2LocalPeerSlotNumber,
-                cgsp2LocalPeerRowStatus,
-                cgsp2LpIpAddressType,  
-                cgsp2LpIpAddress,
-                cgsp2LpIpAddressRowStatus
-        }
-        STATUS current
-        DESCRIPTION
-              "SS7 Local Peer objects."
-        ::= { ciscoGsp2MIBGroups 3 }
-    
-END           

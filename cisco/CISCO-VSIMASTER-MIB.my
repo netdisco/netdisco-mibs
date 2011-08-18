@@ -8,20 +8,23 @@
 -- All rights reserved.
 -- *****************************************************************
  
-CISCO-VSI-MASTER-MIB DEFINITIONS ::= BEGIN
+CISCO-VSIMASTER-MIB DEFINITIONS ::= BEGIN
  
 IMPORTS
      MODULE-IDENTITY, OBJECT-TYPE,
-     Integer32, Gauge32, Counter32    FROM SNMPv2-SMI
+     NOTIFICATION-TYPE,
+     Integer32, Gauge32, Counter32,
+     IpAddress                        FROM SNMPv2-SMI
      SnmpAdminString                  FROM SNMP-FRAMEWORK-MIB
-     MODULE-COMPLIANCE, OBJECT-GROUP  FROM SNMPv2-CONF
+     MODULE-COMPLIANCE, OBJECT-GROUP,  
+     NOTIFICATION-GROUP               FROM SNMPv2-CONF
      TEXTUAL-CONVENTION,
      TruthValue                       FROM SNMPv2-TC
      InterfaceIndex                   FROM IF-MIB
      ciscoMgmt                        FROM CISCO-SMI;
  
 ciscoVsiMasterMIB     MODULE-IDENTITY
-     LAST-UPDATED     "200006010000Z"
+     LAST-UPDATED     "200010170000Z"
      ORGANIZATION     "Cisco Systems, Inc."
      CONTACT-INFO
           "           Cisco Systems
@@ -30,15 +33,24 @@ ciscoVsiMasterMIB     MODULE-IDENTITY
            Postal:    170 W Tasman Drive
                       San Jose, CA  95134
                       USA
-
            Tel:       +1 800 553-NETS
 
-           E-mail:    cs-tagswitching@cisco.com"
+           e-mail:    cs-snmp@cisco.com
+          "
 
      DESCRIPTION
-          "This MIB module contains objects related to the master side of the
+        "This MIB module contains objects related to the master side of
            the Virtual Switch Interface protocol used for control of ATM
            switches."
+
+    REVISION         "200010170000Z"
+    DESCRIPTION
+        "This version introduces NOTIFICATIONS capability."
+
+    REVISION         "200006010000Z"
+    DESCRIPTION
+        "Initial version of this MIB module."
+
      ::=  { ciscoMgmt 162 }   
  
 -- *****************************************************************
@@ -81,19 +93,23 @@ VsiXCIndex ::= TEXTUAL-CONVENTION
      STATUS          current
      DESCRIPTION
           "This textual convention defines a unique value, greater 
-           than zero, for each cross connect on a managed system 
+         than zero, for each cross-connect on a managed system 
            controlled by VSI.  The value should remain constant 
-           after a crossconnect is initialized, for the duration 
-           of the life of the cross connect."
+         after a cross-connect is initialized, for the duration 
+         of the life of the cross-connect."
      SYNTAX          Integer32 (1..2147483647)
+ 
  
 -- *****************************************************************
 --   Top-level structure of the MIB
 -- *****************************************************************
  
-ciscoVsiMasterObjects       OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 1 }
-ciscoVsiMasterNotifications OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 2 }
-ciscoVsiMasterConformance   OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 3 }
+ciscoVsiMasterObjects       
+                        OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 1 }
+ciscoVsiMasterNotifications 
+                        OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 2 }
+ciscoVsiMasterConformance   
+                        OBJECT IDENTIFIER ::= { ciscoVsiMasterMIB 3 }
  
  
 -- *****************************************************************
@@ -147,12 +163,16 @@ VsiMasterControllerEntry ::=
      vsiVersionInUse               Integer32,
      vsiSpecifiedVersion           Integer32,
      vsiControlInterface           InterfaceIndex,
-     vsiLogicalControlInterface    VsiLogicalIfIndex
+     vsiLogicalControlInterface    VsiLogicalIfIndex,
+     vsiControlIfIpAddress         IpAddress,
+     vsiAvailableChnlWarnThreshold Integer32,
+     vsiAvailableChnlAlarmThreshold  Integer32,
+     vsiAvailableChnlThresholdStatus INTEGER
      }
 
 vsiControllerIndex   OBJECT-TYPE
      SYNTAX          VsiControllerIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "A unique value per VSI controller, greater than 0.  This
@@ -177,8 +197,9 @@ vsiCrossConnects     OBJECT-TYPE
      MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "This object contains a value equal to the number of cross-connects
-           being controlled via VSI protocol via this controller."
+        "This object contains a value equal to the number of 
+         cross-connects being controlled via VSI protocol via
+         this controller."
      ::= { vsiMasterControllerEntry 3 }
  
 vsiControllerType     OBJECT-TYPE
@@ -191,14 +212,14 @@ vsiControllerType     OBJECT-TYPE
      STATUS     current
      DESCRIPTION
           "A VSI controller represents an instance of a service layer
-           accessible to a network control application.  This object serves 
-           to identify the type of the network control application currently 
-           being supported by this controller.  
+         accessible to a network control application.  This object 
+         serves to identify the type of the network control 
+         application currently being supported by this controller.  
            other(1): the type is unspecified.
-           mpls(2): indicates that the client is a Label Switch Controller 
-                    performing Multi Protocol Label Switching.  
-           pnni(3): indicates that the client is an instance of the ATM Private 
-                    Network to Network Interface.  
+         mpls(2): indicates that the client is a Label Switch 
+                  Controller performing Multi Protocol Label Switching.
+         pnni(3): indicates that the client is an instance of the 
+                  ATM Private Network to Network Interface.  
            par(4): indicates that the client is an instance of ATM 
                    Portable Autoroute."
      ::= { vsiMasterControllerEntry 4 }
@@ -252,11 +273,12 @@ vsiSpecifiedVersion  OBJECT-TYPE
      DESCRIPTION
           "When this object is written with a non-zero value, 
 	   re-synchronization procedures will be initiated, if necessary,
-	   in order to constrain the master and slaves to use the indicated
-	   protocol version. When written with zero (0), the master and
-	   slaves should use the version dictated by the usual protocol 
-	   version selection procedures; resynchronization procedures will be
-	   invoked, if necessary, to achieve this result."        
+	in order to constrain the master and slaves to use the 
+         indicated protocol version. When written with zero (0), the 
+         master and slaves should use the version dictated by the 
+         usual protocol version selection procedures; resynchronization
+         procedures will be invoked, if necessary, to achieve this 
+         result."        
       ::= { vsiMasterControllerEntry 8 }
 
 vsiControlInterface  OBJECT-TYPE
@@ -282,6 +304,108 @@ vsiLogicalControlInterface     OBJECT-TYPE
            referred to in the description of vsiControlInterface."
      ::= { vsiMasterControllerEntry 10 }
  
+vsiControlIfIpAddress  OBJECT-TYPE
+     SYNTAX          IpAddress
+     MAX-ACCESS      read-only
+     STATUS          current
+     DESCRIPTION
+        "The IP address of the interface identified by
+         the associated vsiControlInterface object."
+      ::= { vsiMasterControllerEntry 11 }
+
+vsiAvailableChnlWarnThreshold  OBJECT-TYPE
+     SYNTAX          Integer32 (0..100)
+     MAX-ACCESS      read-write
+     STATUS          current
+     DESCRIPTION
+        "A controller has in its domain multiple instances of the
+         vsiLogicalIfAvailIngressChnls and 
+         vsiLogicalIfAvailEgressChnls counters.  This set of values,
+         associated with all the logical interfaces in the 
+         vsiLogicalIfTable, is monitored so as to note the minimum 
+         value.  
+
+         The minimum observed value is compared against this threshold
+         object.  If the minimum observed value is less than this 
+         threshold, and the value at the last comparison was greater 
+         than or equal to this threshold, a single event will be 
+         generated, to indicate a warning that available channels are 
+         being depleted.  After a warning event is generated, another 
+         such event will not be generated unless the 
+         vsiAvailableChnlAlarmThreshold is reached.  If the 
+         vsiAvailableChnlAlarmThreshold is reached and then the minimum
+         observed value is greater than or equal to this threshold, a 
+         single event is generated, to indicate that a recovery 
+         of resources has occurred.
+
+         If this object contains the value zero, then the thresholding
+         operation will be disabled.  Otherwise, the value of this
+         object must be greater than or equal to the value of the 
+         associated vsiAvailableChnlAlarmThreshold object.
+         Notification emissions are also gated by the 
+         vsiXCTrapEnable object."
+ 
+      DEFVAL        { 0 }
+      ::= { vsiMasterControllerEntry 12 }
+
+vsiAvailableChnlAlarmThreshold  OBJECT-TYPE
+     SYNTAX          Integer32 (0..100)
+     MAX-ACCESS      read-write
+     STATUS          current
+     DESCRIPTION
+        "A controller has in its domain multiple instances of the
+         vsiLogicalIfAvailIngressChnls and 
+         vsiLogicalIfAvailEgressChnls counters.  This set of values,
+         associated with all the logical interfaces in the 
+         vsiLogicalIfTable, is monitored so as to note the minimum 
+         value.  
+
+         The minimum observed value is compared against this threshold
+         object.  If the minimum observed value is less than this 
+         threshold, and the value at the last comparison was greater 
+         than or equal to this threshold, a single event will be 
+         generated, to indicate an alarm that available channels are 
+         being depleted.  After an alarm event is generated, another 
+         such event will not be generated unless the 
+         vsiAvailableChnlWarnThreshold is reached.
+
+         If this object contains the value zero, then the thresholding
+         operation will be disabled.  Otherwise, the value of this
+         object must be less than or equal to the value of the 
+         associated vsiAvailableChnlWarnThreshold object.  
+         Notification emissions are also gated by the 
+         vsiXCTrapEnable object."
+
+      DEFVAL        { 0 }
+      ::= { vsiMasterControllerEntry 13 }
+
+vsiAvailableChnlThresholdStatus OBJECT-TYPE
+     SYNTAX         INTEGER {
+                     warning(1), 
+                     alarm(2),   
+                     recovery(3),
+                     normal(4) }
+     MAX-ACCESS      read-only
+     STATUS          current
+     DESCRIPTION
+        "As described for the vsiAvailableChnlWarnThreshold and 
+         vsiAvailableChnlAlarmThreshold objects, events are generated
+         when these thresholds are crossed.  This object defines a 
+         set of unique values that are used with the 
+         vsiLcnExhaustionNotice to convey information about the 
+         context of a threshold crossing.  
+
+         warning(1): the event qualifier for indicating
+                     vsiAvailableChnlWarnThreshold violations.
+         alarm(2): the event qualifier for indicating 
+                   vsiAvailableChnlAlarmThreshold violations.
+         recovery(3): the event qualifier for indicating
+                      vsiAvailableChnlWarnThreshold recovery.
+         normal(4): the initial value that indicates that no
+                    thresholds have been crossed."
+      ::= { vsiMasterControllerEntry 14 }
+
+ 
 -- *****************************************************************
 --   VSI Master Session Objects
 -- *****************************************************************
@@ -295,8 +419,8 @@ vsiSessionTable      OBJECT-TYPE
            Each VSI controller manages a set of VSI slaves, via a protocol 
            instance called a Session.  VSI slaves are entities that reside
            on the controlled ATM switch.  Their number and characteristics
-           are discovered by the VSI controller via the VSI protocol.  This
-           table has an entry for each slave so discovered."
+         are discovered by the VSI controller via the VSI protocol.  
+         This table has an entry for each slave so discovered."
      ::= { ciscoVsiMasterObjects 2 }
  
 vsiSessionEntry      OBJECT-TYPE
@@ -304,13 +428,14 @@ vsiSessionEntry      OBJECT-TYPE
      MAX-ACCESS      not-accessible
      STATUS          current
      DESCRIPTION
-          "A vsiSessionEntry is a set of objects that together represent the 
-           status of each instance of VSI protocol and the slave in an ATM
-           switch to which that instance corresponds.  There is one vsiSession 
-           for each slave.  The number of slaves is discovered via the VSI 
-           protocol.  Each slave is responsible for a subset of the total number 
-           of external interfaces on the ATM switch.   Session entries refer back
-           to their respective controllers via vsiSessionControllerIndex, and
+        "A vsiSessionEntry is a set of objects that together represent 
+         the status of each instance of VSI protocol and the slave in 
+         an ATM switch to which that instance corresponds.  There is 
+         one vsiSession for each slave.  The number of slaves is 
+         discovered via the VSI protocol.  Each slave is responsible 
+         for a subset of the total number of external interfaces on 
+         the ATM switch.   Session entries refer back to their 
+         respective controllers via vsiSessionControllerIndex, and
            are in turn referred to by vsiLogicalIfSessionIndex in the
            VsiLogicalIfEntry.  These entries are never deleted."
      INDEX          { vsiSessionControllerIndex, vsiSessionIndex }
@@ -337,9 +462,10 @@ vsiSessionControllerIndex     OBJECT-TYPE
      MAX-ACCESS      not-accessible
      STATUS          current
      DESCRIPTION
-          "The ID of the controller which controls this master-slave session.
-           This identifies which vsiMasterControllerEntry represents the
-           controller communicating with a slave through this Session."
+        "The ID of the controller which controls this master-slave 
+         session.  This identifies which vsiMasterControllerEntry 
+         represents the controller communicating with a slave through 
+         this Session."
      ::= { vsiSessionEntry 1 }
  
 vsiSessionIndex      OBJECT-TYPE
@@ -371,10 +497,10 @@ vsiSessionVci        OBJECT-TYPE
      MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "The virtual channel identifier for this VSI master-slave session.
-           The Slave Control Link, referred to in the description of
-           vsiLogicalControlInterface, supports an ATM control VC.  This
-           is the vci for that link."
+        "The virtual channel identifier for this VSI master-slave 
+         session.  The Slave Control Link, referred to in the 
+         description of vsiLogicalControlInterface, supports an 
+         ATM control VC.  This is the vci for that link."
      ::= { vsiSessionEntry 4 }
  
 vsiSessionSwitchId   OBJECT-TYPE
@@ -427,21 +553,22 @@ vsiSessionState      OBJECT-TYPE
            with the slave have been created, but the VSI protocol has 
            not been started.
            unknown(2): slave has been queried, but its configuration data
-           has not yet been recieved.
+         has not yet been received.
            configuring(3): configuration data has been sent to the slave,
            but a response has not yet been received.
-           resyncStarting(4): a re-sync command has been sent to the slave,
-           but a response has not yet been recieved.
-           resyncUnderway(5): a re-sync command response has been received
-           from the slave, but the network applications have not yet
-           completed reasserting connections.
-           resyncEnding(6): a command has been sent to end re-sync, but a
-           response has not yet been received.
-           discovery(7): a query has been sent to the slave for interface
-           information, but a response has not yet been received.
+         resyncStarting(4): a re-sync command has been sent to the 
+         slave but a response has not yet been received.
+         resyncUnderway(5): a re-sync command response has been 
+         received from the slave, but the network applications have 
+         not yet completed reasserting connections.
+         resyncEnding(6): a command has been sent to end re-sync, but
+         a response has not yet been received.
+         discovery(7): a query has been sent to the slave for 
+         interface information, but a response has not yet 
+         been received.
            established(8): discovery has completed.
-           shutdownStarting(9): the master has started an orderly shutdown
-           of the slave."
+         shutdownStarting(9): the master has started an orderly 
+         shutdown of the slave."
      ::= { vsiSessionEntry 8 }
  
 vsiSessionWindowSize     OBJECT-TYPE
@@ -449,9 +576,9 @@ vsiSessionWindowSize     OBJECT-TYPE
      MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "The maximum number of command messages the VSI master will send 
-           before requiring a response from slave.  If the value is 0,
-           then flow control is not enabled."
+        "The maximum number of command messages the VSI master will 
+         send before requiring a response from slave.  If the value 
+         is 0, then flow control is not enabled."
      ::= { vsiSessionEntry 9 }
  
 vsiSessionCmdsPending    OBJECT-TYPE
@@ -461,8 +588,8 @@ vsiSessionCmdsPending    OBJECT-TYPE
      DESCRIPTION
           "The number of unacknowledged command messages.  The VSI master
            sends commands to the slave, without receiving acknowledgement, 
-           until the window size threshold has been reached.
-           This object is a count of the number of commands that have been
+         until the window size threshold has been reached.  This
+         object is a count of the number of commands that have been
            sent and that are awaiting acknowledgment."
      ::= { vsiSessionEntry 10 }
  
@@ -471,9 +598,9 @@ vsiSessionActiveId   OBJECT-TYPE
      MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "ID supplied by the slave to identify the session.  This value is
-           interpreted by the master, when a change occurs, to indicate that 
-           a resync should be inititated."
+        "ID supplied by the slave to identify the session.  This value 
+         is interpreted by the master, when a change occurs, to 
+         indicate that a resync should be inititated."
      ::= { vsiSessionEntry 11 }
  
 vsiSessionPowerupId  OBJECT-TYPE
@@ -482,8 +609,9 @@ vsiSessionPowerupId  OBJECT-TYPE
      STATUS          current
      DESCRIPTION
           "ID supplied by the slave to identify the session at powerup.
-           This is the initial value for vsiSessionActiveId, and its default 
-           is zero.  Changes in vsiSessionActiveId signal a resync."
+         This is the initial value for vsiSessionActiveId, and its 
+         default is zero.  Changes in vsiSessionActiveId signal a 
+         resync."
      ::= { vsiSessionEntry 12 }
  
 -- *****************************************************************
@@ -499,9 +627,9 @@ vsiLogicalIfTable    OBJECT-TYPE
            on the slave switch controlled via VSI.  Logical interfaces
            are an abstraction of exposed, external ATM interfaces that
            are available for connections.  When two external interfaces,
-           represented by two logical interfaces, are paired, they provide 
-           physical paths through the switch.  These physical pathways
-           support cross-connects."
+         represented by two logical interfaces, are paired, they 
+         provide physical paths through the switch.  These physical 
+         pathways support cross-connects."
      ::= { ciscoVsiMasterObjects 3 }
  
 vsiLogicalIfEntry    OBJECT-TYPE
@@ -561,7 +689,7 @@ VsiLogicalIfEntry ::=
  
 vsiLogicalIfControllerIndex    OBJECT-TYPE
      SYNTAX          VsiControllerIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "The VSI controller index of the controller through which
@@ -570,7 +698,7 @@ vsiLogicalIfControllerIndex    OBJECT-TYPE
  
 vsiLogicalIfIndex    OBJECT-TYPE
      SYNTAX          VsiLogicalIfIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "A unique value, greater than zero, for each VSI logical 
@@ -578,8 +706,8 @@ vsiLogicalIfIndex    OBJECT-TYPE
            switch to be unique and persistent.  The same number is
            preserved through power failures.  This index is not the same
            as an ifIndex.  It is an abstract number provided by the slave, 
-           representing a virtual interface, which is an identifier to be used 
-           when communicating with the slave about an interface."
+         representing a virtual interface, which is an identifier to be
+         used when communicating with the slave about an interface."
       ::= { vsiLogicalIfEntry 2 }
  
 vsiLogicalIfName     OBJECT-TYPE
@@ -603,11 +731,14 @@ vsiLogicalIfOperState    OBJECT-TYPE
      DESCRIPTION
           "The VSI operational state of the logical interface as
            reported to the VSI master by the VSI slave.
-           removed(1): the interface is not a valid interface for this controller.
+         removed(1): the interface is not a valid interface on this
+                     controller, is not part of the controller's 
+                     partition, or is not available.
            active(2): the interface is active and ready for use.
-           failedExternal(3): external failure, such as a line alarm, detected.
-           failedInternal(4): local hardware has detected a failure, making the
-           interface unusable."
+         failedExternal(3): external failure, such as a line alarm,
+                            detected.
+         failedInternal(4): local hardware has detected a failure,
+                            making the interface unusable."
      ::= { vsiLogicalIfEntry 4 }
  
 vsiLogicalIfAdminState     OBJECT-TYPE
@@ -620,10 +751,11 @@ vsiLogicalIfAdminState     OBJECT-TYPE
      DESCRIPTION
           "The current administrative (configured) state of the
            interface, as reported to the VSI master by the VSI slave.
-           down(1): the interface is not a valid interface for the controller.
+         down(1): the interface is not a valid interface for the 
+         controller.
            up(2): the interface is configured for use by the controller.
-           pendingDown(3): the interface is being removed from service, and
-           the controller is requested to remove all connections."
+         pendingDown(3): the interface is being removed from service, 
+         and the controller is requested to remove all connections."
       ::= { vsiLogicalIfEntry 5 }
  
 vsiLogicalIfRxCells  OBJECT-TYPE
@@ -691,7 +823,9 @@ vsiLogicalIfEndPointsInUse     OBJECT-TYPE
      DESCRIPTION
           "The number of end points in use on this logical 
            interface, as reported to the VSI master by the 
-           VSI slave.  If this logical interface has not been
+         VSI slave.  This reflects an aggregate count of
+         input, output and bi-directional end points.
+         If the logical interface has not been
            removed, but does not currently support any cross
            connects, this object will be reported as zero (0)."
      ::= { vsiLogicalIfEntry 12 }
@@ -844,8 +978,8 @@ vsiLogicalControlIfIndex  OBJECT-TYPE
      STATUS          current
      DESCRIPTION
           "The interface index for the interface which
-           controls this logical interface.  This is the 
-           ifIndex of the controlling xtagatm interface, and
+         controls this logical interface.  This is the ifIndex 
+         of the controlling network layer interface, and
            is a direct manifestation of the mapping between
            a logical interface and the real ifIndex."
       ::= { vsiLogicalIfEntry 27 }
@@ -871,8 +1005,8 @@ vsiXCTable           OBJECT-TYPE
      MAX-ACCESS      not-accessible
      STATUS          current
      DESCRIPTION
-          "A table containing information about crossconnects
-           on the slave switch controlled via VSI.  Cross connects
+        "A table containing information about cross-connects
+         on the slave switch controlled via VSI.  cross-connects
            represent virtual links across two interfaces.  The
            participating interfaces that support these links are 
            represented in this MIB by the vsiLogicalIfTable entries."
@@ -884,7 +1018,7 @@ vsiXCEntry           OBJECT-TYPE
      STATUS          current
      DESCRIPTION
           "An entry containing information about one unidirectional 
-           or bidirectional crossconnect on the slave switch 
+         or bidirectional cross-connect on the slave switch 
            controlled via VSI.  A VSI controller represents an instance 
            of a service layer accessible to a network control application. 
            The application creates virtual links via service requests to
@@ -914,54 +1048,54 @@ VsiXCEntry     ::=
  
 vsiXCControllerIndex    OBJECT-TYPE
      SYNTAX          VsiControllerIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "The  index of the VSI controller through which this
-           crossconnect was instantiated.  This object is the index for 
+         cross-connect was instantiated.  This object is the index for 
            a vsiControllerTable entry;  the controller indexed is
            the VSI protocol partner to the slave that is controlling
-           the logical interfaces on which this cross connect is
+         the logical interfaces on which this cross-connect is
            supported."
       ::= { vsiXCEntry 1 }
  
 vsiXCLogicalIfLow    OBJECT-TYPE
      SYNTAX          VsiLogicalIfIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "The VSI logical interface index for the first endpoint
            of the cross-connect.  This object is the selector index
            for one of the two vsiLogicalIfTable entries that support this
-           cross connect.  Further, this index value is constrained 
+         cross-connect.  Further, this index value is constrained 
            to be 'numerically lower than' the index value of the other 
            vsiLogicalIfTable entry, indexed by vsiXCLogicalIfHi,
-           supporting this cross connect."
+         supporting this cross-connect."
      ::= { vsiXCEntry 2 }
  
 vsiXCLogicalIfHi     OBJECT-TYPE
      SYNTAX          VsiLogicalIfIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
           "The VSI logical interface index for the second endpoint
            of the cross-connect.  This object is the selector index
            for one of the two vsiLogicalIfTable entries that support this
-           cross connect.  Further, this index value is constrained 
+         cross-connect.  Further, this index value is constrained 
            to be 'numerically higher than' the index value of the other 
            vsiLogicalIfTable entry, indexed by vsiXCLogicalIfLow,
-           supporting this cross connect."
+         supporting this cross-connect."
      ::= { vsiXCEntry 3 }
  
 vsiXCIndex           OBJECT-TYPE
      SYNTAX          VsiXCIndex
-     MAX-ACCESS      not-accessible
+     MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "A unique value greater than zero, for each crossconnect
+        "A unique value greater than zero, for each cross-connect
            within the set of VsiXCTable entries indexed by
            vsiXCLogicalIfLow and vsiXCLogicalIfHi.
-           The value should remain constant after a crossconnect
+         The value should remain constant after a cross-connect
            is initialized.  These values are assigned in sequence
            by the management agent, starting from one (1)."
      ::= { vsiXCEntry 4 }
@@ -976,12 +1110,13 @@ vsiXCState          OBJECT-TYPE
      MAX-ACCESS      read-only
      STATUS          current
      DESCRIPTION
-          "The operational state of the cross connect, as reported
+        "The operational state of the cross-connect, as reported
            to the VSI master by the VSI slave.  
            deleted(1): the connection does not exist.
            reserved(2): connection is in the reserved state.
            committed(3): connection is in the committed state.
-           reservedFail(4): connection is reserved but has an internal failure."
+         reservedFail(4): connection is reserved but has an internal 
+                          failure."
       ::= { vsiXCEntry 5 }
  
 vsiXCVpiLow          OBJECT-TYPE
@@ -1024,36 +1159,271 @@ vsiXCVciHi           OBJECT-TYPE
            given by vsiXCLogicalIfHi."
      ::= { vsiXCEntry 9 }
 
+
+
+-- Notification Configuration
+
+vsiControllerTrapEnable OBJECT-TYPE
+     SYNTAX        TruthValue
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION
+        "If this object is true, both vsiControllerAdded and 
+         vsiControllerDeleted notifications are enabled."
+     DEFVAL { false }
+     ::= { ciscoVsiMasterObjects 5 }
+
+vsiSessionTrapEnable OBJECT-TYPE
+     SYNTAX        TruthValue
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION
+        "If this object is true, both vsiSessionUp
+         and vsiSessionDown notifications are enabled."
+     DEFVAL { false }
+     ::= { ciscoVsiMasterObjects 6 }
+
+vsiLogicalIfTrapEnable OBJECT-TYPE
+     SYNTAX        TruthValue
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION
+        "If this object is true, both vsiLogicalIfUp
+         and vsiLogicalIfDown notifications are enabled."
+     DEFVAL { false }
+     ::= { ciscoVsiMasterObjects 7 }
+
+vsiXCTrapEnable OBJECT-TYPE
+     SYNTAX        TruthValue
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION
+        "If this object is true, both vsiXCFailed and
+         vsiLcnExhaustionNotice notifications are enabled."
+     DEFVAL { false }
+     ::= { ciscoVsiMasterObjects 8 }
+
+vsiVSITrapEnable OBJECT-TYPE
+     SYNTAX        TruthValue
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION
+        "If this object is true, all of 
+         vsiControllerTrapEnable, vsiSessionTrapEnable, 
+         vsiLogicalIfTrapEnable, and vsiXCTrapEnable
+         are also set to true.  This allows for enabling
+         and disabling all notifications as a group."
+     DEFVAL { false }
+     ::= { ciscoVsiMasterObjects 9 }
+
+--
+--   Notifications
+--
+
+vsiControllerAdded NOTIFICATION-TYPE
+     OBJECTS     { vsiControllerType }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when a vsiMasterControllerEntry 
+         is added to the vsiMasterControllerTable.
+
+         The vsiControllerType object identifies the type and instance
+         of the entry that was added.
+
+         The agent will not generate this notification if the
+         vsiControllerTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 1 }
+
+vsiControllerDeleted NOTIFICATION-TYPE
+     OBJECTS     { vsiControllerType }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when a vsiMasterControllerEntry 
+         is deleted from the vsiMasterControllerTable.
+
+         The vsiControllerType object identifies the type and instance
+         of the entry that was deleted.
+
+         The agent will not generate this notification if the
+         vsiControllerTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 2 }
+
+vsiSessionUp NOTIFICATION-TYPE
+     OBJECTS     { vsiSessionState}
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when the vsiSessionState
+         object transitions to the established(8) state.
+
+         The vsiSessionState object identifies the state and instance
+         of the session, after the session has made the transition that 
+         caused the notification to be generated.
+
+         The agent will not generate this notification if the
+         vsiSessionTrapEnable object is equal to 'false'."
+
+     ::= { ciscoVsiMasterNotifications 3 }
+
+vsiSessionDown NOTIFICATION-TYPE
+     OBJECTS     { vsiSessionState }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when the vsiSessionState
+         object transitions from any of unknown(1), configuring(2), or
+         established(8) state to shutdownStarting(9) states.  
+         This notification is also generated when the vsiSessionState 
+         transitions from configuring(2) or established(8) state to 
+         the unknown(1) state.
+
+         The vsiSessionState object identifies the state and instance
+         of the session, after the session has made the transition that 
+         caused the notification to be generated.
+
+         The agent will not generate this notification if the
+         vsiSessionTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 4 }
+
+vsiLogicalIfUp NOTIFICATION-TYPE
+     OBJECTS     { vsiLogicalIfOperState }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when the vsiLogicalIfOperState
+         object transitions to the active(2) state.
+
+         The vsiLogicalIfOperState object identifies the state and
+         instance of the logical interface, after the logical interface
+         has made the transition that caused the notification to be 
+         generated.
+
+         The agent will not generate this notification if the
+         vsiLogicalIfTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 5 }
+
+vsiLogicalIfDown NOTIFICATION-TYPE
+     OBJECTS     { vsiLogicalIfOperState }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when the vsiLogicalIfOperState
+         object transitions from the active(2) state to either the
+         failedExternal(3) or failedInternal(4) state.
+
+         The vsiLogicalIfOperState object identifies the state and
+         instance of the logical interface, after the logical interface
+         has made the transition that caused the notification to be 
+         generated.
+
+         The agent will not generate this notification if the
+         vsiLogicalIfTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 6 }
+  
+vsiXCFailed NOTIFICATION-TYPE
+     OBJECTS     { vsiXCControllerIndex,
+                   vsiXCLogicalIfLow,
+                   vsiXCLogicalIfHi }
+     STATUS      current
+     DESCRIPTION
+        "This notification is generated when an attempt to create a
+         cross-connect fails.  Failure means the slave has answered
+         a connect command with a nak, reject, or error response.
+
+         The vsiXCControllerIndex object identifies the 
+         VsiControllerIndex of the VSI controller through which the 
+         cross-connect was attempted.
+         The vsiXCLogicalIfLow object provides the lower valued
+         VsiLogicalIfIndex of the logical interface on which the 
+         cross-connect was attempted.
+         The vsiXCLogicalIfHi object provides the higher valued
+         VsiLogicalIfIndex of the logical interface on which the 
+         cross-connect was attempted.
+
+         The agent will not generate this notification if the
+         vsiXCTrapEnable object is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 7 }
+
+vsiLcnExhaustionNotice NOTIFICATION-TYPE
+     OBJECTS     { vsiControllerIndex,
+                   vsiAvailableChnlThresholdStatus }
+     STATUS      current
+     DESCRIPTION
+        "As cross-connects on logical interfaces are instantiated or
+         released, and available channel counts are respectively
+         diminished or augmented, there is a potential for the
+         available channel counts to cross a threshold.  The threshold
+         value may be crossed in the positive direction as the
+         available channel count is rising, or in a negative direction
+         as the available channel count is falling.  The threshold
+         values are described as the vsiAvailableChnlWarnThreshold and  
+         the vsiAvailableChnlAlarmThreshold objects.  
+
+         The vsiControllerIndex identifies the controller domain in
+         which the threshold event took place.
+         The vsiAvailableChnlThresholdStatus indicates the particular 
+         kind of threshold crossing that occurred.
+
+         When comparison with vsiAvailableChnlWarnThreshold indicates a 
+         negative crossing, this notification, with 
+         vsiAvailableChnlThresholdStatus:warning(1) is emitted.
+         When comparison with vsiAvailableChnlAlarmThreshold indicates
+         a negative threshold violation, this notification, with
+         vsiAvailableChnlThresholdStatus:alarm(2) is emitted.  
+         When comparison with vsiAvailableChnlWarnThreshold indicates a
+         positive threshold crossing, and if the preceeding
+         vsiLcnExhaustionNotice had been sent with the
+         vsiAvailableChnlThresholdStatus:alarm(2) parameter, this
+         notification, with vsiAvailableChnlThresholdStatus:recovery(3)
+         is emitted.
+
+         The agent will not generate this notification if the 
+         vsiXCTrapEnable is equal to 'false'."
+     ::= { ciscoVsiMasterNotifications 8 }
+
+
+-- End of notifications.
+
+
 --********************************************************************
 -- Module Conformance Statement
 --********************************************************************
  
-ciscoVsiMasterGroups      OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 1 }
-ciscoVsiMasterCompliances OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 2 }
+ciscoVsiMasterGroups
+                  OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 1 }
+ciscoVsiMasterCompliances 
+                  OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 2 }
  
 --
 -- Compliance Statements
 --
 
     ciscoVsiMasterModuleCompliance MODULE-COMPLIANCE
-          STATUS current
+          STATUS deprecated
           DESCRIPTION
-              "The basic implentation requirements for agents that support
-               this VSI Master MIB."
+             "The basic implentation requirements for agents that 
+              support this VSI Master MIB."
           MODULE -- this module
               MANDATORY-GROUPS    { ciscoVsiMasterGeneralGroup }
+          ::= { ciscoVsiMasterCompliances 1 }
 
+    ciscoVsi2MasterModuleCompliance MODULE-COMPLIANCE
+          STATUS current
+          DESCRIPTION
+             "The implentation requirements for agents that
+              support the VSI Master MIB with Notifications."
+          MODULE -- this module
+              MANDATORY-GROUPS  { ciscoVsiMasterGeneralGroup,
+                                  ciscoVsi2MasterGroup,
+                                  ciscoVsi2AlarmControlGroup,
+                                  ciscoVsi2MasterNotificationGroup   }
           OBJECT     vsiSpecifiedVersion
           MIN-ACCESS read-only
           DESCRIPTION
              "Write access is not required."
-
-          ::= { ciscoVsiMasterCompliances 1 }
+          ::= { ciscoVsiMasterCompliances 2 }
 
       -- units of conformance
  
       ciscoVsiMasterGeneralGroup OBJECT-GROUP
           OBJECTS {
+              vsiControllerIndex,
               vsiControllerId,
               vsiCrossConnects,
               vsiControllerType,
@@ -1073,6 +1443,8 @@ ciscoVsiMasterCompliances OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 2 }
               vsiSessionCmdsPending,
               vsiSessionActiveId,
               vsiSessionPowerupId,
+              vsiLogicalIfControllerIndex,
+              vsiLogicalIfIndex,
               vsiLogicalIfName,
               vsiLogicalIfOperState,
               vsiLogicalIfAdminState,
@@ -1099,6 +1471,10 @@ ciscoVsiMasterCompliances OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 2 }
               vsiLogicalIfMaxVci,
               vsiLogicalControlIfIndex,
               vsiLogicalIfSessionIndex,
+              vsiXCControllerIndex,
+              vsiXCLogicalIfLow,
+              vsiXCLogicalIfHi,
+              vsiXCIndex,
               vsiXCState,
               vsiXCVpiLow,
               vsiXCVciLow,
@@ -1110,5 +1486,50 @@ ciscoVsiMasterCompliances OBJECT IDENTIFIER ::= { ciscoVsiMasterConformance 2 }
               "Objects that apply to all VSI Master implementations."
           ::= { ciscoVsiMasterGroups 1 }
  
+      ciscoVsi2MasterGroup OBJECT-GROUP
+          OBJECTS {
+              vsiControlIfIpAddress,
+              vsiAvailableChnlWarnThreshold,
+              vsiAvailableChnlAlarmThreshold,
+              vsiAvailableChnlThresholdStatus
+          }
+          STATUS    current
+          DESCRIPTION
+              "Objects that apply to all VSI Master implementations."
+          ::= { ciscoVsiMasterGroups 2 }
+
+      ciscoVsi2AlarmControlGroup  OBJECT-GROUP
+          OBJECTS { 
+              vsiControllerTrapEnable,
+              vsiSessionTrapEnable,
+              vsiLogicalIfTrapEnable,
+              vsiXCTrapEnable,
+              vsiVSITrapEnable
+          }
+          STATUS  current
+          DESCRIPTION
+              "Collection of objects needed to control 
+               (enable and disable)
+               the generation of associated Notifications."
+          ::= { ciscoVsiMasterGroups 3 }
+
+      ciscoVsi2MasterNotificationGroup NOTIFICATION-GROUP
+          NOTIFICATIONS { vsiControllerAdded,
+                          vsiControllerDeleted,
+                          vsiSessionUp,
+                          vsiSessionDown,
+                          vsiLogicalIfUp,
+                          vsiLogicalIfDown,
+                          vsiXCFailed,
+                          vsiLcnExhaustionNotice }
+          STATUS  current
+          DESCRIPTION
+               "Set of notifications implemented in this module."
+          ::= { ciscoVsiMasterGroups 4 }
+
+ 
+
 END
+
+
 

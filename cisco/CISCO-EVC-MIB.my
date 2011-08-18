@@ -2,8 +2,9 @@
 -- CISCO-EVC-MIB.my : Cisco Ethernet Virtual Connection MIB
 --   
 -- January 2007, Viet Nguyen
+-- April 2008, Pravin Gohite
 --   
--- Copyright (c) 2007 by Cisco Systems, Inc.
+-- Copyright (c) 2007-2008 by Cisco Systems Inc.
 --   
 -- All rights reserved.
 -- *****************************************************************
@@ -41,7 +42,7 @@ IMPORTS
 
 
 ciscoEvcMIB MODULE-IDENTITY
-    LAST-UPDATED    "200712200000Z"
+    LAST-UPDATED    "200805010000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -75,6 +76,7 @@ ciscoEvcMIB MODULE-IDENTITY
         associated ingress and egress interface, of every device, 
         through which the EVC passes.  A service instance represents
         these flow points where a service passes through an interface.  
+
         From an operational perspective, a service instance serves 
         three purposes: 
             1.  Defines the instance of a particular EVC service on
@@ -135,11 +137,15 @@ ciscoEvcMIB MODULE-IDENTITY
             I-SID: Service Instance Identifier field in Ethernet 
             802.1ah frame
 
+            MAC: Media Access Control
+
             MEN: Metro Ethernet Network 
 
             NNI: Network to Network Interface
 
             OAM: Operations Administration and Management
+
+            PPPoE: Point-to-Point Protocol over Ethernet
 
             Service frame: An Ethernet frame transmitted across the 
             UNI toward the service provider or an Ethernet frame 
@@ -163,6 +169,32 @@ ciscoEvcMIB MODULE-IDENTITY
             UNI-N: User Network Interface, service provider side
 
             VLAN: Virtual Local Area Network"
+    REVISION        "200805010000Z"
+    DESCRIPTION
+        "- Added following enums to cevcSIOperStatus:
+        * deleted(4)
+        * errorDisabled(5)
+        * unknown(6)
+
+        - Added following named bits to cevcSIMatchEncapValid:
+        * payloadTypes(3)
+        * priorityCos(4)
+        * dot1qNativeVlan(5)
+        * dot1adNativeVlan(6)
+        * encapExact(7)
+
+        - The Object cevcSIMatchEncapPayloadType is replaced by
+        new object cevcSIMatchEncapPayloadTypes to support multiple
+        payload types for service instance match criteria.
+
+        - Added new object cevcSIMatchEncapPriorityCos to 
+        cevcSIMatchEncapTable.
+
+        - Added new Compliance ciscoEvcMIBComplianceRev1.
+
+        - Added new Object Group cevcSIMatchCriteriaGroupRev1.
+
+        - Miscellaneous updates/corrections."
     REVISION        "200712200000Z"
     DESCRIPTION
         "Initial version of this MIB module."
@@ -770,11 +802,8 @@ cevcEvcTable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table contains a list of EVCs, their service attributes
-        and operational status.
-
-        This table has an one-to-one dependent relationship on the
-        cevcEvcTable, containing a row for each EVC."
+        "This table contains a list of EVCs and their service
+        attributes."
     ::= { cevcEvc 1 }
 
 cevcEvcEntry OBJECT-TYPE
@@ -946,7 +975,8 @@ cevcEvcOperStatus OBJECT-TYPE
 
         'unknown'
             Not enough information available regarding the EVC to
-            determine the operational status at this time.
+            determine the operational status at this time or EVC 
+            operational status is undefined.
 
         'active'
             Fully operational between the UNIs in the EVC.  
@@ -1147,8 +1177,8 @@ cevcSITable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table lists each service instance and its association
-        to an interface/media type."
+        "This table lists each service instance and its service
+        attributes."
     ::= { cevcServiceInstance 1 }
 
 cevcSIEntry OBJECT-TYPE
@@ -1188,7 +1218,9 @@ cevcSIIndex OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "This object indicates an arbitrary integer-value that uniquely
-        identifies a service instance" 
+        identifies a service instance.  An implementation MAY assign
+        an ifIndex-value assigned to the service instance to
+        cevcSIIndex." 
     ::= { cevcSIEntry 1 }
 
 cevcSIRowStatus OBJECT-TYPE
@@ -1327,8 +1359,8 @@ cevcSIForwardingType OBJECT-TYPE
             'bridgeDomain'
                 Bridge domain is used to forward service frames by a
                 service instance.  If cevcSIForwardingType is 
-                'bridge domainDomain(1)', there must exist an active
-                row in the cevcSIForwardingBdTable with the same
+                'bridgeDomain(1)', there must exist an active
+                row in the cevcSIForwardBdTable with the same
                 index value of cevcSIIndex.  The object
                 cevcSIForwardBdNumber indicates the identifier of
                 the bridge domain component being used." 
@@ -1342,8 +1374,7 @@ cevcSIStateTable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table lists each service instance and its service
-        attributes.
+        "This table lists statical/status data of the service instance.
 
         This table has an one-to-one dependent relationship on the
         cevcSITable, containing a row for each service instance."
@@ -1371,7 +1402,10 @@ cevcSIOperStatus OBJECT-TYPE
     SYNTAX          INTEGER  {
                         up(1),
                         down(2),
-                        adminDown(3)
+                        adminDown(3),
+                        deleted(4),
+                        errorDisabled(5),
+                        unknown(6)
                     }
     MAX-ACCESS      read-only
     STATUS          current
@@ -1381,20 +1415,34 @@ cevcSIOperStatus OBJECT-TYPE
 
 
             'up' 
-                The service instance is fully operational and able to
+                Service instance is fully operational and able to
                 transfer traffic.
 
 
             'down'
-                The service instance is down and not capable of
+                Service instance is down and not capable of
                 transferring traffic, and is not administratively
                 configured to be down by management system. 
 
 
             'adminDown'
-                The service instance has been explicitly configured to
+                Service instance has been explicitly configured to
                 administratively down by a management system and is not
-                capable of transferring traffic." 
+                capable of transferring traffic.
+
+
+            'deleted'
+                Service instance has been deleted.
+
+
+            'errorDisabled'
+                Service instance has been shut down due to MAC 
+                security violations. 
+
+
+            'unknown'
+                Operational status of service instance is unknown or
+                undefined." 
     ::= { cevcSIStateEntry 1 }
  
 
@@ -1963,7 +2011,7 @@ cevcSIMatchEncapTable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table contains the encapulation based match criteria for
+        "This table contains the encapsulation based match criteria for
         each service instance.  
 
         This table has a sparse dependent relationship on the 
@@ -1974,7 +2022,8 @@ cevcSIMatchEncapTable OBJECT-TYPE
             - 'dot1q'
             - 'dot1ad'
             - 'untaggedAndDot1q'
-            - 'untaggedAndDot1ad'"
+            - 'untaggedAndDot1ad'
+            - 'priorityTagged'"
     ::= { cevcServiceInstance 7 }
 
 cevcSIMatchEncapEntry OBJECT-TYPE
@@ -2006,7 +2055,9 @@ CevcSIMatchEncapEntry ::= SEQUENCE {
         cevcSIMatchEncapEncapsulation INTEGER ,
         cevcSIMatchEncapPrimaryCos    CiscoCosList,
         cevcSIMatchEncapSecondaryCos  CiscoCosList,
-        cevcSIMatchEncapPayloadType   INTEGER 
+        cevcSIMatchEncapPayloadType   INTEGER,
+        cevcSIMatchEncapPayloadTypes  BITS,
+        cevcSIMatchEncapPriorityCos   CiscoCosList
 }
 
 cevcSIMatchEncapRowStatus OBJECT-TYPE
@@ -2044,7 +2095,12 @@ cevcSIMatchEncapValid OBJECT-TYPE
     SYNTAX          BITS {
                         primaryCos(0),
                         secondaryCos(1),
-                        payloadType(2)
+                        payloadType(2),
+                        payloadTypes(3),
+                        priorityCos(4),
+                        dot1qNativeVlan(5),
+                        dot1adNativeVlan(6),
+                        encapExact(7)
                     }
     MAX-ACCESS      read-create
     STATUS          current
@@ -2079,6 +2135,39 @@ cevcSIMatchEncapValid OBJECT-TYPE
                 This bit set to '1' specifies that the value of
                 corresponding instance of cevcSIMatchEncapPayloadType
                 is used as service match criteria for the service
+                instance.
+
+
+            'payloadTypes'
+                This bit set to '1' specifies that the value of
+                corresponding instance of cevcSIMatchEncapPayloadTypes
+                is used as service match criteria for the service
+                instance.
+
+
+            'priorityCos'
+                This bit set to '1' specifies that the value of
+                corresponding instance of cevcSIMatchEncapPriorityCos
+                is used as service match criteria for the service
+                instance.
+
+
+            'dot1qNativeVlan'
+                This bit set to '1' specifies that the IEEE 802.1q
+                tag with native vlan is used as service match 
+                criteria for the service instance.
+
+
+            'dot1adNativeVlan'
+                This bit set to '1' specifies that the IEEE 802.1ad
+                tag with native vlan is used as service match 
+                criteria for the service instance.
+
+
+            'encapExact'
+                This bit set to '1' specifies that a service frame is
+                mapped to the service instance only if it matches
+                exactly to the encapsulation specified by the service
                 instance." 
     ::= { cevcSIMatchEncapEntry 3 }
 
@@ -2159,7 +2248,7 @@ cevcSIMatchEncapPayloadType OBJECT-TYPE
                         payloadType0x0800ip(2)
                     }
     MAX-ACCESS      read-create
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "This object specifies the PayloadType(etype/protocol type)
         values that the service instance uses as a service match
@@ -2172,14 +2261,72 @@ cevcSIMatchEncapPayloadType OBJECT-TYPE
                 None of the following.
 
 
-            'payloadType0x0800'
+            'payloadType0x0800ip'
                 Payload type value for IP is 0x0800.
 
 
         This object is valid only when 'payloadType' bit is set to '1'
         in corresponding instance of the object 
-        cevcSIMatchEncapValid." 
+        cevcSIMatchEncapValid.
+
+        This object is deprecated by cevcSIMatchEncapPayloadTypes." 
     ::= { cevcSIMatchEncapEntry 7 }
+ 
+cevcSIMatchEncapPayloadTypes OBJECT-TYPE
+    SYNTAX          BITS {
+                        payloadTypeIPv4(0),
+                        payloadTypeIPv6(1),
+                        payloadTypePPPoEDiscovery(2),
+                        payloadTypePPPoESession(3),
+                        payloadTypePPPoEAll(4)
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the etype/protocol type values that
+        service instance uses as a service match criteria.  This
+        object is required when the forwarding of layer-2 ethernet
+        packet is done through the payload ether type i.e IP etc.
+
+
+            'payloadTypeIPv4'
+                Ethernet payload type value for IPv4 protocol.
+
+
+            'payloadTypeIPv6'
+                Ethernet payload type value for IPv6 protocol.
+
+
+            'payloadTypePPPoEDiscovery'
+                Ethernet payload type value for PPPoE discovery
+                stage.
+
+
+            'payloadTypePPPoESession'
+                Ethernet payload type value for PPPoE session
+                stage.
+
+
+            'payloadTypePPPoEAll'
+                All ethernet payload type values for PPPoE protocol.
+
+        This object is valid only when 'payloadTypes' bit is set to
+        '1' in corresponding instance of the object
+        cevcSIMatchEncapValid.
+
+        This object deprecates cevcSIMatchEncapPayloadType." 
+    ::= { cevcSIMatchEncapEntry 8 }
+
+cevcSIMatchEncapPriorityCos OBJECT-TYPE
+    SYNTAX          CiscoCosList
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the priority CoS values which the
+        service instance uses as service match criteria.  This 
+        object is valid only when 'priorityCos' bit is set to '1'
+        in corresponding instance of the object cevcSIMatchEncapValid." 
+    ::= { cevcSIMatchEncapEntry 9 }
  
 
 -- Service Instance Primary Vlan List Table
@@ -2536,7 +2683,7 @@ ciscoEvcMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoEvcMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The new compliance statement for entities which implement
         the CISCO-EVC-MIB."
@@ -2810,6 +2957,294 @@ ciscoEvcMIBCompliance MODULE-COMPLIANCE
         "Write access is not required."
     ::= { ciscoEvcMIBCompliances 1 }
 
+ciscoEvcMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the CISCO-EVC-MIB.
+
+        This compliance module deprecates
+        ciscoEvcMIBCompliance."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cevcSystemGroup,
+                        cevcPortGroup,
+                        cevcEvcGroup,
+                        cevcSIGroup,
+                        cevcEvcNotificationConfigGroup,
+                        cevcEvcNotificationGroup
+                    }
+
+    GROUP           cevcSICosMatchCriteriaGroup
+    DESCRIPTION
+        "This group is optional for Cos MatchCriteria."
+
+    GROUP           cevcSIVlanRewriteGroup
+    DESCRIPTION
+        "This group is optional for the Vlan Rewrite for Service
+        Instance."
+
+    GROUP           cevcSIMatchCriteriaGroupRev1
+    DESCRIPTION
+        "This group is optional for the Match Criteria information of
+        of a service instance."
+
+    GROUP           cevcSIForwardGroup
+    DESCRIPTION
+        "This group is optional for the Forwarding information of
+        service instance."
+
+    OBJECT          cevcPortMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcUniIdentifier
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcUniPortType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcUniServiceAttributes
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcPortL2ControlProtocolAction
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcIdentifier
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcCfgUnis
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSITargetType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSITarget
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIEvcIndex
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIAdminStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIForwardingType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteAction
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteEncapsulation
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteVlan1
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteVlan2
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIVlanRewriteSymmetric
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIL2ControlProtocolAction
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSICEVlanRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSICEVlanStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSICEVlanEndingVlan
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchCriteriaType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapValid
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapEncapsulation
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapPrimaryCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapSecondaryCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapPayloadTypes
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIMatchEncapPriorityCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIPrimaryVlanRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIPrimaryVlanStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIPrimaryVlanEndingVlan
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSISecondaryVlanRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSISecondaryVlanStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSISecondaryVlanEndingVlan
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIForwardBdRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIForwardBdStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcSIForwardBdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cevcEvcNotifyEnabled
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoEvcMIBCompliances 2 }
+
 -- Units of Conformance
 
 cevcSystemGroup OBJECT-GROUP
@@ -2944,7 +3379,7 @@ cevcSIMatchCriteriaGroup OBJECT-GROUP
                         cevcSISecondaryVlanStorageType,
                         cevcSISecondaryVlanEndingVlan
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A collection of objects providing match criteria information
         for service instances."
@@ -2983,7 +3418,45 @@ cevcEvcNotificationGroup NOTIFICATION-GROUP
         required to implement."
     ::= { ciscoEvcMIBGroups 10 }
 
+cevcSIMatchCriteriaGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cevcSIMatchRowStatus,
+                        cevcSIMatchStorageType,
+                        cevcSIMatchCriteriaType,
+                        cevcSIMatchEncapRowStatus,
+                        cevcSIMatchEncapStorageType,
+                        cevcSIMatchEncapValid,
+                        cevcSIMatchEncapEncapsulation,
+                        cevcSIMatchEncapPrimaryCos,
+                        cevcSIMatchEncapSecondaryCos,
+                        cevcSIMatchEncapPayloadTypes,
+                        cevcSIMatchEncapPriorityCos,
+                        cevcSIPrimaryVlanRowStatus,
+                        cevcSIPrimaryVlanStorageType,
+                        cevcSIPrimaryVlanEndingVlan,
+                        cevcSISecondaryVlanRowStatus,
+                        cevcSISecondaryVlanStorageType,
+                        cevcSISecondaryVlanEndingVlan
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing match criteria information
+        for service instances.
+
+        This group deprecates the old group cevcSIMatchCriteriaGroup."
+    ::= { ciscoEvcMIBGroups 11 }
+
 END
+
+
+
+
+
+
+
+
+
+
 
 
 

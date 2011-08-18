@@ -6,28 +6,36 @@
 --  April 2001, A S Kiran Koushik
 --  May  2004, Arul Mozhi 
 --
--- Copyright (c) 2001, 2002, 2003 & 2004  by cisco Systems, Inc.
+-- Copyright (c) 2001-2003, 2004, 2008 by cisco Systems Inc.
 -- All rights reserved.
 --
 -- *****************************************************************
---
 
 CISCO-ENTITY-EXT-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-	MODULE-IDENTITY, OBJECT-TYPE,
-        Unsigned32              FROM SNMPv2-SMI
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    Unsigned32
+        FROM SNMPv2-SMI
         MODULE-COMPLIANCE, 
-        OBJECT-GROUP            FROM SNMPv2-CONF
-	TEXTUAL-CONVENTION      FROM SNMPv2-TC
-        SnmpAdminString         FROM SNMP-FRAMEWORK-MIB
+    OBJECT-GROUP
+        FROM SNMPv2-CONF
+    TEXTUAL-CONVENTION
+        FROM SNMPv2-TC
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
 	entPhysicalIndex,
-        entPhysicalEntry        FROM ENTITY-MIB
-        ciscoMgmt               FROM CISCO-SMI;
+    entPhysicalEntry
+        FROM ENTITY-MIB
+    Unsigned64
+        FROM CISCO-TC
+    ciscoMgmt
+        FROM CISCO-SMI;
 
 
 ciscoEntityExtMIB MODULE-IDENTITY
-        LAST-UPDATED  "200407060000Z"
+    LAST-UPDATED    "200811240000Z"
         ORGANIZATION  "Cisco Systems, Inc."
         CONTACT-INFO
                 "       Cisco Systems
@@ -77,6 +85,16 @@ ciscoEntityExtMIB MODULE-IDENTITY
 		 
 		 Booting is the process of initializing the
 		 hardware and starting the Operating System."
+    REVISION        "200811240000Z"
+    DESCRIPTION
+        "Added following new objects to ceExtPhysicalProcessorTable.
+        ceExtProcessorRamOverflow and ceExtHCProcessorRam
+
+        Added following new groups to ciscoEntityExtMIBGroups.
+        ceExtPhyProcessorOverflowGroup and ceExtPhyProcessorHCGroup.
+
+        Added a new compliance ciscoEntityExtMIBComplianceRev3 which
+        deprecates ciscoEntityExtMIBComplianceRev2."
     REVISION     "200407060000Z"
     DESCRIPTION
 	    "Added a new table object 'ceExtEntPhysicalTable' ." 
@@ -102,12 +120,11 @@ ciscoEntityExtMIB MODULE-IDENTITY
 ::= { ciscoMgmt 195 }
 
 
-ciscoEntityExtMIBObjects  
-	OBJECT IDENTIFIER ::= { ciscoEntityExtMIB 1 }
+ciscoEntityExtMIBObjects  OBJECT IDENTIFIER
+    ::= { ciscoEntityExtMIB 1 }
 
---
+
 -- textual conventions
---
 
 ConfigRegisterValue ::= TEXTUAL-CONVENTION
 	DISPLAY-HINT "2x"
@@ -179,10 +196,7 @@ ConfigRegisterValue ::= TEXTUAL-CONVENTION
 				it cannot boot any image in the
 				ceExtSysBootImageList, it 
 				stays in ROM monitor mode."
-
-
        SYNTAX       OCTET STRING (SIZE (2))
-
 
 BootImageList ::= TEXTUAL-CONVENTION
     STATUS       current
@@ -214,16 +228,9 @@ BootImageList ::= TEXTUAL-CONVENTION
 	     would be exceeded.
 
 	     For example:
-		disk0:image1;disk0:image2;+
-	     "
-	
+           disk0:image1;disk0:image2;+"
     SYNTAX      OCTET STRING (SIZE (0..255))
-
-
-
---
 -- ceExtPhysicalProcessorTable
---
 
 ceExtPhysicalProcessorTable OBJECT-TYPE
     SYNTAX  SEQUENCE OF CeExtPhysicalProcessorEntry
@@ -233,8 +240,7 @@ ceExtPhysicalProcessorTable OBJECT-TYPE
 	    "The ceExtPhysicalProcessorTable extends
 	     the ENTITY-MIB entPhysicalTable for modules
 	     (Non FRUs(Field Replacable Units) or FRUs)."
-    REFERENCE
-	    "RFC2737: Section 2.12.1"
+    REFERENCE       "RFC2737: Section 2.12.1"
     ::= { ciscoEntityExtMIBObjects 1 }
 
 ceExtPhysicalProcessorEntry OBJECT-TYPE
@@ -270,7 +276,9 @@ ceExtPhysicalProcessorEntry OBJECT-TYPE
 CeExtPhysicalProcessorEntry  ::= SEQUENCE {
     ceExtProcessorRam			Unsigned32,
     ceExtNVRAMSize			Unsigned32,
-    ceExtNVRAMUsed			Unsigned32
+        ceExtNVRAMUsed            Unsigned32,
+        ceExtProcessorRamOverflow Unsigned32,
+        ceExtHCProcessorRam       Unsigned64
 }
 
 ceExtProcessorRam OBJECT-TYPE
@@ -306,6 +314,30 @@ ceExtNVRAMUsed OBJECT-TYPE
 		 is irrelevant if ceExtNVRAMSize is 0."
         ::= { ceExtPhysicalProcessorEntry 3 }
 
+ceExtProcessorRamOverflow OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object represents the upper 32-bit of ceExtProcessorRam.
+        This object needs to be supported only if the available RAM
+        bytes exceeds 32-bit, otherwise this object value would be set
+        to 0." 
+    ::= { ceExtPhysicalProcessorEntry 4 }
+
+ceExtHCProcessorRam OBJECT-TYPE
+    SYNTAX          Unsigned64
+    UNITS           "bytes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object represents the total number of bytes of RAM
+        available on the Processor. This object is a 64-bit version
+        of ceExtProcessorRam." 
+    ::= { ceExtPhysicalProcessorEntry 5 }
+ 
+
 
 ceExtConfigRegTable OBJECT-TYPE
     SYNTAX  SEQUENCE OF CeExtConfigRegEntry
@@ -314,8 +346,7 @@ ceExtConfigRegTable OBJECT-TYPE
     DESCRIPTION
 	    "The ceExtConfigRegTable extends
 	     the ENTITY-MIB entPhysicalTable."
-    REFERENCE
-	    "RFC2737: Section 2.12.1"		
+    REFERENCE       "RFC2737: Section 2.12.1"
     ::= { ciscoEntityExtMIBObjects 2 }
 
 ceExtConfigRegEntry OBJECT-TYPE
@@ -332,7 +363,6 @@ ceExtConfigRegEntry OBJECT-TYPE
 	
 	     Entries are removed when the module is reset or 
 	     removed."
-
     INDEX   { entPhysicalIndex }
     ::= { ceExtConfigRegTable 1 }
 
@@ -383,9 +413,9 @@ ceExtKickstartImageList OBJECT-TYPE
         DEFVAL { "" }
         ::= { ceExtConfigRegEntry 4 }
 
---
+
 -- ceExtEntityLEDTable
---
+
 ceExtEntityLEDTable  OBJECT-TYPE
     SYNTAX     SEQUENCE OF CeExtEntityLEDEntry
     MAX-ACCESS not-accessible
@@ -402,7 +432,10 @@ ceExtEntityLEDEntry OBJECT-TYPE
         "An entry (conceptual row) in the ceExtEntityLEDTable, 
         containing information about an LED on an entity, identified by 
         entPhysicalIndex. "
-    INDEX { entPhysicalIndex, ceExtEntityLEDType } 
+    INDEX           {
+                        entPhysicalIndex,
+                        ceExtEntityLEDType
+                    } 
     ::= { ceExtEntityLEDTable 1 }
 
 CeExtEntityLEDEntry ::= SEQUENCE {
@@ -451,9 +484,7 @@ ceExtEntityLEDColor OBJECT-TYPE
     ::= { ceExtEntityLEDEntry 2 }
 
 
---
 -- ceExtEntityPhysicalTable
---
 
 ceExtEntPhysicalTable  OBJECT-TYPE
     SYNTAX     SEQUENCE OF CeExtEntPhysicalEntry
@@ -464,8 +495,7 @@ ceExtEntPhysicalTable  OBJECT-TYPE
         a particular physical entity.
 	This table augments the 'entPhysicalTable'  of
         the ENTITY-MIB." 
-    REFERENCE
-	"RFC2737: Section 2.12.1"
+    REFERENCE       "RFC2737: Section 2.12.1"
     ::= { ciscoEntityExtMIBObjects 4 }
 
 ceExtEntPhysicalEntry OBJECT-TYPE
@@ -477,6 +507,7 @@ ceExtEntPhysicalEntry OBJECT-TYPE
         containing additional information about a physical entity, 
         identified by 'entPhysicalIndex'."
     AUGMENTS { entPhysicalEntry }
+ 
     ::= { ceExtEntPhysicalTable 1 }
 
 CeExtEntPhysicalEntry ::= SEQUENCE {
@@ -486,7 +517,8 @@ CeExtEntPhysicalEntry ::= SEQUENCE {
 ceEntPhysicalSecondSerialNum  OBJECT-TYPE
     SYNTAX      SnmpAdminString (SIZE (0..32))
     MAX-ACCESS  read-write
-    STATUS      current DESCRIPTION 
+    STATUS          current
+    DESCRIPTION
         "This object represents the vendor-specific second 
         serial number string for the physical entity. 
         The first serial number string of the physical
@@ -529,47 +561,45 @@ ceEntPhysicalSecondSerialNum  OBJECT-TYPE
 
 
 --Notifications
-ceExtMIBNotificationPrefix 
-	OBJECT IDENTIFIER ::= {ciscoEntityExtMIB 2 }
-ciscoEntityExtMIBNotifications 
-	OBJECT IDENTIFIER ::= {ceExtMIBNotificationPrefix 0 }
 
---
+ceExtMIBNotificationPrefix  OBJECT IDENTIFIER
+    ::= { ciscoEntityExtMIB 2 }
+
+ciscoEntityExtMIBNotifications  OBJECT IDENTIFIER
+    ::= { ceExtMIBNotificationPrefix 0 }
+
 -- conformance information
---
-ciscoEntityExtMIBConformance
-        OBJECT IDENTIFIER ::= { ciscoEntityExtMIB 3 }
 
-ciscoEntityExtMIBCompliances
-        OBJECT IDENTIFIER ::= { ciscoEntityExtMIBConformance 1 }
+ciscoEntityExtMIBConformance  OBJECT IDENTIFIER
+    ::= { ciscoEntityExtMIB 3 }
 
-ciscoEntityExtMIBGroups
-        OBJECT IDENTIFIER ::= { ciscoEntityExtMIBConformance 2 }
+ciscoEntityExtMIBCompliances  OBJECT IDENTIFIER
+    ::= { ciscoEntityExtMIBConformance 1 }
 
---
+ciscoEntityExtMIBGroups  OBJECT IDENTIFIER
+    ::= { ciscoEntityExtMIBConformance 2 }
+
+
 -- compliance statements
---
 
 ciscoEntityExtMIBCompliance MODULE-COMPLIANCE
-    STATUS  deprecated -- superseded by 
-                       -- ciscoEntityExtMIBComplianceRev1
+    STATUS          deprecated
     DESCRIPTION
             "Compliance for SNMP Entities which support modules 
 	     with CPU, NVRAM and configuration register."
     MODULE  -- this module
-    MANDATORY-GROUPS {
-		ceExtPhysicalProcessorGroup
-    }
+    MANDATORY-GROUPS { ceExtPhysicalProcessorGroup }
+
     GROUP ciscoEntityExtConfigRegGroup
     DESCRIPTION
 	    "The ciscoEntityExtConfigRegGroup is an optional group
 	     containing objects providing information about
 	     configuration register."
+
     GROUP ceExtSysBootImageListGroup
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides information about the system boot images."
-
     ::= { ciscoEntityExtMIBCompliances 1 }
 
 ciscoEntityExtMIBComplianceRev1 MODULE-COMPLIANCE
@@ -578,51 +608,54 @@ ciscoEntityExtMIBComplianceRev1 MODULE-COMPLIANCE
             "Compliance for SNMP Entities which support modules 
 	     with CPU, NVRAM and configuration register."
     MODULE  -- this module
-    MANDATORY-GROUPS {
-		ceExtPhysicalProcessorGroup
-    }
+    MANDATORY-GROUPS { ceExtPhysicalProcessorGroup }
+
     GROUP ciscoEntityExtConfigRegGroup
     DESCRIPTION
 	    "The ciscoEntityExtConfigRegGroup is an optional group
 	     containing objects providing information about
 	     configuration register."
+
     GROUP ceExtSysBootImageListGroup
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides information about the system boot images."
+
     GROUP ciscoEntityExtLEDGroup
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides LED information."
+
 	GROUP ceExtSysBootImageListGroupRev1
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides information about the system boot images."   
     ::= { ciscoEntityExtMIBCompliances 2 }
 
-
 ciscoEntityExtMIBComplianceRev2 MODULE-COMPLIANCE
-    STATUS  current
+    STATUS          deprecated
     DESCRIPTION
             "Compliance for SNMP Entities which support modules 
 	     with CPU, NVRAM and configuration register."
     MODULE  -- this module
-    MANDATORY-GROUPS {
-		ceExtPhysicalProcessorGroup
-    }
+    MANDATORY-GROUPS { ceExtPhysicalProcessorGroup }
+
     GROUP ciscoEntityExtConfigRegGroup
     DESCRIPTION
 	    "The ciscoEntityExtConfigRegGroup is an optional group
 	     containing objects providing information about
 	     configuration register."
+
     GROUP ceExtSysBootImageListGroup
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides information about the system boot images."
+
     GROUP ciscoEntityExtLEDGroup
     DESCRIPTION
 	    "This group is an optional group containing an object
 	     which provides LED information."
+
     GROUP ceExtSysBootImageListGroupRev1
     DESCRIPTION
 	    "This group is an optional group containing an object
@@ -635,9 +668,53 @@ ciscoEntityExtMIBComplianceRev2 MODULE-COMPLIANCE
              physical entity."   
     ::= { ciscoEntityExtMIBCompliances 3 }
 
---
+ciscoEntityExtMIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "Compliance for SNMP Entities which support modules
+        with CPU, NVRAM and configuration register."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ceExtPhysicalProcessorGroup }
+
+    GROUP           ciscoEntityExtConfigRegGroup
+    DESCRIPTION
+        "The ciscoEntityExtConfigRegGroup is an optional group
+        containing objects providing information about
+        configuration register."
+
+    GROUP           ceExtSysBootImageListGroup
+    DESCRIPTION
+        "This group is an optional group containing an object
+        which provides information about the system boot images."
+
+    GROUP           ciscoEntityExtLEDGroup
+    DESCRIPTION
+        "This group is an optional group containing an object
+        which provides LED information."
+
+    GROUP           ceExtSysBootImageListGroupRev1
+    DESCRIPTION
+        "This group is an optional group containing an object
+        which provides information about the system boot images."
+
+    GROUP           ciscoExtEntityPhysicalGroup
+    DESCRIPTION
+        "This group is an optional group containing an object
+        which provides additional information about the 
+        physical entity."
+
+    GROUP           ceExtPhyProcessorOverflowGroup
+    DESCRIPTION
+        "This group is an optional group for the physical entities which
+        support 32-bit operating system."
+
+    GROUP           ceExtPhyProcessorHCGroup
+    DESCRIPTION
+        "This group is an optional group for the physical entities which
+        support 32-bit operating system."
+    ::= { ciscoEntityExtMIBCompliances 4 }
+
 -- units of conformance
---
 
 ceExtPhysicalProcessorGroup OBJECT-GROUP
     OBJECTS {
@@ -665,9 +742,7 @@ ciscoEntityExtConfigRegGroup OBJECT-GROUP
     ::= { ciscoEntityExtMIBGroups 2 }
 
 ceExtSysBootImageListGroup OBJECT-GROUP
-    OBJECTS {
-	ceExtSysBootImageList
-    }
+    OBJECTS         { ceExtSysBootImageList }
     STATUS  current
     DESCRIPTION
             "A group containing an object providing information 
@@ -684,9 +759,7 @@ ciscoEntityExtLEDGroup OBJECT-GROUP
         ::= { ciscoEntityExtMIBGroups 4}
         
 ceExtSysBootImageListGroupRev1 OBJECT-GROUP
-    OBJECTS {
-	ceExtKickstartImageList
-    }
+    OBJECTS         { ceExtKickstartImageList }
     STATUS  current
     DESCRIPTION
             "A group containing an object providing information 
@@ -695,11 +768,8 @@ ceExtSysBootImageListGroupRev1 OBJECT-GROUP
 	     Implementation of this group is optional."
     ::= { ciscoEntityExtMIBGroups 5 }
 
-   
 ciscoExtEntityPhysicalGroup OBJECT-GROUP
-    OBJECTS {
-	ceEntPhysicalSecondSerialNum
-    }
+    OBJECTS         { ceEntPhysicalSecondSerialNum }
     STATUS  current
     DESCRIPTION
             "The collection of objects for providing additional 
@@ -707,7 +777,37 @@ ciscoExtEntityPhysicalGroup OBJECT-GROUP
 
 	    Implementation of this group is optional."
     ::= { ciscoEntityExtMIBGroups 6 }
+
+ceExtPhyProcessorOverflowGroup OBJECT-GROUP
+    OBJECTS         { ceExtProcessorRamOverflow }
+    STATUS          current
+    DESCRIPTION
+        "The collection of Overflow (upper 32-bit) objects which
+        provides information about physical processor, when the entity
+        runs on 64-bit Operating System (OS). This group is optional for
+        the entities which run on 32-bit OS."
+    ::= { ciscoEntityExtMIBGroups 7 }
+
+ceExtPhyProcessorHCGroup OBJECT-GROUP
+    OBJECTS         { ceExtHCProcessorRam }
+    STATUS          current
+    DESCRIPTION
+        "The collection of High Capacity (HC) objects which provides
+        information about physical processor, when the entity runs on
+        64-bit Operating System (OS). This group is optional for the
+        entities which run on 32-bit OS."
+    ::= { ciscoEntityExtMIBGroups 8 }
+
 END
+
+
+
+
+
+
+
+
+
 
 
 

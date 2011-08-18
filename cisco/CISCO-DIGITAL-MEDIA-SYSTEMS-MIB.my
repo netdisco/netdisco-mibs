@@ -1,9 +1,10 @@
 -- *------------------------------------------------------------------
--- * CISCO-DIGITAL-MEDIA-SYSTEMS-MIB.my:  Cisco Digital Media Systems MIB
+-- * CISCO-DIGITAL-MEDIA-SYSTEMS-MIB.my:  Cisco Digital Media Systems
+-- MIB
 -- *
--- * Mar 2008, S Ramakrishnan
+-- * Jun 2009, S Ramakrishnan
 -- *
--- * Copyright (c) 2007-2008 by cisco Systems Inc.
+-- * Copyright (c) 2007-2008, 2009 by Cisco Systems Inc.
 -- * All rights reserved.
 -- *
 -- *------------------------------------------------------------------
@@ -16,7 +17,8 @@ IMPORTS
     NOTIFICATION-TYPE,
     Counter64,
     Gauge32,
-    Unsigned32
+    Unsigned32,
+    Integer32
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     OBJECT-GROUP,
@@ -26,7 +28,8 @@ IMPORTS
     DateAndTime,
     MacAddress,
     TruthValue,
-    RowStatus
+    RowStatus,
+    TimeStamp
         FROM SNMPv2-TC
     InetAddressType,
     InetAddress
@@ -38,7 +41,7 @@ IMPORTS
 
 
 ciscoDigitalMediaSystemsMIB MODULE-IDENTITY
-    LAST-UPDATED    "200805150000Z"
+    LAST-UPDATED    "200910120000Z"
     ORGANIZATION    "Cisco Systems"
     CONTACT-INFO
             "Cisco Systems
@@ -80,8 +83,8 @@ ciscoDigitalMediaSystemsMIB MODULE-IDENTITY
         Overview of the MIB
 
         This is a MIB Module for managing and monitoring the physical
-        and logical structures in Cisco Digital Media Management System.
-        The MIB reflects the structure as follows:
+        and logical structures in Cisco Digital Media Management
+                System. The MIB reflects the structure as follows:
             * show DMS as an coherent, abstract media management system
             * indicate the physical inventory of DMS
             * indicate the media management features active (licensed)
@@ -138,7 +141,7 @@ ciscoDigitalMediaSystemsMIB MODULE-IDENTITY
 
          j) Capacity Group:
               This section is planned for the future and would define
-              the limits and/capacities of functions of DMS. These
+              the limits and capacities of functions of DMS. These
               include limits such as the type of media encodings that
               are supported, the maximum number of media players that
               may be managed etc.
@@ -158,6 +161,9 @@ ciscoDigitalMediaSystemsMIB MODULE-IDENTITY
               This section defines notifications to signal
               significant events pertaining to this installation of
               DMS."
+    REVISION        "200910120000Z"
+    DESCRIPTION
+        "Added support for High Availability (HA)."
     REVISION        "200805150000Z"
     DESCRIPTION
         "Initial version of this module."
@@ -236,8 +242,25 @@ CDmsElementType ::= TEXTUAL-CONVENTION
         "The type of the DMS inventory element.
 
         DMS supports the following inventory element types
-        among other types: encoders, media players and video
-        portals."
+        among other types: 
+
+        'other': other type not represented by any other enum value
+
+        'encoder': device capable of encoding video media to be
+                                   streamed to DMS endpoints
+
+        'videoPortal': endpoint that delivers video to desktops
+
+        'mediaPlayer': endpoint that delivers video to large LCDs
+
+        'transCoder': device capable of transcoding video from one 
+                      format to another
+
+        'storageServer': device capable of storing media
+
+        'streamingServer': device capable of serving media as a stream
+
+        'dmm': DMS administrative node"
     SYNTAX          INTEGER  {
                         other(1),
                         encoder(2),
@@ -245,7 +268,8 @@ CDmsElementType ::= TEXTUAL-CONVENTION
                         mediaPlayer(4),
                         transCoder(5),
                         storageServer(6),
-                        streamingServer(7)
+                        streamingServer(7),
+                        dmm(8) -- DMS administrative node                        
                     }
 
 CDmsFunctionalStatus ::= TEXTUAL-CONVENTION
@@ -264,6 +288,9 @@ CDmsFunctionalStatus ::= TEXTUAL-CONVENTION
         shutdown: the component is shut down or is
                   shutting down.
 
+        standby: the component is not servicing requests but is
+                 ready to do when needed.
+
         Objects of this type may be used to reboot a DMS
         element by setting value of the object to initialize(1).
 
@@ -275,7 +302,8 @@ CDmsFunctionalStatus ::= TEXTUAL-CONVENTION
                         other(1),
                         initialize(2),
                         active(3),
-                        shutdown(4)
+                        shutdown(4),
+                        standby(5)
                     }
 
 CDmsEmailAddress ::= TEXTUAL-CONVENTION
@@ -313,10 +341,7 @@ CDmsLicensedFeature ::= TEXTUAL-CONVENTION
                         digitalSignage(5),
                         enterpriseTv(6),
                         snmpManagement(7),
-                        digitalMediaPlayer(8) -- This product feature
-                                              -- pertains to the usage of
-                                              -- digital media player to
-                                              -- render streaming media.                        
+                        digitalMediaPlayer(8)
                     }
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- DMS MIB Object Groups
@@ -378,6 +403,9 @@ cdmsEvents  OBJECT IDENTIFIER
 
 cdmsNotifControl  OBJECT IDENTIFIER
     ::= { ciscoDmsMonitorMIBObjects 13 }
+
+cdmsHa  OBJECT IDENTIFIER
+    ::= { ciscoDmsMonitorMIBObjects 10 }
 
 
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -669,7 +697,7 @@ cdmsInventoryElementMetadata OBJECT-TYPE
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "A metadata string associated with this inventory element.
+        "A meta-data string associated with this inventory element.
         This information is interpreted by the DMS functional
         components using inventory elements programmatically
         within the system." 
@@ -838,6 +866,511 @@ cdmsAuthenticationMode OBJECT-TYPE
     DESCRIPTION
         "The mode of authenticating users in use by DMS." 
     ::= { cdmsSecurityConfiguration 1 }
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- DMS High Availability group
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+cdmsHaClusterInfo  OBJECT IDENTIFIER
+    ::= { cdmsHa 1 }
+
+cdmsHaClusterComposition  OBJECT IDENTIFIER
+    ::= { cdmsHa 2 }
+
+cdmsHaClusterStatus  OBJECT IDENTIFIER
+    ::= { cdmsHa 3 }
+
+
+cdmsHaClusterEnabled OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates if high availability function is enabled
+        in this installation of DMS.
+
+        The value 'true(1)', indicates that high availability function
+        is enabled.
+
+        The value 'false(2)', indicates that high availability function
+        is disabled."
+    DEFVAL          { false } 
+    ::= { cdmsHaClusterInfo 1 }
+
+cdmsHaClusterName OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..255))
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This human-readable string servers as the administrative label
+        of this DMS cluster." 
+    ::= { cdmsHaClusterInfo 2 }
+cdmsHaDmmCluster  OBJECT IDENTIFIER
+    ::= { cdmsHaClusterComposition 1 }
+
+cdmsHaVpCluster  OBJECT IDENTIFIER
+    ::= { cdmsHaClusterComposition 2 }
+
+
+cdmsHaClusterNumTotalDmms OBJECT-TYPE
+    SYNTAX          Integer32 (2..10)
+    UNITS           "Nodes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the total number of DMM nodes in this
+        cluster." 
+    ::= { cdmsHaDmmCluster 1 }
+
+cdmsHaClusterNumActiveDmms OBJECT-TYPE
+    SYNTAX          Gauge32 (1..10)
+    UNITS           "Nodes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the total number of DMM nodes in this
+        cluster which are in active state." 
+    ::= { cdmsHaDmmCluster 2 }
+
+cdmsHaClusterDmmVipType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The type of the Virtual Internet Protocol address of the DMM
+        cluster of this DMS cluster." 
+    ::= { cdmsHaDmmCluster 3 }
+
+cdmsHaClusterDmmVip OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The value of the virtual address of the DMM cluster. The type
+        of this address is determined by the value of 
+        'cdmsHaClusterDmmVipType'." 
+    ::= { cdmsHaDmmCluster 4 }
+
+cdmsHaDmmClusterMemberTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CdmsHaDmmClusterMemberEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table lists the membership of the DMM cluster in this DMS
+        cluster. Each conceptual row in this table represents an
+        instance of DMM node in the DMM cluster.
+
+        Rows in this table are created by the agent when the DMM
+                cluster is configured."
+    ::= { cdmsHaDmmCluster 5 }
+
+cdmsHaDmmClusterMemberEntry OBJECT-TYPE
+    SYNTAX          CdmsHaDmmClusterMemberEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry (conceptual row) in the
+        'cdmsHaDmmClusterMemberTable' describes one DMM node in the
+        membership of the DMM cluster."
+    INDEX           {
+                        cdmsHaDmmClusterMemberAddrType,
+                        cdmsHaDmmClusterMemberAddress
+                    } 
+    ::= { cdmsHaDmmClusterMemberTable 1 }
+
+CdmsHaDmmClusterMemberEntry ::= SEQUENCE {
+        cdmsHaDmmClusterMemberAddrType  InetAddressType,
+        cdmsHaDmmClusterMemberAddress   InetAddress,
+        cdmsHaDmmClusterMemberIsPrimary TruthValue,
+        cdmsHaDmmClusterMemberOperState CDmsFunctionalStatus
+}
+
+cdmsHaDmmClusterMemberAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the type of the actual network address
+        of DMM node represented by the corresponding instance
+        identifier 'cdmsHaDmmClusterMemberAddress')." 
+    ::= { cdmsHaDmmClusterMemberEntry 1 }
+
+cdmsHaDmmClusterMemberAddress OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The actual network address of the DMM node corresponding to
+        this conceptual row. The type of address of an instance of this
+        object is determined by the value of the corresponding instance
+        of 'cdmsHaDmmClusterMemberAddrType'." 
+    ::= { cdmsHaDmmClusterMemberEntry 2 }
+
+cdmsHaDmmClusterMemberIsPrimary OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates if the DMM node corresponding to this
+        conceptual row is 'primary'.
+
+        A node in a cluster is considered 'primary' if:
+          a) the cluster services are preferred to be implemented on
+             the node
+          b) if the node acts as a management interface to the cluster.
+
+        Otherwise, the node is considered 'secondary'.
+
+        The value 'true(1)', indicates that the DMM is primary.
+
+        The value 'false(2)', indicates that the DMM is secondary." 
+    ::= { cdmsHaDmmClusterMemberEntry 3 }
+
+cdmsHaDmmClusterMemberOperState OBJECT-TYPE
+    SYNTAX          CDmsFunctionalStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the operational state of the DMM node
+        corresponding to this conceptual row." 
+    ::= { cdmsHaDmmClusterMemberEntry 4 }
+ 
+
+
+cdmsHaVpClusterNumClusters OBJECT-TYPE
+    SYNTAX          Integer32 (1..50)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of Video Portal Clusters
+        comprising this DMS cluster." 
+    ::= { cdmsHaVpCluster 1 }
+
+cdmsHaVpClusterMemberTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CdmsHaVpClusterMemberEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table serves the dual purpose of enumerating the various
+        video portal clusters in this installation as well as 
+        listing the member video portal nodes in each video portal
+        cluster. Entries in this table are created by the agent when 
+                the cluster is configured."
+    ::= { cdmsHaVpCluster 2 }
+
+cdmsHaVpClusterMemberEntry OBJECT-TYPE
+    SYNTAX          CdmsHaVpClusterMemberEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry (conceptual row) in the cdmsHaVpClusterMemberTable.
+        Each entry in this table represents a VP node that belongs to
+        this VP cluster.
+
+        This table is read-only; the agent creates the
+        necessary rows when the cluster is configured and deletion of
+        rows is not permitted."
+    INDEX           {
+                        cdmsHaVpClusterMemberClusterName,
+                        cdmsHaVpClusterMemberVipType,
+                        cdmsHaVpClusterMemberVip,
+                        cdmsHaVpClusterMemberAddrType,
+                        cdmsHaVpClusterMemberAddress
+                    } 
+    ::= { cdmsHaVpClusterMemberTable 1 }
+
+CdmsHaVpClusterMemberEntry ::= SEQUENCE {
+        cdmsHaVpClusterMemberClusterName SnmpAdminString,
+        cdmsHaVpClusterMemberVipType     InetAddressType,
+        cdmsHaVpClusterMemberVip         InetAddress,
+        cdmsHaVpClusterMemberAddrType    InetAddressType,
+        cdmsHaVpClusterMemberAddress     InetAddress,
+        cdmsHaVpClusterMemberIsPrimary   TruthValue,
+        cdmsHaVpClusterMemberOperState   CDmsFunctionalStatus
+}
+
+cdmsHaVpClusterMemberClusterName OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..255))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies a human-readable administrative name of
+        the video portal cluster corresponding to this conceptual row." 
+    ::= { cdmsHaVpClusterMemberEntry 1 }
+
+cdmsHaVpClusterMemberVipType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the type of the virtual IP address of
+        the video portal cluster represented by the corresponding 
+        instance identifier 'cdmsHaVpClusterMemberVip'." 
+    ::= { cdmsHaVpClusterMemberEntry 2 }
+
+cdmsHaVpClusterMemberVip OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The virtual IP address of the video portal cluster represented
+        by this conceptual row. The type of address of an instance of
+        this object is determined by the value of the corresponding
+        instance of 'cdmHaVpClusterMemberVipType'." 
+    ::= { cdmsHaVpClusterMemberEntry 3 }
+
+cdmsHaVpClusterMemberAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the actual IP address of the video
+        portal node represented by the corresponding instance 
+        identifier 'cdmsHaVpClusterMemberAddress'." 
+    ::= { cdmsHaVpClusterMemberEntry 4 }
+
+cdmsHaVpClusterMemberAddress OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The actual IP address of the video portal represented by this
+        conceptual row. The type of address of an instance of this
+        object is determined by the value of the corresponding instance
+        of 'cdmHaVpClusterMemberAddrType'." 
+    ::= { cdmsHaVpClusterMemberEntry 5 }
+
+cdmsHaVpClusterMemberIsPrimary OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates if the DMM node corresponding to this
+        conceptual row is 'primary'.
+
+        A node in a cluster is considered 'primary' if:
+          a) the cluster services are preferred to be implemented on
+             the node
+          b) if the node acts as a management interface to the cluster.
+
+        Otherwise, the node is considered 'secondary'.
+
+        The value 'true(1)', indicates that the VP is primary.
+
+        The value 'false(2)', indicates that the VP is secondary." 
+    ::= { cdmsHaVpClusterMemberEntry 6 }
+
+cdmsHaVpClusterMemberOperState OBJECT-TYPE
+    SYNTAX          CDmsFunctionalStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the operational state of the VP node
+        corresponding to this conceptual row." 
+    ::= { cdmsHaVpClusterMemberEntry 7 }
+ 
+
+
+cdmsHaClusterLastDmmStatusChangeTime OBJECT-TYPE
+    SYNTAX          DateAndTime
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The time-stamp of the most recent occurrence of the status
+        change of a DMM node in this cluster. A status change is 
+        defined as a transition in the value of the object
+        'cdmsHaDmmClusterMemberOperState'." 
+    ::= { cdmsHaClusterStatus 1 }
+
+cdmsHaClusterLastDmmStatusChangeAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the type of the network address of the
+        DMM node which changed status most recently in this cluster
+        (represented  by the value of
+        'cdmsHaClusterLastDmmStatusChangeAddress' object). A status
+        change is defined as a transition in the value of the object
+        'cdmsHaDmmClusterMemberOperState'." 
+    ::= { cdmsHaClusterStatus 2 }
+
+cdmsHaClusterLastDmmStatusChangeAddress OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The network address of the DMM node which changed status most
+        recently in this cluster. The type of address of an instance of
+        this object is determined by the value of the corresponding
+        instance of 'cdmsHaClusterLastDmmStatusChangeAddrType' object." 
+    ::= { cdmsHaClusterStatus 3 }
+
+cdmsHaClusterLastVpStatusChangeTime OBJECT-TYPE
+    SYNTAX          DateAndTime
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The time-stamp of the most recent occurrence of the status
+        change of a video portal node in this cluster. A status
+        change is defined as a transition in the value of the object
+        'cdmsHaVpClusterMemberOperState'." 
+    ::= { cdmsHaClusterStatus 4 }
+
+cdmsHaClusterLastVpStatusChangeCluster OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..255))
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The administrative label of the video portal cluster in which
+        a video portal node changed its state most recently." 
+    ::= { cdmsHaClusterStatus 5 }
+
+cdmsHaClusterLastStatusChangeVpAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the type of the network address of the
+        VP node which changed status most recently in this cluster
+        (represented  by the value of
+        'cdmsHaClusterLastVpStatusChangeAddress' object). A status
+        change is defined as a transition in the value of the object
+        'cdmsHaVpClusterMemberOperState'." 
+    ::= { cdmsHaClusterStatus 6 }
+
+cdmsHaClusterLastVpStatusChangeVpAddress OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The network address of the video portal node which changed
+        status most recently in this cluster. The type of address of an
+        instance of this object is determined by the value of the
+        corresponding instance of
+        'cdmsHaClusterLastVpStatusChangeAddrType' object." 
+    ::= { cdmsHaClusterStatus 7 }
+cdmsHaClusterStatusHistory  OBJECT IDENTIFIER
+    ::= { cdmsHaClusterStatus 8 }
+
+
+cdmsHaClusterHistoryMaxRecords OBJECT-TYPE
+    SYNTAX          Integer32 (1..65535)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the maximum number of history records
+        pertaining to DMS Cluster history that would be maintained in
+        the table 'cdmsHaClusterHistoryTable'." 
+    ::= { cdmsHaClusterStatusHistory 1 }
+
+cdmsHaClusterHistoryTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CdmsHaClusterHistoryEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table contains the chronological record of all the DMS
+        cluster events and their attributes that occurred in the
+        manager DMS cluster since the last re-initialization of this 
+        device.
+
+        When the number of entries in this table exceeds the value of
+        object 'cdmsHaClusterHistoryMaxRecords', the older entries will
+        be purged."
+    ::= { cdmsHaClusterStatusHistory 2 }
+
+cdmsHaClusterHistoryEntry OBJECT-TYPE
+    SYNTAX          CdmsHaClusterHistoryEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry (conceptual row) contains the record of a single DMS
+        cluster event."
+    INDEX           { cdmsHaClusterHistId } 
+    ::= { cdmsHaClusterHistoryTable 1 }
+
+CdmsHaClusterHistoryEntry ::= SEQUENCE {
+        cdmsHaClusterHistId            Integer32,
+        cdmsHaClusterHistTimestamp     TimeStamp,
+        cdmsHaClusterHistClusterName   SnmpAdminString,
+        cdmsHaClusterHistNodeType      CDmsElementType,
+        cdmsHaClusterHistNodeNewStatus CDmsFunctionalStatus,
+        cdmsHaClusterHistNodeAddrType  InetAddressType,
+        cdmsHaClusterHistNodeAddr      InetAddress
+}
+
+cdmsHaClusterHistId OBJECT-TYPE
+    SYNTAX          Integer32 (1..65535)
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object uniquely identifies an entry in the cluster
+        history." 
+    ::= { cdmsHaClusterHistoryEntry 1 }
+
+cdmsHaClusterHistTimestamp OBJECT-TYPE
+    SYNTAX          TimeStamp
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The value of sysUpTime when the cluster event corresponding to
+        this conceptual row occurred." 
+    ::= { cdmsHaClusterHistoryEntry 2 }
+
+cdmsHaClusterHistClusterName OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..255))
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The name of the DMS cluster in which the cluster event
+        corresponding to this conceptual row occurred." 
+    ::= { cdmsHaClusterHistoryEntry 3 }
+
+cdmsHaClusterHistNodeType OBJECT-TYPE
+    SYNTAX          CDmsElementType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The type of the DMS node in which the cluster event
+        corresponding to this conceptual row occurred, if this event
+        pertains to a node in the cluster. If this event does not
+        pertain to a node, the value of this column is undefined." 
+    ::= { cdmsHaClusterHistoryEntry 4 }
+
+cdmsHaClusterHistNodeNewStatus OBJECT-TYPE
+    SYNTAX          CDmsFunctionalStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "If the cluster event corresponding to this conceptual row is
+        a cluster node event, then this object identifies the new state
+        of the cluster node identified by 'cdmsHaClusterHistNodeAddr'
+        after this event." 
+    ::= { cdmsHaClusterHistoryEntry 5 }
+
+cdmsHaClusterHistNodeAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the type of network address of the node
+        (represented by the value of the corresponding instance of 
+        'cdmsHaClusterHistNodeAddr') to which the cluster event
+        pertains." 
+    ::= { cdmsHaClusterHistoryEntry 6 }
+
+cdmsHaClusterHistNodeAddr OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The address of the node to which the cluster event
+        corresponding to this conceptual row pertains. The type of
+        address of an instance of this object is determined by the 
+                value of the corresponding instance of 
+                'cdmsHaClusterHistNodeAddrType' object." 
+    ::= { cdmsHaClusterHistoryEntry 7 }
+ 
+
 
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- DMS User group
@@ -1010,6 +1543,40 @@ cdmsMediaPlayerAddrTakenEnable OBJECT-TYPE
     DEFVAL          { false } 
     ::= { cdmsNotifControl 4 }
 
+cdmsHaClusterNodeUpEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the administrative state of sending the
+        'ciscoDmsHaClusterNodeUp' notification to signal the fact that
+                a component in a DMS cluster has transitioned to active state."
+    DEFVAL          { false } 
+    ::= { cdmsNotifControl 5 }
+
+cdmsHaClusterNodeDownEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the administrative state of sending the
+        'ciscoDmsHaClusterNodeDown' notification to signal the fact 
+                that a component in a DMS cluster has transitioned to inactive
+        state."
+    DEFVAL          { false } 
+    ::= { cdmsNotifControl 6 }
+
+cdmsHaClusterConfigChangeEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the administrative state of sending the
+        'ciscoDmsHaClusterConfigChange' notification to signal the fact
+        that the configuration of the managed DMS cluster has changed."
+    DEFVAL          { false } 
+    ::= { cdmsNotifControl 7 }
+
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- Cisco DMS Notifications
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1064,6 +1631,56 @@ ciscoDmsMediaPlayerAddrTaken NOTIFICATION-TYPE
         that the network address of a media player is
         taken by a different media player."
    ::= { ciscoDmsMonitorMIBNotifs 4 }
+
+ciscoDmsHaClusterNodeUp NOTIFICATION-TYPE
+    OBJECTS         {
+                        cdmsHaClusterHistClusterName,
+                        cdmsHaClusterHistNodeType,
+                        cdmsHaClusterHistNodeAddrType,
+                        cdmsHaClusterHistNodeAddr
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated when it is detected
+        that a node in a managed DMS cluster has transitioned
+        to active state, that is, the value of the object
+        'cdmsHaDmmClusterMemberOperState' or
+        'cdmsHaVpClusterMemberOperState' has transitioned to 'active'.
+
+        This object specifies the administrative state of
+        sending the 'ciscoDmsHaClusterNodeDown' notification to
+        signal the fact that a component in a DMS cluster has 
+        transitioned to inactive state."
+   ::= { ciscoDmsMonitorMIBNotifs 5 }
+
+ciscoDmsHaClusterNodeDown NOTIFICATION-TYPE
+    OBJECTS         {
+                        cdmsHaClusterHistClusterName,
+                        cdmsHaClusterHistNodeType,
+                        cdmsHaClusterHistNodeAddrType,
+                        cdmsHaClusterHistNodeAddr
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated when it is detected
+        that a node in a managed DMS cluster has transitioned
+        to inactive state, that is, the value of the object
+        'cdmsHaDmmClusterMemberOperState' or
+        'cdmsHaVpClusterMemberOperState' has transitioned to
+        'shutdown'."
+   ::= { ciscoDmsMonitorMIBNotifs 6 }
+
+cdmsDmsHaClusterConfigChange NOTIFICATION-TYPE
+    OBJECTS         { cdmsHaClusterHistClusterName }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated when it is detected
+        that the configuration of a managed DMS cluster has 
+        been altered. Configuration changes that trigger this
+        notification include modifications to the virtual IP address
+        and
+        the virtual IP address type."
+   ::= { ciscoDmsMonitorMIBNotifs 7 }
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- Conformance Information
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1078,9 +1695,11 @@ ciscoDmsMonitorMIBGroups  OBJECT IDENTIFIER
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- Compliance Statements
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+--   
+-- Superseded by 'ciscoDmsMonitorMIBComplianceRev1'.
 
 ciscoDmsMonitorMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for SNMP entities
         the Cisco Digital Media System MIB."
@@ -1115,6 +1734,14 @@ ciscoDmsMonitorMIBCompliance MODULE-COMPLIANCE
     DESCRIPTION
         "This group is optional."
 
+    GROUP           ciscoDmsHaGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsHaAdvancedGroup
+    DESCRIPTION
+        "This group is optional."
+
     GROUP           ciscoDmsNotificationCntlGroup
     DESCRIPTION
         "This group is optional."
@@ -1122,6 +1749,11 @@ ciscoDmsMonitorMIBCompliance MODULE-COMPLIANCE
     GROUP           ciscoDmsNotificationsGroup
     DESCRIPTION
         "This group is optional."
+
+    GROUP           ciscoDmsAdvancedNotificationsGroup
+    DESCRIPTION
+        "These groups would be implemented if and only if the
+        installation of DMS supports high availability feature."
 
     OBJECT          cdmsAdministrator
     MIN-ACCESS      read-only
@@ -1167,7 +1799,158 @@ ciscoDmsMonitorMIBCompliance MODULE-COMPLIANCE
     MIN-ACCESS      read-only
     DESCRIPTION
         "Write access is not required."
+
+    OBJECT          cdmsHaClusterNodeUpEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterNodeDownEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterConfigChangeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterHistoryMaxRecords
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
     ::= { ciscoDmsMonitorMIBCompliances 1 }
+
+ciscoDmsMonitorMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for SNMP entities the Cisco Digital
+        Media System MIB. This revision adds support
+        for High Availability (HA)."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoDmsSystemGroup,
+                        ciscoDmsFeatureGroup,
+                        ciscoDmsInventoryGroup
+                    }
+
+    GROUP           ciscoDmsFeatureAdvancedGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsServerGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDamGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsSecurityGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsUserGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsEventGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsNotificationCntlGroupRev1
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsNotificationsGroupRev1
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoDmsAdvancedNotificationsGroup
+    DESCRIPTION
+        "These groups would be implemented if and only if the
+        installation of DMS supports high availability feature."
+
+    GROUP           ciscoDmsHaGroup
+    DESCRIPTION
+        "These groups would be implemented if and only if the
+        installation of DMS supports high availability feature."
+
+    OBJECT          cdmsAdministrator
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsInventoryElementState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsInventoryElementMetadata
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsServerStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsAuthenticationMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsMediaPlayerRegisteredEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsMediaPlayerUpEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsMediaPlayerDownEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsMediaPlayerAddrTakenEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterNodeUpEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterNodeDownEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterConfigChangeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterHistoryMaxRecords
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdmsHaClusterName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoDmsMonitorMIBCompliances 2 }
 
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- Units of Conformance
@@ -1285,6 +2068,8 @@ ciscoDmsEventGroup OBJECT-GROUP
         about DMS events."
     ::= { ciscoDmsMonitorMIBGroups 9 }
 
+-- Superseded by 'ciscoDmsNotificationCntlGroupRev1'.
+
 ciscoDmsNotificationCntlGroup OBJECT-GROUP
     OBJECTS         {
                         cdmsMediaPlayerRegisteredEnable,
@@ -1292,11 +2077,13 @@ ciscoDmsNotificationCntlGroup OBJECT-GROUP
                         cdmsMediaPlayerDownEnable,
                         cdmsMediaPlayerAddrTakenEnable
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A collection of objects that provides information
         about DMS notification control."
     ::= { ciscoDmsMonitorMIBGroups 10 }
+
+-- Superseded by 'ciscoDmsNotificationsGroupRev1'.
 
 ciscoDmsNotificationsGroup NOTIFICATION-GROUP
    NOTIFICATIONS    {
@@ -1305,13 +2092,111 @@ ciscoDmsNotificationsGroup NOTIFICATION-GROUP
                         ciscoDmsMediaPlayerDown,
                         ciscoDmsMediaPlayerAddrTaken
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A collection of objects that provides information
         about DMS notifications."
     ::= { ciscoDmsMonitorMIBGroups 11 }
 
+ciscoDmsAdvancedNotificationsGroup NOTIFICATION-GROUP
+   NOTIFICATIONS    { cdmsDmsHaClusterConfigChange }
+    STATUS          current
+    DESCRIPTION
+        "Please enter the description here"
+    ::= { ciscoDmsMonitorMIBGroups 12 }
+
+ciscoDmsHaGroup OBJECT-GROUP
+    OBJECTS         {
+                        cdmsHaClusterNodeUpEnable,
+                        cdmsHaClusterNodeDownEnable,
+                        cdmsHaClusterConfigChangeEnable,
+                        cdmsHaClusterEnabled,
+                        cdmsHaClusterName,
+                        cdmsHaClusterNumTotalDmms,
+                        cdmsHaClusterNumActiveDmms,
+                        cdmsHaClusterDmmVipType,
+                        cdmsHaClusterDmmVip,
+                        cdmsHaDmmClusterMemberIsPrimary,
+                        cdmsHaDmmClusterMemberOperState,
+                        cdmsHaVpClusterNumClusters,
+                        cdmsHaVpClusterMemberIsPrimary,
+                        cdmsHaVpClusterMemberOperState,
+                        cdmsHaClusterLastDmmStatusChangeTime,
+                        cdmsHaClusterLastDmmStatusChangeAddrType,
+                        cdmsHaClusterLastDmmStatusChangeAddress,
+                        cdmsHaClusterLastVpStatusChangeTime,
+                        cdmsHaClusterLastVpStatusChangeCluster,
+                        cdmsHaClusterLastStatusChangeVpAddrType,
+                        cdmsHaClusterLastVpStatusChangeVpAddress,
+                        cdmsHaClusterHistoryMaxRecords
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Collection of MIB objects that must be implemented to support
+        management of DMS HA feature."
+    ::= { ciscoDmsMonitorMIBGroups 13 }
+
+ciscoDmsHaAdvancedGroup OBJECT-GROUP
+    OBJECTS         {
+                        cdmsHaClusterHistTimestamp,
+                        cdmsHaClusterHistClusterName,
+                        cdmsHaClusterHistNodeType,
+                        cdmsHaClusterHistNodeNewStatus,
+                        cdmsHaClusterHistNodeAddrType,
+                        cdmsHaClusterHistNodeAddr,
+                        cdmsHaClusterHistoryMaxRecords
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Collection of MIB objects that must be implemented to support
+        advanced management of DMS HA feature. This group is optional."
+    ::= { ciscoDmsMonitorMIBGroups 14 }
+
+ciscoDmsNotificationCntlGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cdmsMediaPlayerRegisteredEnable,
+                        cdmsMediaPlayerUpEnable,
+                        cdmsMediaPlayerDownEnable,
+                        cdmsMediaPlayerAddrTakenEnable,
+                        cdmsHaClusterNodeUpEnable,
+                        cdmsHaClusterNodeDownEnable,
+                        cdmsHaClusterConfigChangeEnable
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects that provides information about DMS
+        notification control. This revision adds support for High
+        Availability (HA)."
+    ::= { ciscoDmsMonitorMIBGroups 15 }
+
+ciscoDmsNotificationsGroupRev1 NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        ciscoDmsMediaPlayerRegistered,
+                        ciscoDmsMediaPlayerUp,
+                        ciscoDmsMediaPlayerDown,
+                        ciscoDmsMediaPlayerAddrTaken,
+                        ciscoDmsHaClusterNodeUp,
+                        ciscoDmsHaClusterNodeDown
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects that provides information
+        about DMS notifications. This revision adds support for High
+        Availability (HA)."
+    ::= { ciscoDmsMonitorMIBGroups 16 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
 
 
 

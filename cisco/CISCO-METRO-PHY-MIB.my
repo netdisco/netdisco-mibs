@@ -5,7 +5,7 @@
 -- May 2002, Sonal Maheshwari, Mickey Spiegel 
 -- Dec 2002, Arvind Prabhudev, Sonal Maheshwari, Mickey Spiegel
 --
--- Copyright (c) 2001, 2002, 2003, 2004 by cisco Systems, Inc.
+-- Copyright (c) 2001-2005 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -27,7 +27,7 @@ IMPORTS
 ;
 
 ciscoMetroPhyMIB MODULE-IDENTITY
-    LAST-UPDATED   "200411190000Z" 
+    LAST-UPDATED   "200509020000Z"
     ORGANIZATION   "Cisco Systems, Inc."
     CONTACT-INFO   "Cisco Systems
                     Customer Service
@@ -61,6 +61,19 @@ ciscoMetroPhyMIB MODULE-IDENTITY
         The third group, cmPhySonetSectionTrace group, provides
         objects for section trace monitoring on SONET/SDH
         interfaces. 
+        "
+    REVISION   "200509020000Z"
+    DESCRIPTION
+        "Following objects have been added to cmPhyIfTable:
+        cmPhyIfRate,
+        cmPhyIfNegotiatedRate,
+        cmPhyIfOverSubscription,
+        cmPhyIfClientSubrate,
+        cmPhyIfClientSubrateLock.
+
+        Following Textual conventions have been added:
+        CmRateType,
+        CmNegotiatedRateType.
         "
     REVISION   "200411190000Z"
     DESCRIPTION
@@ -187,6 +200,72 @@ TriValue ::= TEXTUAL-CONVENTION
         notApplicable(3)
     }	
 
+CmRateType ::= TEXTUAL-CONVENTION
+    STATUS     current
+    DESCRIPTION
+        "An integer value that identifies the rate of the interface.
+
+         The value 'unknown' indicates the rate of the interface is
+         not known.
+
+         The value 'auto' indicates the rate of the interface is
+         auto. The client interface will automatically negotiates
+         its speed with its peer.
+
+         The value 'oneGbps' indicates the rate of the interface is
+         1 Gigabits/sec.
+
+         The value 'twoGbps' indicates the rate of the interface is
+         2 Gigabits/sec.
+
+         The value 'fourGbps' indicates the rate of the interface is
+         4 Gigabits/sec.
+
+         The value 'tenGbps' indicates the rate of the interface is
+         10 Gigabits/sec."
+
+    SYNTAX INTEGER {
+        unknown(1),     -- unknown 
+        auto(2),        -- auto-negotiation
+        oneGbps(3),     --  1 Gbps
+        twoGbps(4),     --  2 Gbps
+        fourGbps(5),    --  4 Gbps
+        tenGbps(6)      -- 10 Gbps
+    }
+
+CmNegotiatedRateType ::= TEXTUAL-CONVENTION
+    STATUS     current
+    DESCRIPTION
+        "An integer value that identifies the current rate of the
+        interface after the auto negotiation.
+
+         The value 'notApplicable' indicates this object is not
+         applicable for the interface.
+
+         The value 'negotiating' indicates the interface is in the
+         process of negotiating its speed with its peer.
+
+         The value 'oneGbps' indicates the rate of the interface is
+         1 Gigabits/sec after auto negotiation.
+
+         The value 'twoGbps' indicates the rate of the interface is
+         2 Gigabits/sec after auto negotiation.
+
+         The value 'fourGbps' indicates the rate of the interface is
+         4 Gigabits/sec after auto negotiation.
+
+         The value 'tenGbps' indicates the rate of the interface is
+         10 Gigabits/sec after auto negotiation."
+
+    SYNTAX INTEGER {
+        notApplicable(1),    -- Not Applicable
+        negotiating(2),      -- Negotiating 
+        oneGbps(3),          --  1 Gbps
+        twoGbps(4),          --  2 Gbps
+        fourGbps(5),         --  4 Gbps
+        tenGbps(6)           -- 10 Gbps
+    }
+
 -- MIB Object Definitions
 
 ciscoMetroPhyMIBObjects    OBJECT IDENTIFIER ::= { ciscoMetroPhyMIB 1 }
@@ -240,7 +319,12 @@ CmPhyIfEntry ::= SEQUENCE {
     cmPhyIfForwardLaserControl    TruthValue,
     cmPhyIfTxBufferSize           Unsigned32,
     cmPhyIfAutoNegotiation        TriValue,
-    cmPhyIfTransType              TransmissionType
+    cmPhyIfTransType              TransmissionType,
+    cmPhyIfRate                   CmRateType,
+    cmPhyIfNegotiatedRate         CmNegotiatedRateType,
+    cmPhyIfOverSubscription       TriValue,
+    cmPhyIfClientSubrate          Unsigned32,
+    cmPhyIfClientSubrateLock      TruthValue
 }
 
 cmPhyIfMode OBJECT-TYPE
@@ -470,6 +554,76 @@ cmPhyIfTransType OBJECT-TYPE
          'unknown'."
     ::= { cmPhyIfEntry 11 }
  
+cmPhyIfRate OBJECT-TYPE
+    SYNTAX        CmRateType
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This object is used to specify the rate of the interface.
+        The value of 'unknown' implies that this object does not
+        apply to this interface."
+    ::= { cmPhyIfEntry 12 }
+
+cmPhyIfNegotiatedRate OBJECT-TYPE
+    SYNTAX        CmNegotiatedRateType
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "This object is used to identify the current rate of the
+        interface after the auto negotation.  This object is valid
+        only if the object cmPhyIfRate is configured as 'auto'." 
+    ::= { cmPhyIfEntry 13 }
+
+cmPhyIfOverSubscription OBJECT-TYPE
+    SYNTAX        TriValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "Oversubscription allows the user to carry multiple clients
+        over the trunk to efficiently utilize the trunk bandwidth.
+
+        This object allows the management client to enable 
+        over subscription on an interface by setting a value
+        of 'true' to this object. A 'false' value would disable
+        over subscription. Setting the value 'notApplicable' to
+        this object is not allowed. The value of 'notApplicable'
+        implies that this object does not apply to this interface."
+    DEFVAL { false }
+    ::={cmPhyIfEntry 14 }
+
+cmPhyIfClientSubrate OBJECT-TYPE
+    SYNTAX        Unsigned32 (0..4240)
+    UNITS         "mega-bytes-per-second"
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This object allows the management client to specify the
+        subrate bandwidth of the oversubscribed trunk which carries
+        this client.
+
+         A value of 0 implies that this object does not apply to this
+         interface."
+    DEFVAL { 0 }
+    ::= { cmPhyIfEntry 15 }
+
+cmPhyIfClientSubrateLock OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This object allows the management client to lock the
+        subrate bandwidth on an interface, by writing a value of
+        'true' to this object.  A 'false' value would disable the
+        bandwidth lock. If the clients bandwidth is locked then
+        this client will not share its bandwidth with the other
+        clients on the same oversubscribed trunk.
+
+        SubrateLock does not apply when the value of 
+        cmPhyIfClientSubrate is zero."
+    DEFVAL { false }
+    ::={cmPhyIfEntry 16 }
+
+
 --  cmPhyStatistics group
 
 --  This group contains objects for the error 
@@ -1092,7 +1246,7 @@ cmPhyMIBComplianceRev4 MODULE-COMPLIANCE
 
 
 cmPhyMIBComplianceRev5 MODULE-COMPLIANCE
-    STATUS   current
+    STATUS   deprecated
     DESCRIPTION
         "The compliance statement for platforms that monitor the
         operating status with respect to error
@@ -1177,6 +1331,130 @@ cmPhyMIBComplianceRev5 MODULE-COMPLIANCE
             "Write access is not required."
 
     ::= { ciscoMetroPhyMIBCompliances 5 }
+
+
+cmPhyMIBComplianceRev6 MODULE-COMPLIANCE
+    STATUS   current
+    DESCRIPTION
+        "The compliance statement for platforms that monitor the
+        operating status with respect to error
+        counters, for the physical layer."
+    MODULE -- this module
+        MANDATORY-GROUPS {
+            cmPhyIf2Group
+        }
+
+        GROUP cmPhyCVRDErrorsGroup
+        DESCRIPTION
+            "Required only for entities that support code violation
+            and running disparity error counters."
+
+        GROUP cmPhyCRCErrorsGroup
+        DESCRIPTION
+            "Required only for entities that support
+            CRC error counters."
+
+        GROUP cmPhyEncapFarEndPktErrorsGroup
+        DESCRIPTION
+            "Required only for entities that support
+            far end ingress error indication counters for Ethernet-
+            encapsulated ESCON streams."
+
+        GROUP cmPhySonetSectionTraceGroup
+        DESCRIPTION
+            "Required for entities that support SONET/SDH section
+             trace."
+
+        GROUP cmPhyIfTxBufferSizeGroup
+        DESCRIPTION
+            "Required for entities that support control of transmit
+             buffer size."
+
+        GROUP cmPhyIfAutoNegGroup
+        DESCRIPTION
+            "Required for entities that support auto negotiation
+             on the client interface."
+
+        GROUP cmPhyIfGroupSup1
+        DESCRIPTION
+            "Required for entities that have different transmission 
+             types on the client interface."
+
+        GROUP cmPhyIfRateGroup
+        DESCRIPTION
+            "This group is mandatory only for entities that support
+            multiple rate configuration on an interface."
+
+        GROUP cmPhyIfClientOvsGroup
+        DESCRIPTION
+            "This group is mandatory only for entities that support
+            oversubscription."
+
+        GROUP cmPhyIfClientSubrateGroup
+        DESCRIPTION
+            "This group is mandatory only for entities that support
+            subrating."
+
+        OBJECT        cmPhyIfMode
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required if only one mode is
+            supported."
+
+        OBJECT        cmPhyIfProtocol
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is required only when 3R mode is supported
+            and multiple protocols are supported on the interface."
+
+        OBJECT        cmPhyIfClockRate
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is required only when 3R mode is supported
+            and multiple clock rates are supported on the interface."
+
+        OBJECT        cmPhyIfMonitor
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfOFC
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfTxBufferSize
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfAutoNegotiation
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfRate
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is required only for entities that support
+            multiple rate configuration on an interface."
+
+        OBJECT        cmPhyIfOverSubscription
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfClientSubrate
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT        cmPhyIfClientSubrateLock
+        MIN-ACCESS    read-only
+        DESCRIPTION
+            "Write access is not required."
+
+    ::= { ciscoMetroPhyMIBCompliances 6 }
 
 
 --
@@ -1312,5 +1590,36 @@ cmPhyIfGroupSup1 OBJECT-GROUP
          types on the client interface."
     ::= { ciscoMetroPhyMIBGroups 10 }
 
+cmPhyIfRateGroup OBJECT-GROUP
+    OBJECTS {
+        cmPhyIfRate,
+        cmPhyIfNegotiatedRate
+    }
+    STATUS current
+    DESCRIPTION
+        "The collection of objects that are used to retrieve and
+        configure the various interface rates."
+    ::= { ciscoMetroPhyMIBGroups 11 }
+
+cmPhyIfClientOvsGroup OBJECT-GROUP
+    OBJECTS {
+        cmPhyIfOverSubscription
+    }
+    STATUS current
+    DESCRIPTION
+        "The collection of objects to allow the oversubscription
+        configurations on an interface."
+    ::= { ciscoMetroPhyMIBGroups 12 }
+
+cmPhyIfClientSubrateGroup OBJECT-GROUP
+    OBJECTS {
+        cmPhyIfClientSubrate,
+        cmPhyIfClientSubrateLock
+    }
+    STATUS current
+    DESCRIPTION
+        "The collection of objects to allow the configurations related
+        to the subrating on an interface."
+    ::= { ciscoMetroPhyMIBGroups 13 }
 
 END

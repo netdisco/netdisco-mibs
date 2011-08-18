@@ -1,8 +1,8 @@
 -- *****************************************************************
 -- CISCO-HSRP-MIB
+--   
 
-
--- Copyright (c) 1998-2005 by cisco Systems, Inc.
+-- Copyright (c) 1998-2005, 2010 by cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -15,23 +15,24 @@ IMPORTS
     IpAddress,
     Unsigned32
         FROM SNMPv2-SMI
+    MODULE-COMPLIANCE,
+    NOTIFICATION-GROUP,
+    OBJECT-GROUP
+        FROM SNMPv2-CONF
     TEXTUAL-CONVENTION,
     DisplayString,
     TruthValue,
     RowStatus,
     MacAddress
         FROM SNMPv2-TC
-    MODULE-COMPLIANCE,
-    NOTIFICATION-GROUP,
-    OBJECT-GROUP
-        FROM SNMPv2-CONF
     ifIndex
         FROM IF-MIB
     ciscoMgmt
         FROM CISCO-SMI;
 
+
 ciscoHsrpMIB MODULE-IDENTITY
-    LAST-UPDATED    "200512200000Z"
+    LAST-UPDATED    "201009060000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -78,6 +79,18 @@ ciscoHsrpMIB MODULE-IDENTITY
             'Holdtime' is the interval between the receipt of a Hello
             message and the presumption that the sending router has
             failed."
+    REVISION        "201009060000Z"
+    DESCRIPTION
+        "The following changes have been made.
+
+        [1] Objects cHsrpGrpIpNone has been added to the
+             cHsrpGrpTable.
+
+        [2] Added new object group cHsrpGrpGroupSup
+
+
+        [3] Added new compliance cHsrpComplianceRev2, which
+            deprecates cHsrpComplianceRev1."
     REVISION        "200512200000Z"
     DESCRIPTION
             "Deprecated cHsrpCompliance and added cHsrpComplianceRev1
@@ -89,7 +102,10 @@ ciscoHsrpMIB MODULE-IDENTITY
             "Initial version of this MIB."
     ::= { ciscoMgmt 106 }
 
+
+
 -- Textual Conventions
+
 HsrpState ::= TEXTUAL-CONVENTION
     STATUS          current
     DESCRIPTION
@@ -103,7 +119,6 @@ HsrpState ::= TEXTUAL-CONVENTION
                         standby(5),
                         active(6)
                     }
-
 ciscoHsrpMIBObjects OBJECT IDENTIFIER
     ::= { ciscoHsrpMIB 1 }
 
@@ -113,7 +128,9 @@ cHsrpGlobalConfig OBJECT IDENTIFIER
 cHsrpGroup OBJECT IDENTIFIER
     ::= { ciscoHsrpMIBObjects 2 }
 
+
 -- Global Config Objects
+
 cHsrpConfigTimeout OBJECT-TYPE
     SYNTAX          Unsigned32 (1..60)
     UNITS           "minutes"
@@ -124,8 +141,8 @@ cHsrpConfigTimeout OBJECT-TYPE
             remain in a state other than active before being timed out."
     DEFVAL          { 5 }
     ::= { cHsrpGlobalConfig 1 }
-
 -- HSRP Tables
+
 cHsrpGrpTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CHsrpGrpEntry
     MAX-ACCESS      not-accessible
@@ -197,7 +214,8 @@ CHsrpGrpEntry ::= SEQUENCE {
     cHsrpGrpStandbyRouter           IpAddress,
     cHsrpGrpStandbyState            HsrpState,
     cHsrpGrpVirtualMacAddr          MacAddress,
-    cHsrpGrpEntryRowStatus          RowStatus
+        cHsrpGrpEntryRowStatus         RowStatus,
+        cHsrpGrpIpNone                 TruthValue
 }
 
 cHsrpGrpNumber OBJECT-TYPE
@@ -456,12 +474,25 @@ cHsrpGrpEntryRowStatus OBJECT-TYPE
             DESCRIPTION for cHsrpGrpEntry."
     ::= { cHsrpGrpEntry 17 }
 
+cHsrpGrpIpNone OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the disable HSRP IPv4 virtual
+        IP address."
+    DEFVAL          { false } 
+    ::= { cHsrpGrpEntry 18 }
+ 
+
 -- Notifications
+
 cHsrpMIBNotificationPrefix OBJECT IDENTIFIER
     ::= { ciscoHsrpMIB 2 }
 
 cHsrpMIBNotifications OBJECT IDENTIFIER
     ::= { cHsrpMIBNotificationPrefix 0 }
+
 
 cHsrpStateChange NOTIFICATION-TYPE
     OBJECTS         { cHsrpGrpStandbyState }
@@ -473,8 +504,8 @@ cHsrpStateChange NOTIFICATION-TYPE
             will be only one notification issued when the state change
             is from standby to active and vice versa."
     ::= { cHsrpMIBNotifications 1 }
-
 -- Conformance groups
+
 cHsrpConformance OBJECT IDENTIFIER
     ::= { ciscoHsrpMIB 3 }
 
@@ -484,7 +515,9 @@ cHsrpCompliances OBJECT IDENTIFIER
 cHsrpComplianceGroups OBJECT IDENTIFIER
     ::= { cHsrpConformance 2 }
 
+
 -- compliance statements
+
 cHsrpCompliance MODULE-COMPLIANCE
     STATUS          deprecated
     DESCRIPTION
@@ -498,10 +531,9 @@ cHsrpCompliance MODULE-COMPLIANCE
     ::= { cHsrpCompliances 1 }
 
 cHsrpComplianceRev1 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-            "The compliance statement for all hosts implementing
-            the CISCO-HSRP-MIB."
+        "The object group is deprecated by the cHsrpComplianceRev2"
     MODULE          -- this module
     MANDATORY-GROUPS {
                         cHsrpConfigGroup,
@@ -510,7 +542,22 @@ cHsrpComplianceRev1 MODULE-COMPLIANCE
                     }
     ::= { cHsrpCompliances 2 }
 
+cHsrpComplianceRev2 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+            "The compliance statement for all hosts implementing
+            the CISCO-HSRP-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cHsrpConfigGroup,
+                        cHsrpGrpGroup,
+                        cHsrpGrpGroupSup,
+                        cHsrpNotificationsGroup
+                    }
+    ::= { cHsrpCompliances 3 }
+
 -- units of conformance
+
 cHsrpConfigGroup OBJECT-GROUP
     OBJECTS         { cHsrpConfigTimeout }
     STATUS          current
@@ -540,8 +587,8 @@ cHsrpGrpGroup OBJECT-GROUP
                     }
     STATUS          current
     DESCRIPTION
-            "The collection of objects used to add, delete and
-            retrieve information about HSRP groups."
+        "The collection of objects used to add, delete and retrieve
+        information about HSRP groups."
     ::= { cHsrpComplianceGroups 2 }
 
 cHsrpNotificationsGroup NOTIFICATION-GROUP
@@ -552,4 +599,15 @@ cHsrpNotificationsGroup NOTIFICATION-GROUP
             state information."
     ::= { cHsrpComplianceGroups 3 }
 
+cHsrpGrpGroupSup OBJECT-GROUP
+    OBJECTS         { cHsrpGrpIpNone }
+    STATUS          current
+    DESCRIPTION
+        "The collection of objects used to add, delete and retrieve
+        information about HSRP groups."
+    ::= { cHsrpComplianceGroups 4 }
+
 END
+
+
+

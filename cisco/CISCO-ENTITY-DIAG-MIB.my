@@ -6,7 +6,7 @@
 -- November 2002, Patrick Gili
 -- October  2005, Jayakumar Kadirvelu
 --   
--- Copyright (c) 2002-2009 by Cisco Systems Inc.
+-- Copyright (c) 2002-2010 by Cisco Systems, Inc.
 -- All rights reserved.
 -- ****************************************************************
 
@@ -52,7 +52,7 @@ IMPORTS
 
 
 ciscoEntityDiagMIB MODULE-IDENTITY
-    LAST-UPDATED    "200906300000Z"
+    LAST-UPDATED    "201005260000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -128,6 +128,9 @@ ciscoEntityDiagMIB MODULE-IDENTITY
         Diagnostic Job - Consists of a diagnostic suite 
         (i.e., a collection of tests) to be executed by a physical
         entity."
+    REVISION        "201005260000Z"
+    DESCRIPTION
+        "Added ceDiagHMTestThreshWindowGroup."
     REVISION        "200906300000Z"
     DESCRIPTION
         "Added ceDiagTestPerfLastTestMethodGroup.
@@ -1115,7 +1118,9 @@ CeDiagHMTestEntry ::= SEQUENCE {
         ceDiagHMTestIntervalDefault  Unsigned32,
         ceDiagHMTestInterval         Unsigned32,
         ceDiagHMTestThresholdDefault Unsigned32,
-        ceDiagHMTestThreshold        Unsigned32
+        ceDiagHMTestThreshold         Unsigned32,
+        ceDiagHMTestThreshWindowSuite INTEGER,
+        ceDiagHMTestThreshWindowSize  Unsigned32
 }
 
 ceDiagHMTestEnabled OBJECT-TYPE
@@ -1180,9 +1185,85 @@ ceDiagHMTestThreshold OBJECT-TYPE
         "This object specifies the consecutive failure count threshold
         for this test.  When the specified failure count threshold is
         reached, the diagnostic test result is set to failure.
-        A value of '0' indicates that there is no consecutive
-        failure count threshold for this test." 
+
+        A value of '0' indicates that there is no failure count
+        threshold for this test.
+
+        This object is used in combination with
+        ceDiagHMTestThreshWindowSuite and ceDiagHMTestThreshWindowSize
+        to specify a sliding history window for which the threshold
+        is monitored. 
+
+        When the value of ceDiagHMTestThreshWindowSuite is
+        'default', the sliding history window is in number of test
+        runs, with a window size the same as the value of this
+        object.
+
+        If ceDiagHMTestThreshWindowSuite and 
+        ceDiagHMTestThreshWindowSize are not supported, the failure
+        count threshold will be the consecutive failure count threshold." 
     ::= { ceDiagHMTestEntry 6 }
+ 
+ceDiagHMTestThreshWindowSuite OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        default(1),
+                        milliseconds(2),
+                        seconds(3),
+                        minutes(4),
+                        hours(5),
+                        days(6),
+                        runs(7)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies a sliding history window
+        parameter which is used in combination with 
+        ceDiagHMTestThreshold. When the specified failure count
+        threshold is reached in this sliding history window, 
+        the diagnostic test result is set to failure.
+
+        'default'      - The sliding history window is in number
+                         of test runs or executions, with a window
+                         size the same as ceDiagHMTestThreshold.
+
+        'milliseconds' - The sliding history window is in milli-seconds
+                         specified by ceDiagHMTestThreshWindowSize.
+
+        'seconds'      - The sliding history window is in seconds
+                         specified by ceDiagHMTestThreshWindowSize.
+
+        'minutes'      - The sliding history window is in minutes
+                         specified by ceDiagHMTestThreshWindowSize.
+
+        'hours'        - The sliding history window is in hours
+                         specified by ceDiagHMTestThreshWindowSize.
+
+        'days'         - The sliding history window is in days
+                         specified by ceDiagHMTestThreshWindowSize.
+
+        'runs'         - The sliding history window is in number
+                         of test runs or executions specified by
+                         ceDiagHMTestThreshWindowSize.
+
+        When the value of this object is 'default' the user cannot set
+        any value for ceDiagHMTestThreshWindowSize.
+        When the value of this object is not 'default', 
+        then the value of ceDiagHMTestThreshWindowSize cannot be zero (0)." 
+    ::= { ceDiagHMTestEntry 7 }
+
+ceDiagHMTestThreshWindowSize OBJECT-TYPE
+    SYNTAX          Unsigned32 (0..2147483647)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the sliding history window size.
+
+        When the value of ceDiagHMTestThreshWindowSuite is 'default', the
+        user cannot set any value for this object.
+
+        The value of zero (0) cannot be set." 
+    ::= { ceDiagHMTestEntry 8 }
  
 
 
@@ -1630,6 +1711,66 @@ ciscoEntityDiagMIBComplianceRev2 MODULE-COMPLIANCE
     ::= { ciscoEntityDiagMIBCompliances 2 }
 
 ciscoEntityDiagMIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for SNMP entities that implement the
+        CISCO-ENTITY-DIAG-MIB.  Implementation of this MIB module is
+        strongly recommended for any platform implementing the
+        online diagnostic feature.
+
+        This statement is deprecated and superceded by 
+        ciscoEntityDiagMIBComplianceRev4."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ceDiagDescrGroup,
+                        ceDiagGlobalConfigGroup,
+                        ceDiagEntityGroup,
+                        ceDiagOnDemandGroup,
+                        ceDiagScheduledGroup,
+                        ceDiagTestPerfGroup,
+                        ceDiagEventGroup
+                    }
+
+    GROUP           ceDiagEntityImageGroup
+    DESCRIPTION
+        "The objects defined by this group only need to be
+        implemented if the physical entities in the system
+        are capable of running their own diagnostic image."
+
+    GROUP           ceDiagHealthMonitorGroup
+    DESCRIPTION
+        "The objects defined by this group only need to be
+        implemented if the online diagnostic feature
+        supports a health monitor."
+
+    GROUP           ceDiagScheduledJobSuiteGroup
+    DESCRIPTION
+        "The objects defined by this group only need to be
+        implemented if the online diagnostic feature
+        supports scheduled job test suites."
+
+    GROUP           ceDiagNotifControlGroup
+    DESCRIPTION
+        "This group is mandatory for devices which can provide
+        online diagnostic notifications."
+
+    GROUP           ceDiagNotifErrorMsgGroup
+    DESCRIPTION
+        "This group is mandatory for devices which can provide
+        online diagnostic notifications."
+
+    GROUP           ceDiagNotificationGroup
+    DESCRIPTION
+        "This group is mandatory for devices which can provide
+        online diagnostic notifications."
+
+    GROUP           ceDiagTestPerfLastTestMethodGroup
+    DESCRIPTION
+        "This group is mandatory for devices which can provide
+        the last testing method for a diagnostic test."
+    ::= { ciscoEntityDiagMIBCompliances 3 }
+
+ciscoEntityDiagMIBComplianceRev4 MODULE-COMPLIANCE
     STATUS          current
     DESCRIPTION
         "The compliance statement for SNMP entities that implement the
@@ -1682,9 +1823,188 @@ ciscoEntityDiagMIBComplianceRev3 MODULE-COMPLIANCE
 
     GROUP           ceDiagTestPerfLastTestMethodGroup
     DESCRIPTION
-        "This group is mandatory for devices which can provide
-        the last testing method for a diagnostic test."
-    ::= { ciscoEntityDiagMIBCompliances 3 }
+        "This group is mandatory for devices which support sliding
+         history window parameters for Health Monitor diagnostic test."
+
+    GROUP           ceDiagHMTestThreshWindowGroup
+    DESCRIPTION
+        "This group is mandatory for devices which support
+        sliding window parameters for health monitor tests."
+
+    OBJECT          ceDiagBootupLevel
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEntityImageAdminStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEntityFieldDiagnosticUrl
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandErrorAllowed
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandErrorAction
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandIterations
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandJobSuite
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandJobTestList
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandJobPortList
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagOnDemandJobRowStatus
+    SYNTAX          INTEGER  {
+                        active(1)
+                    }
+    WRITE-SYNTAX    INTEGER  {
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobStart
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobDayOfWeek
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobTestList
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobPortList
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobRowStatus
+    SYNTAX          INTEGER  {
+                        active(1)
+                    }
+    WRITE-SYNTAX    INTEGER  {
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagScheduledJobSuite
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMSyslogEnabled
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMTestEnabled
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMTestInterval
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMTestThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMTestThreshWindowSuite
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagHMTestThreshWindowSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEventLogSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEventQueryPhysicalIndex
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEventQuerySeverity
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEventQueryOwner
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEventQueryStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEnableBootUpFailedNotif
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEnableHMThreshReachedNotif
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEnableHMTestRecoverNotif
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ceDiagEnableSchedTestFailedNotif
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoEntityDiagMIBCompliances 4 }
 
 -- Units of Conformance
 
@@ -1871,7 +2191,21 @@ ceDiagTestPerfLastTestMethodGroup OBJECT-GROUP
         for a diagnostic test."
     ::= { ciscoEntityDiagMIBGroups 14 }
 
+ceDiagHMTestThreshWindowGroup OBJECT-GROUP
+    OBJECTS         {
+                        ceDiagHMTestThreshWindowSuite,
+                        ceDiagHMTestThreshWindowSize
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of managed objects that describe the sliding
+        history window parameters for a Health Monitor diagnostic test."
+    ::= { ciscoEntityDiagMIBGroups 15 }
+
 END
+
+
+
 
 
 

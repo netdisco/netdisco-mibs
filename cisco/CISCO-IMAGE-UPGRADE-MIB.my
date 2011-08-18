@@ -20,12 +20,12 @@ IMPORTS
     SnmpAdminString                        FROM SNMP-FRAMEWORK-MIB   
     NOTIFICATION-GROUP,MODULE-COMPLIANCE,
     OBJECT-GROUP                           FROM SNMPv2-CONF
-    PhysicalIndex,entPhysicalIndex         FROM ENTITY-MIB
+    entPhysicalIndex                       FROM ENTITY-MIB
     ciscoMgmt                              FROM CISCO-SMI
     EntPhysicalIndexOrZero                 FROM CISCO-TC;
  
 ciscoImageUpgradeMIB MODULE-IDENTITY
-    LAST-UPDATED "200311040000Z"
+    LAST-UPDATED "201103280000Z"
     ORGANIZATION "Cisco Systems Inc."
     CONTACT-INFO 
                 "     Cisco Systems
@@ -79,6 +79,39 @@ ciscoImageUpgradeMIB MODULE-IDENTITY
          provided using ciuUpgradeTargetTable. If this table is empty
          than an upgrade operation would be performed on all the 
          modules in the system."
+    REVISION    "201103280000Z"
+    DESCRIPTION
+         "Added new group ciuUpgradeOpNewGroup.
+          Added new enum 'systemPreupgradeBegin' to
+          ciuUpgradeOpStatusOperation.
+          Added ciuUpgradeOpLastCommand and ciuUpgradeOpLastStatus to 
+          the varbind list of ciuUpgradeOpCompletionNotify.
+          Added new compliance ciuImageUpgradeComplianceRev4
+          and deprecated ciuImageUpgradeComplianceRev3. 
+          Added ciuUpgradeJobStatusNotifyOnCompletion."
+    REVISION    "200803180000Z"
+    DESCRIPTION
+         "Added new enum 'compactFlashTcamSanity' to 
+          ciuUpgradeOpStatusOperation."
+    REVISION    "200707180000Z"
+    DESCRIPTION
+         "Added new enums to ciuUpgradeOpStatusOperation."
+    REVISION    "200612210000Z"
+    DESCRIPTION
+         "Added new enums to ciuUpgradeOpStatus and
+          ciuUpgradeOpStatusOperation.
+          Added new trap ciuUpgradeJobStatusNotify.
+          Changed type for ciuUpgradeOpStatusModule
+          to EntPhysicalIndexOrZero.
+          Added ciuUpgradeNotificationGroupSup group,
+          deprecated ciuImageUpgradeComplianceRev2 and 
+          added ciuImageUpgradeComplianceRev3 "
+    REVISION    "200401200000Z"
+    DESCRIPTION
+         "Added new enums to ciuUpgradeOpStatus and 
+          ciuUpgradeOpStatusOperation.
+          Corrected description for 'configSync' enum defined in
+          ciuUpgradeOpStatusOperation object. "
     REVISION    "200311040000Z"
     DESCRIPTION
          "Updated compliance statement. Removed ciuImageLocInputGroup
@@ -328,7 +361,10 @@ ciuUpgradeOpStatus OBJECT-TYPE
                             inProgress(4),
                             success(5),
                             abortInProgress(6),
-                            abortSuccess(7)
+                            abortSuccess(7),
+                            abortFailed(8),
+                            successReset(9),
+                            fsUpgReset(10)
                            }
         MAX-ACCESS     read-only
         STATUS         current
@@ -342,7 +378,12 @@ ciuUpgradeOpStatus OBJECT-TYPE
              success(5)          - specified operation has completed
                                    successfully.
              abortInProgress(6)  - abort in progress.
-             abortSuccess(7)     - abort operation successful. "
+             abortSuccess(7)     - abort operation successful.
+             abortFailed(8)      - abort failed.
+             successReset(9)     - specified operation has completed
+                                   successfully and the system will 
+                                   reset.
+             fsUpgReset(10)      - fabric switch upgrade reset."
         DEFVAL { none }
         ::= { ciscoImageUpgradeOp 2 }
 
@@ -419,6 +460,108 @@ ciuUpgradeOpStatusReason OBJECT-TYPE
         ::= { ciscoImageUpgradeOp 7 }
               
         
+ciuUpgradeOpLastCommand OBJECT-TYPE
+        SYNTAX         INTEGER {
+                                none(1),
+                                done(2),
+                                install(3),
+                                check(4)
+                           }
+        MAX-ACCESS     read-only
+        STATUS         current
+        DESCRIPTION
+            "This object indicates previous OpCommand value.
+             It will be updated after new OpCommand is set and delivered
+             to upgrade process.
+             'none'    if this object is read without performing
+                       any operation listed above, 'none' would be 
+                       returned. Also 'none' would be returned for a
+                       read operation if a cleanup of the previous
+                       upgrade operation is completed either through
+                       the issue of 'done' command or the maximum
+                       timeout of 5 minutes is elapsed. Setting this
+                       object to 'none', agent would return a success
+                       without any upgrade operation being performed. 
+                       
+             'done'    if this object returns any value other than
+                       'none', then setting this to 'done' would do
+                       the required cleanup of previous upgrade
+                       operation and make the system ready for any new
+                       upgrade operation. This is needed because the
+                       system maintains the status of the previous
+                       upgrade operation for a maximum time of 5 minutes
+                       before it does the cleanup. During this period
+                       no new upgrade operation is allowed.
+                        
+             'install' perform the required upgrade operation listed 
+                       in ciuUpgradeTargetTable table. However
+                       the upgrade operation for a module would not be
+                       done if the current running image and the image
+                       to be upgraded given as an input through the
+                       ciuImageLocInputTable are the same.
+                       
+             'check'   check the version compatibility for the given
+                       set of image files against the current system 
+                       configuration."
+        ::= { ciscoImageUpgradeOp 8 }
+
+ciuUpgradeOpLastStatus OBJECT-TYPE
+        SYNTAX         INTEGER {
+                            none(1),
+                            invalidOperation(2),
+                            failure(3),
+                            inProgress(4),
+                            success(5),
+                            abortInProgress(6),
+                            abortSuccess(7),
+                            abortFailed(8),
+                            successReset(9),
+                            fsUpgReset(10)
+                           }
+        MAX-ACCESS     read-only
+        STATUS         current
+        DESCRIPTION
+            "This object indicates previous OpStatus value. 
+             It will be updated after new OpCommand is set and delivered
+             to upgrade process.
+             'none'             - no operation was performed.
+             'invalidOperation' - the selected operation is not
+                                   supported.
+             'failure'          - the selected operation has failed.
+             'inProgress'       - specified operation is active.
+             'success'          - specified operation has completed
+                                   successfully.
+             'abortInProgress'  - abort in progress.
+             'abortSuccess'     - abort operation successful.
+             'abortFailed'      - abort failed.
+             'successReset'     - specified operation has completed
+                                   successfully and the system will 
+                                   reset.
+             'fsUpgReset'      - fabric switch upgrade reset."
+        ::= { ciscoImageUpgradeOp 9 }
+
+ciuUpgradeOpLastStatusReason OBJECT-TYPE
+        SYNTAX         SnmpAdminString
+        MAX-ACCESS     read-only
+        STATUS         current
+        DESCRIPTION
+            "This object indicates the previous OpStatusReason value.  
+             It will be updated after new OpCommand is set and delivered
+             to upgrade process."
+        ::= { ciscoImageUpgradeOp 10 }
+
+ciuUpgradeJobStatusNotifyOnCompletion OBJECT-TYPE
+        SYNTAX         TruthValue
+        MAX-ACCESS     read-write
+        STATUS         current
+        DESCRIPTION
+            "This object specifies whether or not 
+            ciuUpgradeJobStatusCompletionNotify notification 
+            should be generated on the completion of an operation.
+            If 'true', ciuUpgradeJobStatusCompletionNotify
+            will be generated, else if 'false' it would not be."
+        ::= { ciscoImageUpgradeOp 11}
+
 --
 -- target input table
 --                                                  
@@ -613,7 +756,8 @@ ciuVersionCompUpgradeAction OBJECT-TYPE
                                   switchOverReset(4),
                                   reset(5),
                                   copy(6),
-                                  notApplicable(7)
+                                  notApplicable(7),
+                                  plugin(8)
                                 }
         MAX-ACCESS     read-only
         STATUS         current
@@ -634,7 +778,9 @@ ciuVersionCompUpgradeAction OBJECT-TYPE
                                 updated and will take effect on next
                                 reload.
             notApplicable(7)  : upgrade action is not possible
-                                because image is not upgradable. "
+                                because image is not upgradable. 
+            plugin(8)		  : upgrading plugin only instead of full
+                                image."
         ::= { ciuVersionCompChkEntry 3 }
                      
 ciuVersionCompUpgradeBios OBJECT-TYPE
@@ -835,7 +981,7 @@ ciuUpgradeOpStatusEntry  OBJECT-TYPE
 CiuUpgradeOpStatusEntry ::= SEQUENCE {
         ciuUpgradeOpStatusOperIndex        Unsigned32,
         ciuUpgradeOpStatusOperation        INTEGER,
-        ciuUpgradeOpStatusModule           PhysicalIndex,
+        ciuUpgradeOpStatusModule           EntPhysicalIndexOrZero,
         ciuUpgradeOpStatusSrcImageLoc      SnmpAdminString,
         ciuUpgradeOpStatusDestImageLoc     SnmpAdminString,
         ciuUpgradeOpStatusJobStatus        INTEGER,
@@ -873,7 +1019,22 @@ ciuUpgradeOpStatusOperation OBJECT-TYPE
                          unknownModuleOnline(17),
                          recommendedAction(18),
                          recoveryAction(19),
-                         remainingAction(20)                         
+                         remainingAction(20),
+                         additionalInfo(21),
+                         settingBootvars(22),
+                         informLcmFsUpg(23),
+                         sysmgrSaveRuntimeStateAndSuccessReset(24),
+                         kexecLoadUpgImages(25),
+                         fsUpgCleanup(26),
+                         saveMtsState(27),
+                         fsUpgBegin(28),
+                         lcWarmBootStatus(29),
+                         waitStateVerificationStatus(30),
+                         informLcmFsUpgExternalLc(31),
+                         externalLcWarmBootStatus(32),
+                         total(33), 
+                         compactFlashTcamSanity(34),
+                         systemPreupgradeBegin(35)
                        }
         MAX-ACCESS     read-only
         STATUS         current
@@ -885,13 +1046,14 @@ ciuUpgradeOpStatusOperation OBJECT-TYPE
             'copy'    - the image is being copied from 
                         ciuUpgradeOpStatusSrcImageLoc to
                         ciuUpgradeOpStatusDestImageLoc.
-            'verify'  - copied images are being verified for checksum and
-                        input consistency.
+            'verify'  - copied images are being verified for checksum 
+                        and input consistency.
             'versionExtraction' - extracting the version info from 
                                   image.
             'imageSync'     - Syncing image to the standby supervisor,
                               if standby supervisor exists. 
-            'configSync'    - syncing configuration to standby 
+            'configSync'    - saving running configuration to startup
+                              configuration and syncing it to standby 
                               supervisor, if it exists.
             'preUpgrade'    - Upgrading Bios/loader/bootrom
             'forceDownload' - This module is being force downloaded. 
@@ -932,12 +1094,41 @@ ciuUpgradeOpStatusOperation OBJECT-TYPE
                                      'ciuUpgradeOpStatusSrcImageLoc'
                                      would contain the information 
                                      about the remaining actions.
-
+            'additionalInfo'      -  Specifies the additional info 
+                                     the installer conveys to the user.
+                                     If this object value is 
+                                     'additionalInfo' then 
+                                     the object 
+                                     'ciuUpgradeOpStatusSrcImageLoc'
+                                     would contain the information.
+            'settingBootvars'     -  setting the boot variables.
+            'informLcmFsUpg'      -  save linecard runtime state.
+            'sysmgrSaveRuntimeStateAndSuccessReset' - save supervisor 
+                                     runtime state and terminate all 
+                                     services.
+            'kexecLoadUpgImages'  - load upgrade images into memory.
+            'fsUpgCleanup'        - cleanup file system for upgrade.
+            'saveMtsState'        - saving persistent transaction 
+                                    messages.
+            'fsUpgBegin'          - notify services that upgrade is 
+                                    about to begin.
+            'lcWarmBootStatus'    - linecard upgrade status.
+            'waitStateVerificationStatus' - supervisor state 
+                                    verification with the new image.
+            'informLcmFsUpgExternalLc' - save external linecard runtime 
+                                      state.
+            'externalLcWarmBootStatus' - external linecard upgrade 
+                                     status.
+            'total'               - total.
+            'compactFlashTcamSanity'  - compact flash and TCAM sanity 
+                                      test.
+            'systemPreupgradeBegin' - notify services of beginning of 
+                                      upgrade.
              "
         ::= { ciuUpgradeOpStatusEntry 2 }
 
 ciuUpgradeOpStatusModule OBJECT-TYPE
-        SYNTAX         PhysicalIndex
+        SYNTAX         EntPhysicalIndexOrZero
         MAX-ACCESS     read-only
         STATUS         current
         DESCRIPTION
@@ -1129,16 +1320,60 @@ ciuUpgradeOpCompletionNotify NOTIFICATION-TYPE
         OBJECTS	{
           ciuUpgradeOpCommand, 
           ciuUpgradeOpStatus,
-          ciuUpgradeOpTimeCompleted  
+          ciuUpgradeOpTimeCompleted,
+          ciuUpgradeOpLastCommand,
+          ciuUpgradeOpLastStatus
         }
         STATUS current
         DESCRIPTION
             "A ciuUpgradeOpCompletionNotify is sent at the
-             completion of upgrade operation(enumerated in
-             ciuUpgradeOpCommand) if such a notification was
-             requested when the operation was initiated."
+             completion of upgrade operation denoted by 
+             ciuUpgradeOpCommand object if such a notification 
+             was requested when the operation was initiated.
+             ciuUpgradeOpCommand indicates the type of 
+             operation. ciuUpgradeOpStatus indicates the
+             result of the operation. ciuUpgradeOpTimeCompleted
+             indicates the time when the operation is
+             completed. ciuUpgradeopLastCommand indicates
+             the previous operation that was executed. 
+             ciuUpgradeOpLastStatus indicates the result of
+             previous operation."
         ::= { ciscoImageUpgradeMIBNotifs 1 }
 
+ciuUpgradeJobStatusNotify NOTIFICATION-TYPE
+        OBJECTS {
+          ciuUpgradeOpStatusOperation,
+          ciuUpgradeOpStatusModule,
+          ciuUpgradeOpStatusSrcImageLoc,
+          ciuUpgradeOpStatusDestImageLoc,
+          ciuUpgradeOpStatusJobStatus,
+          ciuUpgradeOpStatusPercentCompl,
+          ciuUpgradeOpStatusJobStatusReas,
+          ciuUpgradeOpStatus,
+          ciuUpgradeOpStatusReason
+        }
+        STATUS current  
+        DESCRIPTION
+            "A ciuUpgradeJobStatusNotify is sent when there
+             is status change in the upgrade process.
+             ciuUpgradeOpStatusOperation indicates the
+             operation to change the upgrade status. 
+             ciuUpgradeOpStatusModule indicates which module 
+             is affected. ciuUpgradeOpStatusSrcImageLoc 
+             indicates location of source image if applicable.  
+             ciuUpgradeOpStatusDestImageLoc indicates location
+             of destination image if applicable.
+             ciuUpgradeOpStatusJobStatus indicates the result
+             of this operation to change the status.
+             ciuUpgradeOpStatusPercentCompl indicates percentage
+             of the operation that has been completed.
+             ciuUpgradeOpStatusJobStatusReas gives explanation
+             of the faiure if there is a failure.
+             ciuUpgradeOpStatus indicates the result of the 
+             operation at higher level.
+             ciuUpgradeOpStatusReason gives detailed explanation 
+             if ciuUpgradeOpStatus is not successful."
+        ::= { ciscoImageUpgradeMIBNotifs 2}
   
 -- 
 -- Conformance 
@@ -1204,7 +1439,7 @@ ciuImageUpgradeCompliance MODULE-COMPLIANCE
  
 
 ciuImageUpgradeComplianceRev1 MODULE-COMPLIANCE
-     STATUS deprecated -- by ciuImageUpgradeComplianceRev1
+     STATUS deprecated -- by ciuImageUpgradeComplianceRev2
      DESCRIPTION
          "Compliance statement for Image Upgrade MIB.
          
@@ -1259,7 +1494,7 @@ ciuImageUpgradeComplianceRev1 MODULE-COMPLIANCE
      ::= { ciuImageUpgradeCompliances 2 }
  
 ciuImageUpgradeComplianceRev2 MODULE-COMPLIANCE
-     STATUS current
+     STATUS deprecated -- by ciuImageUpgradeComplianceRev3
      DESCRIPTION
          "Compliance statement for Image Upgrade MIB. 
          
@@ -1314,6 +1549,121 @@ ciuImageUpgradeComplianceRev2 MODULE-COMPLIANCE
          
      ::= { ciuImageUpgradeCompliances 3 } 
      
+ciuImageUpgradeComplianceRev3 MODULE-COMPLIANCE
+     STATUS deprecated -- by ciuImageUpgradeComplianceRev4 
+     DESCRIPTION
+         "Compliance statement for Image Upgrade MIB. 
+         
+          For the (mandatory) ciuImageLocInputGroup, it is 
+          compliant	to allow only a limited number of entries to be
+          created and concurrently 'active' in the 
+          ciuImageLocInputTable table."    
+     MODULE       -- this module
+     MANDATORY-GROUPS {
+         ciuImageUpgradeGroup,
+         ciuImageVariableGroup,
+         ciuImageURIGroup,
+         ciuUpgradeOpGroup,
+         ciuImageLocInputGroup,
+         ciuVersionCompChkGroup,
+         ciuUpgradeImageVersionGroup,
+         ciuUpgradeOpStatusGroup,
+         ciuUpgradeNotificationGroup,
+         ciuUpgradeNotificationGroupSup,
+         ciuUpgradeMiscGroup,
+         ciuUpgradeMiscInfoGroup
+     }
+     
+     OBJECT  ciuUpgradeTargetEntryStatus 
+     SYNTAX  INTEGER {             
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+     DESCRIPTION 
+         "Only three values 'createAndGo', 'destroy' and 'active' 
+         out of the six enumerated values need to be supported."
+         
+     OBJECT ciuImageLocInputEntryStatus
+     SYNTAX  INTEGER {             
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+     DESCRIPTION 
+         "Only three values 'createAndGo', 'destroy' and 'active' 
+         out of the six enumerated values need to be supported."
+         
+     OBJECT ciuImageLocInputURI
+     DESCRIPTION 
+         "It is compliant to support a maximum value for this 
+         object which is smaller than the defined maximum value."
+           
+     GROUP ciuUpgradeTargetGroup
+     DESCRIPTION
+         "Implementation of this group is optional. For some systems
+         all the required modules in the system would be upgraded 
+         in response to ciuUpgradeOpCommand. In such cases,
+         implementation of this group is optional."
+         
+     ::= { ciuImageUpgradeCompliances 4 } 
+
+ciuImageUpgradeComplianceRev4 MODULE-COMPLIANCE
+     STATUS current 
+     DESCRIPTION
+         "Compliance statement for Image Upgrade MIB.
+
+          For the (mandatory) ciuImageLocInputGroup, it is
+          compliant to allow only a limited number of entries to be
+          created and concurrently 'active' in the
+          ciuImageLocInputTable table."
+     MODULE       -- this module
+     MANDATORY-GROUPS {
+         ciuImageUpgradeGroup,
+         ciuImageVariableGroup,
+         ciuImageURIGroup,
+         ciuUpgradeOpGroup,
+         ciuImageLocInputGroup,
+         ciuVersionCompChkGroup,
+         ciuUpgradeImageVersionGroup,
+         ciuUpgradeOpStatusGroup,
+         ciuUpgradeNotificationGroup,
+         ciuUpgradeNotificationGroupSup,
+         ciuUpgradeMiscGroup,
+         ciuUpgradeMiscInfoGroup,
+         ciuUpgradeOpNewGroup
+     }
+
+     OBJECT  ciuUpgradeTargetEntryStatus
+     SYNTAX  INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+     DESCRIPTION
+         "Only three values 'createAndGo', 'destroy' and 'active'
+         out of the six enumerated values need to be supported."
+
+     OBJECT ciuImageLocInputEntryStatus
+     SYNTAX  INTEGER {
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)}
+     DESCRIPTION
+         "Only three values 'createAndGo', 'destroy' and 'active'
+         out of the six enumerated values need to be supported."
+
+     OBJECT ciuImageLocInputURI
+     DESCRIPTION
+         "It is compliant to support a maximum value for this
+         object which is smaller than the defined maximum value."
+
+     GROUP ciuUpgradeTargetGroup
+     DESCRIPTION
+         "Implementation of this group is optional. For some systems
+         all the required modules in the system would be upgraded
+         in response to ciuUpgradeOpCommand. In such cases,
+         implementation of this group is optional."
+
+     ::= { ciuImageUpgradeCompliances 5 }
+
 -- Units of Conformance
 
 ciuImageUpgradeGroup OBJECT-GROUP
@@ -1430,7 +1780,9 @@ ciuUpgradeOpStatusGroup OBJECT-GROUP
      ::= { ciuImageUpgradeGroups 9 }
      
 ciuUpgradeNotificationGroup        NOTIFICATION-GROUP
-     NOTIFICATIONS { ciuUpgradeOpCompletionNotify }
+     NOTIFICATIONS { 
+               ciuUpgradeOpCompletionNotify
+     }
      STATUS current
      DESCRIPTION
             "A collection of notifications for upgrade operations. "
@@ -1455,4 +1807,29 @@ ciuUpgradeMiscInfoGroup OBJECT-GROUP
          "A collection of objects for Miscelleneous info for upgrade
          operation."
      ::= { ciuImageUpgradeGroups 12 }     
+
+ciuUpgradeNotificationGroupSup        NOTIFICATION-GROUP
+     NOTIFICATIONS {
+               ciuUpgradeJobStatusNotify
+     }
+     STATUS current
+     DESCRIPTION
+            "A collection of notifications for upgrade operations. "
+     ::= { ciuImageUpgradeGroups  13 }
+
+ciuUpgradeOpNewGroup OBJECT-GROUP
+     OBJECTS {
+               ciuUpgradeJobStatusNotifyOnCompletion,
+               ciuUpgradeOpLastCommand,
+               ciuUpgradeOpLastStatus,
+               ciuUpgradeOpLastStatusReason
+     }
+     STATUS current
+     DESCRIPTION
+         "A collection of objects for Upgrade operation."
+     ::= { ciuImageUpgradeGroups 14 }
+
 END
+
+
+

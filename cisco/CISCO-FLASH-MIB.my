@@ -3,7 +3,7 @@
 --
 -- April 1995, Ashwin Baindur
 --
--- Copyright (c) 1995-2008 by cisco Systems Inc.
+-- Copyright (c) 1995-2009, 2011 by cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -44,7 +44,7 @@ IMPORTS
 
 
 ciscoFlashMIB MODULE-IDENTITY
-    LAST-UPDATED    "200812080000Z"
+    LAST-UPDATED    "201103160000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -60,6 +60,18 @@ ciscoFlashMIB MODULE-IDENTITY
     DESCRIPTION
         "This MIB provides for the management of Cisco
         Flash Devices."
+    REVISION        "201103160000Z"
+    DESCRIPTION
+        "Added ciscoFlashDeviceMinPartitionSizeExtended to support flash
+        devices of sizes greater than 4 GB.
+
+        Added new object group ciscoFlashDeviceInfoExtGroupSupRev1.
+
+        Added new compliance group ciscoFlashMIBComplianceRev10 which
+        deprecates ciscoFlashMIBComplianceRev9."
+    REVISION        "200906030000Z"
+    DESCRIPTION
+        "Added 'copyProhibited' enum value to ciscoFlashCopyStatus object."
     REVISION        "200812080000Z"
     DESCRIPTION
         "Added ciscoFlashDeviceSizeExtended,
@@ -347,7 +359,8 @@ CiscoFlashDeviceEntry ::= SEQUENCE {
         ciscoFlashDeviceRemovable         TruthValue,
         ciscoFlashPhyEntIndex             PhysicalIndex,
         ciscoFlashDeviceNameExtended      DisplayString,
-        ciscoFlashDeviceSizeExtended      CounterBasedGauge64
+        ciscoFlashDeviceSizeExtended             CounterBasedGauge64,
+        ciscoFlashDeviceMinPartitionSizeExtended CounterBasedGauge64
 }
 
 ciscoFlashDeviceIndex OBJECT-TYPE
@@ -412,7 +425,13 @@ ciscoFlashDeviceMinPartitionSize OBJECT-TYPE
         will be equal to the minimum of
         ciscoFlashDeviceMaxPartitions
         and
-        (ciscoFlashDeviceSize / ciscoFlashDeviceMinPartitionSize)."
+        (ciscoFlashDeviceSize / ciscoFlashDeviceMinPartitionSize).
+
+        If the total size of the flash device is greater than the
+        maximum value reportable by this object then this object should
+        report its maximum value(4,294,967,295) and
+        ciscoFlashDeviceMinPartitionSizeExtended must be used to report
+        the flash device's minimum partition size." 
     ::= { ciscoFlashDeviceEntry 3 }
 
 ciscoFlashDeviceMaxPartitions OBJECT-TYPE
@@ -661,6 +680,16 @@ ciscoFlashDeviceSizeExtended OBJECT-TYPE
         This object is a 64-bit version of ciscoFlashDeviceSize."
     ::= { ciscoFlashDeviceEntry 16 }
 
+ciscoFlashDeviceMinPartitionSizeExtended OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object provides the minimum partition size supported for
+        this device. This object is a 64-bit version of 
+        ciscoFlashDeviceMinPatitionSize." 
+    ::= { ciscoFlashDeviceEntry 17 }
+ 
 
 -- Flash device sub group : Chip level information
 
@@ -1703,7 +1732,8 @@ ciscoFlashCopyStatus OBJECT-TYPE
                         copyFileChecksumError(15),
                         copyNoMemory(16),
                         copyUnknownFailure(17),
-                        copyInvalidSignature(18)
+                        copyInvalidSignature(18),
+                        copyProhibited(19)
                     }
     MAX-ACCESS      read-only
     STATUS          current
@@ -1776,7 +1806,10 @@ ciscoFlashCopyStatus OBJECT-TYPE
                 system running low on memory
 
         copyUnknownFailure :
-                failure unknown"
+                failure unknown
+
+        copyProhibited:
+              stop user from overwriting current boot image file." 
     ::= { ciscoFlashCopyEntry 8 }
 
 ciscoFlashCopyNotifyOnCompletion OBJECT-TYPE
@@ -2932,10 +2965,13 @@ ciscoFlashMIBComplianceRev8 MODULE-COMPLIANCE
     ::= { ciscoFlashMIBCompliances 9 }
 
 ciscoFlashMIBComplianceRev9 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities that support
-        the Cisco Flash MIB."
+        the Cisco Flash MIB.
+
+        This compliance is deprecated by
+        ciscoFlashMIBComplianceRev10."
     MODULE          -- this module
     MANDATORY-GROUPS {
                         ciscoFlashPartitionInfoGroup,
@@ -2993,8 +3029,71 @@ ciscoFlashMIBComplianceRev9 MODULE-COMPLIANCE
     DESCRIPTION
         "This group is mandatory for device which suppoorts
          flash devices of sizes greater than 4 GB."
-
     ::= { ciscoFlashMIBCompliances 10 }
+
+ciscoFlashMIBComplianceRev10 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities that supports
+        the Cisco Flash MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoFlashPartitionInfoGroup,
+                        ciscoFlashFileInfoGroupRev1,
+                        ciscoFlashFileInfoGroupSupp1,
+                        ciscoFlashChipInfoGroup,
+                        ciscoFlashCopyOpGroupRev2,
+                        ciscoFlashCopyOpGroupRev3
+                    }
+
+    GROUP           ciscoFlashDeviceOptionalInfoGroupRev1
+    DESCRIPTION
+        "The Flash device optional group contains objects for features
+        that may be optional or not available across all systems.       
+        An example is the partitioning feature"
+
+    GROUP           ciscoFlashPartitioningOpGroup
+    DESCRIPTION
+        "The Flash partitioning operations group is optional. It is
+        intended whenever partitioning is supported."
+
+    GROUP           ciscoFlashMiscOpGroup
+    DESCRIPTION
+        "The Flash miscellaneous operations group is optional. It
+        contains operations that are not essential or not universally
+        supported across all platforms"
+
+    GROUP           ciscoFlashNotifGroupRev2
+    DESCRIPTION
+        "This group contains Notifications representing flash operations"
+
+    GROUP           ciscoFlashFileTypeInfoGroup
+    DESCRIPTION
+        "This group contain objects for the device to represent Flash
+        Files sorted by FlashFileType"
+
+    GROUP           ciscoFlashDeviceInfoGroupRev2
+    DESCRIPTION
+        "This group contain objects for the device to represent Flash
+        Files sorted by FlashFileType"
+
+    GROUP           ciscoFlashDeviceInfoExtGroup
+    DESCRIPTION
+        "This group is mandatory for device which suppoorts
+        flash devices of sizes greater than 4 GB and also
+        supports ciscoFlashDeviceInfoGroupRev2."
+
+    GROUP           ciscoFlashPartitionInfoExtGroup
+    DESCRIPTION
+        "This group is mandatory for device which suppoorts
+        flash devices of sizes greater than 4 GB"
+
+    GROUP           ciscoFlashDeviceInfoExtGroupSupRev1
+    DESCRIPTION
+        "This group is mandatory for device which suppoorts
+        flash devices of sizes greater than 4 GB and also
+        supports ciscoFlashDeviceInfoGroupRev2."
+    ::= { ciscoFlashMIBCompliances 11 }
 
 -- Units of conformance
 
@@ -3317,9 +3416,7 @@ ciscoFlashFileTypeInfoGroup OBJECT-GROUP
     ::= { ciscoFlashMIBGroups 20 }
 
 ciscoFlashDeviceInfoExtGroup OBJECT-GROUP
-    OBJECTS         {
-                        ciscoFlashDeviceSizeExtended
-                    }
+    OBJECTS         { ciscoFlashDeviceSizeExtended }
     STATUS          current
     DESCRIPTION
         "A collection of objects providing high capacity
@@ -3337,4 +3434,36 @@ ciscoFlashPartitionInfoExtGroup OBJECT-GROUP
         Flash partition level information."
     ::= { ciscoFlashMIBGroups 22 }
 
+ciscoFlashDeviceInfoExtGroupSupRev1 OBJECT-GROUP
+    OBJECTS         { ciscoFlashDeviceMinPartitionSizeExtended }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing high capacity
+        mandatory Flash device level information.
+
+        This Group is supplement to ciscoFlashDeviceInfoExtGroup."
+    ::= { ciscoFlashMIBGroups 23 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

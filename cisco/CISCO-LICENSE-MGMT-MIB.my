@@ -4,7 +4,7 @@
 --   
 -- July 2006, Sunil Gudurvalmiki
 --   
--- Copyright (c) 2006, 2008-2009 by Cisco Systems Inc.
+-- Copyright (c) 2006, 2008, 2011 by Cisco Systems Inc.
 -- All rights reserved.
 --   
 -- ********************************************************************
@@ -40,15 +40,20 @@ IMPORTS
 
 
 ciscoLicenseMgmtMIB MODULE-IDENTITY
-    LAST-UPDATED    "200811210000Z"
+    LAST-UPDATED    "201104190000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems
             Customer Service
+
             Postal: 170 W Tasman Drive
+
             San Jose, CA  95134
+
             USA
+
             Tel: +1 800 553 -NETS
+
             E-mail: cs-snmp@cisco.com"
     DESCRIPTION
         "The MIB module for managing licenses on the system.
@@ -94,6 +99,15 @@ ciscoLicenseMgmtMIB MODULE-IDENTITY
             Agreement) before using an evaluation license. Even
             though they are not node locked, their usage is
             recorded on the device.
+
+        RIGHT TO USE (RTU) LICENSE:
+            Right to use license is a non-node locked metered
+            license which is in evaluation mode for a limited
+            time after which it is converted to Right To Use (RTU) 
+            license and is valid for the lifetime of the product.
+            User will have to accept EULA (End User License Agreement)
+            before using this license. Even though it is not node
+            locked, usage information is recorded on the device.
 
         EXTENSION LICENSE:
             Extension licenses are node locked metered licenses.
@@ -292,6 +306,27 @@ ciscoLicenseMgmtMIB MODULE-IDENTITY
         entPhysicalIndex imported from ENTITY-MIB is used to
         identify the device uniquely. It is specified as the index
         or one of the index for tables in this MIB as needed."
+    REVISION        "201104190000Z"
+    DESCRIPTION
+        "This version of the MIB adds support for Right to use (RTU)
+        licensing. The revisions are:
+        o Added RTU license definition to MIB description above.
+        o Updated clmgmtLicenseType object to support the following new
+          types of license:
+          evalRightToUse
+          rightToUse
+        o Added following objects to clmgmtLicenseInfoTable
+          clmgmtLicensePeriodUsed
+        o Added following objects to clmgmtLicensableFeatureTable
+          clmgmtFeaturePeriodUsed
+        o Added the following notifications
+          clmgmtLicenseEvalRTUTransitionWarning
+          clmgmtLicenseEvalRTUTransition
+        o Added the following conformance groups
+          clmgmtLicenseRTUGroup
+          clmgmtLicenseRTUUsageNotifGroup
+
+        The new module compliance is ciscoLicenseMgmtComplianceRev1."
     REVISION        "200811210000Z"
     DESCRIPTION
         "This version of the MIB adds support for subscription
@@ -1322,7 +1357,8 @@ ClmgmtLicenseInfoEntry ::= SEQUENCE {
         clmgmtLicenseComments                SnmpAdminString,
         clmgmtLicenseStatus                  INTEGER,
         clmgmtLicenseStartDate               DateAndTime,
-        clmgmtLicenseEndDate                 DateAndTime
+        clmgmtLicenseEndDate                 DateAndTime,
+        clmgmtLicensePeriodUsed              Unsigned32
 }
 
 clmgmtLicenseStoreUsed OBJECT-TYPE
@@ -1374,7 +1410,9 @@ clmgmtLicenseType OBJECT-TYPE
                         permanent(4),
                         paidSubscription(5),
                         evaluationSubscription(6),
-                        extensionSubscription(7)
+                        extensionSubscription(7),
+                        evalRightToUse(8),
+                        rightToUse(9)
                     }
     MAX-ACCESS      read-only
     STATUS          current
@@ -1408,7 +1446,10 @@ clmgmtLicenseType OBJECT-TYPE
                                   licenses but these licenses are issued
                                   based on customer request. There are
                                   no restrictions on the number of
-                                  licenses available for a UDI." 
+                                  licenses available for a UDI.
+        evalRightToUse(8)       - Evaluation Right to use (RTU)
+        license.
+        rightToUse(9)           - Right to use (RTU) license." 
     ::= { clmgmtLicenseInfoEntry 5 }
 
 clmgmtLicenseCounted OBJECT-TYPE
@@ -1430,8 +1471,8 @@ clmgmtLicenseValidityPeriod OBJECT-TYPE
     DESCRIPTION
         "This object indicates the time period the license is valid for.
         This object is applicable only if clmgmtLicenseType is demo(1),
-        or extension(2) or gracePeriod(3). The object will return 0 for
-        other license types." 
+        or extension(2) or gracePeriod(3) or evalRightToUse(8). The
+        object will return 0 for other license types." 
     ::= { clmgmtLicenseInfoEntry 7 }
 
 clmgmtLicenseValidityPeriodRemaining OBJECT-TYPE
@@ -1440,11 +1481,11 @@ clmgmtLicenseValidityPeriodRemaining OBJECT-TYPE
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "This object indicates the time period remaining before
-        the license expires. This object is applicable only if
-        clmgmtLicenseType is demo(1), or extension(2) or
-        gracePeriod(3). The object will contain 0 for other license
-        types." 
+        "This object indicates the time period remaining before the
+        license expires or transitions to rightToUse(9) license. This
+        object is applicable only if clmgmtLicenseType is demo(1), or
+        extension(2) or gracePeriod(3) or evalRightToUse(8). The object
+        will contain 0 for other license types." 
     ::= { clmgmtLicenseInfoEntry 8 }
 
 clmgmtLicenseExpiredPeriod OBJECT-TYPE
@@ -1562,6 +1603,17 @@ clmgmtLicenseEndDate OBJECT-TYPE
         string of length 0 when it is not applicable." 
     ::= { clmgmtLicenseInfoEntry 16 }
  
+clmgmtLicensePeriodUsed OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "seconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the time period used for the
+        Right to use (RTU) licenses. This object is applicable for all
+        RTU licenses." 
+    ::= { clmgmtLicenseInfoEntry 17 }
+ 
 
 -- Licensable features information table.
 
@@ -1600,7 +1652,8 @@ ClmgmtLicensableFeatureEntry ::= SEQUENCE {
         clmgmtFeatureValidityPeriodRemaining Unsigned32,
         clmgmtFeatureWhatIsCounted           SnmpAdminString,
         clmgmtFeatureStartDate               DateAndTime,
-        clmgmtFeatureEndDate                 DateAndTime
+        clmgmtFeatureEndDate                 DateAndTime,
+        clmgmtFeaturePeriodUsed              Unsigned32
 }
 
 clmgmtFeatureIndex OBJECT-TYPE
@@ -1639,9 +1692,10 @@ clmgmtFeatureValidityPeriodRemaining OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "This object indicates the time period remaining before
-        the feature's license expires. This object is applicable
-        only if clmgmtLicenseType of the license used by this
-        feature is demo(1), or extension(2) or gracePeriod(3).
+        the feature's license expires or transitions. This object is
+        applicable only if clmgmtLicenseType of the license used by
+        this feature is demo(1), or extension(2) or gracePeriod(3) or
+        evalRightToUse(8).
 
         The object will contain 0 if other types of license is used
         or if the feature does not use any license. If the
@@ -1689,6 +1743,15 @@ clmgmtFeatureEndDate OBJECT-TYPE
         feature have a valid end date then this object will contain an
         octet string of length 0." 
     ::= { clmgmtLicensableFeatureEntry 7 }
+ 
+clmgmtFeaturePeriodUsed OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "seconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the license period used for the feature." 
+    ::= { clmgmtLicensableFeatureEntry 8 }
  
 
 
@@ -2016,7 +2079,9 @@ clmgmtLicenseUsageNotifEnable OBJECT-TYPE
             clmgmtLicenseUsageCountAboutToExceed
             clmgmtLicenseSubscriptionExpiryWarning
             clmgmtLicenseSubscriptionExtExpiryWarning
-            clmgmtLicenseSubscriptionExpired"
+            clmgmtLicenseSubscriptionExpired
+            clmgmtLicenseEvalRTUTransitionWarning
+            clmgmtLicenseEvalRTUTransition"
     DEFVAL          { true } 
     ::= { clmgmtLicenseNotifObjects 1 }
 
@@ -2220,6 +2285,31 @@ clmgmtLicenseSubscriptionExpired NOTIFICATION-TYPE
         of a feature completely expires. It will be sent once a day
         after the license has completely expired"
    ::= { ciscoLicenseMgmtMIBNotifs 12 }
+
+clmgmtLicenseEvalRTUTransitionWarning NOTIFICATION-TYPE
+    OBJECTS         {
+                        clmgmtFeatureName,
+                        clmgmtFeatureVersion,
+                        clmgmtFeatureValidityPeriodRemaining
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is sent when Evaluation to Right to use (RTU)
+        license transition is about to happen. The first notification
+        will be sent 10 days before the transition and second
+        notification will be sent 5 days before the transition."
+   ::= { ciscoLicenseMgmtMIBNotifs 13 }
+
+clmgmtLicenseEvalRTUTransition NOTIFICATION-TYPE
+    OBJECTS         {
+                        clmgmtFeatureName,
+                        clmgmtFeatureVersion
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is sent, when a feature license transitions
+        from a evaluation to a Right to use (RTU) license."
+   ::= { ciscoLicenseMgmtMIBNotifs 14 }
 -- Conformance
 
 ciscoLicenseMgmtCompliances  OBJECT IDENTIFIER
@@ -2283,6 +2373,16 @@ ciscoLicenseMgmtComplianceRev1 MODULE-COMPLIANCE
     DESCRIPTION
         "This notification group is mandatory for all devices that
         support subscription licensing."
+
+    GROUP           clmgmtLicenseRTUGroup
+    DESCRIPTION
+        "This object group is mandatory for all devices that
+        support Right to Use (RTU) licensing."
+
+    GROUP           clmgmtLicenseRTUUsageNotifGroup
+    DESCRIPTION
+        "This notification group is mandatory for all devices that
+        support Right to use (RTU) licensing."
     ::= { ciscoLicenseMgmtCompliances 2 }
 
 -- Units of Conformance
@@ -2465,4 +2565,34 @@ clmgmtLicenseSubscriptionUsageNotifGroup NOTIFICATION-GROUP
         licenses."
     ::= { ciscoLicenseMgmtGroups 12 }
 
+clmgmtLicenseRTUGroup OBJECT-GROUP
+    OBJECTS         {
+                        clmgmtLicensePeriodUsed,
+                        clmgmtFeaturePeriodUsed
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects that provide information specific to
+        Right to use (RTU) licenses."
+    ::= { ciscoLicenseMgmtGroups 13 }
+
+clmgmtLicenseRTUUsageNotifGroup NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        clmgmtLicenseEvalRTUTransitionWarning,
+                        clmgmtLicenseEvalRTUTransition
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of notifications related to Right to use (RTU)
+        licenses."
+    ::= { ciscoLicenseMgmtGroups 14 }
+
 END
+
+
+
+
+
+
+
+

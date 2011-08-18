@@ -3,7 +3,7 @@
 -- 
 -- Dec. 2003 Sejun Song
 -- 
--- Copyright (c) 2002 - 2003 by Cisco Systems, Inc.
+-- Copyright (c) 2002 - 2005 by Cisco Systems, Inc.
 -- All right reserved.
 --
 -- *********************************************************************
@@ -29,7 +29,7 @@ IMPORTS
 
 
 ciscoOutageMIB MODULE-IDENTITY
-    LAST-UPDATED        "200209090000Z"
+    LAST-UPDATED        "200508220000Z"
     ORGANIZATION        "Cisco Systems, Inc."
     CONTACT-INFO        "Cisco Systems
                         Customer Service
@@ -47,8 +47,11 @@ ciscoOutageMIB MODULE-IDENTITY
         and software components comprising a router. They includes 
         physical interfaces, logical interfaces, physical 
         entities such as chassis, slots, modules, ports, 
-        power supplies, and fan, and software processes 
-        running on each card. 
+        power supplies, and fan, software processes 
+        running on each card, and logical entity, which can be 
+        defined by outage monitoring program,
+        which are IOS software for each LC and RP,
+        router device, and CPU utilization. 
 
         The outage related information comprises entity or 
         interface up and down, process start and abnormal 
@@ -70,6 +73,9 @@ ciscoOutageMIB MODULE-IDENTITY
             2) Number of Accumulated Failure (NAF): total 
                number of failure instance from the 
                beginning of the measurement.
+             
+            3) Recording Start Time (RST): the date-time 
+               that the measurement process began against the object. 
              
         Using aforementioned outage data, users can calculate 
         and correlate to derive availability information as 
@@ -94,30 +100,35 @@ ciscoOutageMIB MODULE-IDENTITY
             4) MTBF (Mean Time Between Failure): expected 
                average time between failures of a component.
  
-               = (T2 - T1) / NAFi 
+               = (T2 - RSTi) / NAFi 
 
             5) MTTF (Mean Time To Failure): the mean time to 
                failure once the device starts working.
 
-               = (MTBFi - MTTRi = (T2 - T1 - AOTi) / NAFi)
+               = (MTBFi - MTTRi = (T2 - RSTi - AOTi) / NAFi)
 
 
                                  measurement 1
                              |<----------------->|
                              |                   |
             System Up @------|-------------------|----> Time
-                             T1                  T2
+                            RSTi                 T2
  
-            At the beginning T1:
+            At the beginning RSTi:
 
 	       tmp_AOT = AOTi (from the MIB polling);
-	       LastPollingTime = Current Time(T1);
 
             At the end T2:
 
-               Duration = Current Time(T2) - LastPollingTime(T1);
+               Duration = Current Time(T2) - RSTi;
                Outage Time = AOTj - tmp_AOT;
         "
+    REVISION            "200508220000Z"
+    DESCRIPTION
+        "Added object cOutageRecordingStartTime to cOutageObjectTable.
+         Added logicalEntity(5) to OutageMonObjectType.
+         Added cOutageLntMapping subgroup object." 
+
     REVISION            "200209090000Z" 
     DESCRIPTION
         "Initial version of this MIB."
@@ -134,6 +145,7 @@ cOutageDescription  OBJECT IDENTIFIER ::=  { ciscoOutageMIBObjects 3 }
 cOutageMonObject    OBJECT IDENTIFIER ::=  { ciscoOutageMIBObjects 4 }
 cOutageCpmMapping   OBJECT IDENTIFIER ::=  { ciscoOutageMIBObjects 5 }
 cOutageRmtMapping   OBJECT IDENTIFIER ::=  { ciscoOutageMIBObjects 6 }
+cOutageLntMapping   OBJECT IDENTIFIER ::=  { ciscoOutageMIBObjects 7 }
 
 -- Textual Conventions
 
@@ -155,13 +167,19 @@ OutageMonObjectType ::= TEXTUAL-CONVENTION
 
         remoteObject - this object supports monitoring of remote 
         objects including remote customer devices or interfaces.
-        The object is defined by users via CLI configuration." 
+        The object is defined by users via CLI configuration.
+
+        logicalEntity - this object supports monitoring of any logical 
+        entities contained by the system, including router device, 
+        IOS software on each LC or RP, and CPU utilization object,
+        which can be defined by outage monitoring program."
 
     SYNTAX  INTEGER { 
         interface(1), 
         physicalEntity(2), 
         swProcess(3), 
-        remoteObject(4) 
+        remoteObject(4),
+        logicalEntity(5) 
     }
 
 
@@ -350,7 +368,7 @@ cOutageEventObjectType OBJECT-TYPE
     DESCRIPTION
         "This object specifies the monitored object's type. 
         It comprises interface(1), physicalEntity(2), 
-        swProcess(3), and remoteObject(4). 
+        swProcess(3), remoteObject(4), and logicalEntity(5).  
 
         The detailed description has been presented above 
         in the OutageMonObjectType definition."
@@ -376,6 +394,9 @@ cOutageEventMonObjectIndex  OBJECT-TYPE
         If it is remoteObject(4), the value corresponds to an 
         entry in the cOutageRemoteObjMapTable, which correlates the 
         object with its ID and description.  
+        If it is logicalEntity(5), the value corresponds to an 
+        entry in the cOutageLogicalObjMapTable, which correlates the 
+        object with the description.  
         
         It also correlates the event entry with a specific 
         entry in cOutageObjectTable."
@@ -524,7 +545,8 @@ COutageObjectEntry      ::= SEQUENCE {
     cOutageMonitoredObjectIndex          Unsigned32,
     cOutageCurrentStatus                 INTEGER,
     cOutageAOTSinceMeasureStarted        Unsigned32, 
-    cOutageNAFSinceMeasureStarted        Unsigned32 
+    cOutageNAFSinceMeasureStarted        Unsigned32,
+    cOutageRecordingStartTime            DateAndTime 
 } 
 
 
@@ -535,7 +557,7 @@ cOutageObjectType OBJECT-TYPE
     DESCRIPTION
         "This object specifies the monitored object's type. 
         It comprises interface(1), physicalEntity(2), 
-        swProcess(3), and remoteObject(4). 
+        swProcess(3), remoteObject(4), and logicalEntity(5). 
 
         The detailed description has been presented above 
         in the OutageMonObjectType definition."
@@ -560,7 +582,10 @@ cOutageMonitoredObjectIndex OBJECT-TYPE
         cpmProcessTable in the CISCO-PROCESS-MIB.
         If it is remoteObject(4), the value corresponds to an
         entry in the cOutageRemoteObjMapTable, which correlates the
-        object with its ID and description."
+        object with its ID and description.
+        If it is logicalEntity(5), the value corresponds to an 
+        entry in the cOutageLogicalObjMapTable, which correlates the 
+        object with the description."
     ::= { cOutageObjectEntry 2 }
 
 
@@ -603,6 +628,19 @@ cOutageNAFSinceMeasureStarted  OBJECT-TYPE
         of the measurement. Every failure event of a component 
         adds 1 to this object." 
     ::= { cOutageObjectEntry 5 }
+
+cOutageRecordingStartTime  OBJECT-TYPE
+    SYNTAX     DateAndTime
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "This object specifies the date and time of the
+        object to start outage recording.
+
+        The instance value of this cOutageRecordingStartTime 
+        value is initialized to the time when the monitored 
+        object is added into this cOutageObjectTable."
+    ::= { cOutageObjectEntry 6 }
 
  
 -- Process Index Map Table
@@ -760,6 +798,62 @@ cOutageRemoteObjDescrText OBJECT-TYPE
     ::= { cOutageRemoteObjMapEntry 4 }
 
 
+-- Logical Entity Object Map Table
+
+
+cOutageLogicalObjMapTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF COutageLogicalObjMapEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION
+        "A table containing information about
+        cOutageMonitoredObjectIndex value mapping,
+        when the cOutageObjectType is logicalEntity.
+        Each conceptual row specifies a unique mapping
+        between a cOutageMonitoredObjectIndex value, and
+        a logical entity object related information such 
+        as the object description."         
+    ::= { cOutageLntMapping 1 }
+
+
+cOutageLogicalObjMapEntry OBJECT-TYPE
+    SYNTAX      COutageLogicalObjMapEntry 
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A mapping between a logical entity object and  
+        a logical entity object description."
+    INDEX       { cOutageLogicalObjMapIndex }
+    ::= { cOutageLogicalObjMapTable 1 }
+
+
+COutageLogicalObjMapEntry ::= SEQUENCE {
+    cOutageLogicalObjMapIndex   Unsigned32,    
+    cOutageLogicalObjDescrText  SnmpAdminString
+}
+
+
+cOutageLogicalObjMapIndex OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This object uniquely identifies a logical entity 
+        object description."
+    ::= { cOutageLogicalObjMapEntry 1 }
+
+
+cOutageLogicalObjDescrText OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object specifies a human-readable
+        message describing a detailed information 
+        about the monitored logical entity."
+    ::= { cOutageLogicalObjMapEntry 2 }
+
+
 -- MIB Notification Definitions
 
 
@@ -800,10 +894,12 @@ ciscoOutageMIBGroups      OBJECT IDENTIFIER ::=
 
 
 ciscoOutageMIBCompliance MODULE-COMPLIANCE
-    STATUS	current
+    STATUS	deprecated
     DESCRIPTION
 	"The compliance statement for Cisco agents which 
-        implement the Cisco Outage MIB."
+        implement the Cisco Outage MIB. This is
+        deprecated and new compliance
+        ciscoOutageMIBComplianceRev1 is added."
     MODULE
     MANDATORY-GROUPS { 
         ciscoOutageBasicGroup,
@@ -815,6 +911,24 @@ ciscoOutageMIBCompliance MODULE-COMPLIANCE
         ciscoOutageNotificationsGroup
         }         
     ::= { ciscoOutageMIBCompliances 1 }
+
+ciscoOutageMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS	current
+    DESCRIPTION
+	"The compliance statement for Cisco agents which 
+        implement the Cisco Outage MIB."
+    MODULE
+    MANDATORY-GROUPS { 
+        ciscoOutageBasicGroup,
+        ciscoEventHistoryGroup,
+        ciscoEventDescrGroup,
+        ciscoObjectOutageGroupRev,  
+        ciscoCpmMappingGroup,
+        ciscoRmtMappingGroup,
+        ciscoLntMappingGroup,
+        ciscoOutageNotificationsGroup        
+        }         
+    ::= { ciscoOutageMIBCompliances 2 }
 
 
 -- Units of Conformance
@@ -872,10 +986,12 @@ ciscoObjectOutageGroup OBJECT-GROUP
         cOutageAOTSinceMeasureStarted,
         cOutageNAFSinceMeasureStarted
 	}
-    STATUS	current
+    STATUS	deprecated
     DESCRIPTION
         "A collection of managed objects providing 
-        accumulated outage data."
+        accumulated outage data. 
+        This group is deprecated in favour of 
+        ciscoObjectOutageGroupRev."
     ::= { ciscoOutageMIBGroups 4 }
 
 
@@ -912,4 +1028,27 @@ ciscoOutageNotificationsGroup NOTIFICATION-GROUP
     DESCRIPTION
         "A collection of notifications."
     ::= { ciscoOutageMIBGroups 7 }
+
+ciscoObjectOutageGroupRev OBJECT-GROUP
+    OBJECTS {
+        cOutageCurrentStatus,
+        cOutageRecordingStartTime,
+        cOutageAOTSinceMeasureStarted,
+        cOutageNAFSinceMeasureStarted
+	}
+    STATUS	current
+    DESCRIPTION
+        "A collection of managed objects providing 
+        accumulated outage data information."
+    ::= { ciscoOutageMIBGroups 8 }
+
+ciscoLntMappingGroup OBJECT-GROUP
+    OBJECTS {
+        cOutageLogicalObjDescrText
+        }
+    STATUS      current
+    DESCRIPTION
+        "A managed object defining the 
+        description of logical entity objects."
+    ::= { ciscoOutageMIBGroups 9 }
 END

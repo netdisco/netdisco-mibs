@@ -3,7 +3,7 @@
 --   
 -- January, 2007 Thamilarasu K
 --   
--- Copyright (c) 2007-2009 by cisco Systems, Inc.
+-- Copyright (c) 2007-2011 by cisco Systems Inc.
 -- All rights reserved.
 --   
 -- ****************************************************************
@@ -40,12 +40,14 @@ IMPORTS
         FROM ENTITY-MIB
     SnmpAdminString
         FROM SNMP-FRAMEWORK-MIB
+    CounterBasedGauge64
+        FROM HCNUM-TC
     ciscoMgmt
         FROM CISCO-SMI;
 
 
 ciscoContentServicesMIB MODULE-IDENTITY
-    LAST-UPDATED    "200908120000Z"
+    LAST-UPDATED    "201102050000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -99,6 +101,51 @@ ciscoContentServicesMIB MODULE-IDENTITY
                      policy control interface.
 
           NBAR       Network Based Application Recognition."
+    REVISION        "201102050000Z"
+    DESCRIPTION
+        "Added ccsLoadStatRadiusTable with following objects:
+        ccsLoadStatHCRadiusStartAllowedRate,
+        ccsLoadStatHCRadiusStartDenialRate.
+        Added ccsLoadStatUserDBTable with following objects:
+        ccsLoadStatHCUserDBReqAllowedRate, 
+        ccsLoadStatHCUserDBReqDenialRate.
+        Added ccsLoadStatSessionTable with following objects:
+        ccsLoadStatHCSessionCreateAllowedRate, 
+        ccsLoadStatHCSessionCreateDenialRate
+        Added ccsLoadStatBMATable with following objects:
+        ccsLoadStatHCBMAMsgsAllowedRate, 
+        ccsLoadStatHCBMAMsgsDenialRate
+        Added ccsLoadStatQuotaMgrTable with following objects:
+        ccsLoadStatHCQuotaMgrMsgsAllowedRate, 
+        ccsLoadStatHCQuotaMgrMsgsDenialRate
+        Added ccsLoadStatGxEventTable with following objects:
+        ccsLoadStatHCGxEventsAllowedRate, 
+        ccsLoadStatHCGxEventsDenialRate.
+        Added following object groups to ciscoContentServicesMIBGroups:
+        ciscoContentServicesLoadStatRadiusGroupSup1,
+        ciscoContentServicesLoadStatUserDBGroupSup1,
+        ciscoContentServicesLoadStatSessionGroupSup1,
+        ciscoContentServicesLoadStatBMAGroupSup1,
+        ciscoContentServicesLoadStatQuotaMgrGroupSup1,
+        ciscoContentServicesLoadStatGxEventGroupSup1.
+        Deprecated the following old object groups from ciscoContentServicesMIBGroups:
+        ciscoContentServicesLoadStatRadiusGroup,
+        ciscoContentServicesLoadStatUserDBGroup,
+        ciscoContentServicesLoadStatSessionGroup,
+        ciscoContentServicesLoadStatBMAGroup,
+        ciscoContentServicesLoadStatQuotaMgrGroup,
+        ciscoContentServicesLoadStatGxEventGroup.
+        Added following new compliance statement to
+        ciscoContentServicesMIBCompliances:
+        ciscoContentServicesMIBComplianceRev6.
+        Deprecated the following old compliance statement from
+        ciscoContentServicesMIBCompliances:
+        ciscoContentServicesMIBComplianceRev5."
+    REVISION        "201001280000Z"
+    DESCRIPTION
+        "Added ccsBillingPlanStatsTable
+        Added OBJECT-GROUP ciscoContentServicesBillingPlanStatsGroup
+        Added MODULE-COMPLIANCE ciscoContentServicesMIBComplianceRev5"
     REVISION        "200908120000Z"
     DESCRIPTION
         "Added ccsProtocolStatsTable with following objects:
@@ -1748,7 +1795,7 @@ ccsProtocolStatsTable OBJECT-TYPE
         categories of protocols. The first category of protocols are
         identified using the protocol handlers of the entity which
         provides the content services. These typically includes
-        protocols like http, ftp, rtsp, sip, pop3, imap, smtp and wap
+        protocols like http, ftp, rtsp, sip, pop3, imap, smtp, wap and dns
         which use well-known ports and for which deep packet inspection
         upto the application layer has been performed. The second
         category contains those protocols which have been identified
@@ -2146,6 +2193,107 @@ ccspsNetOutBitRateHighWaterTime OBJECT-TYPE
 
 -- *************************************************************
 -- *                                                           *
+-- *      Table of Billing Plan Stats                          *
+-- *                                                           *
+-- *************************************************************
+
+ccsBillingPlanStatsTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CcsBillingPlanStatsEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table contains the statistics of subscribers for
+        all configured Billing Plans."
+    ::= { ccsStats 7 }
+
+ccsBillingPlanStatsEntry OBJECT-TYPE
+    SYNTAX          CcsBillingPlanStatsEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Each entry in this table contains subscriber statistics related
+        to Billing Plan. A billing plan is a set of services. An entry
+        is created in the table, whenever a billing  plan is configured.
+        An entry will be deleted from the table, whenever a billing plan
+        is unconfigured.
+
+        The entPhysicalIndex identifies the entity that provides the 
+        content services."
+    INDEX           {
+                        entPhysicalIndex,
+                        ccsbpsBillingPlanName
+                    } 
+    ::= { ccsBillingPlanStatsTable 1 }
+
+CcsBillingPlanStatsEntry ::= SEQUENCE {
+        ccsbpsBillingPlanName        SnmpAdminString,
+        ccsbpsSubscribers            Gauge32,
+        ccsbpsHCSubscribers          CounterBasedGauge64,
+        ccsbpsSubscribersHighWater   Gauge32,
+        ccsbpsHCSubscribersHighWater CounterBasedGauge64
+}
+
+ccsbpsBillingPlanName OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..64))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The name of Billing Plan. Billing plan is set of services.
+        Each service represents a group of content that is billed
+        the same way, such as billing per-click (or per-request)
+        or billing per-IP byte, and that shares part of a
+        subscriber quota.
+        A content configuration contains the following information:
+        Layer 3 information that specifies the IP-level details
+        of the content.
+        Layer 4 information that specifies transport layer parameters,
+        such as TCP and User Datagram Protocol (UDP) port numbers." 
+    ::= { ccsBillingPlanStatsEntry 1 }
+
+ccsbpsSubscribers OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "subscribers"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Number of subscribers associated with a given
+        Billing Plan." 
+    ::= { ccsBillingPlanStatsEntry 2 }
+
+ccsbpsHCSubscribers OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "subscribers"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Number of subscribers associated with a given Billing Plan.
+        This object is 64-bit version of ccsbpsSubscribers." 
+    ::= { ccsBillingPlanStatsEntry 3 }
+
+ccsbpsSubscribersHighWater OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "subscribers"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The highest number of subscribers associated with a given
+        Billing Plan so far, as reported by ccsbpsSubscribers." 
+    ::= { ccsBillingPlanStatsEntry 4 }
+
+ccsbpsHCSubscribersHighWater OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "subscribers"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The highest number of subscribers associated with a given
+        Billing Plan so far, as reported by ccsbpsHCSubscribers. 
+        This object is 64-bit version of ccsbpsSubscribersHighWater." 
+    ::= { ccsBillingPlanStatsEntry 5 }
+ 
+
+-- *************************************************************
+-- *                                                           *
 -- *      Table of Radius Load Statistics                      *
 -- *                                                           *
 -- *************************************************************
@@ -2185,7 +2333,9 @@ CcsLoadStatRadiusEntry ::= SEQUENCE {
         ccsLoadStatHCRadiusStartDenied               Counter64,
         ccsLoadStatRadiusStartDenialRate             Gauge32,
         ccsLoadStatRadiusStartDenialRateHighWater    Gauge32,
-        ccsLoadStatHCRadiusStartDenialRateHighWater  Counter64
+        ccsLoadStatHCRadiusStartDenialRateHighWater  Counter64,
+        ccsLoadStatHCRadiusStartAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCRadiusStartDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatRadiusStartAllowed OBJECT-TYPE
@@ -2299,6 +2449,26 @@ ccsLoadStatHCRadiusStartDenialRateHighWater OBJECT-TYPE
         ccsLoadStatRadiusStartDenialRateHighWater." 
     ::= { ccsLoadStatRadiusEntry 11 }
  
+ccsLoadStatHCRadiusStartAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatRadiusStartAllowedRate." 
+    ::= { ccsLoadStatRadiusEntry 12 }
+
+ccsLoadStatHCRadiusStartDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatRadiusStartDenialRate." 
+    ::= { ccsLoadStatRadiusEntry 13 }
+ 
 
 -- *************************************************************
 -- *                                                           *
@@ -2341,7 +2511,9 @@ CcsLoadStatUserDBEntry ::= SEQUENCE {
         ccsLoadStatHCUserDBReqDenied               Counter64,
         ccsLoadStatUserDBReqDenialRate             Gauge32,
         ccsLoadStatUserDBReqDenialRateHighWater    Gauge32,
-        ccsLoadStatHCUserDBReqDenialRateHighWater  Counter64
+        ccsLoadStatHCUserDBReqDenialRateHighWater  Counter64,
+        ccsLoadStatHCUserDBReqAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCUserDBReqDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatUserDBReqAllowed OBJECT-TYPE
@@ -2453,6 +2625,26 @@ ccsLoadStatHCUserDBReqDenialRateHighWater OBJECT-TYPE
         ccsLoadStatUserDBReqDenialRateHighWater." 
     ::= { ccsLoadStatUserDBEntry 11 }
  
+ccsLoadStatHCUserDBReqAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatUserDBReqAllowedRate." 
+    ::= { ccsLoadStatUserDBEntry 12 }
+
+ccsLoadStatHCUserDBReqDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatUserDBReqDenialRate." 
+    ::= { ccsLoadStatUserDBEntry 13 }
+ 
 
 -- *************************************************************
 -- *                                                           *
@@ -2495,7 +2687,9 @@ CcsLoadStatSessionEntry ::= SEQUENCE {
         ccsLoadStatHCSessionCreateDenied               Counter64,
         ccsLoadStatSessionCreateDenialRate             Gauge32,
         ccsLoadStatSessionCreateDenialRateHighWater    Gauge32,
-        ccsLoadStatHCSessionCreateDenialRateHighWater  Counter64
+        ccsLoadStatHCSessionCreateDenialRateHighWater  Counter64,
+        ccsLoadStatHCSessionCreateAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCSessionCreateDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatSessionCreateAllowed OBJECT-TYPE
@@ -2609,6 +2803,26 @@ ccsLoadStatHCSessionCreateDenialRateHighWater OBJECT-TYPE
         ccsLoadStatSessionCreateDenialRateHighWater." 
     ::= { ccsLoadStatSessionEntry 11 }
  
+ccsLoadStatHCSessionCreateAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatSessionCreateAllowedRate." 
+    ::= { ccsLoadStatSessionEntry 12 }
+
+ccsLoadStatHCSessionCreateDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "requests"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatSessionCreateDenialRate." 
+    ::= { ccsLoadStatSessionEntry 13 }
+ 
 
 -- *************************************************************
 -- *                                                           *
@@ -2650,7 +2864,9 @@ CcsLoadStatBMAEntry ::= SEQUENCE {
         ccsLoadStatHCBMAMsgsDenied               Counter64,
         ccsLoadStatBMAMsgsDenialRate             Gauge32,
         ccsLoadStatBMAMsgsDenialRateHighWater    Gauge32,
-        ccsLoadStatHCBMAMsgsDenialRateHighWater  Counter64
+        ccsLoadStatHCBMAMsgsDenialRateHighWater  Counter64,
+        ccsLoadStatHCBMAMsgsAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCBMAMsgsDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatBMAMsgsAllowed OBJECT-TYPE
@@ -2762,6 +2978,26 @@ ccsLoadStatHCBMAMsgsDenialRateHighWater OBJECT-TYPE
         ccsLoadStatBMAMsgsDenialRateHighWater." 
     ::= { ccsLoadStatBMAEntry 11 }
  
+ccsLoadStatHCBMAMsgsAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "messages"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatBMAMsgsAllowedRate." 
+    ::= { ccsLoadStatBMAEntry 12 }
+
+ccsLoadStatHCBMAMsgsDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "messages"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatBMAMsgsDenialRate." 
+    ::= { ccsLoadStatBMAEntry 13 }
+ 
 
 -- *************************************************************
 -- *                                                           *
@@ -2804,7 +3040,9 @@ CcsLoadStatQuotaMgrEntry ::= SEQUENCE {
         ccsLoadStatHCQuotaMgrMsgsDenied               Counter64,
         ccsLoadStatQuotaMgrMsgsDenialRate             Gauge32,
         ccsLoadStatQuotaMgrMsgsDenialRateHighWater    Gauge32,
-        ccsLoadStatHCQuotaMgrMsgsDenialRateHighWater  Counter64
+        ccsLoadStatHCQuotaMgrMsgsDenialRateHighWater  Counter64,
+        ccsLoadStatHCQuotaMgrMsgsAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCQuotaMgrMsgsDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatQuotaMgrMsgsAllowed OBJECT-TYPE
@@ -2918,6 +3156,26 @@ ccsLoadStatHCQuotaMgrMsgsDenialRateHighWater OBJECT-TYPE
         ccsLoadStatQuotaMgrMsgsDenialRateHighWater." 
     ::= { ccsLoadStatQuotaMgrEntry 11 }
  
+ccsLoadStatHCQuotaMgrMsgsAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "messages"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatQuotaMgrMsgsAllowedRate." 
+    ::= { ccsLoadStatQuotaMgrEntry 12 }
+
+ccsLoadStatHCQuotaMgrMsgsDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "messages"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatQuotaMgrMsgsDenialRate." 
+    ::= { ccsLoadStatQuotaMgrEntry 13 }
+ 
 
 -- *************************************************************
 -- *                                                           *
@@ -2962,7 +3220,9 @@ CcsLoadStatGxEventEntry ::= SEQUENCE {
         ccsLoadStatHCGxEventsDenied               Counter64,
         ccsLoadStatGxEventsDenialRate             Gauge32,
         ccsLoadStatGxEventsDenialRateHighWater    Gauge32,
-        ccsLoadStatHCGxEventsDenialRateHighWater  Counter64
+        ccsLoadStatHCGxEventsDenialRateHighWater  Counter64,
+        ccsLoadStatHCGxEventsAllowedRate          CounterBasedGauge64,
+        ccsLoadStatHCGxEventsDenialRate           CounterBasedGauge64
 }
 
 ccsLoadStatGxEventsAllowed OBJECT-TYPE
@@ -3069,6 +3329,26 @@ ccsLoadStatHCGxEventsDenialRateHighWater OBJECT-TYPE
         "This object is a 64-bit version of
         ccsLoadStatGxEventsDenialRateHighWater." 
     ::= { ccsLoadStatGxEventEntry 11 }
+ 
+ccsLoadStatHCGxEventsAllowedRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "notifications per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatGxEventsAllowedRate." 
+    ::= { ccsLoadStatGxEventEntry 12 }
+
+ccsLoadStatHCGxEventsDenialRate OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "notifications per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is a 64-bit version of
+        ccsLoadStatGxEventsDenialRate." 
+    ::= { ccsLoadStatGxEventEntry 13 }
  
 
 -- *************************************************************
@@ -3932,7 +4212,7 @@ ciscoContentServicesMIBComplianceRev3 MODULE-COMPLIANCE
     ::= { ciscoContentServicesMIBCompliances 4 }
 
 ciscoContentServicesMIBComplianceRev4 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities which implement
         the Cisco Content Services MIB. This compliance statement
@@ -4030,6 +4310,206 @@ ciscoContentServicesMIBComplianceRev4 MODULE-COMPLIANCE
     DESCRIPTION
         "Write access is not required."
     ::= { ciscoContentServicesMIBCompliances 5 }
+
+ciscoContentServicesMIBComplianceRev5 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the Cisco Content Services MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoContentServicesGlobalCfgGroup,
+                        ciscoContentServicesGlobalStatsGroup,
+                        ciscoContentServicesBMAGroup,
+                        ciscoContentServicesQuotaMgrGroup,
+                        ciscoContentServicesUserDbGroup,
+                        ciscoContentServicesNotifEnableGroup,
+                        ciscoContentServicesNotifGroup,
+                        ciscoContentServicesLoadStatRadiusGroup,
+                        ciscoContentServicesLoadStatUserDBGroup,
+                        ciscoContentServicesLoadStatSessionGroup,
+                        ciscoContentServicesLoadStatBMAGroup,
+                        ciscoContentServicesLoadStatQuotaMgrGroup,
+                        ciscoContentServicesGlobalStatsGroupSup1,
+                        ciscoContentServicesBMAGroupSup1,
+                        ciscoContentServicesQuotaMgrGroupSup1,
+                        ciscoContentServicesGlobalCfgGroupSup1,
+                        ciscoContentServicesNotifEnableGroupSup1,
+                        ciscoContentServicesNotifGroupSup1,
+                        ciscoContentServicesGlobalCfgGroupSup2,
+                        ciscoContentServicesNotifEnableGroupSup2,
+                        ciscoContentServicesNotifGroupSup2,
+                        ciscoContentServicesNotifInfoGroup,
+                        ciscoContentServiceProtocolStatsGroup,
+                        ciscoContentServicesLoadStatGxEventGroup,
+                        ciscoContentServicesBillingPlanStatsGroup
+                    }
+
+    OBJECT          ccsBMAHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsQuotaMgrHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsBMAPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsQuotaMgrPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsBMARowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsQuotaMgrRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsgsGTPBMARateInterval
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsgsGTPQuotaMgrRateInterval
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsTransactionRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsSubOutPacketRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsNetOutPacketRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsSubOutBitRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsNetOutBitRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoContentServicesMIBCompliances 6 }
+
+ciscoContentServicesMIBComplianceRev6 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which implement
+        the Cisco Content Services MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoContentServicesGlobalCfgGroup,
+                        ciscoContentServicesGlobalStatsGroup,
+                        ciscoContentServicesBMAGroup,
+                        ciscoContentServicesQuotaMgrGroup,
+                        ciscoContentServicesUserDbGroup,
+                        ciscoContentServicesNotifEnableGroup,
+                        ciscoContentServicesNotifGroup,
+                        ciscoContentServicesGlobalStatsGroupSup1,
+                        ciscoContentServicesBMAGroupSup1,
+                        ciscoContentServicesQuotaMgrGroupSup1,
+                        ciscoContentServicesGlobalCfgGroupSup1,
+                        ciscoContentServicesNotifEnableGroupSup1,
+                        ciscoContentServicesNotifGroupSup1,
+                        ciscoContentServicesGlobalCfgGroupSup2,
+                        ciscoContentServicesNotifEnableGroupSup2,
+                        ciscoContentServicesNotifGroupSup2,
+                        ciscoContentServicesNotifInfoGroup,
+                        ciscoContentServiceProtocolStatsGroup,
+                        ciscoContentServicesBillingPlanStatsGroup,
+                        ciscoContentServicesLoadStatRadiusGroupSup1,
+                        ciscoContentServicesLoadStatUserDBGroupSup1,
+                        ciscoContentServicesLoadStatSessionGroupSup1,
+                        ciscoContentServicesLoadStatBMAGroupSup1,
+                        ciscoContentServicesLoadStatQuotaMgrGroupSup1,
+                        ciscoContentServicesLoadStatGxEventGroupSup1
+                    }
+
+    OBJECT          ccsBMAHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsQuotaMgrHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsBMAPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsQuotaMgrPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is not required."
+
+    OBJECT          ccsBMARowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsQuotaMgrRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsgsGTPBMARateInterval
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccsgsGTPQuotaMgrRateInterval
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsTransactionRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsSubOutPacketRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsNetOutPacketRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsSubOutBitRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ccspsNetOutBitRateHighWater
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoContentServicesMIBCompliances 7 }
 
 -- units of conformance
 
@@ -4165,7 +4645,7 @@ ciscoContentServicesLoadStatRadiusGroup OBJECT-GROUP
                         ccsLoadStatRadiusStartDenialRateHighWater,
                         ccsLoadStatHCRadiusStartDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Load Statistics for Radius."
     ::= { ciscoContentServicesMIBGroups 9 }
@@ -4184,7 +4664,7 @@ ciscoContentServicesLoadStatUserDBGroup OBJECT-GROUP
                         ccsLoadStatUserDBReqDenialRateHighWater,
                         ccsLoadStatHCUserDBReqDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Load Statistics for Database."
     ::= { ciscoContentServicesMIBGroups 10 }
@@ -4203,7 +4683,7 @@ ciscoContentServicesLoadStatSessionGroup OBJECT-GROUP
                         ccsLoadStatSessionCreateDenialRateHighWater,
                         ccsLoadStatHCSessionCreateDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Load Statistics for Session."
     ::= { ciscoContentServicesMIBGroups 11 }
@@ -4222,7 +4702,7 @@ ciscoContentServicesLoadStatBMAGroup OBJECT-GROUP
                         ccsLoadStatBMAMsgsDenialRateHighWater,
                         ccsLoadStatHCBMAMsgsDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Load Statistics for BMA."
     ::= { ciscoContentServicesMIBGroups 12 }
@@ -4241,7 +4721,7 @@ ciscoContentServicesLoadStatQuotaMgrGroup OBJECT-GROUP
                         ccsLoadStatQuotaMgrMsgsDenialRateHighWater,
                         ccsLoadStatHCQuotaMgrMsgsDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Load Statistics for Quota Manager."
     ::= { ciscoContentServicesMIBGroups 13 }
@@ -4438,13 +4918,156 @@ ciscoContentServicesLoadStatGxEventGroup OBJECT-GROUP
                         ccsLoadStatGxEventsDenialRateHighWater,
                         ccsLoadStatHCGxEventsDenialRateHighWater
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A collection of objects providing load statistics for Gx
         Events."
     ::= { ciscoContentServicesMIBGroups 25 }
 
+ciscoContentServicesBillingPlanStatsGroup OBJECT-GROUP
+    OBJECTS         {
+                        ccsbpsSubscribers,
+                        ccsbpsHCSubscribers,
+                        ccsbpsSubscribersHighWater,
+                        ccsbpsHCSubscribersHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Collection of objects providing Billing Plan Stats.
+        This group augments the objects contained in the
+        ciscoContentServicesBillingPlanStatsGroup."
+    ::= { ciscoContentServicesMIBGroups 26 }
+
+ciscoContentServicesLoadStatRadiusGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatRadiusStartAllowed,
+                        ccsLoadStatHCRadiusStartAllowed,
+                        ccsLoadStatRadiusStartAllowedRate,
+                        ccsLoadStatHCRadiusStartAllowedRate,
+                        ccsLoadStatRadiusStartAllowedRateHighWater,
+                        ccsLoadStatHCRadiusStartAllowedRateHighWater,
+                        ccsLoadStatRadiusStartIPCQueueDepthTolerance,
+                        ccsLoadStatRadiusStartDenied,
+                        ccsLoadStatHCRadiusStartDenied,
+                        ccsLoadStatRadiusStartDenialRate,
+                        ccsLoadStatHCRadiusStartDenialRate,
+                        ccsLoadStatRadiusStartDenialRateHighWater,
+                        ccsLoadStatHCRadiusStartDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Load Statistics for Radius."
+    ::= { ciscoContentServicesMIBGroups 27 }
+
+ciscoContentServicesLoadStatUserDBGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatUserDBReqAllowed,
+                        ccsLoadStatHCUserDBReqAllowed,
+                        ccsLoadStatUserDBReqAllowedRate,
+                        ccsLoadStatHCUserDBReqAllowedRate,
+                        ccsLoadStatUserDBReqAllowedRateHighWater,
+                        ccsLoadStatHCUserDBReqAllowedRateHighWater,
+                        ccsLoadStatUserDBReqIPCQueueDepthTolerance,
+                        ccsLoadStatUserDBReqDenied,
+                        ccsLoadStatHCUserDBReqDenied,
+                        ccsLoadStatUserDBReqDenialRate,
+                        ccsLoadStatHCUserDBReqDenialRate,
+                        ccsLoadStatUserDBReqDenialRateHighWater,
+                        ccsLoadStatHCUserDBReqDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Load Statistics for Database."
+    ::= { ciscoContentServicesMIBGroups 28 }
+
+ciscoContentServicesLoadStatSessionGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatSessionCreateAllowed,
+                        ccsLoadStatHCSessionCreateAllowed,
+                        ccsLoadStatSessionCreateAllowedRate,
+                        ccsLoadStatHCSessionCreateAllowedRate,
+                        ccsLoadStatSessionCreateAllowedRateHighWater,
+                        ccsLoadStatHCSessionCreateAllowedRateHighWater,
+                        ccsLoadStatSessionCreateIPCQueueDepthTolerance,
+                        ccsLoadStatSessionCreateDenied,
+                        ccsLoadStatHCSessionCreateDenied,
+                        ccsLoadStatSessionCreateDenialRate,
+                        ccsLoadStatHCSessionCreateDenialRate,
+                        ccsLoadStatSessionCreateDenialRateHighWater,
+                        ccsLoadStatHCSessionCreateDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Load Statistics for Session."
+    ::= { ciscoContentServicesMIBGroups 29 }
+
+ciscoContentServicesLoadStatBMAGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatBMAMsgsAllowed,
+                        ccsLoadStatHCBMAMsgsAllowed,
+                        ccsLoadStatBMAMsgsAllowedRate,
+                        ccsLoadStatHCBMAMsgsAllowedRate,
+                        ccsLoadStatBMAMsgsAllowedRateHighWater,
+                        ccsLoadStatHCBMAMsgsAllowedRateHighWater,
+                        ccsLoadStatBMAMsgsIPCQueueDepthTolerance,
+                        ccsLoadStatBMAMsgsDenied,
+                        ccsLoadStatHCBMAMsgsDenied,
+                        ccsLoadStatBMAMsgsDenialRate,
+                        ccsLoadStatHCBMAMsgsDenialRate,
+                        ccsLoadStatBMAMsgsDenialRateHighWater,
+                        ccsLoadStatHCBMAMsgsDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Load Statistics for BMA."
+    ::= { ciscoContentServicesMIBGroups 30 }
+
+ciscoContentServicesLoadStatQuotaMgrGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatQuotaMgrMsgsAllowed,
+                        ccsLoadStatHCQuotaMgrMsgsAllowed,
+                        ccsLoadStatQuotaMgrMsgsAllowedRate,
+                        ccsLoadStatHCQuotaMgrMsgsAllowedRate,
+                        ccsLoadStatQuotaMgrMsgsAllowedRateHighWater,
+                        ccsLoadStatHCQuotaMgrMsgsAllowedRateHighWater,
+                        ccsLoadStatQuotaMgrMsgsIPCQueueDepthTolerance,
+                        ccsLoadStatQuotaMgrMsgsDenied,
+                        ccsLoadStatHCQuotaMgrMsgsDenied,
+                        ccsLoadStatQuotaMgrMsgsDenialRate,
+                        ccsLoadStatHCQuotaMgrMsgsDenialRate,
+                        ccsLoadStatQuotaMgrMsgsDenialRateHighWater,
+                        ccsLoadStatHCQuotaMgrMsgsDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Load Statistics for Quota Manager."
+    ::= { ciscoContentServicesMIBGroups 31 }
+
+ciscoContentServicesLoadStatGxEventGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        ccsLoadStatGxEventsAllowed,
+                        ccsLoadStatHCGxEventsAllowed,
+                        ccsLoadStatGxEventsAllowedRate,
+                        ccsLoadStatHCGxEventsAllowedRate,
+                        ccsLoadStatGxEventsAllowedRateHighWater,
+                        ccsLoadStatHCGxEventsAllowedRateHighWater,
+                        ccsLoadStatGxEventsIPCQueueDepthTolerance,
+                        ccsLoadStatGxEventsDenied,
+                        ccsLoadStatHCGxEventsDenied,
+                        ccsLoadStatGxEventsDenialRate,
+                        ccsLoadStatHCGxEventsDenialRate,
+                        ccsLoadStatGxEventsDenialRateHighWater,
+                        ccsLoadStatHCGxEventsDenialRateHighWater
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing load statistics for Gx
+        Events."
+    ::= { ciscoContentServicesMIBGroups 32 }
+
 END
+
+
 
 
 

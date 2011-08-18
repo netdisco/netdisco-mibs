@@ -6,10 +6,9 @@
 --
 -- December 2002, Federico Mota
 --
--- Copyright (c) 2002-2005 by Cisco Systems, Inc.
+-- Copyright (c) 2002-2005, 2007 by Cisco Systems Inc.
 -- All rights reserved.
--- *********************************************************************
---
+-- ********************************************************************
 
 CISCO-IP-LOCAL-POOL-MIB DEFINITIONS ::= BEGIN
 
@@ -20,14 +19,14 @@ IMPORTS
     Unsigned32,
     Gauge32
         FROM SNMPv2-SMI
-    TEXTUAL-CONVENTION,
-    TruthValue,
-    RowStatus
-        FROM SNMPv2-TC
     MODULE-COMPLIANCE,
     OBJECT-GROUP,
     NOTIFICATION-GROUP
         FROM SNMPv2-CONF
+    TEXTUAL-CONVENTION,
+    TruthValue,
+    RowStatus
+        FROM SNMPv2-TC
     InetAddressType,
     InetAddress
         FROM INET-ADDRESS-MIB
@@ -38,8 +37,9 @@ IMPORTS
     ciscoMgmt
         FROM CISCO-SMI;
 
+
 ciscoIpLocalPoolMIB MODULE-IDENTITY
-    LAST-UPDATED    "200501110000Z"
+    LAST-UPDATED    "200711120000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
         "            Cisco Systems
@@ -80,7 +80,13 @@ ciscoIpLocalPoolMIB MODULE-IDENTITY
         IP pool groups and IP local pools.  There exist other objects
         that maintain statistics about the address usage of IP local
         pools."
+    REVISION        "200711120000Z"
+    DESCRIPTION
+        "Added one object to the cIpLocalPoolConfigTable:
+        - cIpLocalPoolPriority
 
+        Added ciscoIpLocalPoolMIBCompliance2 MODULE-COMPLIANCE 
+        Added ciscoIpLocalPoolPriorityGroup OBJECT-GROUP"
     REVISION        "200501110000Z"
     DESCRIPTION
         "Added two objects to the cIpLocalPoolStatsTable:
@@ -90,11 +96,12 @@ ciscoIpLocalPoolMIB MODULE-IDENTITY
          Added two notifications:
            - cilpPercentAddrUsedHiNotif
            - cilpPercentAddrUsedLoNotif"
-
     REVISION        "200304032000Z"
     DESCRIPTION
         "Initial version of this MIB module."
     ::= { ciscoMgmt 326 }
+
+
 
 CIpLocalPoolName ::= TEXTUAL-CONVENTION
     STATUS  current
@@ -117,26 +124,23 @@ CIpLocalPoolPercentage ::= TEXTUAL-CONVENTION
         "A percentage associated with the addresses used in a IP local
         pool."
     SYNTAX  Gauge32 (0..100)
+ciscoIpLocalPoolMIBNotifs  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIB 0 }
 
+ciscoIpLocalPoolMIBObjects  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIB 1 }
 
-ciscoIpLocalPoolMIBNotifs  OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIB 0 }
+ciscoIpLocalPoolMIBConform  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIB 2 }
 
-ciscoIpLocalPoolMIBObjects OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIB 1 }
+cIpLocalPoolConfig  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIBObjects 1 }
 
-ciscoIpLocalPoolMIBConform OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIB 2 }
+cIpLocalPoolGroup  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIBObjects 2 }
 
-
-cIpLocalPoolConfig         OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIBObjects 1 }
-
-cIpLocalPoolGroup          OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIBObjects 2 }
-
-cIpLocalPoolStats          OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIBObjects 3 }
+cIpLocalPoolStats  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIBObjects 3 }
 
 
 -- Config
@@ -176,9 +180,12 @@ cIpLocalPoolConfigEntry OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "Each entry provides information about a particular IP local
-        pool, including the number of free and used addresses."
-    INDEX  { cIpLocalPoolName, cIpLocalPoolAddrType,
-             cIpLocalPoolAddressLo }
+        pool, including the number of free and used addresses and its priority."
+    INDEX           {
+                        cIpLocalPoolName,
+                        cIpLocalPoolAddrType,
+                        cIpLocalPoolAddressLo
+                    } 
     ::= { cIpLocalPoolConfigTable 1 }
 
 CIpLocalPoolConfigEntry ::= SEQUENCE {
@@ -189,7 +196,8 @@ CIpLocalPoolConfigEntry ::= SEQUENCE {
     cIpLocalPoolFreeAddrs           Gauge32,
     cIpLocalPoolInUseAddrs          Gauge32,
     cIpLocalPoolGroupContainedIn    CIpLocalPoolGroupNameOrNull,
-    cIpLocalPoolRowStatus           RowStatus
+        cIpLocalPoolRowStatus        RowStatus,
+        cIpLocalPoolPriority         Unsigned32
     }
 
 cIpLocalPoolName OBJECT-TYPE
@@ -277,6 +285,18 @@ cIpLocalPoolRowStatus OBJECT-TYPE
         conceptual row in this table."
     ::= { cIpLocalPoolConfigEntry 8 }
 
+cIpLocalPoolPriority OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..255 )
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies priority of the IP local pool,
+        where smaller value indicates the lower priority.
+        The priority value is used in assigning IP Address 
+        from local pools."
+    DEFVAL          { 1 } 
+    ::= { cIpLocalPoolConfigEntry 9 }
+ 
 
 -- Group
 
@@ -314,7 +334,10 @@ cIpLocalPoolGroupContainsEntry OBJECT-TYPE
         implicit group identifiers because pool names can only be
         associated with one group.  An entry in this table describes
         such an association."
-    INDEX  { cIpLocalPoolGroupName, cIpLocalPoolChildIndex }
+    INDEX           {
+                        cIpLocalPoolGroupName,
+                        cIpLocalPoolChildIndex
+                    } 
     ::= { cIpLocalPoolGroupContainsTable 1 }
 
 CIpLocalPoolGroupContainsEntry ::= SEQUENCE {
@@ -338,6 +361,8 @@ cIpLocalPoolChildIndex OBJECT-TYPE
     DESCRIPTION
         "The value of cIpLocalPoolName for the contained IP local pool."
     ::= { cIpLocalPoolGroupContainsEntry 2 }
+
+
 
 cIpLocalPoolGroupTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF CIpLocalPoolGroupEntry
@@ -422,7 +447,6 @@ cIpLocalPoolStatsEntry OBJECT-TYPE
         of all the ranges in an IP local pool."
     INDEX  { cIpLocalPoolName }
     ::= { cIpLocalPoolStatsTable 1 }
-
 
 CIpLocalPoolStatsEntry ::= SEQUENCE {
     cIpLocalPoolStatFreeAddrs           Gauge32,
@@ -534,6 +558,8 @@ cIpLocalPoolPercentAddrThldHi OBJECT-TYPE
     DEFVAL  { 100 }
     ::= { cIpLocalPoolStatsEntry 7 }
 
+
+
 cIpLocalPoolAllocTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF CIpLocalPoolAllocEntry
     MAX-ACCESS  not-accessible
@@ -563,8 +589,11 @@ cIpLocalPoolAllocEntry OBJECT-TYPE
         "Each entry refers to conceptual row that associates an IP
         addresses with the interface where the request was received, and
         the user that requested the address."
-    INDEX  { cIpLocalPoolName, cIpLocalPoolAllocAddrType,
-             cIpLocalPoolAllocAddr }
+    INDEX           {
+                        cIpLocalPoolName,
+                        cIpLocalPoolAllocAddrType,
+                        cIpLocalPoolAllocAddr
+                    } 
     ::= { cIpLocalPoolAllocTable 1 }
 
 CIpLocalPoolAllocEntry ::= SEQUENCE {
@@ -617,11 +646,14 @@ cIpLocalPoolAllocUser OBJECT-TYPE
     ::= { cIpLocalPoolAllocEntry 4 }
 
 
+
 -- Notifications
 
 ciscoIpLocalPoolInUseAddrNoti NOTIFICATION-TYPE
-    OBJECTS { cIpLocalPoolStatFreeAddrs,
-              cIpLocalPoolStatInUseAddrs }
+    OBJECTS         {
+                        cIpLocalPoolStatFreeAddrs,
+                        cIpLocalPoolStatInUseAddrs
+                    }
     STATUS  current
     DESCRIPTION
         "A notification indicating that number of used addresses of an
@@ -630,8 +662,10 @@ ciscoIpLocalPoolInUseAddrNoti NOTIFICATION-TYPE
     ::= { ciscoIpLocalPoolMIBNotifs 1 }
 
 cilpPercentAddrUsedLoNotif NOTIFICATION-TYPE
-    OBJECTS { cIpLocalPoolStatFreeAddrs,
-              cIpLocalPoolStatInUseAddrs }
+    OBJECTS         {
+                        cIpLocalPoolStatFreeAddrs,
+                        cIpLocalPoolStatInUseAddrs
+                    }
     STATUS  current
     DESCRIPTION
         "A notification indicating that the percentage of used addresses
@@ -640,26 +674,27 @@ cilpPercentAddrUsedLoNotif NOTIFICATION-TYPE
     ::= { ciscoIpLocalPoolMIBNotifs 2 }
 
 cilpPercentAddrUsedHiNotif NOTIFICATION-TYPE
-    OBJECTS { cIpLocalPoolStatFreeAddrs,
-              cIpLocalPoolStatInUseAddrs }
+    OBJECTS         {
+                        cIpLocalPoolStatFreeAddrs,
+                        cIpLocalPoolStatInUseAddrs
+                    }
     STATUS  current
     DESCRIPTION
         "A notification indicating that the percentage of used addresses
         of an IP local pool is equal to or exceeds the threshold value
         indicated by cIpLocalPoolPercentAddrThldHi."
     ::= { ciscoIpLocalPoolMIBNotifs 3 }
-
-
 -- Conformance
 
-ciscoIpLocalPoolMIBCompliances OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIBConform 1 }
+ciscoIpLocalPoolMIBCompliances  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIBConform 1 }
 
-ciscoIpLocalPoolMIBGroups      OBJECT IDENTIFIER ::=
-    { ciscoIpLocalPoolMIBConform 2 }
+ciscoIpLocalPoolMIBGroups  OBJECT IDENTIFIER
+    ::= { ciscoIpLocalPoolMIBConform 2 }
+
 
 ciscoIpLocalPoolMIBCompliance MODULE-COMPLIANCE
-    STATUS      deprecated -- by ciscoIpLocalPoolMIBCompliance1
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities which implement the Cisco
         IP Local Pool MIB."
@@ -687,11 +722,10 @@ ciscoIpLocalPoolMIBCompliance MODULE-COMPLIANCE
         MIN-ACCESS read-only
         DESCRIPTION
             "Create/Write access is optional."
-
     ::= { ciscoIpLocalPoolMIBCompliances 1 }
 
 ciscoIpLocalPoolMIBCompliance1 MODULE-COMPLIANCE
-    STATUS      current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities which implement the Cisco
         IP Local Pool MIB."
@@ -728,8 +762,48 @@ ciscoIpLocalPoolMIBCompliance1 MODULE-COMPLIANCE
         MIN-ACCESS read-only
         DESCRIPTION
             "Create/Write access is optional."
-
     ::= { ciscoIpLocalPoolMIBCompliances 2 }
+
+ciscoIpLocalPoolMIBCompliance2 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which implement the Cisco
+        IP Local Pool MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoIpLocalPoolConfigGroup,
+                        ciscoIpLocalPoolStatsGroup,
+                        ciscoIpLocalPoolNotifGroup,
+                        ciscoIpLocalPoolPriorityGroup
+                    }
+
+    GROUP           ciscoIpLocalPoolGroupGroup
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoIpLocalPoolStatsGroupSup1
+    DESCRIPTION
+        "This group is optional."
+
+    GROUP           ciscoIpLocalPoolNotifGroupSup1
+    DESCRIPTION
+        "This group is optional."
+
+    OBJECT          cIpLocalPoolAddressHi
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is optional."
+
+    OBJECT          cIpLocalPoolGroupContainedIn
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is optional."
+
+    OBJECT          cIpLocalPoolRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/Write access is optional."
+    ::= { ciscoIpLocalPoolMIBCompliances 3 }
 
 -- Units of Conformance
 
@@ -774,8 +848,7 @@ ciscoIpLocalPoolStatsGroup OBJECT-GROUP
     ::= { ciscoIpLocalPoolMIBGroups 3 }
 
 ciscoIpLocalPoolNotifGroup NOTIFICATION-GROUP
-    NOTIFICATIONS {
-        ciscoIpLocalPoolInUseAddrNoti }
+   NOTIFICATIONS    { ciscoIpLocalPoolInUseAddrNoti }
     STATUS      current
     DESCRIPTION
         "The collection of notifications used for monitoring IP local
@@ -804,4 +877,14 @@ ciscoIpLocalPoolNotifGroupSup1 NOTIFICATION-GROUP
         IP local pool utilization."
     ::= { ciscoIpLocalPoolMIBGroups 6 }
 
+ciscoIpLocalPoolPriorityGroup OBJECT-GROUP
+    OBJECTS         { cIpLocalPoolPriority }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides priority configuration of IP local pools."
+    ::= { ciscoIpLocalPoolMIBGroups 7 }
+
 END
+
+
+

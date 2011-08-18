@@ -2,12 +2,12 @@
 -- CISCO-IP-IF-MIB.my
 --
 -- September 2002, Jayakumar Kadirvelu
+-- July 2008, Patrick R. Gili
 -- 
---
--- Copyright (c) 2002 by cisco Systems, Inc.
+-- Copyright (c) 2002, 2008 by Cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
---
+
 CISCO-IP-IF-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
@@ -17,19 +17,25 @@ IMPORTS
     MODULE-COMPLIANCE,
     OBJECT-GROUP
         FROM SNMPv2-CONF
-    ciscoMgmt
-        FROM CISCO-SMI
-    RowStatus, TEXTUAL-CONVENTION
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
+    RowStatus,
+    StorageType,
+    TEXTUAL-CONVENTION
         FROM SNMPv2-TC
     InetAddressPrefixLength,
     InetAddressType,
     InetAddress
         FROM INET-ADDRESS-MIB
-    InterfaceIndex
-        FROM IF-MIB;
+    InterfaceIndex,
+    ifIndex
+        FROM IF-MIB
+    ciscoMgmt
+        FROM CISCO-SMI;
+
 
 ciscoIPIfMIB MODULE-IDENTITY
-    LAST-UPDATED        "200210120000Z"
+    LAST-UPDATED    "200808080000Z"
     ORGANIZATION        "Cisco Systems, Inc."
     CONTACT-INFO
        "Cisco Systems
@@ -39,10 +45,17 @@ ciscoIPIfMIB MODULE-IDENTITY
         USA
         Tel: +1 800 553-NETS
 
-        E-mail: cs-wbu@cisco.com"
+            E-mail: cs-snmp@cisco.com"
     DESCRIPTION
         "The MIB module for configuring IP characteristics
          of the interfaces of a device."
+    REVISION        "200808080000Z"
+    DESCRIPTION
+        "Modified the definition for ciiHelperAdressVrf to conform to the
+        de facto standard."
+    REVISION        "200807280000Z"
+    DESCRIPTION
+        "Added ciiHelperAddressTable."
     REVISION        "200210120000Z"
     DESCRIPTION
         "Added ciiIPIfAddressTable.
@@ -58,22 +71,32 @@ ciscoIPIfMIB MODULE-IDENTITY
         "Initial version of this MIB module."
     ::= { ciscoMgmt 309 }
 
-ciscoIPIfMIBNotifs        OBJECT IDENTIFIER ::= { ciscoIPIfMIB 0 }
-ciscoIPIfMIBObjects       OBJECT IDENTIFIER ::= { ciscoIPIfMIB 1 }    
-ciscoIPIfMIBConform       OBJECT IDENTIFIER ::= { ciscoIPIfMIB 2 }
+
+ciscoIPIfMIBNotifs  OBJECT IDENTIFIER
+    ::= { ciscoIPIfMIB 0 }
+
+ciscoIPIfMIBObjects  OBJECT IDENTIFIER
+    ::= { ciscoIPIfMIB 1 }
+
+ciscoIPIfMIBConform  OBJECT IDENTIFIER
+    ::= { ciscoIPIfMIB 2 }
 
 ciiIPAddressConfiguration OBJECT IDENTIFIER
     ::=  { ciscoIPIfMIBObjects 1 }
+
+ciiHelperAddressConfiguration  OBJECT IDENTIFIER
+    ::= { ciscoIPIfMIBObjects 2 }
+
 ciiIPIfNotifications OBJECT IDENTIFIER
     ::=  { ciscoIPIfMIBNotifs 0 }
 
 
-
 -- Textual Conventions
---
+
 IpAddressCatagory ::= TEXTUAL-CONVENTION
      STATUS         current
-     DESCRIPTION    "Represents the IP address category.
+    DESCRIPTION
+        "Represents the IP address category.
                      single(1) - Indicates that the IP addressing 
                                  information for this interface,
                                  has no primary/secondary category.
@@ -94,13 +117,14 @@ IpAddressCatagory ::= TEXTUAL-CONVENTION
                      secondary(3)
                     }
 
-
---
 -- IP Address Configuration objects
---
 
 ciiIPAddressCategoryCap OBJECT-TYPE
-    SYNTAX     BITS { single(0), primary(1), secondary(2) }
+    SYNTAX          BITS {
+                        single(0),
+                        primary(1),
+                        secondary(2)
+                    }
     MAX-ACCESS read-only
     STATUS     current
     DESCRIPTION
@@ -121,7 +145,6 @@ ciiIPAddressCategoryCap OBJECT-TYPE
          Likewise devices which have the primary(1) and/or 
          secondary(2) bits set to 1, should have the single(0)
          set to 0."
-
     ::= { ciiIPAddressConfiguration 1 }
 
 ciiIPAddressTable OBJECT-TYPE
@@ -132,9 +155,7 @@ ciiIPAddressTable OBJECT-TYPE
         "The table of addressing information relevant to
          this entity's IP addresses. This is the enhancement of
          the ipAddrTable in IP-MIB."
-    REFERENCE
-        "RFC 2011"
- 
+    REFERENCE       "RFC 2011"
     ::= { ciiIPAddressConfiguration 2 }
 
 ciiIPAddressEntry OBJECT-TYPE
@@ -152,7 +173,10 @@ ciiIPAddressEntry OBJECT-TYPE
 
          Any column in the  entry may be modified anytime,
          when the value of ciiIPAddressStatus is 'active'."
-    INDEX { ciiIPAddressType, ciiIPAddress } 
+    INDEX           {
+                        ciiIPAddressType,
+                        ciiIPAddress
+                    } 
     ::= { ciiIPAddressTable 1 }
 
 CiiIPAddressEntry ::= SEQUENCE {
@@ -249,12 +273,10 @@ ciiIPAddressStatus OBJECT-TYPE
          after the entry is destroyed. In this case, the destroy 
          of the old entry and the creation on the new entry
          should be packed in the same PDU."
-
     ::= { ciiIPAddressEntry 7 }
 
---
+
 -- ciiIPIfAddressTable
---
 
 ciiIPIfAddressTable OBJECT-TYPE
     SYNTAX     SEQUENCE OF CiiIPIfAddressEntry
@@ -276,9 +298,7 @@ ciiIPIfAddressTable OBJECT-TYPE
          Entries in this table are created/deleted only by 
          network managers. Agents will typically only allow
          entries to be created on a subset of ifIndex values. "     
-    REFERENCE
-        "RFC 2011"
- 
+    REFERENCE       "RFC 2011"
     ::= { ciiIPAddressConfiguration 3 }
 
 ciiIPIfAddressEntry OBJECT-TYPE
@@ -295,10 +315,12 @@ ciiIPIfAddressEntry OBJECT-TYPE
          ciiIPIfAddressStatus object to 'destroy'.
 
          Any column in the  entry may be modified anytime,
-         when the value of ciiIPIfAddressStatus is 'active'.
-         "
-    INDEX { ciiIPAddressIfIndex, ciiIPAddressType, 
-            ciiIPAddress } 
+        when the value of ciiIPIfAddressStatus is 'active'."
+    INDEX           {
+                        ciiIPAddressIfIndex,
+                        ciiIPAddressType,
+                        ciiIPAddress
+                    } 
     ::= { ciiIPIfAddressTable 1 }
 
 CiiIPIfAddressEntry ::= SEQUENCE {
@@ -372,18 +394,132 @@ ciiIPIfAddressStatus OBJECT-TYPE
          should be packed in the same PDU."
     ::= { ciiIPIfAddressEntry 4 }
 
+
+-- IP Helper Address Configuration
+
+ciiHelperAddressTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CiiHelperAddressEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table lists the IP helper addresses associated with each
+        interface."
+    ::= { ciiHelperAddressConfiguration 1 }
+
+ciiHelperAddressEntry OBJECT-TYPE
+    SYNTAX          CiiHelperAddressEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry describes a single IP helper address associated with
+        the corresponding interface, identified by the ifIndex-value
+        assigned to the interface.
+
+        A peer SNMP entity may associate a helper address with an
+        interface by setting an instance of ciiHelperAddressStatus to
+        'createAndWait' or 'createAndGo'.  Observe that an
+        implementation that does not support these options must specify
+        these limitations in an agent capabilities statement.
+
+        Other management entities (e.g., the local console) may
+        associate a helper address with an interface.  In these cases,
+        the system must automatically create a row in the
+        ciiHelperAddressTable.
+
+        A peer SNMP entity may disassociate a helper address from an
+        interface by setting the corresponding instance of
+        ciiHelperAddressStatus to 'destroy'.  Observe an implementation
+        that does not support this option must specify this limitation
+        in an agent capabilities statement.
+
+        Other management entities may disassociate a helper address
+        from an interface.  In these cases, the system must
+        automatically destroy the corresponding row in the
+        ciiHelperAddressTable.
+
+        The system automatically destroys a row when the system destroys
+        the corresponding interface in the ifTable."
+    INDEX           {
+                        ifIndex,
+                        ciiHelperAddressVrf,
+                        ciiHelperAddressType,
+                        ciiHelperAddress
+                    } 
+    ::= { ciiHelperAddressTable 1 }
+
+CiiHelperAddressEntry ::= SEQUENCE {
+        ciiHelperAddressVrf     SnmpAdminString,
+        ciiHelperAddressType    InetAddressType,
+        ciiHelperAddress        InetAddress,
+        ciiHelperAddressStatus  RowStatus,
+        ciiHelperAddressStorage StorageType
+}
+
+ciiHelperAddressVrf OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (0..32))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the name assigned to the Virtual Routing
+        and Forwarding (VRF) instance in which the IP helper address
+        resides." 
+    ::= { ciiHelperAddressEntry 1 }
+
+ciiHelperAddressType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the type of IP address indicated by the
+        corresponding instance of ciiHelperAddress." 
+    ::= { ciiHelperAddressEntry 2 }
+
+ciiHelperAddress OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the IP helper address." 
+    ::= { ciiHelperAddressEntry 3 }
+
+ciiHelperAddressStatus OBJECT-TYPE
+    SYNTAX          RowStatus
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the status of the row.  The following
+        columns must be valid before activing the row:
+
+            - ciiHelperAddressStorage
+
+        An implementation must not allow an EMS/NMS to modify any
+        column once the row has been activated." 
+    ::= { ciiHelperAddressEntry 4 }
+
+ciiHelperAddressStorage OBJECT-TYPE
+    SYNTAX          StorageType
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the memory realization of the row."
+    DEFVAL          { volatile } 
+    ::= { ciiHelperAddressEntry 5 }
+ 
+
 -- Notifications
 -- None
-
+--   
 -- Conformance
+
 ciscoIPIfMIBCompliances OBJECT IDENTIFIER 
                      ::= { ciscoIPIfMIBConform 1 }
+
 ciscoIPIfMIBGroups      OBJECT IDENTIFIER 
                      ::= { ciscoIPIfMIBConform 2 }
 
 
 ciscoIPIfMIBCompliance MODULE-COMPLIANCE
-     STATUS      deprecated -- superceded by ciscoIPIfMIBCompliance1 
+    STATUS          deprecated
      DESCRIPTION
          "The compliance statement for the CISCO-IP-IF-MIB.
 
@@ -398,11 +534,8 @@ ciscoIPIfMIBCompliance MODULE-COMPLIANCE
           DESCRIPTION
               An implementation is only required to support IPv4
               addresses."
-
      MODULE  -- this module
-     MANDATORY-GROUPS {
-                      ciscoIPIfAddressConfigurationGroup1
-                      }
+    MANDATORY-GROUPS { ciscoIPIfAddressConfigurationGroup1 }
 
      GROUP ciscoIPIfAddressConfigurationGroup2
      DESCRIPTION
@@ -418,17 +551,20 @@ ciscoIPIfMIBCompliance MODULE-COMPLIANCE
           Write access is not required."
 
      OBJECT ciiIPAddressStatus
-     SYNTAX INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
      DESCRIPTION
          "An implementation is only required to support
           three of the six enumerated values of the RowStatus
           textual convention, specifically: active(1),
           createAndGo(4), and destroy(6)."
-
      ::= { ciscoIPIfMIBCompliances 1 }
 
 ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
-     STATUS       current
+    STATUS          deprecated
      DESCRIPTION
          "The compliance statement for the CISCO-IP-IF-MIB. 
 
@@ -443,11 +579,96 @@ ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
           DESCRIPTION
               An implementation is only required to support IPv4
               addresses. "
-
      MODULE  -- this module
-     -- MANDATORY-GROUPS {}
+    GROUP           ciscoIPIfAddressConfigurationGroup1
+    DESCRIPTION
+        "Implementation of this group is optional. But in an
+        implementaion of this mib, either 
+        ciscoIPIfAddressConfigGroup1 or 
+        ciscoIPIfAddressConfigGroup3 must be 
+        implemented."
 
+    GROUP           ciscoIPIfAddressConfigurationGroup2
+    DESCRIPTION
+        "Implementation of this group is optional."
 
+    GROUP           ciscoIPIfAddressConfigurationGroup3
+    DESCRIPTION
+        "Implementation of this group is optional. But in an
+        implementaion of this mib, either 
+        ciscoIPIfAddressConfigGroup1 or 
+        ciscoIPIfAddressConfigGroup3 must be 
+        implemented."
+
+    GROUP           ciscoIPIfAddressConfigurationGroup4
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    OBJECT          ciiIPAddressBroadcast
+    SYNTAX          InetAddress (SIZE (4))
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "An implementation is only required if the value of
+        ciiIPAddressType in the same conceptual row is ipv4(1).
+
+        Write access is not required."
+
+    OBJECT          ciiIPAddressStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    DESCRIPTION
+        "An implementation is only required to support
+        three of the six enumerated values of the RowStatus
+        textual convention, specifically: active(1),
+        createAndGo(4), and destroy(6)."
+
+    OBJECT          ciiIPIfAddressBroadcast
+    SYNTAX          InetAddress (SIZE (4))
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "An implementation is only required if the value of
+        ciiIPAddressType in the same conceptual row is ipv4(1).
+
+        Write access is not required."
+
+    OBJECT          ciiIPIfAddressStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    DESCRIPTION
+        "An implementation is only required to support
+        three of the six enumerated values of the RowStatus
+        textual convention, specifically: active(1),
+        createAndGo(4), and destroy(6)."
+
+    OBJECT          ciiIPIfAddressCategory
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoIPIfMIBCompliances 2 }
+
+ciscoIPIfMIBCompliance2 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the CISCO-IP-IF-MIB.
+
+        OBJECT ciiIPAddressType
+        SYNTAX  INTEGER { ipv4(1) }
+        DESCRIPTION
+            An implementation is only required to support IPv4
+            addresses.
+
+        OBJECT ciiIPAddress
+        SYNTAX InetAddress (SIZE(4))
+        DESCRIPTION
+            An implementation is only required to support IPv4
+            addresses."
+    MODULE          -- this module
      GROUP ciscoIPIfAddressConfigurationGroup1
      DESCRIPTION
          "Implementation of this group is optional. But in an 
@@ -472,6 +693,10 @@ ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
      DESCRIPTION
          "Implementation of this group is optional."
 
+    GROUP           ciiHelperAddressGroup
+    DESCRIPTION
+        "This group is mandatory only for those implementations that
+        support interface IP address helper address configuration."
  
      OBJECT ciiIPAddressBroadcast
      SYNTAX InetAddress (SIZE(4))
@@ -483,7 +708,11 @@ ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
           Write access is not required."
 
      OBJECT ciiIPAddressStatus
-     SYNTAX INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
      DESCRIPTION
          "An implementation is only required to support
           three of the six enumerated values of the RowStatus
@@ -500,7 +729,11 @@ ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
           Write access is not required."
 
      OBJECT ciiIPIfAddressStatus
-     SYNTAX INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
      DESCRIPTION
          "An implementation is only required to support
           three of the six enumerated values of the RowStatus
@@ -512,7 +745,18 @@ ciscoIPIfMIBCompliance1 MODULE-COMPLIANCE
      DESCRIPTION
          "Write access is not required."
 
-     ::= { ciscoIPIfMIBCompliances 2 }
+    OBJECT          ciiHelperAddressStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "An implementation must at least provide read-only access to
+        this object."
+
+    OBJECT          ciiHelperAddressStorage
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "An implementation must at least provide read-only access to
+        this object."
+    ::= { ciscoIPIfMIBCompliances 3 }
 
 -- Units of Conformance
 
@@ -531,9 +775,7 @@ ciscoIPIfAddressConfigurationGroup1 OBJECT-GROUP
        ::= { ciscoIPIfMIBGroups 1 }
 
 ciscoIPIfAddressConfigurationGroup2 OBJECT-GROUP
-       OBJECTS {
-            ciiIPAddressBroadcast
-       }
+    OBJECTS         { ciiIPAddressBroadcast }
        STATUS current
        DESCRIPTION
            "A collection of objects for the broadcast address 
@@ -554,13 +796,27 @@ ciscoIPIfAddressConfigurationGroup3 OBJECT-GROUP
        ::= { ciscoIPIfMIBGroups 3 }
 
 ciscoIPIfAddressConfigurationGroup4 OBJECT-GROUP
-       OBJECTS {
-            ciiIPIfAddressBroadcast
-       }
+    OBJECTS         { ciiIPIfAddressBroadcast }
        STATUS current
        DESCRIPTION
            "A collection of objects for the broadcast address 
             configuration of interfaces."
        ::= { ciscoIPIfMIBGroups 4 }
 
+ciiHelperAddressGroup OBJECT-GROUP
+    OBJECTS         {
+                        ciiHelperAddressStatus,
+                        ciiHelperAddressStorage
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects describing IP helper addresses
+        associated with interfaces."
+    ::= { ciscoIPIfMIBGroups 5 }
+
 END
+
+
+
+
+
