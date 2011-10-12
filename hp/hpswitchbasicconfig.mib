@@ -1,10 +1,11 @@
 HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
     IMPORTS
-        OBJECT-TYPE, MODULE-IDENTITY, Integer32, IpAddress
+        OBJECT-TYPE, MODULE-IDENTITY, Integer32, IpAddress,
+        Unsigned32,NOTIFICATION-TYPE, Counter32
             FROM SNMPv2-SMI
-        RowStatus, DisplayString
+        RowStatus, DisplayString, DateAndTime, TruthValue
             FROM SNMPv2-TC
-        MODULE-COMPLIANCE, OBJECT-GROUP
+        MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
             FROM SNMPv2-CONF
         hpSwitchConfig, hpSwitchFilterConfig, hpSwitchIgmpConfig
             FROM CONFIG-MIB
@@ -13,18 +14,33 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
         portCopyEntry
             FROM SMON-MIB
         entPhysicalIndex
-            FROM ENTITY-MIB;
+            FROM ENTITY-MIB
+        InetAddressType, InetAddress
+            FROM INET-ADDRESS-MIB 
+        ;
 
     hpSwitchBasicConfigMIB MODULE-IDENTITY
-        LAST-UPDATED "200909100000Z"  -- Sept 10, 2009
-        ORGANIZATION "Hewlett Packard Company,
-                      Network Infrastructure Solutions"
+        LAST-UPDATED  "201006280000Z"  -- June 28, 2010
+        ORGANIZATION "HP Networking"
         CONTACT-INFO "Hewlett Packard Company
                       8000 Foothills Blvd.
                       Roseville, CA 95747"
         DESCRIPTION  "This MIB module describes objects for basic
                       switch configuration."  
     
+            
+        REVISION     "201006280000Z"  -- June 28, 2010
+        DESCRIPTION  "Added hpSwitchImplicitConfigSave."
+
+        REVISION     "201004140000Z"  -- Apr 14, 2010
+        DESCRIPTION  "Added hpSwitchStartupConfigSourceIPAddrType,
+                      modified hpSwitchStartupConfigSourceIPAddr"
+
+        REVISION     "201002170000Z"  -- Feb 18, 2010
+        DESCRIPTION  "Added hpSwitchStartupConfigSeqNum,
+                      hpSwitchStartupConfigNotifyEnable, 
+                      hpSwitchNotificationObjects"
+
         REVISION     "200909100000Z"  -- Sept 10, 2009
         DESCRIPTION  "Added hpSwitchIgmpProxyDomainConfigTable"
 
@@ -44,6 +60,9 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
 
     hpSwitchModules  OBJECT IDENTIFIER
         ::= { hpSwitchBasicConfigObjects 7 }
+
+    hpSwitchRunningCfgChgObjects OBJECT IDENTIFIER ::=
+                               { hpSwitchBasicConfigObjects 12 }
 
     hpSwitchSaveConfig OBJECT-TYPE
         SYNTAX      INTEGER {
@@ -95,7 +114,7 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
         ::= { hpSwitchAliasEntry 1 }
 
     hpSwitchAliasCommand OBJECT-TYPE
-        SYNTAX      OCTET STRING      
+        SYNTAX      OCTET STRING (SIZE (1..255))     
         MAX-ACCESS  read-create
         STATUS      current
         DESCRIPTION "CLI command for which 'hpSwitchAliasName' can be
@@ -375,8 +394,10 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
             ::= {  hpSwitchModuleInfoTable 1 } 
  
     HpSwitchModuleInfoEntry ::= SEQUENCE { 
-             hpSwitchModuleInfoModId    Integer32,
-             hpSwitchModuleInfoModType  DisplayString
+             hpSwitchModuleInfoModId
+                                  Integer32,
+             hpSwitchModuleInfoModType
+                                  DisplayString
             } 
 
     hpSwitchModuleInfoModId OBJECT-TYPE 
@@ -414,9 +435,7 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
                 "Configuration of module type for a
                  specific module. Configuration of 
                  module type on an already configured 
-                  module is not allowed. The index to
-		  this table corresponds to the 
-		  container of the slots."
+                 module is not allowed."
             INDEX           {  entPhysicalIndex }
             ::= {  hpSwitchModuleConfigTable 1 } 
  
@@ -433,11 +452,9 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
             STATUS          current 
             DESCRIPTION 
                 "The module type in the switch.
-                 This is the product number (eg. Jxxxx) 
-                 on the device. The supported types are
-                 listed in hpSwitchModuleInfoTable.
-		 This is the module that can be inserted into
-		 the corresponding entPhysicalIndex." 
+                 This is the Jnumber supported 
+                 on the device. The supported 
+                 types are listed in hpSwitchModuleInfoTable." 
             ::= {  hpSwitchModuleConfigEntry 1 } 
 
     hpSwitchModuleConfigModName OBJECT-TYPE 
@@ -445,8 +462,7 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
             MAX-ACCESS      read-only 
             STATUS          current 
             DESCRIPTION 
-                "The module name in the switch.
-		 This is same as the entPhysicalName."
+                "The module name in the switch." 
             ::= {  hpSwitchModuleConfigEntry 2 } 
 
     hpSwitchWebSupportUrl OBJECT-TYPE
@@ -455,6 +471,319 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
         STATUS      current
         DESCRIPTION "URL for the web interface support page."
         ::= { hpSwitchBasicConfigObjects 8 }
+  
+    hpSwitchImplicitConfigSave OBJECT-TYPE
+        SYNTAX      INTEGER{
+                      enable(1),
+                      disable(2)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "This object is to enable/disable the implicit
+                     write-memory (saving the running-config to the
+                     flash) done after every successful SNMP 
+                     set operation.
+
+                     When set to 'enable', config changes are written to 
+                     the flash which results in slow performance for 
+                     these set operations.
+                     
+                     To get faster processing while doing large number 
+                     of continuous SNMP set operations, this object can be
+                     set to 'disable'; And,once the SNMP set operations are
+                     done, 'hpSwitchSaveConfig' MIB object can be used 
+                     to save the running-config to the flash.
+
+                     This object will not be saved across a re-boot,
+                     and will always be set to 'enable' at boot.
+
+                     It is advisable to set this MIB object to 
+                     'disable' only when there are a lot of
+                     continuous SNMP set operations e.g. a script 
+                     executing a large number of SNMP set operations."
+
+        DEFVAL {enable}
+        ::= { hpSwitchBasicConfigObjects 11}                    
+
+
+
+     hpSwitchStartupConfigSeqNum OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..2147483647)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "This is the value of the global startup-config 
+                     sequential number. Every change to startup-config 
+                     increments the value by 1. Must be stored in 
+                     non-volatile memory to be carried over the system boot."
+        DEFVAL      { 0 }
+        ::= { hpSwitchBasicConfigObjects 9 }
+
+
+     hpSwitchStartupConfigNotifyEnable  OBJECT-TYPE
+        SYNTAX      INTEGER 
+           {
+              enable (1),
+              disable(2)
+            }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Indicates whether the SNMP entitiy is permitted
+                     to generate hpSwitchStartupConfigChange notifications.
+                      Default is disabled."
+        DEFVAL      { 2 }
+        ::= { hpSwitchBasicConfigObjects 10 }
+
+     hpSwitchNotificationObjects OBJECT IDENTIFIER 
+          ::= { hpSwitchBasicConfigObjects 0 } 
+
+     hpSwitchStartupConfigSource OBJECT-TYPE 
+        SYNTAX  INTEGER {
+          unknown (0),
+          viaCli (1),
+          viaSnmp (2),
+          viaWebUI (3)
+        }
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION  "Indicate the method of change to startup config
+                      was initiated."
+        ::= { hpSwitchNotificationObjects 1 }
+
+     hpSwitchStartupConfigSourceIPAddrType OBJECT-TYPE
+        SYNTAX  InetAddressType
+        MAX-ACCESS   accessible-for-notify
+        STATUS  current
+        DESCRIPTION  "Indicates the source address type of network agent
+                      which made a change. Not valid (set to zero)
+                      if change is made via CLI on system console."
+        ::=  { hpSwitchNotificationObjects 2 }
+
+     hpSwitchStartupConfigSourceIPAddr OBJECT-TYPE
+        SYNTAX  InetAddress
+        MAX-ACCESS   accessible-for-notify
+        STATUS  current
+        DESCRIPTION  "Indicates the source address of network agent
+                      which made a change. Not valid (set to zero)
+                      if change is made via CLI on system console."
+        ::=  { hpSwitchNotificationObjects 3 }
+
+     hpSwitchStartupConfigSourceUsername OBJECT-TYPE
+        SYNTAX       DisplayString (SIZE (0..255))
+        MAX-ACCESS   accessible-for-notify
+        STATUS  current
+        DESCRIPTION  "Indicates the username of CLI user making the
+                      change to startup config. Zero-string if username
+                      is not set or change is made via SNMP"
+        ::=  { hpSwitchNotificationObjects 4 }
+
+
+     hpSwitchStartupConfigThrottled OBJECT-TYPE
+        SYNTAX       TruthValue
+        MAX-ACCESS   accessible-for-notify
+        STATUS  current
+        DESCRIPTION  "Indicates if notification throttle was activated
+                      and one or more notifications were dropped."
+        DEFVAL       { false }
+        ::=  { hpSwitchNotificationObjects 5 }
+
+
+
+-- Notification of changed Startup Config
+
+     hpSwitchStartupConfigChange NOTIFICATION-TYPE
+        OBJECTS     
+              {
+                 hpSwitchStartupConfigSeqNum,
+                 hpSwitchStartupConfigSource,
+                 hpSwitchStartupConfigSourceIPAddrType,
+                 hpSwitchStartupConfigSourceIPAddr,
+                 hpSwitchStartupConfigSourceUsername,
+                 hpSwitchStartupConfigThrottled
+              }
+        STATUS      current
+        DESCRIPTION "The hpSwitchStartupConfigChange
+                     notification signifies that switch's startup
+                     config was modified by user/manager.                     
+                     Notifications might be buffered on the system to
+                     be sent after throttle delay. In some cases, 
+                     notifications will be dropped. At such event
+                     the next transmitted notification will set
+                     flag hpSwitchStartupConfigThrottled"
+        ::= { hpSwitchNotificationObjects 6 }
+
+
+    hpSwitchRunningCfgChgNotifyEnable  OBJECT-TYPE
+        SYNTAX      INTEGER
+           {
+              enable (1),
+              disable(2)
+            }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Indicates whether the SNMP entity is permitted
+                     to generate hpSwitchRunningConfigChange notifications.
+                     Default is disabled."
+        DEFVAL      { 2 }
+        ::= { hpSwitchRunningCfgChgObjects 1}
+
+     hpSwitchRunningCfgChgTransmitInterval  OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Specifies the transmission interval in seconds
+                     for sending running config change traps. Only
+                     one running config change trap is sent in this 
+                     time interval. Default value is 0, indicating
+                     there is no limit on sending running config
+                     change traps."
+        DEFVAL      { 0 }
+        ::=  { hpSwitchRunningCfgChgObjects 2}
+
+     hpSwitchRunningCfgChgLatestDateAndTime OBJECT-TYPE
+        SYNTAX      DateAndTime
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Indicates the date and time of the 
+                     most recent running config change."
+        ::=  { hpSwitchRunningCfgChgObjects 3 }
+
+     hpSwitchRunningCfgChgCount OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The total number of running config changes
+                     since last reboot."
+        ::= { hpSwitchRunningCfgChgObjects 4 }
+
+     hpSwitchRunningCfgChgEntriesBumped OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The number of times the oldest entry in
+                     hpSwitchRunningCfgChgTable was discarded
+                     to make room for a new entry."
+        ::= { hpSwitchRunningCfgChgObjects 5 }
+
+     hpSwitchRunningCfgChgEventTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpSwitchRunningCfgChgEventEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "A table of latest 32 running configuration change 
+                     events."
+        ::= { hpSwitchRunningCfgChgObjects 6 }
+
+    hpSwitchRunningCfgChgEventEntry OBJECT-TYPE
+        SYNTAX      HpSwitchRunningCfgChgEventEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Information about running configuration 
+                     change event on this switch."
+        INDEX       { hpSwitchRunningCfgChgEventTableIndex }
+        ::= { hpSwitchRunningCfgChgEventTable 1 }
+
+     HpSwitchRunningCfgChgEventEntry ::= SEQUENCE {
+          hpSwitchRunningCfgChgEventTableIndex
+                                    Integer32,
+          hpSwitchRunningCfgChgEventId
+                                     Unsigned32,
+          hpSwitchRunningCfgChgEventMethod
+                                     INTEGER ,
+          hpSwitchRunningCfgChgEventSourceIPAddrType
+                                     InetAddressType,
+          hpSwitchRunningCfgChgEventSourceIPAddr
+                                     InetAddress,
+          hpSwitchRunningCfgChgEventUsername
+                                     DisplayString,
+          hpSwitchRunningCfgChgEventDateAndTime
+                                     DateAndTime
+       }
+
+     hpSwitchRunningCfgChgEventTableIndex OBJECT-TYPE
+        SYNTAX      Integer32(1..100)
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The Index for hpSwitchRunningCfgChgTable."
+        ::= { hpSwitchRunningCfgChgEventEntry 1 }
+
+     hpSwitchRunningCfgChgEventId OBJECT-TYPE
+        SYNTAX      Unsigned32(1..4294967295)
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Identifies a specific running config change. 
+                     Monotonically increasing values will be 
+                     assigned by the system to each event as it 
+                     occurs. If the system is reset, these event ID 
+                     values will be reset as well. "
+        ::= { hpSwitchRunningCfgChgEventEntry 2 }
+
+     hpSwitchRunningCfgChgEventMethod OBJECT-TYPE
+        SYNTAX  INTEGER {
+          unknown (0),
+          cli (1),
+          menu (2),
+          snmp (3),
+          webUI (4),
+          internalEvent (5)
+        }
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "Indicates the source through which change to 
+                      running config was initiated."
+        ::= { hpSwitchRunningCfgChgEventEntry 3 }
+
+     hpSwitchRunningCfgChgEventSourceIPAddrType OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Indicates the source address type of network agent
+                     which made a change. This object value is set to an
+                     address type of unknown when not applicable."
+        ::= { hpSwitchRunningCfgChgEventEntry 4 }
+
+     hpSwitchRunningCfgChgEventSourceIPAddr OBJECT-TYPE
+        SYNTAX      InetAddress
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Indicates the source address of network agent
+                     which made a running config change. The value 
+                     is an address of length 0 (unknown(0)) if not 
+                     available or not applicable."
+        ::=  { hpSwitchRunningCfgChgEventEntry 5 }
+
+     hpSwitchRunningCfgChgEventUsername OBJECT-TYPE
+        SYNTAX       DisplayString (SIZE (0..255))
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "Indicates the username of the user making the change
+                      the change to running config. Empty string (length 0)
+                      if username is not available or not applicable."  
+        ::=  { hpSwitchRunningCfgChgEventEntry 6 }
+
+
+     hpSwitchRunningCfgChgEventDateAndTime OBJECT-TYPE
+        SYNTAX       DateAndTime
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "Indicates the date and time of the running
+                      config change."
+        ::=  { hpSwitchRunningCfgChgEventEntry 7 }
+
+-- Notification for running config change
+
+     hpSwitchRunningConfigChange NOTIFICATION-TYPE
+        OBJECTS
+              {
+                 hpSwitchRunningCfgChgEventId,
+                 hpSwitchRunningCfgChgEventMethod,
+                 hpSwitchRunningCfgChgEventSourceIPAddrType,
+                 hpSwitchRunningCfgChgEventSourceIPAddr,
+                 hpSwitchRunningCfgChgEventUsername,
+                 hpSwitchRunningCfgChgEventDateAndTime
+              }
+        STATUS      current
+        DESCRIPTION "Notification of a running configuration change
+                     event as recorded in hpSwitchRunningCfgChgTable."
+        ::= { hpSwitchNotificationObjects 7 }
 
    --
    -- Conformance Section
@@ -463,6 +792,8 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
                                   { hpSwitchBasicConfigConformance 1 }
    hpSwitchBasicConfigGroups      OBJECT IDENTIFIER ::= 
                                   { hpSwitchBasicConfigConformance 2 }
+   hpSwitchBasicNotificationGroups  OBJECT IDENTIFIER ::=
+                                  { hpSwitchBasicConfigConformance 3 }
 
    hpSwitchBasicConfigCompliance MODULE-COMPLIANCE
         STATUS      current
@@ -476,16 +807,28 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
                            hpSwitchAclLogtimeoutGroup,
                            hpSwitchIgmpProxyDomainConfigGroup,
                            hpSwitchChassisLocateGroup,
-			   hpSwitchModuleGroup
+			   hpSwitchModuleGroup,
+                           hpSwitchBasicNotificationGroup,
+                           hpSwitchRunningCfgChgGroup,
+                           hpSwitchStartupConfigChangeGroup
                          }
 
        ::= { hpSwitchBasicConfigCompliances 1 }
+
+   hpSwitchBasicConfigCompliance2 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for config entities 
+                     which implements basic configuration of the switch." 
+        MODULE       -- this module
+        MANDATORY-GROUPS { hpSwitchBasicConfigGroup2 }
+
+       ::= { hpSwitchBasicConfigCompliances 2 }
 
    hpSwitchBasicConfigGroup OBJECT-GROUP
         OBJECTS     {
                        hpSwitchSaveConfig,
                        hpSwitchDefaultLogon,
-		       hpSwitchWebSupportUrl
+                       hpSwitchWebSupportUrl
                     }
         STATUS      current
         DESCRIPTION "A collection of objects for basic configuration
@@ -527,7 +870,7 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION "A collection of objects for ACL configuration
                     of the switch."
         ::= { hpSwitchBasicConfigGroups 5 }
-	
+   
      hpSwitchIgmpProxyDomainConfigGroup OBJECT-GROUP
        OBJECTS      { hpSwitchIgmpProxyDomainName,
                       hpSwitchIgmpProxyDomainStatus,
@@ -553,12 +896,64 @@ HP-SWITCH-BASIC-CONFIG-MIB DEFINITIONS ::= BEGIN
        OBJECTS     { 
                      hpSwitchModuleInfoModType,
                      hpSwitchModuleConfigModType,
-		     hpSwitchModuleConfigModName
+                     hpSwitchModuleConfigModName
                     }
        STATUS      current
        DESCRIPTION "A collection of objects for switch module
                     configuration." 
        ::= { hpSwitchBasicConfigGroups 8 }
+
+    hpSwitchStartupConfigChangeGroup  OBJECT-GROUP
+       OBJECTS     { 
+                     hpSwitchStartupConfigSeqNum,
+                     hpSwitchStartupConfigNotifyEnable,
+                     hpSwitchStartupConfigSource,
+                     hpSwitchStartupConfigSourceIPAddrType,
+                     hpSwitchStartupConfigSourceIPAddr,
+                     hpSwitchStartupConfigSourceUsername,
+                     hpSwitchStartupConfigThrottled
+                    }
+       STATUS      current
+       DESCRIPTION "A collection of objects for startup
+                    config change notifications." 
+       ::= { hpSwitchBasicConfigGroups 9 }
+
+    hpSwitchBasicConfigGroup2  OBJECT-GROUP
+       OBJECTS     { hpSwitchImplicitConfigSave }
+       STATUS      current
+       DESCRIPTION "A collection of objects for switch basic
+                    configurations." 
+       ::= { hpSwitchBasicConfigGroups 10 }
+
+
+    hpSwitchRunningCfgChgGroup  OBJECT-GROUP
+       OBJECTS    {
+                    hpSwitchRunningCfgChgNotifyEnable,
+                    hpSwitchRunningCfgChgTransmitInterval,
+                    hpSwitchRunningCfgChgLatestDateAndTime,
+                    hpSwitchRunningCfgChgCount,
+                    hpSwitchRunningCfgChgEntriesBumped,
+                    hpSwitchRunningCfgChgEventId,
+                    hpSwitchRunningCfgChgEventMethod,
+                    hpSwitchRunningCfgChgEventSourceIPAddrType,
+                    hpSwitchRunningCfgChgEventSourceIPAddr,
+                    hpSwitchRunningCfgChgEventUsername,
+                    hpSwitchRunningCfgChgEventDateAndTime
+                  }
+       STATUS      current
+       DESCRIPTION "A collection of objects for running
+                    config change details and its notification."
+       ::= { hpSwitchBasicConfigGroups 11 }
+
+    hpSwitchBasicNotificationGroup NOTIFICATION-GROUP
+               NOTIFICATIONS {
+                               hpSwitchRunningConfigChange,
+                               hpSwitchStartupConfigChange
+                             }
+        STATUS current
+        DESCRIPTION
+            "Switch Basic Config notifications"
+              ::= { hpSwitchBasicNotificationGroups 1 }
 
 END
 
