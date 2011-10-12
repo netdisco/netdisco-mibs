@@ -10,30 +10,30 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
             FROM SNMPv2-TC
         MODULE-COMPLIANCE, OBJECT-GROUP
             FROM SNMPv2-CONF
-        BigMetric
+        BigMetric, ospfAreaAggregateEntry
             FROM OSPF-MIB
         IANAipRouteProtocol
             FROM IANA-RTPROTO-MIB
         hpSwitch
             FROM HP-ICF-OID
-        ospfAddressLessIf, ospfIfIpAddress, ospfIfEntry
+        ospfAddressLessIf, ospfIfIpAddress, ospfIfEntry, ospfNbrEntry, ospfLsdbEntry,
+        ospfLsdbAreaId, ospfLsdbType, ospfLsdbLsid, ospfLsdbRouterId, ospfExtLsdbEntry
             FROM OSPF-MIB;
 
     hpicfOspf MODULE-IDENTITY
-        LAST-UPDATED "200903050000Z" -- March 5, 2009
-        ORGANIZATION "Hewlett-Packard Company,
-                      Workgroup Networks Division"
-        CONTACT-INFO "John Flick
-
-             Postal: Hewlett-Packard Company
-                     8000 Foothills Blvd. M/S 5557
-                     Roseville, CA 95747-5557
-             Tel:    +1 916 785 4018
-             Fax:    +1 916 785 1199
-
-             E-mail: johnf@rose.hp.com"
+        LAST-UPDATED "201010281000Z" -- October 28, 2010
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO "Hewlett-Packard Company
+                      8000 Foothills Blvd. M/S 5557
+                      Roseville, CA 95747-5557"
         DESCRIPTION  "This MIB module contains HP proprietary
                      extensions to the OSPF-MIB module."
+
+        REVISION     "201010281000Z" -- October 28, 2010
+        DESCRIPTION  "Added hpicfOspfAreaAggregateTable."
+
+        REVISION     "201003250000Z" -- March 25, 2010
+        DESCRIPTION  "Added hpicfOspfNbrTable."
 
         REVISION     "200903050000Z" -- March 5, 2009
         DESCRIPTION  "Added hpicfOspfLogTable."
@@ -68,6 +68,18 @@ HP-ICF-OSPF DEFINITIONS ::= BEGIN
         REVISION     "200111130339Z" -- November 13, 2001
         DESCRIPTION  "Initial revision."
         ::= { hpSwitch 14 }
+
+        HpicfOspfRouterIdTc ::= TEXTUAL-CONVENTION 
+             DISPLAY-HINT "d-0" 
+             STATUS      current 
+             DESCRIPTION 
+                  "A 32-bit, unsigned integer uniquely identifying the 
+                  router in the Autonomous System. To ensure 
+                  uniqueness, this may default to the value of one of 
+                  the router's IPv4 host addresses if IPv4 is 
+                  configured on the router." 
+             SYNTAX      Unsigned32 (1..'FFFFFFFF'h) 
+
 
     hpicfOspfObjects OBJECT IDENTIFIER ::= { hpicfOspf 1 }
 
@@ -348,7 +360,8 @@ hpicfOspfIfEntry OBJECT-TYPE
 
 HpicfOspfIfEntry ::=
     SEQUENCE { 
-        hpicfOspfIfPassive  TruthValue
+        hpicfOspfIfPassive  TruthValue,
+	hpicfOspfIfNbrCount Unsigned32
     }
 
 
@@ -373,6 +386,18 @@ hpicfOspfIfPassive   OBJECT-TYPE
 
     DEFVAL { false }
     ::= { hpicfOspfIfEntry 1 }
+
+hpicfOspfIfNbrCount OBJECT-TYPE
+           SYNTAX	      Unsigned32
+           MAX-ACCESS	read-only
+	        STATUS	      current
+	        DESCRIPTION
+              "This object specifies the number of OSPFv3 neighbors   
+               present in this interface. This counter should be 
+               incremented when a new neighbor is added in the network in 
+               which this interface is present. 
+               It should be decremented when a neighbor is disconnected."
+           ::= { hpicfOspfIfEntry 2 }
 
 hpicfOspfIfStatsTable  OBJECT-TYPE
     SYNTAX      SEQUENCE OF HpicfOspfIfStatsEntry 
@@ -675,7 +700,8 @@ hpicfOspfSpfEntry OBJECT-TYPE
 HpicfOspfSpfEntry ::=
     SEQUENCE { 
         hpicfOspfSpfInstance      Integer32, 
-        hpicfOspfSpfReason        Integer32
+        hpicfOspfSpfReason        Integer32,
+	hpicfOspfSpfTime          Integer32
     }
 
 hpicfOspfSpfInstance  OBJECT-TYPE
@@ -698,6 +724,19 @@ hpicfOspfSpfReason  OBJECT-TYPE
                  adding/deleting interface, linkStateUpdate received..
                  Only last ten SPF run's reasons will be saved."
         ::= { hpicfOspfSpfEntry 2 }
+
+hpicfOspfSpfTime  OBJECT-TYPE
+            SYNTAX          Integer32
+            UNITS           "seconds"
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+                "The hpicfOspfSpfTime refers to the time at which 
+                 SPF run is scheduled. Reasons could be OSPF init, 
+                 adding/deleting interface, linkStateUpdate received..
+                 Only last ten SPF run's reasons will be saved."
+        ::= { hpicfOspfSpfEntry 3 }
+
         
 
 
@@ -1043,6 +1082,370 @@ hpicfOspfSpfReason  OBJECT-TYPE
            Spf is run"
         ::= { hpicfOspf 12 }
 
+
+     --  OSPF Area-Scope Link State Database 
+ 
+ 
+     hpicfOspfAreaLsdbTable OBJECT-TYPE 
+            SYNTAX          SEQUENCE OF HpicfOspfAreaLsdbEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "The OSPF Process's Area-Scope LSDB.
+                The LSDB contains the Area-Scope Link State 
+                Advertisements from throughout the area that the 
+                device is attached to." 
+            ::= {  hpicfOspf 14 } 
+ 
+     hpicfOspfAreaLsdbEntry OBJECT-TYPE 
+            SYNTAX          HpicfOspfAreaLsdbEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "A single Area-Scope Link State Advertisement." 
+                        AUGMENTS   {  ospfLsdbEntry } 
+            ::= {  hpicfOspfAreaLsdbTable 1 } 
+ 
+    HpicfOspfAreaLsdbEntry ::= SEQUENCE { 
+             hpicfOspfAreaLsdbRtrCapBits     -- RTR
+                    Unsigned32, 
+             hpicfOspfAreaLsdbOptions        -- NTW
+                    Unsigned32,
+             hpicfOspfAreaLsdbMetric         -- RTR, Summary, NSA
+                    Metric, 
+            hpicfOspfAreaLsdbAddrPrefix
+	            Unsigned32,
+	    hpicfOspfAreaLsdbFwdingAddress  
+                    HpicfOspfRouterIdTc,           -- NSA
+             hpicfOspfAreaLsdbExtRouteTags
+                    Integer32,                 -- NSA
+             hpicfOspfTOS
+	       Unsigned32,
+	     hpicfOspfLsdbRouterLinks
+	            Unsigned32,
+	     hpicfOspfLsdbBitE
+	          Unsigned32
+
+          } 
+ 
+         hpicfOspfAreaLsdbRtrCapBits OBJECT-TYPE
+            SYNTAX         Unsigned32
+	    MAX-ACCESS     read-only 
+            STATUS         current 
+            DESCRIPTION 
+                "This field is valid if the LSA is a Router LSA. It uniquely
+                identifies the router type of the router in the Area."
+            REFERENCE
+                "OSPF Version 2, Appendix A.4.2 Router LSAs" 
+                
+            ::= { hpicfOspfAreaLsdbEntry 1 } 
+
+     hpicfOspfAreaLsdbOptions OBJECT-TYPE 
+            SYNTAX         Unsigned32 
+            MAX-ACCESS     read-only 
+            STATUS         current 
+            DESCRIPTION 
+               "The Options field enables OSPF routers to support
+                (or not support) optional capabilities, and to communicate
+                their capability level to other OSPF routers. This field is
+                valid for each type of LSA."
+            REFERENCE 
+                "OSPF Version 2, Appendix A.2 The Options field" 
+            ::= { hpicfOspfAreaLsdbEntry 2 } 
+
+     hpicfOspfAreaLsdbMetric OBJECT-TYPE 
+            SYNTAX         Metric 
+            MAX-ACCESS     read-only 
+            STATUS         current 
+            DESCRIPTION 
+               "This field is valid if the LSA is a Router LSA, a
+                Summary LSA, AS Summary LSA or a NSSA LSA.
+                This field indicates the cost involved in using the interface
+                or route."
+            ::= { hpicfOspfAreaLsdbEntry 3 } 
+
+     hpicfOspfAreaLsdbAddrPrefix OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The Prefix the Address." 
+            ::= {  hpicfOspfAreaLsdbEntry 4 } 
+
+     hpicfOspfAreaLsdbFwdingAddress OBJECT-TYPE
+            SYNTAX          HpicfOspfRouterIdTc
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+               "This field is valid if the LSA is a NSSA LSA. This field is
+                present only if the 'F' Bit is set in the EFT flags field
+                and if included, the data traffic for the advertised
+                destination will be forwarded to this address."
+            ::= {  hpicfOspfAreaLsdbEntry 5 } 
+ 
+     hpicfOspfAreaLsdbExtRouteTags OBJECT-TYPE
+            SYNTAX          Unsigned32
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+               "This field is valid if the LSA is a NSSA LSA. This field is
+                present only if the 'T' Bit is set in the EFT flags field.
+                A 32-bit field which may be used to communicate additional
+                information between AS boundary routers."
+            ::= {  hpicfOspfAreaLsdbEntry 6 }
+   
+
+   hpicfOspfTOS OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The 32-bit identifier for the TOS specific information 
+                of the LSA." 
+            ::= {  hpicfOspfAreaLsdbEntry 7 }
+ 
+ 
+ hpicfOspfLsdbRouterLinks OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "This field is valid if the LSA is Router LSA. It holds the
+                information of Number of links in the router LSA."
+            ::= {  hpicfOspfAreaLsdbEntry 8 }
+
+ hpicfOspfLsdbBitE OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION
+                "The 32-bit identifier for the Metric specific information
+                of the LSA." 
+            ::= {  hpicfOspfAreaLsdbEntry 9 }
+
+
+-- Router LSA expansion table
+ 
+     hpicfOspfRouterLSATable OBJECT-TYPE 
+            SYNTAX          SEQUENCE OF HpicfOspfRouterLSAEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "This table having Area scope is a dependent-expansion table
+                 for the Router LSA entry in the Area LSDB table. It
+                 represents the list of per interface details advertised
+                 in a Router LSA."
+            REFERENCE 
+                "OSPF Version 2, Appendix 4.3 Router-LSAs"
+            ::= {  hpicfOspf 15 } 
+
+    hpicfOspfRouterLSAEntry OBJECT-TYPE 
+            SYNTAX          HpicfOspfRouterLSAEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "A single Area-Scope Link State Advertisement." 
+            INDEX           { ospfLsdbAreaId,
+                              ospfLsdbType,
+			      ospfLsdbLsid, 
+                              ospfLsdbRouterId, 
+                              hpicfOspfRouterLSANbrRtrId }
+            ::= { hpicfOspfRouterLSATable 1 } 
+ 
+    HpicfOspfRouterLSAEntry ::= SEQUENCE { 
+             hpicfOspfRouterLSANbrRtrId
+                    HpicfOspfRouterIdTc,
+	     hpicfOspfRouterLSAIfType
+                    Unsigned32, 
+             hpicfOspfRouterLSAMetric
+                    Metric,
+	     hpicfOspfRouterLSAIfId
+                    HpicfOspfRouterIdTc,
+             hpicfOspfRouterLSATOSMetric
+		    Unsigned32
+            } 
+ 
+ 
+     hpicfOspfRouterLSANbrRtrId OBJECT-TYPE 
+            SYNTAX          HpicfOspfRouterIdTc 
+            MAX-ACCESS      not-accessible
+            STATUS          current 
+            DESCRIPTION 
+                "The router id of the router which is connected over
+                the interface Id." 
+            ::= {  hpicfOspfRouterLSAEntry 1 } 
+
+   
+    hpicfOspfRouterLSAIfType OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The 32-bit identifier of the Area from which the 
+                LSA was received." 
+            ::= {  hpicfOspfRouterLSAEntry 2 } 
+ 
+     hpicfOspfRouterLSAMetric OBJECT-TYPE 
+            SYNTAX          Metric
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "This field indicates the cost involved in using the interface
+                 or route."
+            ::= {  hpicfOspfRouterLSAEntry 3 }
+
+ 	hpicfOspfRouterLSAIfId OBJECT-TYPE 
+            SYNTAX          HpicfOspfRouterIdTc 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The interface Id of the router that connects
+                 to the other router."
+            ::= {  hpicfOspfRouterLSAEntry 4 }
+
+         hpicfOspfRouterLSATOSMetric OBJECT-TYPE 
+            SYNTAX          Unsigned32(0..'FFFFFFFF'h) 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "This field indicates the cost involved in using the interface
+                 or route specific to TOS."
+            ::= {  hpicfOspfRouterLSAEntry 5 } 
+
+    -- Network LSA expansion table
+ 
+    hpicfOspfNetworkLSATable OBJECT-TYPE 
+            SYNTAX          SEQUENCE OF HpicfOspfNetworkLSAEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "This table having Area scope is a dependent-expansion table
+                 for the Network LSA entry in the Area LSDB table. This table
+                 represents the list of routers advertised in a Network LSA."
+            REFERENCE 
+                "OSPF Version 2, Appendix 4.4 Network-LSAs"
+            ::= {  hpicfOspf 16 } 
+
+    hpicfOspfNetworkLSAEntry OBJECT-TYPE 
+            SYNTAX          HpicfOspfNetworkLSAEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "A single Area-Scope Link State Advertisement." 
+            INDEX           { ospfLsdbAreaId,
+                              ospfLsdbType,
+			      ospfLsdbLsid,
+                              ospfLsdbRouterId, 
+                              hpicfOspfNetworkLSASeqNum } 
+            ::= { hpicfOspfNetworkLSATable 1 } 
+ 
+    HpicfOspfNetworkLSAEntry ::= SEQUENCE { 
+             hpicfOspfNetworkLSASeqNum
+                    Unsigned32, 
+             hpicfOspfNetworkLSAAttachedRouter
+                    HpicfOspfRouterIdTc
+            } 
+ 
+    hpicfOspfNetworkLSASeqNum OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      not-accessible
+            STATUS          current 
+            DESCRIPTION 
+                "The 32-bit sequence number identifying the attached router-ids."
+            ::= { hpicfOspfNetworkLSAEntry 1 } 
+ 
+    hpicfOspfNetworkLSAAttachedRouter OBJECT-TYPE 
+            SYNTAX          HpicfOspfRouterIdTc 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The 32-bit Router identifier of the attached Router." 
+            ::= { hpicfOspfNetworkLSAEntry 2 }
+
+ -- OSPF Ext-LSA  Database 
+ 
+     
+     hpicfOspfExtLsdbTable OBJECT-TYPE 
+            SYNTAX          SEQUENCE OF HpicfOspfExtLsdbEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "The OSPFv3 Process's AS-Scope Link State Database 
+                (LSDB). The LSDB contains the AS-Scope Link State 
+                Advertisements from throughout the areas that the 
+                device is attached to." 
+            ::= {  hpicfOspf 17 } 
+ 
+     hpicfOspfExtLsdbEntry OBJECT-TYPE 
+            SYNTAX          HpicfOspfExtLsdbEntry 
+            MAX-ACCESS      not-accessible 
+            STATUS          current 
+            DESCRIPTION 
+                "A single AS-Scope Link State Advertisement." 
+            AUGMENTS { ospfExtLsdbEntry } 
+            ::= {  hpicfOspfExtLsdbTable 1 } 
+ 
+    HpicfOspfExtLsdbEntry ::= SEQUENCE { 
+	     hpicfOspfExtLsdbMetric 
+                    Unsigned32, 
+             hpicfOspfExtLsdbOptions
+                    Unsigned32,
+             hpicfOspfExtLsdbFwdingAddress
+                    HpicfOspfRouterIdTc, 
+             hpicfOspfExtLsdbExtRouteTags
+                    Unsigned32,
+	     hpicfOspfExtLsdbBitE
+		    Unsigned32
+             } 
+ 
+     hpicfOspfExtLsdbMetric OBJECT-TYPE
+            SYNTAX          Unsigned32
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+                "The cost associated with this route."
+            ::= {  hpicfOspfExtLsdbEntry 1 }
+
+
+     hpicfOspfExtLsdbOptions OBJECT-TYPE 
+            SYNTAX          Unsigned32 
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "The Options field enables OSPF routers to support
+                 (or not support) optional capabilities, and to communicate
+                 their capability level to other OSPF routers."
+            ::= {  hpicfOspfExtLsdbEntry 2 } 
+
+
+     hpicfOspfExtLsdbFwdingAddress OBJECT-TYPE
+            SYNTAX          HpicfOspfRouterIdTc
+            MAX-ACCESS      read-only 
+            STATUS          current 
+            DESCRIPTION 
+                "If included, Data traffic for the advertised destination
+                 will be forwarded to this address."
+            ::= {  hpicfOspfExtLsdbEntry 3 } 
+ 
+     hpicfOspfExtLsdbExtRouteTags OBJECT-TYPE
+            SYNTAX          Unsigned32
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+                "The 32-bit Router Tags for the advertised Route."
+            ::= {  hpicfOspfExtLsdbEntry 4 }
+
+     hpicfOspfExtLsdbBitE OBJECT-TYPE
+            SYNTAX          Unsigned32
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+                "The type of External metric. If bit E is set, the metric
+                 specified is Type 2 external metric."
+            ::= {  hpicfOspfExtLsdbEntry 5 }
+
+
+
     -- Logging information for OSPF routing protocols
 
     -- Textual convention for Log Type for an event in OSPFv2/3
@@ -1113,6 +1516,108 @@ hpicfOspfSpfReason  OBJECT-TYPE
                        like every state changes, will get logged.
                        If it is set to disabled, no events are logged."
            ::= { hpicfOspfLogEntry 2 }
+
+   hpicfOspfNbrTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfOspfNbrEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "HP proprietary extension to ospfNbrTable to support
+             read-only elements for reading neighbor adjacency length,
+             designated router, backup designated router, Area ID and the
+             and time-to-expiry for an OSPF neighbor"
+        ::= { hpicfOspfObjects 5}
+
+    hpicfOspfNbrEntry OBJECT-TYPE
+        SYNTAX      HpicfOspfNbrEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Each entry is extension of ospfNbr Entry and gives more
+                     information for OSPF neighbors"
+        AUGMENTS    { ospfNbrEntry }
+        ::= { hpicfOspfNbrTable 1 }
+
+--This table will be indexed by the IP address of the neighbor or with the interface index
+--in case of an unnumbered interface like the base table ospfNbrTable
+
+HpicfOspfNbrEntry ::=
+  SEQUENCE {
+     hpicfOspfNbrUpTime
+       PositiveInteger,
+     hpicfOspfNbrTimeToExpiry
+       PositiveInteger,
+     hpicfOspfNbrDesignatedRouter
+       IpAddress,
+     hpicfOspfNbrBackupDesignatedRouter
+       IpAddress,
+     hpicfOspfNbrAreaId
+       AreaID,
+     hpicfOspfNbrInterfaceName
+       DisplayString
+}
+
+ hpicfOspfNbrUpTime OBJECT-TYPE
+      SYNTAX PositiveInteger
+      UNITS        "seconds"
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+      "This object specifies the time duration for which the
+       adjacency with the particular neighbor is active.  This should be
+       a monotonically increasing timer for the duration the adjacency
+       is active. This counter should be reset when an adjacency is lost or
+       re-established."
+       ::= { hpicfOspfNbrEntry 1}
+
+ hpicfOspfNbrTimeToExpiry OBJECT-TYPE
+      SYNTAX PositiveInteger
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+      "This object specifies the time remaining for the dead timer for the
+       particular neighbor to expire. This counter thus specifies the time in
+       seconds left for an adjacency to be brought down in case no Hello packet
+       is received during the interval."
+      ::= { hpicfOspfNbrEntry 2}
+
+  hpicfOspfNbrDesignatedRouter OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The IP address of the designated router."
+       DEFVAL { '00000000'H } -- 0.0.0.0
+       ::= { hpicfOspfNbrEntry 3 }
+
+  hpicfOspfNbrBackupDesignatedRouter OBJECT-TYPE
+       SYNTAX       IpAddress
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "The IP address of the backup designated
+          router."
+       DEFVAL { '00000000'H }  -- 0.0.0.0
+       ::= { hpicfOspfNbrEntry 4 }
+
+ hpicfOspfNbrAreaId OBJECT-TYPE
+       SYNTAX       AreaID
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+          "A 32-bit integer uniquely identifying an area.
+          Area ID 0.0.0.0 is used for the OSPF backbone."
+       REFERENCE
+          "OSPF Version 2, Appendix C.2 Area parameters"
+       ::= { hpicfOspfNbrEntry 5 }
+
+  hpicfOspfNbrInterfaceName OBJECT-TYPE
+    SYNTAX     DisplayString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "The ifName value of this OSPF interface."
+       ::= { hpicfOspfNbrEntry 6 }
+
 
 hpicfOspfConformance OBJECT IDENTIFIER ::= { hpicfOspf 2 }
 
@@ -1281,18 +1786,110 @@ hpicfOspfConformance OBJECT IDENTIFIER ::= { hpicfOspf 2 }
                       hpicfOspfRcvdLSAPkt,
                       hpicfOspfIfErrorCount,
                       hpicfOspfClearCounters,
-                      hpicfOspfSpfReason
+                      hpicfOspfSpfReason,
+		      hpicfOspfSpfTime
                       }
         STATUS      current
         DESCRIPTION "A collection of objects that contain 
                      OSPF interface and SPF statistics."
-        ::= { hpicfOspfGroups 4 }
-    
+        ::= { hpicfOspfGroups 4}
+
   hpicfOspfLogGroup OBJECT-GROUP
         OBJECTS     { hpicfOspfLogAction}
         STATUS      current
         DESCRIPTION "A collection of objects for configuring the
                     logging of OSPF events."
         ::= { hpicfOspfGroups 6 }
-    
+
+  hpicfOspfNbrGroup OBJECT-GROUP
+        OBJECTS     {  hpicfOspfNbrUpTime,
+                       hpicfOspfNbrTimeToExpiry,
+                       hpicfOspfNbrDesignatedRouter,
+                       hpicfOspfNbrBackupDesignatedRouter,
+                       hpicfOspfNbrAreaId,
+                       hpicfOspfNbrInterfaceName
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of read-only elements for an OSPF neighbor."
+        ::= { hpicfOspfGroups 7 }
+
+    hpicfOspfAreaAggregateTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfOspfAreaAggregateEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "HP proprietary extensions to ospfAreaAggregateTable"
+        ::= { hpicfOspfObjects 6}
+
+    hpicfOspfAreaAggregateEntry OBJECT-TYPE
+        SYNTAX      HpicfOspfAreaAggregateEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Each entry is extension of ospfAreaAggregateEntry"
+        AUGMENTS    { ospfAreaAggregateEntry }
+        ::= { hpicfOspfAreaAggregateTable 1 }
+
+    HpicfOspfAreaAggregateEntry ::=
+        SEQUENCE {
+            hpicfOspfAreaAggregateCost BigMetric
+        }
+
+    hpicfOspfAreaAggregateCost OBJECT-TYPE
+        SYNTAX       BigMetric
+        MAX-ACCESS   read-create
+        STATUS       current
+        DESCRIPTION "Manually configured cost of the summary advertisement.
+                     A value of 0 indicates that the cost defined and 
+                     calculated by the OSPF standard should be used.  
+                     Valid costs range from 1-16777215"
+        DEFVAL { 0 }
+        ::= { hpicfOspfAreaAggregateEntry 1 }
+
+ hpicfOspfIfGroup OBJECT-GROUP
+           OBJECTS          {
+	   		     hpicfOspfIfPassive,
+                             hpicfOspfIfNbrCount
+                            } 
+            STATUS          current 
+            DESCRIPTION 
+                "These interface objects used for  
+                managing/monitoring OSPFv2 interfaces." 
+            ::= {  hpicfOspfGroups 8 }
+  
+hpicfOspfAreaLsdbGroup  OBJECT-GROUP
+            OBJECTS               {
+	                           hpicfOspfAreaLsdbRtrCapBits,     
+                                   hpicfOspfAreaLsdbOptions,        
+                                   hpicfOspfAreaLsdbMetric,         
+                                   hpicfOspfAreaLsdbAddrPrefix,
+	                	   hpicfOspfAreaLsdbFwdingAddress,  
+                                   hpicfOspfAreaLsdbExtRouteTags,
+                                   hpicfOspfRouterLSAIfType,
+                                   hpicfOspfRouterLSAMetric,
+				   hpicfOspfRouterLSAIfId,
+                                   hpicfOspfNetworkLSAAttachedRouter,
+				   hpicfOspfTOS,
+				   hpicfOspfLsdbRouterLinks,
+				   hpicfOspfRouterLSATOSMetric,
+				   hpicfOspfLsdbBitE
+                                   } 
+             STATUS          current 
+             DESCRIPTION 
+                "These objects used for  
+                managing/monitoring OSPFv2 LSAs." 
+            ::= {  hpicfOspfGroups 9 }
+
+ hpicfOspfExtLsdbGroup OBJECT-GROUP 
+            OBJECTS         { 
+                             hpicfOspfExtLsdbMetric,
+                             hpicfOspfExtLsdbOptions,
+                             hpicfOspfExtLsdbFwdingAddress,
+                             hpicfOspfExtLsdbExtRouteTags,
+			     hpicfOspfExtLsdbBitE
+                            } 
+            STATUS          current 
+            DESCRIPTION 
+                "These objects are used for OSPFv2 systems 
+                that display their AS-scope link state database." 
+            ::= {  hpicfOspfGroups 10 } 
+ 
 END
