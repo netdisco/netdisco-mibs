@@ -10,7 +10,7 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        RowStatus, 
        TEXTUAL-CONVENTION, TimeStamp, TruthValue
                  FROM SNMPv2-TC
-       InetAddressType, InetAddress
+       InetAddressType, InetAddress, InetPortNumber
                  FROM INET-ADDRESS-MIB
        MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
                  FROM SNMPv2-CONF
@@ -19,9 +19,8 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
 
     hpicfSyslogMIB MODULE-IDENTITY
-        LAST-UPDATED "201003120000Z"  --   March 12, 2010
-        ORGANIZATION "Hewlett Packard Company,
-                     Procurve Networking Business"
+        LAST-UPDATED "201011030000Z"  --   November 03, 2010
+        ORGANIZATION "HP Networking"
         CONTACT-INFO
             "Hewlett-Packard Company
             8000 Foothills Blvd.
@@ -30,8 +29,30 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
             "The MIB module for configuring and 
              monitoring syslog applications.
 
-             The Procurve syslog application sends syslog messages."
+             The HP syslog application sends syslog messages."
 
+       REVISION "201011030000Z"  --   November 03, 2010
+       DESCRIPTION
+           "Added 'sftp' entry in HpicfSyslogSystemModule"
+
+
+       REVISION "201010250000Z"  --   October 25, 2010
+       DESCRIPTION
+           "Added 'dt' entry in HpicfSyslogSystemModule"
+
+       REVISION "201008110000Z"  --   August 11, 2010
+       DESCRIPTION
+           "Added 'fips' entry in HpicfSyslogSystemModule"
+           
+       REVISION "201006200000Z"  --   June 20, 2010
+       DESCRIPTION
+           "Added 'hpicfSyslogControlTransportProtocol' & 
+            'hpicfSyslogControlDestinationPort' to hpicfSyslogControlEntry."
+	   
+       REVISION "201003200000Z"  --   March 20, 2010
+       DESCRIPTION
+           "Added 'bgp' entry in HpicfSyslogSystemModule"
+	   
        REVISION "201003120000Z"  --   March 12, 2010
        DESCRIPTION
            "Added 'dhcpv6r' entry in HpicfSyslogSystemModule"
@@ -238,7 +259,12 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
               oobm           (77),
               trmode         (78),
               ospf3          (79),
-              dhcpv6r        (80)
+              dhcpv6r        (80),
+	      bgp            (81),
+              ufd            (82),
+              fips           (83),
+              dt             (84),
+              sftp           (86)
            }
 
 
@@ -295,6 +321,10 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
            hpicfSyslogControlBindAddrIsOobm
                 TruthValue,
 	   hpicfSyslogControlSmmLog
+	        Integer32,
+           hpicfSyslogControlTransportProtocol
+                INTEGER,
+	   hpicfSyslogControlDestinationPort
 	        Integer32
         }
 
@@ -399,13 +429,38 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        STATUS      current     
        DESCRIPTION
            "This object is applicable for a device with a standby management 
-	    module like 8200zl. When the value of this object is set to enabled, 
-	    all the log messages from the standby management module(SMM) will be 
-	    sent to the syslog server. If the value is disabled, the log messages 
-	    from the standby management module will not be sent to the syslog server. 
-	    By default, this is disabled."
+	    module like 8200zl. When the value of this object is set to
+            enabled, all the log messages from the standby management
+            module(SMM) will be sent to the syslog server. If the value is
+            disabled, the log messages from the standby management module
+            will not be sent to the syslog server.  By default, this is
+            disabled."
        DEFVAL { disabled }
        ::= { hpicfSyslogControlEntry 7 }
+
+   hpicfSyslogControlTransportProtocol OBJECT-TYPE
+       SYNTAX       INTEGER  {
+                         udp  (1),
+                         tcp  (2)
+                       }
+       MAX-ACCESS  read-write
+       STATUS      current     
+       DESCRIPTION
+           "The transport used for the connection to the syslog server
+            associated with this row.  The default value is UDP."
+       DEFVAL { udp }
+       ::= { hpicfSyslogControlEntry 8 }
+
+   hpicfSyslogControlDestinationPort OBJECT-TYPE
+       SYNTAX      InetPortNumber  
+       MAX-ACCESS  read-write
+       STATUS      current     
+       DESCRIPTION
+           "The port used for the communication to the syslog server associated
+            with this row.  The default syslog ports for UDP is 514,
+            the default syslog for TCP is 1470, and will be based
+            on the setting of the TransportProtocol object."
+       ::= { hpicfSyslogControlEntry 9 }
 
    -- -------------------------------------------------------------
    -- hpicfSyslogOperations
@@ -799,6 +854,112 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 	    hence A get request for this object always returns FALSE."
        ::= { hpicfSyslogLogMsgOptions 1 }
 
+-------------------------------------------------------------------
+
+   hpicfSyslogServerStatisticsTable OBJECT-TYPE
+       SYNTAX      SEQUENCE OF HpicfSyslogServerStatisticsEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           "A table containing the statistical information
+            pertaining to each syslog server indexed by 
+            hpicfSyslogControlIndex.
+           "
+       ::= { hpicfSyslogObjects 6 }
+
+   hpicfSyslogServerStatisticsEntry OBJECT-TYPE
+       SYNTAX      HpicfSyslogServerStatisticsEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+           "The configuration parameters pertaining to a syslog
+            application.
+           "
+       INDEX  { hpicfSyslogControlIndex }
+       ::= { hpicfSyslogServerStatisticsTable 1 }
+
+   HpicfSyslogServerStatisticsEntry ::=
+       SEQUENCE {
+           hpicfSyslogServerLogSent
+                Counter32,
+           hpicfSyslogServerLogRecv
+                Counter32,
+           hpicfSyslogServerLogRelay
+                Counter32,
+           hpicfSyslogServerSendError
+                Counter32,
+           hpicfSyslogServerLogResend
+                Counter32,
+           hpicfSyslogServerResendError
+                Counter32,
+           hpicfSyslogServerLogBuffered
+                Counter32
+        }
+
+   hpicfSyslogServerLogSent OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages sent by the syslog sender."            
+       ::= { hpicfSyslogServerStatisticsEntry 1 }
+
+   hpicfSyslogServerLogRecv OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages received by the syslog 
+            Server."           
+       ::= { hpicfSyslogServerStatisticsEntry 2 }
+
+   hpicfSyslogServerLogRelay OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "The number of messages processed by the syslog relay."
+       ::= { hpicfSyslogServerStatisticsEntry 3 }
+
+   hpicfSyslogServerSendError OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages that failed during the 
+            send process and this failed message will be 
+            buffered for the retransmission process." 
+       ::= { hpicfSyslogServerStatisticsEntry 4 }
+
+   hpicfSyslogServerLogResend OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Number of syslog messages re-transmitted successfully."
+       ::= { hpicfSyslogServerStatisticsEntry  5}
+
+   hpicfSyslogServerResendError OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+            "Number of syslog messages that failed during the 
+             retransmission process.The syslog retransmission 
+             will happen if and only if syslog send failed 
+             while transmitting the buffered syslog messages."
+       ::= { hpicfSyslogServerStatisticsEntry 6}
+
+   hpicfSyslogServerLogBuffered OBJECT-TYPE
+       SYNTAX      Counter32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+           "Current number of buffered syslog messages that 
+            are ready to be transmitted. "
+       ::= { hpicfSyslogServerStatisticsEntry 7 }
+
+
  
   -- -------------------------------------------------------------
    -- Notification Information
@@ -973,6 +1134,34 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
            "A collection of objects representing the log message information."
        ::= { hpicfSyslogGroups 11}
 
+   hpicfSyslogControlTransportGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogControlTransportProtocol,
+                   hpicfSyslogControlDestinationPort
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the run time
+            parameters for the transport applications.
+           "
+       ::= { hpicfSyslogGroups 12}
+
+   hpicfSyslogServerStatisticsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogServerLogSent,
+                   hpicfSyslogServerLogRecv,
+                   hpicfSyslogServerLogRelay,
+                   hpicfSyslogServerSendError,
+                   hpicfSyslogServerLogResend,
+                   hpicfSyslogServerResendError,
+                   hpicfSyslogServerLogBuffered
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing the server specific
+            statistics counter information."
+       ::= { hpicfSyslogGroups 13}
+
 
 
    -- -------------------------------------------------------------
@@ -1095,11 +1284,11 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        DESCRIPTION
            "Write access is not required.
            "
---       OBJECT  hpicfSyslogPriorityDestinationIndex
---       MIN-ACCESS  read-only
---       DESCRIPTION
---           "Write access is not required.
---           "
+     --OBJECT  hpicfSyslogPriorityDestinationIndex
+     --MIN-ACCESS  read-only
+     --DESCRIPTION
+     --"Write access is not required.
+     --  "
        ::= { hpicfSyslogCompliances 5 }
 
    hpicfSyslogNotificationCompliance MODULE-COMPLIANCE
@@ -1157,6 +1346,18 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        }
 
        ::= { hpicfSyslogCompliances 10 }
+
+   hpicfSyslogTransportCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+           "The compliance statement for syslog
+            transport ."
+       MODULE -- this module
+       MANDATORY-GROUPS {
+           hpicfSyslogControlTransportGroup
+       }
+
+       ::= { hpicfSyslogCompliances 11 }
 
    END
 
