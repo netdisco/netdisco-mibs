@@ -21,19 +21,25 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
         ifIndex
             FROM IF-MIB
         portCopyEntry
-            FROM SMON-MIB;
+            FROM SMON-MIB
+	VidList
+	    FROM HP-ICF-FTRCO;
 
 
     hpicfBridge MODULE-IDENTITY
-        LAST-UPDATED "200912150000Z"  -- Dec 15, 2009
-        ORGANIZATION "Hewlett-Packard Company
-                      Network Infrastructure Solutions"
+        LAST-UPDATED "201006260000Z"  -- Jun 26, 2010
+        ORGANIZATION  "HP Networking"
         CONTACT-INFO "Hewlett-Packard Company
                       8000 Foothills Blvd.
                       Roseville, CA 95747"
+		      
+        DESCRIPTION  "This MIB module supports loop protect per vlan feature."
+        REVISION     "201006260000Z"  -- Jun 26, 2010
+	
         DESCRIPTION  "This MIB module contains HP proprietary
                       extensions to the standard Bridge MIBs."
         REVISION     "200912150000Z"  -- Dec 15, 2009
+	
         DESCRIPTION  "Added 'hpicfBridgeMirrorSessionType' MIB object."
 
         REVISION     "200902110000Z"  -- Feb 11, 2009
@@ -245,7 +251,7 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
             hpicfBridgeRstpOperPointToPointMac          TruthValue,
             hpicfBridgeRstpPortPathCost                 Integer32,
             hpicfBridgeRstpForceBpduMigrationCheck      TruthValue,
-            hpicfBridgeRstpAutoEdgePort	                TruthValue,
+            hpicfBridgeRstpAutoEdgePort	              TruthValue,
             hpicfBridgeRstpPortBpduFiltering            TruthValue
         }
 
@@ -440,6 +446,26 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
                      elapsed. Otherwise the port will remain disabled."
         ::= { hpicfBridgeLoopProtectBase 3 }
 
+    hpicfBridgeLoopProtectMode OBJECT-TYPE
+        SYNTAX INTEGER
+	    {
+	    port (1), 
+	    vlan (2)
+	    }		    
+        MAX-ACCESS  read-write
+        STATUS      current
+	DESCRIPTION "This value indicate whether loop protect operates in 
+	             Port or VLAN mode."
+        DEFVAL      { port } 
+        ::= { hpicfBridgeLoopProtectBase 4 }
+
+    hpicfBridgeLoopProtectVIDList    OBJECT-TYPE
+        SYNTAX      VidList
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "A list of VLANs on which loop protection is enabled." 
+	::= { hpicfBridgeLoopProtectBase 5 }
+
     hpicfBridgeLoopProtectPortTable OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpicfBridgeLoopProtectPortEntry
         MAX-ACCESS  not-accessible
@@ -462,7 +488,9 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
             hpicfBridgeLoopProtectPortLoopDetected    TruthValue,
             hpicfBridgeLoopProtectPortLastLoopTime    TimeStamp,
             hpicfBridgeLoopProtectPortLoopCount       Counter32,    
-            hpicfBridgeLoopProtectPortReceiverAction  LoopProtectReceiverAction 
+            hpicfBridgeLoopProtectPortReceiverAction  LoopProtectReceiverAction,
+            hpicfBridgeLoopDetectedVlan               Integer32
+	    
         }
 
     hpicfBridgeLoopProtectPortEnable  OBJECT-TYPE
@@ -510,7 +538,16 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
                      received on this port. When set to 'disableTx' the port 
                      that transmitted the packet will be disabled. When set to 
                      'noDisable' the transmitting port will not be disabled." 
-        ::= { hpicfBridgeLoopProtectPortEntry 5 } 
+        ::= { hpicfBridgeLoopProtectPortEntry 5 }
+
+   
+   hpicfBridgeLoopDetectedVlan OBJECT-TYPE
+        SYNTAX      Integer32(1..4096) 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Refers to this object for the port on which loop is 
+	             detected."
+        ::= { hpicfBridgeLoopProtectPortEntry 6 } 
         
 -- **********************************************************************
 -- hpicfBridgeLoopProtect Notifications 
@@ -519,7 +556,8 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
     hpicfBridgeLoopProtectLoopDetectedNotification NOTIFICATION-TYPE
         OBJECTS     { ifIndex,
                       hpicfBridgeLoopProtectPortLoopCount,       
-                      hpicfBridgeLoopProtectPortReceiverAction}
+                      hpicfBridgeLoopProtectPortReceiverAction
+                    }
         STATUS      current
         DESCRIPTION "A hpicfBridgeLoopProtectLoopDetectedNotification signifies
                      that a loop has been detected by the loop protection protocol.
@@ -531,7 +569,24 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
                      dropped, and not queued up to be sent later."
         ::= { hpicfBridgeLoopProtectNotifications 1 }
                  
-
+    hpicfBridgeVlanLoopProtectLoopDetectedNotification NOTIFICATION-TYPE
+        OBJECTS     { ifIndex,
+                      hpicfBridgeLoopProtectPortLoopCount,       
+                      hpicfBridgeLoopProtectPortReceiverAction,
+                      hpicfBridgeLoopDetectedVlan
+                    }
+        STATUS      current
+        DESCRIPTION "A hpicfBridgeLoopProtectLoopDetectedNotification signifies
+                     that a loop has been detected by the loop protect while 
+                     operating on a per VLAN  mode.
+                     Generation of this notification is controlled by 
+                     hpicfBridgeLoopProtectTrapLoopDetectEnable. To prevent 
+                     excessive notifications this trap is rate-limited to allow 
+                     a maximum of 1 notifications every 30 seconds.
+                     Notifications that are not sent due to rate-limiting are
+                     dropped, and not queued up to be sent later."
+        ::= { hpicfBridgeLoopProtectNotifications 2 }
+ 
 
 -- **********************************************************************
 -- Local Mirror Session  Objects
@@ -813,7 +868,7 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
                       hpicfBridgeLoopProtectPortLoopDetected,
                       hpicfBridgeLoopProtectPortLastLoopTime,
                       hpicfBridgeLoopProtectPortLoopCount,
-                      hpicfBridgeLoopProtectPortReceiverAction  
+                      hpicfBridgeLoopProtectPortReceiverAction
                     }
         STATUS      current
         DESCRIPTION "A collection of objects providing basic instrumentation
@@ -847,6 +902,18 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
 
         ::= {hpicfBridgeGroups 9 }
     
+   
+hpicfBridgeLoopProtectVLANGroup OBJECT-GROUP
+        OBJECTS     { hpicfBridgeLoopProtectMode,
+                      hpicfBridgeLoopProtectVIDList,
+                      hpicfBridgeLoopDetectedVlan
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects providing support for Loop Protect
+	             per VLAN feature."
+
+        ::= {hpicfBridgeGroups 10 }
+       
 
 -- **********************************************************************
 -- Notification groups
@@ -857,7 +924,12 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
            STATUS      current
            DESCRIPTION "Notifications for Loop protection."
            ::= { hpicfBridgeNotGroups 1 }
-        
+  
+       hpicfBridgeVlanLoopProtectNotGrp NOTIFICATION-GROUP
+           NOTIFICATIONS { hpicfBridgeVlanLoopProtectLoopDetectedNotification }
+           STATUS      current
+           DESCRIPTION "Notifications for Loop protect per VLAN"
+           ::= { hpicfBridgeNotGroups 2 }
         
      hpicfBridgeMirrorSessionBaseGroup OBJECT-GROUP
         OBJECTS     { hpicfBridgeMirrorSessionID 
@@ -987,6 +1059,14 @@ HP-ICF-BRIDGE DEFINITIONS ::= BEGIN
             MANDATORY-GROUPS { hpicfBridgeJumboInterfaceConfigGroup,
                               hpicfBridgeManagementInterfaceConfigGroup } 
         ::= { hpicfBridgeCompliances 7 }
-
-   
+        
+    hpicfBridgeVlanLoopProtConfigCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP Switches that 
+                     support loop protect per VLAN feature."
+        MODULE
+            MANDATORY-GROUPS { hpicfBridgeLoopProtectVLANGroup,
+                               hpicfBridgeVlanLoopProtectNotGrp,
+                               hpicfBridgeLoopProtectNotGrp } 
+        ::= { hpicfBridgeCompliances 8 }
 END
