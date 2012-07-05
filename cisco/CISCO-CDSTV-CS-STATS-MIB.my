@@ -4,7 +4,7 @@
 --   
 -- June 2010, Rajat Ahuja
 --   
--- Copyright (c) 2010 by Cisco Systems Inc.
+-- Copyright (c) 2010, 2012 by Cisco Systems Inc.
 --   
 -- All rights reserved.
 --   
@@ -29,7 +29,7 @@ IMPORTS
 
 
 ciscoCdstvCsStatsMIB MODULE-IDENTITY
-    LAST-UPDATED    "201007290000Z"
+    LAST-UPDATED    "201205170000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -64,13 +64,16 @@ ciscoCdstvCsStatsMIB MODULE-IDENTITY
         HTTP    Hyper-Text Transfer Protocol
         MPEG    Motion Picture Experts Group
         MSA     Managed Services Architecture
+        NDVR    Network Digital Video Recorder
         RTSP    Real-Time Streaming Protocol
         STB     Set-Top Box
+        VOD     Video On Demand
 
 
         GLOSSARY
 
-        Catcher: Device responsible for receiving content (typically via
+        Catcher: Device responsible for receiving content (typically
+        via
         satellite dishes and antennae) from content providers or from a
         Headend-In-The-Sky. 
 
@@ -89,6 +92,9 @@ ciscoCdstvCsStatsMIB MODULE-IDENTITY
 
         Streamer: Content delivery application responsible for
         streaming video to STB's."
+    REVISION        "201205170000Z"
+    DESCRIPTION
+        "Added bandwidth reporting by content type support."
     REVISION        "201007290000Z"
     DESCRIPTION
         "Added stream control message queue reporting support."
@@ -419,6 +425,101 @@ cdstvSkippedPlaylistElements OBJECT-TYPE
         elements." 
     ::= { ciscoCdstvStreamStats 14 }
 
+cdstvStatsByContentTypeTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CdstvStatsByContentTypeEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table lists the fill (ingress) and stream (egress) counts
+        as well as the bandwidth used by the ingress fills and egress
+        streams on this streamer, differentiated by the content type."
+    ::= { ciscoCdstvStreamStats 15 }
+
+cdstvStatsByContentTypeEntry OBJECT-TYPE
+    SYNTAX          CdstvStatsByContentTypeEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry (conceptual row) in the cdstvStatsByContentTypeTable.
+        Each entry represents a content type and its active ingress and
+        egress counts, as well as the  bandwidth consumed by the active
+        fills and streams, for this streamer. A row is added for each
+        content type supported by a streamer and the number of rows does
+        not change for a particular streamer."
+    INDEX           { cdstvContentType } 
+    ::= { cdstvStatsByContentTypeTable 1 }
+
+CdstvStatsByContentTypeEntry ::= SEQUENCE {
+        cdstvContentType        INTEGER,
+        cdstvActiveEgressCount  Gauge32,
+        cdstvActiveEgressBW     Gauge32,
+        cdstvActiveIngressCount Gauge32,
+        cdstvActiveIngressBW    Gauge32
+}
+
+cdstvContentType OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        legacyVod(1),
+                        ndvrUniqueCopy(2),
+                        ndvrCommonCopy(3)
+                    }
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the type of the content being ingested
+        into or streamed out of a streamer. Possible values are:
+
+        legacyVod(1)      - Legacy VOD Content
+        ndvrUniqueCopy(2) - NDVR Unique Copy Content
+        ndvrCommonCopy(3) - NDVR Common Copy Content" 
+    ::= { cdstvStatsByContentTypeEntry 1 }
+
+cdstvActiveEgressCount OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "stream count"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of active egress streams from
+        this streamer for the type of content indicated by
+        cdstvContentType." 
+    ::= { cdstvStatsByContentTypeEntry 2 }
+
+cdstvActiveEgressBW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "kilobits"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bandwidth consumed by active egress
+        streams from this streamer for the type of content indicated by
+        cdstvContentType." 
+    ::= { cdstvStatsByContentTypeEntry 3 }
+
+cdstvActiveIngressCount OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "fill count"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of active ingress fills into
+        this streamer for the type of content indicated by
+        cdstvContentType." 
+    ::= { cdstvStatsByContentTypeEntry 4 }
+
+cdstvActiveIngressBW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "kilobits"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bandwidth consumed by active ingress
+        fills into this streamer for the type of content indicated by
+        cdstvContentType." 
+    ::= { cdstvStatsByContentTypeEntry 5 }
+ 
+
+
 cdstvHTTPInStreams OBJECT-TYPE
     SYNTAX          Gauge32
     UNITS           "stream count"
@@ -468,7 +569,7 @@ ciscoCdstvStatsMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoCdstvStatsMIBModuleCompliance MODULE-COMPLIANCE
-    STATUS          deprecated
+    STATUS          obsolete
     DESCRIPTION
         "The compliance statement for the entities which
         implement the CISCO-CDSTV-STATS-MIB."
@@ -480,15 +581,28 @@ ciscoCdstvStatsMIBModuleCompliance MODULE-COMPLIANCE
     ::= { ciscoCdstvStatsMIBCompliances 1 }
 
 ciscoCdstvStatsMIBModuleCompliance2 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "Please enter description here"
+        "The compliance statement for the entities which
+        implement the CISCO-CDSTV-STATS-MIB."
     MODULE          -- this module
     MANDATORY-GROUPS {
                         ciscoCdstvStatsMIBCacheObjectGroup,
                         ciscoCdstvStatsMIBStreamObjectGroup2
                     }
     ::= { ciscoCdstvStatsMIBCompliances 2 }
+
+ciscoCdstvStatsMIBModuleCompliance3 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the entities which
+        implement the CISCO-CDSTV-STATS-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoCdstvStatsMIBCacheObjectGroup,
+                        ciscoCdstvStatsMIBStreamObjectGroup3
+                    }
+    ::= { ciscoCdstvStatsMIBCompliances 3 }
 
 ciscoCdstvStatsMIBCacheObjectGroup OBJECT-GROUP
     OBJECTS         {
@@ -531,7 +645,9 @@ ciscoCdstvStatsMIBStreamObjectGroup OBJECT-GROUP
                     }
     STATUS          deprecated
     DESCRIPTION
-        "A collection of objects providing streaming statistics."
+        "A collection of objects providing streaming statistics.
+        ciscoCdstvStatsMIBStreamObjectGroup object is superseded by
+        ciscoCdstvStatsMIBStreamObjectGroup2."
     ::= { ciscoCdstvStatsMIBGroups 2 }
 
 ciscoCdstvStatsMIBStreamObjectGroup2 OBJECT-GROUP
@@ -551,12 +667,49 @@ ciscoCdstvStatsMIBStreamObjectGroup2 OBJECT-GROUP
                         cdstvStreamControlMessageQueueSize,
                         cdstvSkippedPlaylistElements
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "A collection of objects providing streaming statistics"
+        "A collection of objects providing streaming statistics.
+        ciscoCdstvStatsMIBStreamObjectGroup2 object is superseded by
+        ciscoCdstvStatsMIBStreamObjectGroup3."
     ::= { ciscoCdstvStatsMIBGroups 3 }
 
+ciscoCdstvStatsMIBStreamObjectGroup3 OBJECT-GROUP
+    OBJECTS         {
+                        cdstvActiveStreams,
+                        cdstvActiveStreamBW,
+                        cdstvUniqueStreams,
+                        cdstvUniqueStreamBW,
+                        cdstvCCPOutStreams,
+                        cdstvCCPOutStreamBW,
+                        cdstvHTTPOutStreams,
+                        cdstvHTTPOutStreamBW,
+                        cdstvSessionSetupSuccess,
+                        cdstvSessionSetupFailures,
+                        cdstvSecondsSinceReference,
+                        cdstvStreamControlMessageQueueMax,
+                        cdstvStreamControlMessageQueueSize,
+                        cdstvSkippedPlaylistElements,
+                        cdstvActiveEgressCount,
+                        cdstvActiveEgressBW,
+                        cdstvActiveIngressCount,
+                        cdstvActiveIngressBW
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing streaming statistics."
+    ::= { ciscoCdstvStatsMIBGroups 4 }
+
 END
+
+
+
+
+
+
+
+
+
 
 
 

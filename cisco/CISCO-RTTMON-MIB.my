@@ -3,7 +3,7 @@
 --   
 -- March 1996, Larry Metzger
 --   
--- Copyright (c) 1995-2010 by cisco Systems Inc.
+-- Copyright (c) 1995-2012 by cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 --   
@@ -29,12 +29,20 @@ IMPORTS
     TruthValue,
     RowStatus,
     TimeInterval,
-    TimeStamp
+    TimeStamp,
+    MacAddress
         FROM SNMPv2-TC
     SnmpAdminString
         FROM SNMP-FRAMEWORK-MIB
+    InetAddress,
+    InetAddressType
+        FROM INET-ADDRESS-MIB
     VlanId
         FROM Q-BRIDGE-MIB
+    Dscp
+        FROM DIFFSERV-DSCP-TC
+    InterfaceIndexOrZero
+        FROM IF-MIB
     QosLayer2Cos
         FROM CISCO-QOS-PIB-MIB
     CfmMepid
@@ -57,7 +65,7 @@ IMPORTS
 
 
 ciscoRttMonMIB MODULE-IDENTITY
-    LAST-UPDATED    "201006110000Z"
+    LAST-UPDATED    "201201180000Z"
     ORGANIZATION    "Cisco IOS"
     CONTACT-INFO
             "Cisco Systems, Inc.
@@ -217,6 +225,23 @@ ciscoRttMonMIB MODULE-IDENTITY
                will contain these responses, but the 
                Statistics capture table will omit them to
                prevent skewed results."
+    REVISION        "201109150000Z"
+    DESCRIPTION
+        "Added following objects to rttMonEchoAdmin to support
+        Y1731 extensions.
+        - rttMonEchoAdminTargetMacAddress,
+        - rttMonEchoAdminSourceMacAddress and 
+        - rttMonEchoAdminSourceMPID"
+    REVISION        "201102210000Z"
+    DESCRIPTION
+        "Added four new objects rttMonEchoAdminEmulateSourceAddress,
+        rttMonEchoAdminEmulateSourcePort,
+        rttMonEchoAdminEmulateTargetAddress,
+        rttMonEchoAdminEmulateTargetPort to RttMonEchoAdminEntry."
+    REVISION        "201010180000Z"
+    DESCRIPTION
+        "Added three new objects rttMonEchoAdminDscp,
+        rttMonEchoAdminReserveDsp, rttMonEchoAdminInputInterface"
     REVISION        "201006040000Z"
     DESCRIPTION
         "Changes added for video operation:
@@ -450,7 +475,7 @@ rttMonApplVersion OBJECT-TYPE
     ::= { rttMonAppl 1 }
 
 rttMonApplMaxPacketDataSize OBJECT-TYPE
-    SYNTAX          Integer32 (0..16384 )
+    SYNTAX          Integer32 (0..16384)
     UNITS           "octets"
     MAX-ACCESS      read-only
     STATUS          current
@@ -486,7 +511,7 @@ rttMonApplTimeOfLastSet OBJECT-TYPE
     ::= { rttMonAppl 3 }
 
 rttMonApplNumCtrlAdminEntry OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -653,7 +678,7 @@ rttMonApplPreConfigedEntry OBJECT-TYPE
     ::= { rttMonApplPreConfigedTable 1 }
 
 RttMonApplPreConfigedEntry ::= SEQUENCE {
-        rttMonApplPreConfigedType  INTEGER ,
+        rttMonApplPreConfigedType  INTEGER,
         rttMonApplPreConfigedName  DisplayString,
         rttMonApplPreConfigedValid TruthValue
 }
@@ -707,7 +732,7 @@ rttMonApplPreConfigedValid OBJECT-TYPE
 
 
 rttMonApplProbeCapacity OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -725,7 +750,7 @@ rttMonApplProbeCapacity OBJECT-TYPE
     ::= { rttMonAppl 10 }
 
 rttMonApplFreeMemLowWaterMark OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -792,7 +817,7 @@ RttMonApplAuthEntry ::= SEQUENCE {
 }
 
 rttMonApplAuthIndex OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -865,7 +890,7 @@ rttMonApplAuthStatus OBJECT-TYPE
 
 
 rttMonApplLpdGrpStatsReset OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -928,16 +953,17 @@ RttMonCtrlAdminEntry ::= SEQUENCE {
 }
 
 rttMonCtrlAdminIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
         "Uniquely identifies a row in the rttMonCtrlAdminTable.
-
-        This is a pseudo-random number selected by the management 
-        station when creating a row via the rttMonCtrlAdminStatus
-        object.  If the pseudo-random number is already in use an 
-        'inconsistentValue' return code will be returned when
+        This is a pseudo-random number, selected by the management 
+        station or auto-generated based on  operation started by the 
+        management station,when creating a row via
+         the rttMonCtrlAdminStatus object.  If the pseudo-random 
+         number is already in use an 'inconsistentValue' return code 
+         will be returned when
         set operation is attempted." 
     ::= { rttMonCtrlAdminEntry 1 }
 
@@ -978,7 +1004,7 @@ rttMonCtrlAdminRttType OBJECT-TYPE
     ::= { rttMonCtrlAdminEntry 4 }
 
 rttMonCtrlAdminThreshold OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -992,7 +1018,7 @@ rttMonCtrlAdminThreshold OBJECT-TYPE
     ::= { rttMonCtrlAdminEntry 5 }
 
 rttMonCtrlAdminFrequency OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1035,7 +1061,7 @@ rttMonCtrlAdminFrequency OBJECT-TYPE
     ::= { rttMonCtrlAdminEntry 6 }
 
 rttMonCtrlAdminTimeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800000 )
+    SYNTAX          Integer32 (0..604800000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1069,7 +1095,7 @@ rttMonCtrlAdminVerifyData OBJECT-TYPE
         a type does not support this option, the agent will 
         transition this object to false.  It is the management
         applications responsibility to check for this 
-        transition. This object is only applicable to SNA protocols."
+        transition."
     DEFVAL          { false } 
     ::= { rttMonCtrlAdminEntry 8 }
 
@@ -1176,62 +1202,77 @@ rttMonEchoAdminEntry OBJECT-TYPE
     ::= { rttMonEchoAdminTable 1 }
 
 RttMonEchoAdminEntry ::= SEQUENCE {
-        rttMonEchoAdminProtocol            RttMonProtocol,
-        rttMonEchoAdminTargetAddress       RttMonTargetAddress,
-        rttMonEchoAdminPktDataRequestSize  Integer32,
-        rttMonEchoAdminPktDataResponseSize Integer32,
-        rttMonEchoAdminTargetPort          Integer32,
-        rttMonEchoAdminSourceAddress       RttMonTargetAddress,
-        rttMonEchoAdminSourcePort          Integer32,
-        rttMonEchoAdminControlEnable       TruthValue,
-        rttMonEchoAdminTOS                 Integer32,
-        rttMonEchoAdminLSREnable           TruthValue,
-        rttMonEchoAdminTargetAddressString DisplayString,
-        rttMonEchoAdminNameServer          RttMonTargetAddress,
-        rttMonEchoAdminOperation           RttMonOperation,
-        rttMonEchoAdminHTTPVersion         DisplayString,
-        rttMonEchoAdminURL                 DisplayString,
-        rttMonEchoAdminCache               TruthValue,
-        rttMonEchoAdminInterval            Integer32,
-        rttMonEchoAdminNumPackets          Integer32,
-        rttMonEchoAdminProxy               DisplayString,
-        rttMonEchoAdminString1             DisplayString,
-        rttMonEchoAdminString2             DisplayString,
-        rttMonEchoAdminString3             DisplayString,
-        rttMonEchoAdminString4             DisplayString,
-        rttMonEchoAdminString5             DisplayString,
-        rttMonEchoAdminMode                RttMonOperation,
-        rttMonEchoAdminVrfName             OCTET STRING,
-        rttMonEchoAdminCodecType           RttMonCodecType,
-        rttMonEchoAdminCodecInterval       Integer32,
-        rttMonEchoAdminCodecPayload        Integer32,
-        rttMonEchoAdminCodecNumPackets     Integer32,
-        rttMonEchoAdminICPIFAdvFactor      Integer32,
-        rttMonEchoAdminLSPFECType          INTEGER ,
-        rttMonEchoAdminLSPSelector         RttMonTargetAddress,
-        rttMonEchoAdminLSPReplyMode        RttMonLSPPingReplyMode,
-        rttMonEchoAdminLSPTTL              Integer32,
-        rttMonEchoAdminLSPExp              Integer32,
-        rttMonEchoAdminPrecision           INTEGER ,
-        rttMonEchoAdminProbePakPriority    INTEGER ,
-        rttMonEchoAdminOWNTPSyncTolAbs     Integer32,
-        rttMonEchoAdminOWNTPSyncTolPct     Integer32,
-        rttMonEchoAdminOWNTPSyncTolType    INTEGER ,
-        rttMonEchoAdminCalledNumber        SnmpAdminString,
-        rttMonEchoAdminDetectPoint         RttMonOperation,
-        rttMonEchoAdminGKRegistration      TruthValue,
-        rttMonEchoAdminSourceVoicePort     DisplayString,
-        rttMonEchoAdminCallDuration        Integer32,
-        rttMonEchoAdminLSPReplyDscp        Integer32,
-        rttMonEchoAdminLSPNullShim         TruthValue,
-        rttMonEchoAdminTargetMPID          CfmMepid,
-        rttMonEchoAdminTargetDomainName    SnmpAdminString,
-        rttMonEchoAdminTargetVLAN          VlanId,
-        rttMonEchoAdminEthernetCOS         QosLayer2Cos,
-        rttMonEchoAdminLSPVccvID           Integer32,
-        rttMonEchoAdminTargetEVC           SnmpAdminString,
-        rttMonEchoAdminTargetMEPPort       TruthValue,
-        rttMonEchoAdminVideoTrafficProfile SnmpAdminString
+        rttMonEchoAdminProtocol             RttMonProtocol,
+        rttMonEchoAdminTargetAddress        RttMonTargetAddress,
+        rttMonEchoAdminPktDataRequestSize   Integer32,
+        rttMonEchoAdminPktDataResponseSize  Integer32,
+        rttMonEchoAdminTargetPort           Integer32,
+        rttMonEchoAdminSourceAddress        RttMonTargetAddress,
+        rttMonEchoAdminSourcePort           Integer32,
+        rttMonEchoAdminControlEnable        TruthValue,
+        rttMonEchoAdminTOS                  Integer32,
+        rttMonEchoAdminLSREnable            TruthValue,
+        rttMonEchoAdminTargetAddressString  DisplayString,
+        rttMonEchoAdminNameServer           RttMonTargetAddress,
+        rttMonEchoAdminOperation            RttMonOperation,
+        rttMonEchoAdminHTTPVersion          DisplayString,
+        rttMonEchoAdminURL                  DisplayString,
+        rttMonEchoAdminCache                TruthValue,
+        rttMonEchoAdminInterval             Integer32,
+        rttMonEchoAdminNumPackets           Integer32,
+        rttMonEchoAdminProxy                DisplayString,
+        rttMonEchoAdminString1              DisplayString,
+        rttMonEchoAdminString2              DisplayString,
+        rttMonEchoAdminString3              DisplayString,
+        rttMonEchoAdminString4              DisplayString,
+        rttMonEchoAdminString5              DisplayString,
+        rttMonEchoAdminMode                 RttMonOperation,
+        rttMonEchoAdminVrfName              OCTET STRING,
+        rttMonEchoAdminCodecType            RttMonCodecType,
+        rttMonEchoAdminCodecInterval        Integer32,
+        rttMonEchoAdminCodecPayload         Integer32,
+        rttMonEchoAdminCodecNumPackets      Integer32,
+        rttMonEchoAdminICPIFAdvFactor       Integer32,
+        rttMonEchoAdminLSPFECType           INTEGER,
+        rttMonEchoAdminLSPSelector          RttMonTargetAddress,
+        rttMonEchoAdminLSPReplyMode         RttMonLSPPingReplyMode,
+        rttMonEchoAdminLSPTTL               Integer32,
+        rttMonEchoAdminLSPExp               Integer32,
+        rttMonEchoAdminPrecision            INTEGER,
+        rttMonEchoAdminProbePakPriority     INTEGER,
+        rttMonEchoAdminOWNTPSyncTolAbs      Integer32,
+        rttMonEchoAdminOWNTPSyncTolPct      Integer32,
+        rttMonEchoAdminOWNTPSyncTolType     INTEGER,
+        rttMonEchoAdminCalledNumber         SnmpAdminString,
+        rttMonEchoAdminDetectPoint          RttMonOperation,
+        rttMonEchoAdminGKRegistration       TruthValue,
+        rttMonEchoAdminSourceVoicePort      DisplayString,
+        rttMonEchoAdminCallDuration         Integer32,
+        rttMonEchoAdminLSPReplyDscp         Integer32,
+        rttMonEchoAdminLSPNullShim          TruthValue,
+        rttMonEchoAdminTargetMPID           CfmMepid,
+        rttMonEchoAdminTargetDomainName     SnmpAdminString,
+        rttMonEchoAdminTargetVLAN           VlanId,
+        rttMonEchoAdminEthernetCOS          QosLayer2Cos,
+        rttMonEchoAdminLSPVccvID            Integer32,
+        rttMonEchoAdminTargetEVC            SnmpAdminString,
+        rttMonEchoAdminTargetMEPPort        TruthValue,
+        rttMonEchoAdminVideoTrafficProfile  SnmpAdminString,
+        rttMonEchoAdminDscp                 Dscp,
+        rttMonEchoAdminReserveDsp           INTEGER,
+        rttMonEchoAdminInputInterface       InterfaceIndexOrZero,
+        rttMonEchoAdminEmulateSourceAddress RttMonTargetAddress,
+        rttMonEchoAdminEmulateSourcePort    Integer32,
+        rttMonEchoAdminEmulateTargetAddress RttMonTargetAddress,
+        rttMonEchoAdminEmulateTargetPort    Integer32,
+        rttMonEchoAdminTargetMacAddress     MacAddress,
+        rttMonEchoAdminSourceMacAddress     MacAddress,
+        rttMonEchoAdminSourceMPID           CfmMepid,
+        rttMonEchoAdminEndPointListName     SnmpAdminString,
+        rttMonEchoAdminSSM                  TruthValue,
+        rttMonEchoAdminControlRetry         Unsigned32,
+        rttMonEchoAdminControlTimeout       Unsigned32,
+        rttMonEchoAdminIgmpTreeInit         Unsigned32
 }
 
 rttMonEchoAdminProtocol OBJECT-TYPE
@@ -1270,7 +1311,7 @@ rttMonEchoAdminTargetAddress OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 2 }
 
 rttMonEchoAdminPktDataRequestSize OBJECT-TYPE
-    SYNTAX          Integer32 (0..16384 )
+    SYNTAX          Integer32 (0..16384)
     UNITS           "octets"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1302,7 +1343,7 @@ rttMonEchoAdminPktDataRequestSize OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 3 }
 
 rttMonEchoAdminPktDataResponseSize OBJECT-TYPE
-    SYNTAX          Integer32 (0..16384 )
+    SYNTAX          Integer32 (0..16384)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1324,7 +1365,7 @@ rttMonEchoAdminPktDataResponseSize OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 4 }
 
 rttMonEchoAdminTargetPort OBJECT-TYPE
-    SYNTAX          Integer32 (0..65536 )
+    SYNTAX          Integer32 (0..65536)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1345,7 +1386,7 @@ rttMonEchoAdminSourceAddress OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 6 }
 
 rttMonEchoAdminSourcePort OBJECT-TYPE
-    SYNTAX          Integer32 (0..65536 )
+    SYNTAX          Integer32 (0..65536)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1370,7 +1411,7 @@ rttMonEchoAdminControlEnable OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 8 }
 
 rttMonEchoAdminTOS OBJECT-TYPE
-    SYNTAX          Integer32 (0..255 )
+    SYNTAX          Integer32 (0..255)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1461,7 +1502,7 @@ rttMonEchoAdminCache OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 16 }
 
 rttMonEchoAdminInterval OBJECT-TYPE
-    SYNTAX          Integer32 (0..60000 )
+    SYNTAX          Integer32 (0..60000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1604,7 +1645,7 @@ rttMonEchoAdminCodecType OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 27 }
 
 rttMonEchoAdminCodecInterval OBJECT-TYPE
-    SYNTAX          Integer32 (0..60000 )
+    SYNTAX          Integer32 (0..60000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1615,7 +1656,7 @@ rttMonEchoAdminCodecInterval OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 28 }
 
 rttMonEchoAdminCodecPayload OBJECT-TYPE
-    SYNTAX          Integer32 (0..16384 )
+    SYNTAX          Integer32 (0..16384)
     UNITS           "octets"
     MAX-ACCESS      read-create
     STATUS          current
@@ -1626,7 +1667,7 @@ rttMonEchoAdminCodecPayload OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 29 }
 
 rttMonEchoAdminCodecNumPackets OBJECT-TYPE
-    SYNTAX          Integer32 (0..60000 )
+    SYNTAX          Integer32 (0..60000)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1636,7 +1677,7 @@ rttMonEchoAdminCodecNumPackets OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 30 }
 
 rttMonEchoAdminICPIFAdvFactor OBJECT-TYPE
-    SYNTAX          Integer32 (0..20 )
+    SYNTAX          Integer32 (0..20)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1689,7 +1730,7 @@ rttMonEchoAdminLSPReplyMode OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 34 }
 
 rttMonEchoAdminLSPTTL OBJECT-TYPE
-    SYNTAX          Integer32 (0..255 )
+    SYNTAX          Integer32 (0..255)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1710,7 +1751,7 @@ rttMonEchoAdminLSPTTL OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 35 }
 
 rttMonEchoAdminLSPExp OBJECT-TYPE
-    SYNTAX          Integer32 (0..7 )
+    SYNTAX          Integer32 (0..7)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1766,7 +1807,7 @@ rttMonEchoAdminOWNTPSyncTolAbs OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 39 }
 
 rttMonEchoAdminOWNTPSyncTolPct OBJECT-TYPE
-    SYNTAX          Integer32 (0..100 )
+    SYNTAX          Integer32 (0..100)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1850,7 +1891,7 @@ rttMonEchoAdminCallDuration OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 46 }
 
 rttMonEchoAdminLSPReplyDscp OBJECT-TYPE
-    SYNTAX          Integer32 (0..63  | 255)
+    SYNTAX          Integer32 (0..63 | 255)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1909,7 +1950,7 @@ rttMonEchoAdminTargetVLAN OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 51 }
 
 rttMonEchoAdminEthernetCOS OBJECT-TYPE
-    SYNTAX          QosLayer2Cos
+    SYNTAX          QosLayer2Cos (0..7)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1920,7 +1961,7 @@ rttMonEchoAdminEthernetCOS OBJECT-TYPE
     ::= { rttMonEchoAdminEntry 52 }
 
 rttMonEchoAdminLSPVccvID OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1943,7 +1984,7 @@ rttMonEchoAdminTargetEVC OBJECT-TYPE
         It will be set to NULL for other types of operations."
     DEFVAL          { "" } 
     ::= { rttMonEchoAdminEntry 54 }
- 
+
 rttMonEchoAdminTargetMEPPort OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-create
@@ -1966,6 +2007,207 @@ rttMonEchoAdminVideoTrafficProfile OBJECT-TYPE
         only."
     DEFVAL          { "" } 
     ::= { rttMonEchoAdminEntry 56 }
+
+rttMonEchoAdminDscp OBJECT-TYPE
+    SYNTAX          Dscp
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the Differentiated Service Code Point
+        (DSCP) QoS marking in the generated synthetic packets.
+
+        Value - DiffServ Class
+            0 - BE (default)
+           10 - AF11
+           12 - AF12
+           14 - AF13
+           18 - AF21
+           20 - AF22
+           22 - AF23
+           26 - AF31
+           28 - AF32
+           30 - AF33
+           34 - AF41
+           36 - AF42
+           38 - AF43
+            8 - CS1
+           16 - CS2
+           24 - CS3
+           32 - CS4
+           40 - CS5
+           48 - CS6
+           56 - CS7
+           46 - EF"
+    REFERENCE       "RFC 2474, RFC 2780"
+    DEFVAL          { 0 } 
+    ::= { rttMonEchoAdminEntry 57 }
+
+rttMonEchoAdminReserveDsp OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        be(1), -- best effort
+                        gs(2), -- guaranteed service
+                        na(3) -- not applicable                        
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the video traffic generation source.
+
+        be : best effort using DSP but without reservation
+        gs : guaranteed service using DSP with reservation
+        na : not applicable for not using DSP"
+    DEFVAL          { na } 
+    ::= { rttMonEchoAdminEntry 58 }
+
+rttMonEchoAdminInputInterface OBJECT-TYPE
+    SYNTAX          InterfaceIndexOrZero
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the network input interface on the
+        sender router where the synthetic packets are received from the
+        emulated endpoint source. This is used for path congruence with
+        correct feature processing at the sender router.
+
+        The user can get the InterfaceIndex number from ifIndex object
+        by looking up in ifTable. In fact, it should be useful to first
+        get the entry by the augmented table ifXTable which has ifName
+        object which matches the interface name used on the router or
+        switch equipment console."
+    DEFVAL          { "" } 
+    ::= { rttMonEchoAdminEntry 59 }
+
+rttMonEchoAdminEmulateSourceAddress OBJECT-TYPE
+    SYNTAX          RttMonTargetAddress
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the IP address of the emulated source
+        from which the synthetic packets would be generated. If this
+        object is not specified, the emulated source IP address will by
+        default be the same as rttMonEchoAdminSourceAddress. This object
+        is applicable to video probes." 
+    ::= { rttMonEchoAdminEntry 60 }
+
+rttMonEchoAdminEmulateSourcePort OBJECT-TYPE
+    SYNTAX          Integer32 (0..65536)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the port number of the emulated source
+        from which the synthetic packets would be generated. If this
+        object is not specified, the emulated source port number will by
+        default be the same as rttMonEchoAdminSourcePort. This object is
+        applicable to video probes." 
+    ::= { rttMonEchoAdminEntry 61 }
+
+rttMonEchoAdminEmulateTargetAddress OBJECT-TYPE
+    SYNTAX          RttMonTargetAddress
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the IP address of the emulated target by
+        which the synthetic packets would be received. If this object is
+        not specified, the emulated target IP address will by default be
+        the same as rttMonEchoAdminTargetAddress. This object is
+        applicable to video probes." 
+    ::= { rttMonEchoAdminEntry 62 }
+
+rttMonEchoAdminEmulateTargetPort OBJECT-TYPE
+    SYNTAX          Integer32 (0..65536)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the port number of the emulated target
+        by which the synthetic packets would be received. If this object
+        is not specified, the emulated target port number will by
+        default be the same as rttMonEchoAdminTargetPort. This object is
+        applicable to video probes." 
+    ::= { rttMonEchoAdminEntry 63 }
+
+rttMonEchoAdminTargetMacAddress OBJECT-TYPE
+    SYNTAX          MacAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the MAC address of the target device.
+        This object is only applicable for Y.1731 operations. 
+        rttMonEchoAdminTargetMacAddress and rttMonEchoAdminTargetMPID
+        may not be used in conjunction." 
+    ::= { rttMonEchoAdminEntry 64 }
+
+rttMonEchoAdminSourceMacAddress OBJECT-TYPE
+    SYNTAX          MacAddress
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the MAC address of the source device.
+        This object is only applicable for Y.1731 operations. 
+        rttMonEchoAdminSourceMacAddress and rttMonEchoAdminSourceMPID
+        may not be used in conjunction." 
+    ::= { rttMonEchoAdminEntry 65 }
+
+rttMonEchoAdminSourceMPID OBJECT-TYPE
+    SYNTAX          CfmMepid
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the source maintenance point ID.  It is
+        only applicable to Y.1731 operation.  It will be set to zero for
+        other types of opearations.  rttMonEchoAdminSourceMPID and
+        rttMonEchoAdminSourceMacAddress may not be used in conjunction." 
+    ::= { rttMonEchoAdminEntry 66 }
+
+rttMonEchoAdminEndPointListName OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (1..64))
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the name of endpoint list which a probe
+        uses to generate operations."
+    DEFVAL          { "" } 
+    ::= { rttMonEchoAdminEntry 67 }
+
+rttMonEchoAdminSSM OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if Source Specific Multicast is to be
+        added. This object is applicable to multicast probe only."
+    DEFVAL          { false } 
+    ::= { rttMonEchoAdminEntry 68 }
+
+rttMonEchoAdminControlRetry OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..5)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the maximum number of retries for control message."
+    DEFVAL          { 3 } 
+    ::= { rttMonEchoAdminEntry 69 }
+
+rttMonEchoAdminControlTimeout OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..10000)
+    UNITS           "milliseconds"
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the duration before control message
+        timeout."
+    DEFVAL          { 5000 } 
+    ::= { rttMonEchoAdminEntry 70 }
+
+rttMonEchoAdminIgmpTreeInit OBJECT-TYPE
+    SYNTAX          Unsigned32 (0..10)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies number of packets to be sent for
+        multicast tree setup.  This object is applicable to multicast
+        probe only."
+    DEFVAL          { 0 } 
+    ::= { rttMonEchoAdminEntry 71 }
  
 
 -- FileIO Administration TABLE
@@ -1998,8 +2240,8 @@ rttMonFileIOAdminEntry OBJECT-TYPE
 
 RttMonFileIOAdminEntry ::= SEQUENCE {
         rttMonFileIOAdminFilePath DisplayString,
-        rttMonFileIOAdminSize     INTEGER ,
-        rttMonFileIOAdminAction   INTEGER 
+        rttMonFileIOAdminSize     INTEGER,
+        rttMonFileIOAdminAction   INTEGER
 }
 
 rttMonFileIOAdminFilePath OBJECT-TYPE
@@ -2137,7 +2379,7 @@ RttMonScheduleAdminEntry ::= SEQUENCE {
 }
 
 rttMonScheduleAdminRttLife OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -2196,7 +2438,7 @@ rttMonScheduleAdminRttStartTime OBJECT-TYPE
     ::= { rttMonScheduleAdminEntry 2 }
 
 rttMonScheduleAdminConceptRowAgeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..2073600 )
+    SYNTAX          Integer32 (0..2073600)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -2294,11 +2536,11 @@ rttMonReactAdminEntry OBJECT-TYPE
 RttMonReactAdminEntry ::= SEQUENCE {
         rttMonReactAdminConnectionEnable  TruthValue,
         rttMonReactAdminTimeoutEnable     TruthValue,
-        rttMonReactAdminThresholdType     INTEGER ,
+        rttMonReactAdminThresholdType     INTEGER,
         rttMonReactAdminThresholdFalling  Integer32,
         rttMonReactAdminThresholdCount    Integer32,
         rttMonReactAdminThresholdCount2   Integer32,
-        rttMonReactAdminActionType        INTEGER ,
+        rttMonReactAdminActionType        INTEGER,
         rttMonReactAdminVerifyErrorEnable TruthValue
 }
 
@@ -2404,7 +2646,7 @@ rttMonReactAdminThresholdType OBJECT-TYPE
     ::= { rttMonReactAdminEntry 3 }
 
 rttMonReactAdminThresholdFalling OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          deprecated
@@ -2417,7 +2659,7 @@ rttMonReactAdminThresholdFalling OBJECT-TYPE
     ::= { rttMonReactAdminEntry 4 }
 
 rttMonReactAdminThresholdCount OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     MAX-ACCESS      read-create
     STATUS          deprecated
     DESCRIPTION
@@ -2427,7 +2669,7 @@ rttMonReactAdminThresholdCount OBJECT-TYPE
     ::= { rttMonReactAdminEntry 5 }
 
 rttMonReactAdminThresholdCount2 OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     MAX-ACCESS      read-create
     STATUS          deprecated
     DESCRIPTION
@@ -2543,7 +2785,7 @@ RttMonStatisticsAdminEntry ::= SEQUENCE {
 }
 
 rttMonStatisticsAdminNumHourGroups OBJECT-TYPE
-    SYNTAX          Integer32 (0..25 )
+    SYNTAX          Integer32 (0..25)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2568,7 +2810,7 @@ rttMonStatisticsAdminNumHourGroups OBJECT-TYPE
     ::= { rttMonStatisticsAdminEntry 1 }
 
 rttMonStatisticsAdminNumPaths OBJECT-TYPE
-    SYNTAX          Integer32 (1..128 )
+    SYNTAX          Integer32 (1..128)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2590,7 +2832,7 @@ rttMonStatisticsAdminNumPaths OBJECT-TYPE
     ::= { rttMonStatisticsAdminEntry 2 }
 
 rttMonStatisticsAdminNumHops OBJECT-TYPE
-    SYNTAX          Integer32 (1..30 )
+    SYNTAX          Integer32 (1..30)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2608,7 +2850,7 @@ rttMonStatisticsAdminNumHops OBJECT-TYPE
     ::= { rttMonStatisticsAdminEntry 3 }
 
 rttMonStatisticsAdminNumDistBuckets OBJECT-TYPE
-    SYNTAX          Integer32 (1..20 )
+    SYNTAX          Integer32 (1..20)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2626,7 +2868,7 @@ rttMonStatisticsAdminNumDistBuckets OBJECT-TYPE
     ::= { rttMonStatisticsAdminEntry 4 }
 
 rttMonStatisticsAdminDistInterval OBJECT-TYPE
-    SYNTAX          Integer32 (1..100 )
+    SYNTAX          Integer32 (1..100)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -2711,11 +2953,11 @@ RttMonHistoryAdminEntry ::= SEQUENCE {
         rttMonHistoryAdminNumLives   Integer32,
         rttMonHistoryAdminNumBuckets Integer32,
         rttMonHistoryAdminNumSamples Integer32,
-        rttMonHistoryAdminFilter     INTEGER 
+        rttMonHistoryAdminFilter     INTEGER
 }
 
 rttMonHistoryAdminNumLives OBJECT-TYPE
-    SYNTAX          Integer32 (0..2 )
+    SYNTAX          Integer32 (0..2)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2733,7 +2975,7 @@ rttMonHistoryAdminNumLives OBJECT-TYPE
     ::= { rttMonHistoryAdminEntry 1 }
 
 rttMonHistoryAdminNumBuckets OBJECT-TYPE
-    SYNTAX          Integer32 (1..60 )
+    SYNTAX          Integer32 (1..60)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2750,7 +2992,7 @@ rttMonHistoryAdminNumBuckets OBJECT-TYPE
     ::= { rttMonHistoryAdminEntry 2 }
 
 rttMonHistoryAdminNumSamples OBJECT-TYPE
-    SYNTAX          Integer32 (1..30 )
+    SYNTAX          Integer32 (1..30)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -2821,7 +3063,7 @@ RttMonCtrlOperEntry ::= SEQUENCE {
         rttMonCtrlOperOverThresholdOccurred  TruthValue,
         rttMonCtrlOperNumRtts                Integer32,
         rttMonCtrlOperRttLife                Integer32,
-        rttMonCtrlOperState                  INTEGER ,
+        rttMonCtrlOperState                  INTEGER,
         rttMonCtrlOperVerifyErrorOccurred    TruthValue
 }
 
@@ -2977,7 +3219,7 @@ rttMonCtrlOperOverThresholdOccurred OBJECT-TYPE
     ::= { rttMonCtrlOperEntry 7 }
 
 rttMonCtrlOperNumRtts OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -2998,7 +3240,7 @@ rttMonCtrlOperNumRtts OBJECT-TYPE
     ::= { rttMonCtrlOperEntry 8 }
 
 rttMonCtrlOperRttLife OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "seconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -3290,7 +3532,7 @@ rttMonLatestRttOperSense OBJECT-TYPE
     ::= { rttMonLatestRttOperEntry 2 }
 
 rttMonLatestRttOperApplSpecificSense OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3518,7 +3760,7 @@ RttMonLatestJitterOperEntry ::= SEQUENCE {
         rttMonLatestJitterOperAvgDSJ              Gauge32,
         rttMonLatestJitterOperOWAvgSD             Gauge32,
         rttMonLatestJitterOperOWAvgDS             Gauge32,
-        rttMonLatestJitterOperNTPState            INTEGER ,
+        rttMonLatestJitterOperNTPState            INTEGER,
         rttMonLatestJitterOperUnSyncRTs           Counter32,
         rttMonLatestJitterOperRTTSumHigh          Gauge32,
         rttMonLatestJitterOperRTTSum2High         Gauge32,
@@ -3898,7 +4140,7 @@ rttMonLatestJitterOperNumOfOW OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 41 }
 
 rttMonLatestJitterOperMOS OBJECT-TYPE
-    SYNTAX          Gauge32 (0 |  100..500 )
+    SYNTAX          Gauge32 (0 | 100..500)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3910,7 +4152,7 @@ rttMonLatestJitterOperMOS OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 42 }
 
 rttMonLatestJitterOperICPIF OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3918,7 +4160,7 @@ rttMonLatestJitterOperICPIF OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 43 }
 
 rttMonLatestJitterOperIAJOut OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3928,7 +4170,7 @@ rttMonLatestJitterOperIAJOut OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 44 }
 
 rttMonLatestJitterOperIAJIn OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3938,7 +4180,7 @@ rttMonLatestJitterOperIAJIn OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 45 }
 
 rttMonLatestJitterOperAvgJitter OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3947,7 +4189,7 @@ rttMonLatestJitterOperAvgJitter OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 46 }
 
 rttMonLatestJitterOperAvgSDJ OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3956,7 +4198,7 @@ rttMonLatestJitterOperAvgSDJ OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 47 }
 
 rttMonLatestJitterOperAvgDSJ OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3965,7 +4207,7 @@ rttMonLatestJitterOperAvgDSJ OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 48 }
 
 rttMonLatestJitterOperOWAvgSD OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -3973,7 +4215,7 @@ rttMonLatestJitterOperOWAvgSD OBJECT-TYPE
     ::= { rttMonLatestJitterOperEntry 49 }
 
 rttMonLatestJitterOperOWAvgDS OBJECT-TYPE
-    SYNTAX          Gauge32 (0..2147483647 )
+    SYNTAX          Gauge32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -4129,7 +4371,7 @@ RttMonReactTriggerAdminEntry ::= SEQUENCE {
 }
 
 rttMonReactTriggerAdminRttMonCtrlAdminIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -4179,7 +4421,7 @@ rttMonReactTriggerOperEntry OBJECT-TYPE
     ::= { rttMonReactTriggerOperTable 1 }
 
 RttMonReactTriggerOperEntry ::= SEQUENCE {
-        rttMonReactTriggerOperState INTEGER 
+        rttMonReactTriggerOperState INTEGER
 }
 
 rttMonReactTriggerOperState OBJECT-TYPE
@@ -4246,7 +4488,7 @@ RttMonEchoPathAdminEntry ::= SEQUENCE {
 }
 
 rttMonEchoPathAdminHopIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..8 )
+    SYNTAX          Integer32 (1..8)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -4312,7 +4554,7 @@ RttMonGrpScheduleAdminEntry ::= SEQUENCE {
 }
 
 rttMonGrpScheduleAdminIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -4349,7 +4591,7 @@ rttMonGrpScheduleAdminProbes OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 2 }
 
 rttMonGrpScheduleAdminPeriod OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4360,7 +4602,7 @@ rttMonGrpScheduleAdminPeriod OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 3 }
 
 rttMonGrpScheduleAdminFrequency OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4375,7 +4617,7 @@ rttMonGrpScheduleAdminFrequency OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 4 }
 
 rttMonGrpScheduleAdminLife OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4395,7 +4637,7 @@ rttMonGrpScheduleAdminLife OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 5 }
 
 rttMonGrpScheduleAdminAgeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..2073600 )
+    SYNTAX          Integer32 (0..2073600)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4442,7 +4684,7 @@ rttMonGrpScheduleAdminStatus OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 7 }
 
 rttMonGrpScheduleAdminFreqMax OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4457,7 +4699,7 @@ rttMonGrpScheduleAdminFreqMax OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 8 }
 
 rttMonGrpScheduleAdminFreqMin OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4474,7 +4716,7 @@ rttMonGrpScheduleAdminFreqMin OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminEntry 9 }
 
 rttMonGrpScheduleAdminStartTime OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800 )
+    SYNTAX          Integer32 (0..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4575,7 +4817,7 @@ RttMplsVpnMonCtrlEntry ::= SEQUENCE {
 }
 
 rttMplsVpnMonCtrlIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -4651,7 +4893,7 @@ rttMplsVpnMonCtrlTag OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 4 }
 
 rttMplsVpnMonCtrlThreshold OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4668,7 +4910,7 @@ rttMplsVpnMonCtrlThreshold OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 5 }
 
 rttMplsVpnMonCtrlTimeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800000 )
+    SYNTAX          Integer32 (0..604800000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4685,7 +4927,7 @@ rttMplsVpnMonCtrlTimeout OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 6 }
 
 rttMplsVpnMonCtrlScanInterval OBJECT-TYPE
-    SYNTAX          Integer32 (1..70560 )
+    SYNTAX          Integer32 (1..70560)
     UNITS           "minutes"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4702,7 +4944,7 @@ rttMplsVpnMonCtrlScanInterval OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 7 }
 
 rttMplsVpnMonCtrlDelScanFactor OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -4720,7 +4962,7 @@ rttMplsVpnMonCtrlDelScanFactor OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 8 }
 
 rttMplsVpnMonCtrlEXP OBJECT-TYPE
-    SYNTAX          Integer32 (0..7 )
+    SYNTAX          Integer32 (0..7)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -4730,7 +4972,7 @@ rttMplsVpnMonCtrlEXP OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 9 }
 
 rttMplsVpnMonCtrlRequestSize OBJECT-TYPE
-    SYNTAX          Integer32 (0..16384 )
+    SYNTAX          Integer32 (0..16384)
     UNITS           "octets"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4892,7 +5134,7 @@ rttMplsVpnMonCtrlLpdGrpList OBJECT-TYPE
     ::= { rttMplsVpnMonCtrlEntry 16 }
 
 rttMplsVpnMonCtrlLpdCompTime OBJECT-TYPE
-    SYNTAX          Integer32 (1..65535 )
+    SYNTAX          Integer32 (1..65535)
     UNITS           "minutes"
     MAX-ACCESS      read-only
     STATUS          current
@@ -4934,7 +5176,7 @@ RttMplsVpnMonTypeEntry ::= SEQUENCE {
         rttMplsVpnMonTypeInterval        Integer32,
         rttMplsVpnMonTypeNumPackets      Integer32,
         rttMplsVpnMonTypeDestPort        Integer32,
-        rttMplsVpnMonTypeSecFreqType     INTEGER ,
+        rttMplsVpnMonTypeSecFreqType     INTEGER,
         rttMplsVpnMonTypeSecFreqValue    Integer32,
         rttMplsVpnMonTypeLspSelector     OCTET STRING,
         rttMplsVpnMonTypeLSPReplyMode    RttMonLSPPingReplyMode,
@@ -4950,7 +5192,7 @@ RttMplsVpnMonTypeEntry ::= SEQUENCE {
 }
 
 rttMplsVpnMonTypeInterval OBJECT-TYPE
-    SYNTAX          Integer32 (1..60000 )
+    SYNTAX          Integer32 (1..60000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -4965,7 +5207,7 @@ rttMplsVpnMonTypeInterval OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 1 }
 
 rttMplsVpnMonTypeNumPackets OBJECT-TYPE
-    SYNTAX          Integer32 (1..60000 )
+    SYNTAX          Integer32 (1..60000)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -4979,7 +5221,7 @@ rttMplsVpnMonTypeNumPackets OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 2 }
 
 rttMplsVpnMonTypeDestPort OBJECT-TYPE
-    SYNTAX          Integer32 (1..65536 )
+    SYNTAX          Integer32 (1..65536)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5057,7 +5299,7 @@ rttMplsVpnMonTypeSecFreqType OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 4 }
 
 rttMplsVpnMonTypeSecFreqValue OBJECT-TYPE
-    SYNTAX          Integer32 (1..604800 )
+    SYNTAX          Integer32 (1..604800)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5105,7 +5347,7 @@ rttMplsVpnMonTypeLSPReplyMode OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 7 }
 
 rttMplsVpnMonTypeLSPTTL OBJECT-TYPE
-    SYNTAX          Integer32 (0..255 )
+    SYNTAX          Integer32 (0..255)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5125,7 +5367,7 @@ rttMplsVpnMonTypeLSPTTL OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 8 }
 
 rttMplsVpnMonTypeLSPReplyDscp OBJECT-TYPE
-    SYNTAX          Integer32 (0..63  | 255)
+    SYNTAX          Integer32 (0..63 | 255)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5140,7 +5382,7 @@ rttMplsVpnMonTypeLSPReplyDscp OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 9 }
 
 rttMplsVpnMonTypeLpdMaxSessions OBJECT-TYPE
-    SYNTAX          Integer32 (1..15 )
+    SYNTAX          Integer32 (1..15)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5157,7 +5399,7 @@ rttMplsVpnMonTypeLpdMaxSessions OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 10 }
 
 rttMplsVpnMonTypeLpdSessTimeout OBJECT-TYPE
-    SYNTAX          Integer32 (1..900 )
+    SYNTAX          Integer32 (1..900)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5171,7 +5413,7 @@ rttMplsVpnMonTypeLpdSessTimeout OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 11 }
 
 rttMplsVpnMonTypeLpdEchoTimeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..604800000 )
+    SYNTAX          Integer32 (0..604800000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5183,7 +5425,7 @@ rttMplsVpnMonTypeLpdEchoTimeout OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 12 }
 
 rttMplsVpnMonTypeLpdEchoInterval OBJECT-TYPE
-    SYNTAX          Integer32 (0..3600000 )
+    SYNTAX          Integer32 (0..3600000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5210,7 +5452,7 @@ rttMplsVpnMonTypeLpdEchoNullShim OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 14 }
 
 rttMplsVpnMonTypeLpdScanPeriod OBJECT-TYPE
-    SYNTAX          Integer32 (0..7200 )
+    SYNTAX          Integer32 (0..7200)
     UNITS           "minutes"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5235,7 +5477,7 @@ rttMplsVpnMonTypeLpdScanPeriod OBJECT-TYPE
     ::= { rttMplsVpnMonTypeEntry 15 }
 
 rttMplsVpnMonTypeLpdStatHours OBJECT-TYPE
-    SYNTAX          Integer32 (0..2 )
+    SYNTAX          Integer32 (0..2)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5311,7 +5553,7 @@ rttMplsVpnMonScheduleRttStartTime OBJECT-TYPE
     ::= { rttMplsVpnMonScheduleEntry 1 }
 
 rttMplsVpnMonSchedulePeriod OBJECT-TYPE
-    SYNTAX          Integer32 (1..604800 )
+    SYNTAX          Integer32 (1..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5324,7 +5566,7 @@ rttMplsVpnMonSchedulePeriod OBJECT-TYPE
     ::= { rttMplsVpnMonScheduleEntry 2 }
 
 rttMplsVpnMonScheduleFrequency OBJECT-TYPE
-    SYNTAX          Integer32 (1..604800 )
+    SYNTAX          Integer32 (1..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5366,10 +5608,10 @@ rttMplsVpnMonReactEntry OBJECT-TYPE
 RttMplsVpnMonReactEntry ::= SEQUENCE {
         rttMplsVpnMonReactConnectionEnable TruthValue,
         rttMplsVpnMonReactTimeoutEnable    TruthValue,
-        rttMplsVpnMonReactThresholdType    INTEGER ,
+        rttMplsVpnMonReactThresholdType    INTEGER,
         rttMplsVpnMonReactThresholdCount   Integer32,
-        rttMplsVpnMonReactActionType       INTEGER ,
-        rttMplsVpnMonReactLpdNotifyType    INTEGER ,
+        rttMplsVpnMonReactActionType       INTEGER,
+        rttMplsVpnMonReactLpdNotifyType    INTEGER,
         rttMplsVpnMonReactLpdRetryCount    Integer32
 }
 
@@ -5423,7 +5665,7 @@ rttMplsVpnMonReactThresholdType OBJECT-TYPE
     ::= { rttMplsVpnMonReactEntry 3 }
 
 rttMplsVpnMonReactThresholdCount OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5496,7 +5738,7 @@ rttMplsVpnMonReactLpdNotifyType OBJECT-TYPE
     ::= { rttMplsVpnMonReactEntry 6 }
 
 rttMplsVpnMonReactLpdRetryCount OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     UNITS           "attempts"
     MAX-ACCESS      read-create
     STATUS          current
@@ -5575,8 +5817,8 @@ rttMonReactEntry OBJECT-TYPE
 RttMonReactEntry ::= SEQUENCE {
         rttMonReactConfigIndex      Integer32,
         rttMonReactVar              RttMonReactVar,
-        rttMonReactThresholdType    INTEGER ,
-        rttMonReactActionType       INTEGER ,
+        rttMonReactThresholdType    INTEGER,
+        rttMonReactActionType       INTEGER,
         rttMonReactThresholdRising  Integer32,
         rttMonReactThresholdFalling Integer32,
         rttMonReactThresholdCountX  Integer32,
@@ -5587,7 +5829,7 @@ RttMonReactEntry ::= SEQUENCE {
 }
 
 rttMonReactConfigIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -5730,7 +5972,7 @@ rttMonReactActionType OBJECT-TYPE
     ::= { rttMonReactEntry 4 }
 
 rttMonReactThresholdRising OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5774,7 +6016,7 @@ rttMonReactThresholdRising OBJECT-TYPE
     ::= { rttMonReactEntry 5 }
 
 rttMonReactThresholdFalling OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5821,7 +6063,7 @@ rttMonReactThresholdFalling OBJECT-TYPE
     ::= { rttMonReactEntry 6 }
 
 rttMonReactThresholdCountX OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5843,7 +6085,7 @@ rttMonReactThresholdCountX OBJECT-TYPE
     ::= { rttMonReactEntry 7 }
 
 rttMonReactThresholdCountY OBJECT-TYPE
-    SYNTAX          Integer32 (1..16 )
+    SYNTAX          Integer32 (1..16)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -5856,7 +6098,7 @@ rttMonReactThresholdCountY OBJECT-TYPE
     ::= { rttMonReactEntry 8 }
 
 rttMonReactValue OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -5932,6 +6174,74 @@ rttMonReactStatus OBJECT-TYPE
         for the probes would exist. The reaction configuration for the
         probe is removed." 
     ::= { rttMonReactEntry 11 }
+ 
+
+-- Generated Oper Table
+
+rttMonGeneratedOperTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF RttMonGeneratedOperEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table contains information about the generated
+        operation id as part of a parent IP SLA operation. The parent
+        operation id is pseudo-random number, selected by the management 
+        station based on an operation started by the management 
+        station,when creating a row via the rttMonCtrlAdminStatus
+        object in the rttMonCtrlAdminTable table."
+    ::= { rttMonCtrl 20 }
+
+rttMonGeneratedOperEntry OBJECT-TYPE
+    SYNTAX          RttMonGeneratedOperEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry in the Generated Oper table corresponding to
+        a child or generated operation as part of a parent
+        IP SLA operation."
+    INDEX           {
+                        rttMonCtrlAdminIndex,
+                        rttMonGeneratedOperRespIpAddrType,
+                        rttMonGeneratedOperRespIpAddr
+                    } 
+    ::= { rttMonGeneratedOperTable 1 }
+
+RttMonGeneratedOperEntry ::= SEQUENCE {
+        rttMonGeneratedOperRespIpAddrType InetAddressType,
+        rttMonGeneratedOperRespIpAddr     InetAddress,
+        rttMonGeneratedOperCtrlAdminIndex Unsigned32
+}
+
+rttMonGeneratedOperRespIpAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The type of Internet address, IPv4 or IPv6, of a responder
+        for an IP SLA operation." 
+    ::= { rttMonGeneratedOperEntry 1 }
+
+rttMonGeneratedOperRespIpAddr OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The Internet address of a responder for IP SLA
+        operation. The type of this address is determined
+        by the value of rttMonGeneratedOperRespIpAddrType." 
+    ::= { rttMonGeneratedOperEntry 2 }
+
+rttMonGeneratedOperCtrlAdminIndex OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..2147483647)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This is a pseudo-random number, auto-generated based
+        to identify a child operation based on a parent 
+        operation started by the management station,when 
+        creating a row via the rttMonCtrlAdminStatus
+        object." 
+    ::= { rttMonGeneratedOperEntry 3 }
  
 
 -- Statistics Capture Table
@@ -6087,7 +6397,7 @@ rttMonStatsCaptureStartTimeIndex OBJECT-TYPE
     ::= { rttMonStatsCaptureEntry 1 }
 
 rttMonStatsCapturePathIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..128 )
+    SYNTAX          Integer32 (1..128)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -6116,7 +6426,7 @@ rttMonStatsCapturePathIndex OBJECT-TYPE
     ::= { rttMonStatsCaptureEntry 2 }
 
 rttMonStatsCaptureHopIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..30 )
+    SYNTAX          Integer32 (1..30)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -6140,7 +6450,7 @@ rttMonStatsCaptureHopIndex OBJECT-TYPE
     ::= { rttMonStatsCaptureEntry 3 }
 
 rttMonStatsCaptureDistIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..20 )
+    SYNTAX          Integer32 (1..20)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -6162,7 +6472,7 @@ rttMonStatsCaptureDistIndex OBJECT-TYPE
     ::= { rttMonStatsCaptureEntry 4 }
 
 rttMonStatsCaptureCompletions OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6175,7 +6485,7 @@ rttMonStatsCaptureCompletions OBJECT-TYPE
     ::= { rttMonStatsCaptureEntry 5 }
 
 rttMonStatsCaptureOverThresholds OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6300,11 +6610,13 @@ RttMonStatsCollectEntry ::= SEQUENCE {
         rttMonStatsCollectDrops          Integer32,
         rttMonStatsCollectSequenceErrors Integer32,
         rttMonStatsCollectVerifyErrors   Integer32,
-        rttMonStatsCollectAddress        RttMonTargetAddress
+        rttMonStatsCollectAddress        RttMonTargetAddress,
+        rttMonControlEnableErrors        Integer32,
+        rttMonStatsRetrieveErrors        Integer32
 }
 
 rttMonStatsCollectNumDisconnects OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6337,7 +6649,7 @@ rttMonStatsCollectNumDisconnects OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 1 }
 
 rttMonStatsCollectTimeouts OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6356,7 +6668,7 @@ rttMonStatsCollectTimeouts OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 2 }
 
 rttMonStatsCollectBusies OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6390,7 +6702,7 @@ rttMonStatsCollectBusies OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 3 }
 
 rttMonStatsCollectNoConnections OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6417,7 +6729,7 @@ rttMonStatsCollectNoConnections OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 4 }
 
 rttMonStatsCollectDrops OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6443,7 +6755,7 @@ rttMonStatsCollectDrops OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 5 }
 
 rttMonStatsCollectSequenceErrors OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6469,7 +6781,7 @@ rttMonStatsCollectSequenceErrors OBJECT-TYPE
     ::= { rttMonStatsCollectEntry 6 }
 
 rttMonStatsCollectVerifyErrors OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -6508,6 +6820,32 @@ rttMonStatsCollectAddress OBJECT-TYPE
         of RTT operation selected, as specified by the 
         rttMonEchoAdminProtocol object." 
     ::= { rttMonStatsCollectEntry 8 }
+
+rttMonControlEnableErrors OBJECT-TYPE
+    SYNTAX          Integer32 (0..2147483647)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of occasions when control enable request failed.
+        Currently it is used for multicast operation type.
+
+        This object has the special behavior as defined by the
+        ROLLOVER NOTE in the DESCRIPTION of the ciscoRttMonMIB
+        object." 
+    ::= { rttMonStatsCollectEntry 9 }
+
+rttMonStatsRetrieveErrors OBJECT-TYPE
+    SYNTAX          Integer32 (0..2147483647)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of occasions when stats retrieval request failed.
+        Currently it is used for multicast operation type.
+
+        This object has the special behavior as defined by the
+        ROLLOVER NOTE in the DESCRIPTION of the ciscoRttMonMIB
+        object." 
+    ::= { rttMonStatsCollectEntry 10 }
  
 
 -- Statistics Totals Table
@@ -6562,7 +6900,7 @@ rttMonStatsTotalsElapsedTime OBJECT-TYPE
     ::= { rttMonStatsTotalsEntry 1 }
 
 rttMonStatsTotalsInitiations OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -7398,7 +7736,7 @@ rttMonJitterStatsOWMaxDSNew OBJECT-TYPE
     ::= { rttMonJitterStatsEntry 55 }
 
 rttMonJitterStatsMinOfMOS OBJECT-TYPE
-    SYNTAX          Gauge32 (0 |  100..500 )
+    SYNTAX          Gauge32 (0 | 100..500)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -7411,7 +7749,7 @@ rttMonJitterStatsMinOfMOS OBJECT-TYPE
     ::= { rttMonJitterStatsEntry 56 }
 
 rttMonJitterStatsMaxOfMOS OBJECT-TYPE
-    SYNTAX          Gauge32 (0 |  100..500 )
+    SYNTAX          Gauge32 (0 | 100..500)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -7618,7 +7956,7 @@ RttMonLpdGrpStatsEntry ::= SEQUENCE {
 }
 
 rttMonLpdGrpStatsGroupIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -7652,7 +7990,7 @@ rttMonLpdGrpStatsTargetPE OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 3 }
 
 rttMonLpdGrpStatsNumOfPass OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "passes"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7668,7 +8006,7 @@ rttMonLpdGrpStatsNumOfPass OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 4 }
 
 rttMonLpdGrpStatsNumOfFail OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "failures"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7684,7 +8022,7 @@ rttMonLpdGrpStatsNumOfFail OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 5 }
 
 rttMonLpdGrpStatsNumOfTimeout OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "timeouts"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7700,7 +8038,7 @@ rttMonLpdGrpStatsNumOfTimeout OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 6 }
 
 rttMonLpdGrpStatsAvgRTT OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7711,7 +8049,7 @@ rttMonLpdGrpStatsAvgRTT OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 7 }
 
 rttMonLpdGrpStatsMinRTT OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7723,7 +8061,7 @@ rttMonLpdGrpStatsMinRTT OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 8 }
 
 rttMonLpdGrpStatsMaxRTT OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7735,7 +8073,7 @@ rttMonLpdGrpStatsMaxRTT OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 9 }
 
 rttMonLpdGrpStatsMinNumPaths OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "paths"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7747,7 +8085,7 @@ rttMonLpdGrpStatsMinNumPaths OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 10 }
 
 rttMonLpdGrpStatsMaxNumPaths OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     UNITS           "paths"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7799,7 +8137,7 @@ rttMonLpdGrpStatsLPDFailCause OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 14 }
 
 rttMonLpdGrpStatsLPDCompTime OBJECT-TYPE
-    SYNTAX          Integer32 (0..65535 )
+    SYNTAX          Integer32 (0..65535)
     UNITS           "seconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7835,7 +8173,7 @@ rttMonLpdGrpStatsGroupStatus OBJECT-TYPE
     ::= { rttMonLpdGrpStatsEntry 16 }
 
 rttMonLpdGrpStatsGroupProbeIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     UNITS           "identifier"
     MAX-ACCESS      read-only
     STATUS          current
@@ -7992,7 +8330,7 @@ RttMonHistoryCollectionEntry ::= SEQUENCE {
 }
 
 rttMonHistoryCollectionLifeIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -8007,7 +8345,7 @@ rttMonHistoryCollectionLifeIndex OBJECT-TYPE
     ::= { rttMonHistoryCollectionEntry 1 }
 
 rttMonHistoryCollectionBucketIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..2147483647 )
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -8028,7 +8366,7 @@ rttMonHistoryCollectionBucketIndex OBJECT-TYPE
     ::= { rttMonHistoryCollectionEntry 2 }
 
 rttMonHistoryCollectionSampleIndex OBJECT-TYPE
-    SYNTAX          Integer32 (1..512 )
+    SYNTAX          Integer32 (1..512)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -8106,7 +8444,7 @@ rttMonHistoryCollectionSense OBJECT-TYPE
     ::= { rttMonHistoryCollectionEntry 7 }
 
 rttMonHistoryCollectionApplSpecificSense OBJECT-TYPE
-    SYNTAX          Integer32 (0..2147483647 )
+    SYNTAX          Integer32 (0..2147483647)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -8746,12 +9084,12 @@ ciscoRttMonMibComplianceRev17 MODULE-COMPLIANCE
     ::= { ciscoRttMonMibCompliances 17 }
 
 ciscoRttMonMibComplianceRev18 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for new MIB extensions for
         supporting high order 32 bit of RTT and OW statistics
         for jitter probe."
-    MODULE          
+    MODULE          -- this module
     MANDATORY-GROUPS {
                         ciscoStatsGroup,
                         ciscoHistoryGroup,
@@ -8835,6 +9173,216 @@ ciscoRttMonMibComplianceRev18 MODULE-COMPLIANCE
         "ciscoCtrlGroupRev20 is only mandatory for the devices
         that support Video operations."
     ::= { ciscoRttMonMibCompliances 18 }
+
+ciscoRttMonMibComplianceRev19 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for new MIB extensions for
+        supporting high order 32 bit of RTT and OW statistics
+        for jitter probe."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoStatsGroup,
+                        ciscoHistoryGroup,
+                        ciscoCtrlGroupRev1,
+                        ciscoCtrlGroupRev2,
+                        ciscoLatestOperGroupRev1,
+                        ciscoStatsGroupRev1,
+                        ciscoStatsGroupRev3,
+                        ciscoStatsGroupRev4,
+                        ciscoStatsGroupRev5,
+                        ciscoApplGroupRev2,
+                        ciscoApplGroupRev3,
+                        ciscoCtrlGroupRev4,
+                        ciscoCtrlGroupRev6,
+                        ciscoCtrlGroupRev7,
+                        ciscoCtrlGroupRev10,
+                        ciscoCtrlGroupRev11,
+                        ciscoCtrlGroupRev14,
+                        ciscoNotificationGroupRev1,
+                        ciscoCtrlGroupRev9,
+                        ciscoStatsGroupRev8
+                    }
+
+    GROUP           ciscoCtrlGroupRev19
+    DESCRIPTION
+        "ciscoCtrlGroupRev19 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection."
+
+    GROUP           ciscoCtrlGroupRev18
+    DESCRIPTION
+        "ciscoCtrlGroupRev18 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection ."
+
+    GROUP           ciscoCtrlGroupRev17
+    DESCRIPTION
+        "ciscoCtrlGroupRev17 is only mandatory for the devices
+        that support IP SLA auto measure feature."
+
+    GROUP           ciscoCtrlGroupRev16
+    DESCRIPTION
+        "ciscoCtrlGroupRev16 is only mandatory for the devices
+        that support LSP Ping over pseudowire."
+
+    GROUP           ciscoCtrlGroupRev15
+    DESCRIPTION
+        "ciscoCtrlGroupRev15 is only mandatory for the devices
+        that support Ethernet CFM."
+
+    GROUP           ciscoCtrlGroupRev8
+    DESCRIPTION
+        "ciscoCtrlGroupRev8 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoStatsGroupRev7
+    DESCRIPTION
+        "ciscoStatsGroupRev7 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev13
+    DESCRIPTION
+        "ciscoCtrlGroupRev13 is only mandatory for the device
+        that support MPLS."
+
+    GROUP           ciscoNotificationGroupRev2
+    DESCRIPTION
+        "ciscoNotificationGroupRev2 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoApplGroupRev4
+    DESCRIPTION
+        "ciscoApplGroupRev4 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev12
+    DESCRIPTION
+        "ciscoCtrlGroupRev12 is only mandatory for the devices
+        that support voice."
+
+    GROUP           ciscoCtrlGroupRev20
+    DESCRIPTION
+        "ciscoCtrlGroupRev20 is only mandatory for the devices
+        that support Video operations."
+
+    GROUP           ciscoCtrlGroupRev21
+    DESCRIPTION
+        "ciscoCtrlGroupRev21 is only mandatory for video operation with
+        DSCP, DSP reservation, and source interface support."
+
+    GROUP           ciscoCtrlGroupRev22
+    DESCRIPTION
+        "ciscoCtrlGroupRev22 is optional for video probes using emulate
+        source address, port, target address, and port."
+    ::= { ciscoRttMonMibCompliances 19 }
+
+ciscoRttMonMibComplianceRev20 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "This compliance statement specifies the minimal
+        requirements an implementation must meet in order to 
+        claim full compliance with the definition of the CISCO-
+        RTTMON-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoStatsGroup,
+                        ciscoHistoryGroup,
+                        ciscoCtrlGroupRev1,
+                        ciscoCtrlGroupRev2,
+                        ciscoLatestOperGroupRev1,
+                        ciscoStatsGroupRev1,
+                        ciscoStatsGroupRev3,
+                        ciscoStatsGroupRev4,
+                        ciscoStatsGroupRev5,
+                        ciscoApplGroupRev2,
+                        ciscoApplGroupRev3,
+                        ciscoCtrlGroupRev4,
+                        ciscoCtrlGroupRev6,
+                        ciscoCtrlGroupRev7,
+                        ciscoCtrlGroupRev10,
+                        ciscoCtrlGroupRev11,
+                        ciscoCtrlGroupRev14,
+                        ciscoNotificationGroupRev1,
+                        ciscoCtrlGroupRev9,
+                        ciscoStatsGroupRev8,
+                        ciscoCtrlGroupRev24,
+                        ciscoCtrlGroupRev25,
+                        ciscoStatsGroupRev2
+                    }
+
+    GROUP           ciscoCtrlGroupRev19
+    DESCRIPTION
+        "ciscoCtrlGroupRev19 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection."
+
+    GROUP           ciscoCtrlGroupRev18
+    DESCRIPTION
+        "ciscoCtrlGroupRev18 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection ."
+
+    GROUP           ciscoCtrlGroupRev17
+    DESCRIPTION
+        "ciscoCtrlGroupRev17 is only mandatory for the devices
+        that support IP SLA auto measure feature."
+
+    GROUP           ciscoCtrlGroupRev16
+    DESCRIPTION
+        "ciscoCtrlGroupRev16 is only mandatory for the devices
+        that support LSP Ping over pseudowire."
+
+    GROUP           ciscoCtrlGroupRev15
+    DESCRIPTION
+        "ciscoCtrlGroupRev15 is only mandatory for the devices
+        that support Ethernet CFM."
+
+    GROUP           ciscoCtrlGroupRev8
+    DESCRIPTION
+        "ciscoCtrlGroupRev8 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoStatsGroupRev7
+    DESCRIPTION
+        "ciscoStatsGroupRev7 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev13
+    DESCRIPTION
+        "ciscoCtrlGroupRev13 is only mandatory for the device
+        that support MPLS."
+
+    GROUP           ciscoNotificationGroupRev2
+    DESCRIPTION
+        "ciscoNotificationGroupRev2 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoApplGroupRev4
+    DESCRIPTION
+        "ciscoApplGroupRev4 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev12
+    DESCRIPTION
+        "ciscoCtrlGroupRev12 is only mandatory for the devices
+        that support voice."
+
+    GROUP           ciscoCtrlGroupRev20
+    DESCRIPTION
+        "ciscoCtrlGroupRev20 is only mandatory for the devices
+        that support Video operations."
+
+    GROUP           ciscoCtrlGroupRev21
+    DESCRIPTION
+        "ciscoCtrlGroupRev21 is only mandatory for video operation with
+        DSCP, DSP reservation, and source interface support."
+
+    GROUP           ciscoCtrlGroupRev22
+    DESCRIPTION
+        "ciscoCtrlGroupRev22 is optional for video probes using emulate
+        source address, port, target address, and port."
+
+    GROUP           ciscoCtrlGroupRev23
+    DESCRIPTION
+        "ciscoCtrlGroupRev22 is mandatory for Y1731 operation."
+    ::= { ciscoRttMonMibCompliances 20 }
 
 ciscoStatsGroup OBJECT-GROUP
     OBJECTS         {
@@ -9529,1029 +10077,77 @@ ciscoCtrlGroupRev20 OBJECT-GROUP
         "This object has been added for video operation."
     ::= { ciscoRttMonMibGroups 43 }
 
+ciscoCtrlGroupRev21 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonEchoAdminDscp,
+                        rttMonEchoAdminReserveDsp,
+                        rttMonEchoAdminInputInterface
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This object has been added to support of DSCP marking, sender
+        DSP reservation, and source interface for path congruence in
+        video operation."
+    ::= { ciscoRttMonMibGroups 44 }
+
+ciscoCtrlGroupRev22 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonEchoAdminEmulateSourceAddress,
+                        rttMonEchoAdminEmulateSourcePort,
+                        rttMonEchoAdminEmulateTargetAddress,
+                        rttMonEchoAdminEmulateTargetPort
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This object has been added to support of emulate source
+        address, emulate source port, emulate target address and emulate
+        target port for path congruence in video operation."
+    ::= { ciscoRttMonMibGroups 45 }
+
+ciscoCtrlGroupRev23 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonEchoAdminTargetMacAddress,
+                        rttMonEchoAdminSourceMacAddress,
+                        rttMonEchoAdminSourceMPID
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group contains objects describing Y1731
+        operation."
+    ::= { ciscoRttMonMibGroups 46 }
+
+ciscoCtrlGroupRev24 OBJECT-GROUP
+    OBJECTS         { rttMonGeneratedOperCtrlAdminIndex }
+    STATUS          current
+    DESCRIPTION
+        "This object has been added to for Generated Oper Table."
+    ::= { ciscoRttMonMibGroups 47 }
+
+ciscoCtrlGroupRev25 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonEchoAdminEndPointListName,
+                        rttMonEchoAdminSSM,
+                        rttMonEchoAdminControlRetry,
+                        rttMonEchoAdminControlTimeout,
+                        rttMonEchoAdminIgmpTreeInit
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This object has been added to support Multicast operation."
+    ::= { ciscoRttMonMibGroups 48 }
+
+ciscoStatsGroupRev2 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonControlEnableErrors,
+                        rttMonStatsRetrieveErrors
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing Multicast control
+        request information."
+    ::= { ciscoRttMonMibGroups 49 }
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

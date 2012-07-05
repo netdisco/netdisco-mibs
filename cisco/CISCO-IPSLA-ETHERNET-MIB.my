@@ -1,10 +1,9 @@
-
 -- *****************************************************************
 -- CISCO-IPSLA-ETHERNET-MIB.my:  IP SLA Ethernet MIB file
 --   
 -- February 2006, Minghui Zhu
 --   
--- Copyright (c) 2006 by cisco Systems, Inc.
+-- Copyright (c) 2006-2012 by cisco Systems Inc.
 -- All rights reserved.
 --   
 -- *****************************************************************
@@ -17,7 +16,8 @@ IMPORTS
     Counter32,
     Gauge32,
     Unsigned32,
-    TimeTicks
+    TimeTicks,
+    Counter64
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     OBJECT-GROUP
@@ -48,7 +48,7 @@ IMPORTS
 
 
 ciscoIpSlaEthernetMIB MODULE-IDENTITY
-    LAST-UPDATED    "200602080000Z"
+    LAST-UPDATED    "201205150000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems, Inc.
@@ -84,9 +84,10 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
 
         Auto-Ethernet-CFM operation integrates the capabilities of 
         IP SLA and IEEE 802.1ag.  It's capable of discovering all the
-        existing MEPs in a specified VLAN within a specified 
-        maintenance domain.  After which, it creates, configures, and 
-        schedules an IP SLA operation for each MEP automatically.
+        existing MEPs in a specified VLAN or Ethernet Virtual Connection
+        within a specified maintenance domain.  After which, it creates, 
+        configures, and schedules an IP SLA operation for each MEP 
+        automatically.
 
         IP SLA currently supports two types of operations for 
         end-to-end Ethernet connectivity - 'ethernetPing' and 
@@ -103,7 +104,8 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
         Without Auto-Ethernet-CFM operation, the two types of operations
         can also be created, configured, and scheduled manually through 
         CISCO-RTTMON-MIB by specifing the target MEP's identifier 
-        in addition to the VLAN and Maitenance Domain.
+        in addition to the VLAN or Ethernet Virtual Connection and 
+        Maintenance Domain.
 
         With Auto-Ethernet-CFM operation, the two types of operations
         will be created automatically.  The Auto-Ethernet-CFM will pass
@@ -152,7 +154,7 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
               Domain, such that a Data.Request primitive presented 
               to one SAP can result in a Data.Indication primitive 
               occurring at one or more of the other SAPs in the set.  
-              It corresponds to a VLAN.
+              It corresponds to a VLAN or an Ethernet Virtual Connection.
           TLV - Stands for Type, Length, Value, and denotes a method of
               encoding variable-length and/or optional information in a
               PDU.  TLVs are not aligned to any particular word or octet
@@ -164,12 +166,21 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
 
         REFERENCE:
             IEEE 802.1ag Draft 6.0 'Virtual Briged Local Area Networks 
-             - Amendments 5: Connectivity Fault Management' July 2006 
-        "
+             - Amendments 5: Connectivity Fault Management' July 2006"
+    REVISION        "201205150000Z"
+    DESCRIPTION
+        "Added new object group ciscoIpSlaEthernetY1731Group.
+
+        Added new compliance ciscoIpSlaEthernetComplianceRev3, which
+        deprecates ciscoIpSlaEthenetComplianceRev2"
+    REVISION        "200801020000Z"
+    DESCRIPTION
+        "Added object ipslaEthernetGrpCtrlEVC and
+        ipslaEthernetGrpCtrlServiceInsType."
     REVISION        "200602080000Z"
     DESCRIPTION
         "Initial version of this MIB module."
-          ::= { ciscoMgmt 585 }
+    ::= { ciscoMgmt 585 }
 
 
 ciscoIpSlaEthernetMIBNotifs  OBJECT IDENTIFIER
@@ -220,7 +231,8 @@ ipslaEthernetGrpCtrlTable OBJECT-TYPE
         ipslaEthernetGrpCtrlReqDataSize rttMonEchoAdminPktDataRequestSize
         ipslaEthernetGrpCtrlCOS         rttMonEchoAdminEthernetCOS
         ipslaEthernetGrpCtrlInterval   rttMonEchoAdminInterval
-        ipslaEthernetGrpCtrlNumFrames  rttMonEchoAdminNumPackets"
+        ipslaEthernetGrpCtrlNumFrames  rttMonEchoAdminNumPackets
+        ipslaEthernetGrpCtrlEVC        rttMonEchoAdminTargetEVC"
     ::= { ipslaEthernetGrpCtrl 1 }
 
 ipslaEthernetGrpCtrlEntry OBJECT-TYPE
@@ -239,6 +251,9 @@ ipslaEthernetGrpCtrlEntry OBJECT-TYPE
         The following objects must be specified in order to activate this
         conceptual row.
          - ipslaEthernetGrpCtrlVLAN
+                    OR
+         - ipslaEthernetGrpCtrlEVC
+
          - ipslaEthernetGrpCtrlDomainName
          - ipslaEthernetGrpSchedulePeriod
          - ipslaEthernetGrpScheduleRttStartTime
@@ -270,7 +285,9 @@ IpslaEthernetGrpCtrlEntry ::= SEQUENCE {
         ipslaEthernetGrpCtrlNumFrames        Unsigned32,
         ipslaEthernetGrpScheduleRttStartTime TimeTicks,
         ipslaEthernetGrpSchedulePeriod       Unsigned32,
-        ipslaEthernetGrpScheduleFrequency    Unsigned32
+        ipslaEthernetGrpScheduleFrequency    Unsigned32,
+        ipslaEthernetGrpCtrlEVC              SnmpAdminString,
+        ipslaEthernetGrpCtrlServiceInsType   INTEGER
 }
 
 ipslaEthernetGrpCtrlIndex OBJECT-TYPE
@@ -304,7 +321,12 @@ ipslaEthernetGrpCtrlStatus OBJECT-TYPE
         Following objects must be specified in order for this object to
         become active.
           - ipslaEthernetGrpCtrlRttType
+
           - ipslaEthernetGrpCtrlVLAN
+                      OR
+          - ipslaEthernetGrpCtrlEVC
+
+          - ipslaEthernetGrpCtrlServiceInsType
           - ipslaEthernetGrpCtrlDomainName
           - ipslaEthernetGrpSchedulePeriod
           - ipslaEthernetGrpScheduleRttStartTime
@@ -313,15 +335,21 @@ ipslaEthernetGrpCtrlStatus OBJECT-TYPE
         The following objects cannot be modified after creating the
         Auto-Ethernet-CFM conceptual row.
          - ipslaEthernetGrpCtrlRttType
+
          - ipslaEthernetGrpCtrlVLAN
+                     OR
+         - ipslaEthernetGrpCtrlEVC
+
          - ipslaEthernetGrpCtrlDomainName
+         - ipslaEthernetGrpCtrlServiceInsType 
 
         The following objects can be modified even after creating the
         Auto-Ethernet-CFM conceptual row by setting this object to
         'notInService'
          - All other writable objects in ipslaEthernetGrpCtrlTable except
-           ipslaEthernetGrpCtrlRttType, ipslaEthernetGrpCtrlVLAN
-           and ipslaEthernetGrpCtrlDomainName.
+           ipslaEthernetGrpCtrlRttType, ipslaEthernetGrpCtrlVLAN,
+           ipslaEthernetGrpCtrlDomainName, ipslaEthernetGrpCtrlEVC and
+           ipslaEthernetGrpCtrlServiceInsType
          - Objects in the ipslaEthernetGrpScheduleTable.
 
         The following objects can be modified as needed without setting
@@ -395,7 +423,7 @@ ipslaEthernetGrpCtrlTag OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 6 }
 
 ipslaEthernetGrpCtrlThreshold OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..2147483647 )
+    SYNTAX          Unsigned32 (0..2147483647)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -414,13 +442,12 @@ ipslaEthernetGrpCtrlThreshold OBJECT-TYPE
         For 'ethernetJitter', if the value of 
         ipslaEtherJitterLatestAvgJitter value is greater than this
         value, the 'overThreshold' will be reported through
-        ipslaEtherJitterLatestSense defined this module.
-        "
+        ipslaEtherJitterLatestSense defined this module."
     DEFVAL          { 5000 } 
     ::= { ipslaEthernetGrpCtrlEntry 7 }
 
 ipslaEthernetGrpCtrlTimeout OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..604800000 )
+    SYNTAX          Unsigned32 (0..604800000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -468,7 +495,10 @@ ipslaEthernetGrpCtrlVLAN OBJECT-TYPE
 
         The Auto-Ethernet-CFM will find all the MEPs participating 
         in this VLAN and create IP SLA operations for each MEP 
-        corresponding to value specified in ipslaEthernetGrpCtrlRttType." 
+        corresponding to value specified in ipslaEthernetGrpCtrlRttType.
+
+        The value of this object is in effect only when the value of
+        ipslaEthernetGrpCtrlServiceInsType is set to 'vlan'." 
     ::= { ipslaEthernetGrpCtrlEntry 10 }
 
 ipslaEthernetGrpCtrlDomainNameType OBJECT-TYPE
@@ -507,7 +537,7 @@ ipslaEthernetGrpCtrlDomainName OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 12 }
 
 ipslaEthernetGrpCtrlReqDataSize OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..1400 )
+    SYNTAX          Unsigned32 (0..1400)
     UNITS           "octets"
     MAX-ACCESS      read-create
     STATUS          current
@@ -551,7 +581,7 @@ ipslaEthernetGrpCtrlCOS OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 15 }
 
 ipslaEthernetGrpCtrlInterval OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..60000 )
+    SYNTAX          Unsigned32 (1..60000)
     UNITS           "milliseconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -564,7 +594,7 @@ ipslaEthernetGrpCtrlInterval OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 16 }
 
 ipslaEthernetGrpCtrlNumFrames OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..60000 )
+    SYNTAX          Unsigned32 (1..60000)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -598,7 +628,7 @@ ipslaEthernetGrpScheduleRttStartTime OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 18 }
 
 ipslaEthernetGrpSchedulePeriod OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..604800 )
+    SYNTAX          Unsigned32 (1..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -621,7 +651,7 @@ ipslaEthernetGrpSchedulePeriod OBJECT-TYPE
     ::= { ipslaEthernetGrpCtrlEntry 19 }
 
 ipslaEthernetGrpScheduleFrequency OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..604800 )
+    SYNTAX          Unsigned32 (1..604800)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -648,6 +678,46 @@ ipslaEthernetGrpScheduleFrequency OBJECT-TYPE
         This value will be passed to rttMonCtrlAdminFrequency for 
         all the IP SLA operations created by the Auto-Ethernet-CFM." 
     ::= { ipslaEthernetGrpCtrlEntry 20 }
+
+ipslaEthernetGrpCtrlEVC OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (0..100))
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the Ethernet Virtual Connection for which
+        the Auto-Ethernet-CFM operation will be used.
+
+        It is an unique identifier for a service instance within 
+        a Maintenance Domain specified by ipslaEthernetGrpCtrlDomainName.
+
+        The Auto-Ethernet-CFM will find all the MEPs participating 
+        in this Ethernet Virtual Connection and create IP SLA operations for 
+        each MEP corresponding to value specified in 
+        ipslaEthernetGrpCtrlRttType.
+
+        The value of this object is in effect only when the value of
+        ipslaEthernetGrpCtrlServiceInsType is set to 'evc'." 
+    ::= { ipslaEthernetGrpCtrlEntry 21 }
+
+ipslaEthernetGrpCtrlServiceInsType OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        vlan(1),
+                        evc(2)
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the type of service instance to be used
+        by the Auto-Ethernet-CFM operation.
+
+        When this object is set to value 'vlan', ipslaEthernetGrpCtrlVLAN
+        must be set, and the value of ipslaEthernetGrpCtrlVLAN will be
+        used by the Auto-Ethernet-CFM to discover the participating MEPs.
+
+        When this object is set to value 'evc', ipslaEthernetGrpCtrlEVC
+        must be set, and the value of ipslaEthernetGrpCtrlEVC will be
+        used by the Auto-Ethernet-CFM to discover the participating MEPs." 
+    ::= { ipslaEthernetGrpCtrlEntry 22 }
  
 
 -- Auto-Ethernet-CFM Reaction Table
@@ -730,12 +800,12 @@ IpslaEthernetGrpReactEntry ::= SEQUENCE {
         ipslaEthernetGrpReactStatus           RowStatus,
         ipslaEthernetGrpReactStorageType      StorageType,
         ipslaEthernetGrpReactVar              RttMonReactVar,
-        ipslaEthernetGrpReactThresholdType    INTEGER ,
+        ipslaEthernetGrpReactThresholdType    INTEGER,
         ipslaEthernetGrpReactThresholdRising  Unsigned32,
         ipslaEthernetGrpReactThresholdFalling Unsigned32,
         ipslaEthernetGrpReactThresholdCountX  Unsigned32,
         ipslaEthernetGrpReactThresholdCountY  Unsigned32,
-        ipslaEthernetGrpReactActionType       INTEGER 
+        ipslaEthernetGrpReactActionType       INTEGER
 }
 
 ipslaEthernetGrpReactConfigIndex OBJECT-TYPE
@@ -751,8 +821,7 @@ ipslaEthernetGrpReactConfigIndex OBJECT-TYPE
         station when creating a row via the ipslaEthernetGrpReactStatus.
         If the pseudo-random number is already in use an
         'inconsistentValue' return code will be returned when
-        set operation is attempted.
-        " 
+        set operation is attempted." 
     ::= { ipslaEthernetGrpReactEntry 1 }
 
 ipslaEthernetGrpReactStatus OBJECT-TYPE
@@ -825,8 +894,7 @@ ipslaEthernetGrpReactVar OBJECT-TYPE
             - 'packetLossDS'
             - 'packetLossSD'
             - 'packetOutOfSequence'
-            - 'packetMIA'
-        " 
+            - 'packetMIA'" 
     ::= { ipslaEthernetGrpReactEntry 4 }
 
 ipslaEthernetGrpReactThresholdType OBJECT-TYPE
@@ -894,7 +962,7 @@ ipslaEthernetGrpReactThresholdType OBJECT-TYPE
     ::= { ipslaEthernetGrpReactEntry 5 }
 
 ipslaEthernetGrpReactThresholdRising OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..2147483647 )
+    SYNTAX          Unsigned32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -925,7 +993,7 @@ ipslaEthernetGrpReactThresholdRising OBJECT-TYPE
     ::= { ipslaEthernetGrpReactEntry 6 }
 
 ipslaEthernetGrpReactThresholdFalling OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..2147483647 )
+    SYNTAX          Unsigned32 (0..2147483647)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -956,7 +1024,7 @@ ipslaEthernetGrpReactThresholdFalling OBJECT-TYPE
     ::= { ipslaEthernetGrpReactEntry 7 }
 
 ipslaEthernetGrpReactThresholdCountX OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..16 )
+    SYNTAX          Unsigned32 (1..16)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -978,7 +1046,7 @@ ipslaEthernetGrpReactThresholdCountX OBJECT-TYPE
     ::= { ipslaEthernetGrpReactEntry 8 }
 
 ipslaEthernetGrpReactThresholdCountY OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..16 )
+    SYNTAX          Unsigned32 (1..16)
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1371,7 +1439,8 @@ ipslaEtherJitterLatestFrmOutSeq OBJECT-TYPE
     UNITS           "packets"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "The number of frames arrived out of sequence." 
+    DESCRIPTION
+        "The number of frames arrived out of sequence." 
     ::= { ipslaEtherJitterLatestStatsEntry 28 }
 
 ipslaEtherJitterLatestFrmMIA OBJECT-TYPE
@@ -1572,7 +1641,8 @@ ipslaEtherJitterLatestIAJOut OBJECT-TYPE
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "Inter-arrival jitter (RFC 1889) at responder."
+    DESCRIPTION
+        "Inter-arrival jitter (RFC 1889) at responder."
     REFERENCE
         "Refer to the following documents for the definition: 
                RFC 1889, Section 6.3.1" 
@@ -1583,7 +1653,8 @@ ipslaEtherJitterLatestIAJIn OBJECT-TYPE
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "Inter-arrival jitter (RFC 1889) at source."
+    DESCRIPTION
+        "Inter-arrival jitter (RFC 1889) at source."
     REFERENCE
         "Refer to the following documents for the definition: 
                RFC 1889, Section 6.3.1" 
@@ -1644,66 +1715,94 @@ ipslaEtherJitterAggStatsEntry OBJECT-TYPE
     ::= { ipslaEtherJitterAggStatsTable 1 }
 
 IpslaEtherJitterAggStatsEntry ::= SEQUENCE {
-        ipslaEtherJAggStatsStartTimeId   TimeStamp,
-        ipslaEtherJAggMeasuredCmpletions Counter32,
-        ipslaEtherJAggMeasuredOvThrshlds Counter32,
-        ipslaEtherJAggMeasuredNumRTTs    Counter32,
-        ipslaEtherJAggMeasuredRTTSums    Counter32,
-        ipslaEtherJAggMeasuredRTTSum2Ls  Counter32,
-        ipslaEtherJAggMeasuredRTTSum2Hs  Counter32,
-        ipslaEtherJAggMeasuredRTTMin     Gauge32,
-        ipslaEtherJAggMeasuredRTTMax     Gauge32,
-        ipslaEtherJAggMeasuredMinPosSD   Gauge32,
-        ipslaEtherJAggMeasuredMaxPosSD   Gauge32,
-        ipslaEtherJAggMeasuredNumPosSDs  Counter32,
-        ipslaEtherJAggMeasuredSumPosSDs  Counter32,
-        ipslaEtherJAggMeasuredSum2PSDLs  Counter32,
-        ipslaEtherJAggMeasuredSum2PSDHs  Counter32,
-        ipslaEtherJAggMeasuredMinNegSD   Gauge32,
-        ipslaEtherJAggMeasuredMaxNegSD   Gauge32,
-        ipslaEtherJAggMeasuredNumNegSDs  Counter32,
-        ipslaEtherJAggMeasuredSumNegSDs  Counter32,
-        ipslaEtherJAggMeasuredSum2NSDLs  Counter32,
-        ipslaEtherJAggMeasuredSum2NSDHs  Counter32,
-        ipslaEtherJAggMeasuredMinPosDS   Gauge32,
-        ipslaEtherJAggMeasuredMaxPosDS   Gauge32,
-        ipslaEtherJAggMeasuredNumPosDSes Counter32,
-        ipslaEtherJAggMeasuredSumPosDSes Counter32,
-        ipslaEtherJAggMeasuredSum2PDSLs  Counter32,
-        ipslaEtherJAggMeasuredSum2PDSHs  Counter32,
-        ipslaEtherJAggMeasuredMinNegDS   Gauge32,
-        ipslaEtherJAggMeasuredMaxNegDS   Gauge32,
-        ipslaEtherJAggMeasuredNumNegDSes Counter32,
-        ipslaEtherJAggMeasuredSumNegDSes Counter32,
-        ipslaEtherJAggMeasuredSum2NDSLs  Counter32,
-        ipslaEtherJAggMeasuredSum2NDSHs  Counter32,
-        ipslaEtherJAggMeasuredFrmLossSDs Counter32,
-        ipslaEtherJAggMeasuredFrmLssDSes Counter32,
-        ipslaEtherJAggMeasuredFrmOutSeqs Counter32,
-        ipslaEtherJAggMeasuredFrmMIAes   Counter32,
-        ipslaEtherJAggMeasuredFrmSkippds Counter32,
-        ipslaEtherJAggMeasuredErrors     Counter32,
-        ipslaEtherJAggMeasuredBusies     Counter32,
-        ipslaEtherJAggMeasuredOWSumSDs   Counter32,
-        ipslaEtherJAggMeasuredOWSum2SDLs Counter32,
-        ipslaEtherJAggMeasuredOWSum2SDHs Counter32,
-        ipslaEtherJAggMeasuredOWMinSD    Gauge32,
-        ipslaEtherJAggMeasuredOWMaxSD    Gauge32,
-        ipslaEtherJAggMeasuredOWSumDSes  Counter32,
-        ipslaEtherJAggMeasuredOWSum2DSLs Counter32,
-        ipslaEtherJAggMeasuredOWSum2DSHs Counter32,
-        ipslaEtherJAggMeasuredOWMinDS    Gauge32,
-        ipslaEtherJAggMeasuredOWMaxDS    Gauge32,
-        ipslaEtherJAggMeasuredNumOWs     Counter32,
-        ipslaEtherJAggMeasuredAvgJ       Gauge32,
-        ipslaEtherJAggMeasuredAvgJSD     Gauge32,
-        ipslaEtherJAggMeasuredAvgJDS     Gauge32,
-        ipslaEtherJAggMinSucFrmLoss      Gauge32,
-        ipslaEtherJAggMaxSucFrmLoss      Gauge32,
-        ipslaEtherJAggMeasuredIAJOut     Gauge32,
-        ipslaEtherJAggMeasuredIAJIn      Gauge32,
-        ipslaEtherJAggMeasuredFrmLateAs  Counter32,
-        ipslaEtherJAggMeasuredFrmUnPrcds Counter32
+        ipslaEtherJAggStatsStartTimeId                       TimeStamp,
+        ipslaEtherJAggMeasuredCmpletions                     Counter32,
+        ipslaEtherJAggMeasuredOvThrshlds                     Counter32,
+        ipslaEtherJAggMeasuredNumRTTs                        Counter32,
+        ipslaEtherJAggMeasuredRTTSums                        Counter32,
+        ipslaEtherJAggMeasuredRTTSum2Ls                      Counter32,
+        ipslaEtherJAggMeasuredRTTSum2Hs                      Counter32,
+        ipslaEtherJAggMeasuredRTTMin                         Gauge32,
+        ipslaEtherJAggMeasuredRTTMax                         Gauge32,
+        ipslaEtherJAggMeasuredMinPosSD                       Gauge32,
+        ipslaEtherJAggMeasuredMaxPosSD                       Gauge32,
+        ipslaEtherJAggMeasuredNumPosSDs                      Counter32,
+        ipslaEtherJAggMeasuredSumPosSDs                      Counter32,
+        ipslaEtherJAggMeasuredSum2PSDLs                      Counter32,
+        ipslaEtherJAggMeasuredSum2PSDHs                      Counter32,
+        ipslaEtherJAggMeasuredMinNegSD                       Gauge32,
+        ipslaEtherJAggMeasuredMaxNegSD                       Gauge32,
+        ipslaEtherJAggMeasuredNumNegSDs                      Counter32,
+        ipslaEtherJAggMeasuredSumNegSDs                      Counter32,
+        ipslaEtherJAggMeasuredSum2NSDLs                      Counter32,
+        ipslaEtherJAggMeasuredSum2NSDHs                      Counter32,
+        ipslaEtherJAggMeasuredMinPosDS                       Gauge32,
+        ipslaEtherJAggMeasuredMaxPosDS                       Gauge32,
+        ipslaEtherJAggMeasuredNumPosDSes                     Counter32,
+        ipslaEtherJAggMeasuredSumPosDSes                     Counter32,
+        ipslaEtherJAggMeasuredSum2PDSLs                      Counter32,
+        ipslaEtherJAggMeasuredSum2PDSHs                      Counter32,
+        ipslaEtherJAggMeasuredMinNegDS                       Gauge32,
+        ipslaEtherJAggMeasuredMaxNegDS                       Gauge32,
+        ipslaEtherJAggMeasuredNumNegDSes                     Counter32,
+        ipslaEtherJAggMeasuredSumNegDSes                     Counter32,
+        ipslaEtherJAggMeasuredSum2NDSLs                      Counter32,
+        ipslaEtherJAggMeasuredSum2NDSHs                      Counter32,
+        ipslaEtherJAggMeasuredFrmLossSDs                     Counter32,
+        ipslaEtherJAggMeasuredFrmLssDSes                     Counter32,
+        ipslaEtherJAggMeasuredFrmOutSeqs                     Counter32,
+        ipslaEtherJAggMeasuredFrmMIAes                       Counter32,
+        ipslaEtherJAggMeasuredFrmSkippds                     Counter32,
+        ipslaEtherJAggMeasuredErrors                         Counter32,
+        ipslaEtherJAggMeasuredBusies                         Counter32,
+        ipslaEtherJAggMeasuredOWSumSDs                       Counter32,
+        ipslaEtherJAggMeasuredOWSum2SDLs                     Counter32,
+        ipslaEtherJAggMeasuredOWSum2SDHs                     Counter32,
+        ipslaEtherJAggMeasuredOWMinSD                        Gauge32,
+        ipslaEtherJAggMeasuredOWMaxSD                        Gauge32,
+        ipslaEtherJAggMeasuredOWSumDSes                      Counter32,
+        ipslaEtherJAggMeasuredOWSum2DSLs                     Counter32,
+        ipslaEtherJAggMeasuredOWSum2DSHs                     Counter32,
+        ipslaEtherJAggMeasuredOWMinDS                        Gauge32,
+        ipslaEtherJAggMeasuredOWMaxDS                        Gauge32,
+        ipslaEtherJAggMeasuredNumOWs                         Counter32,
+        ipslaEtherJAggMeasuredAvgJ                           Gauge32,
+        ipslaEtherJAggMeasuredAvgJSD                         Gauge32,
+        ipslaEtherJAggMeasuredAvgJDS                         Gauge32,
+        ipslaEtherJAggMinSucFrmLoss                          Gauge32,
+        ipslaEtherJAggMaxSucFrmLoss                          Gauge32,
+        ipslaEtherJAggMeasuredIAJOut                         Gauge32,
+        ipslaEtherJAggMeasuredIAJIn                          Gauge32,
+        ipslaEtherJAggMeasuredFrmLateAs                      Counter32,
+        ipslaEtherJAggMeasuredFrmUnPrcds                     Counter32,
+        ipslaEtherJAggMeasuredMaxPosTW                       Gauge32,
+        ipslaEtherJAggMeasuredMaxNegTW                       Gauge32,
+        ipslaEtherJAggMeasuredMinPosTW                       Gauge32,
+        ipslaEtherJAggMeasuredMinNegTW                       Gauge32,
+        ipslaEtherJAggMeasuredTxFrmsSD                       Counter64,
+        ipslaEtherJAggMeasuredTxFrmsDS                       Counter64,
+        ipslaEtherJAggMeasuredRxFrmsSD                       Counter64,
+        ipslaEtherJAggMeasuredRxFrmsDS                       Counter64,
+        ipslaEtherJAggMeasuredMinLossNumeratorSD             Gauge32,
+        ipslaEtherJAggMeasuredMinLossDenominatorSD           Gauge32,
+        ipslaEtherJAggMeasuredMaxLossNumeratorSD             Gauge32,
+        ipslaEtherJAggMeasuredMaxLossDenominatorSD           Gauge32,
+        ipslaEtherJAggMeasuredAvgLossNumeratorSD             Gauge32,
+        ipslaEtherJAggMeasuredAvgLossDenominatorSD           Gauge32,
+        ipslaEtherJAggMeasuredMinLossNumeratorDS             Gauge32,
+        ipslaEtherJAggMeasuredMinLossDenominatorDS           Gauge32,
+        ipslaEtherJAggMeasuredMaxLossNumeratorDS             Gauge32,
+        ipslaEtherJAggMeasuredMaxLossDenominatorDS           Gauge32,
+        ipslaEtherJAggMeasuredAvgLossNumeratorDS             Gauge32,
+        ipslaEtherJAggMeasuredAvgLossDenominatorDS           Gauge32,
+        ipslaEtherJAggMeasuredCumulativeLossNumeratorSD      Gauge32,
+        ipslaEtherJAggMeasuredCumulativeLossDenominatorSD    Gauge32,
+        ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorSD   Gauge32,
+        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorSD Gauge32,
+        ipslaEtherJAggMeasuredCumulativeLossNumeratorDS      Gauge32,
+        ipslaEtherJAggMeasuredCumulativeLossDenominatorDS    Gauge32,
+        ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorDS   Gauge32,
+        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS Gauge32
 }
 
 ipslaEtherJAggStatsStartTimeId OBJECT-TYPE
@@ -2061,7 +2160,8 @@ ipslaEtherJAggMeasuredFrmOutSeqs OBJECT-TYPE
     UNITS           "frames"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "The number of frames arrived out of sequence." 
+    DESCRIPTION
+        "The number of frames arrived out of sequence." 
     ::= { ipslaEtherJitterAggStatsEntry 36 }
 
 ipslaEtherJAggMeasuredFrmMIAes OBJECT-TYPE
@@ -2269,7 +2369,8 @@ ipslaEtherJAggMeasuredIAJOut OBJECT-TYPE
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "Inter-arrival jitter (RFC 1889) at responder"
+    DESCRIPTION
+        "Inter-arrival jitter (RFC 1889) at responder"
     REFERENCE
         "Refer to the following documents for the definition: 
                RFC 1889, Section 6.3.1" 
@@ -2280,7 +2381,8 @@ ipslaEtherJAggMeasuredIAJIn OBJECT-TYPE
     UNITS           "milliseconds"
     MAX-ACCESS      read-only
     STATUS          current
-    DESCRIPTION     "Inter-arrival jitter (RFC 1889) at sender"
+    DESCRIPTION
+        "Inter-arrival jitter (RFC 1889) at sender"
     REFERENCE
         "Refer to the following documents for the definition: 
                RFC 1889, Section 6.3.1" 
@@ -2304,9 +2406,298 @@ ipslaEtherJAggMeasuredFrmUnPrcds OBJECT-TYPE
         "The number of frames that arrived but could not be
         processed due to the internal error." 
     ::= { ipslaEtherJitterAggStatsEntry 60 }
+
+ipslaEtherJAggMeasuredMaxPosTW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The two-way maximum of all positive jitter values for
+        frames." 
+    ::= { ipslaEtherJitterAggStatsEntry 61 }
+
+ipslaEtherJAggMeasuredMaxNegTW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The two-way maximum of all negative jitter values for
+        frames." 
+    ::= { ipslaEtherJitterAggStatsEntry 62 }
+
+ipslaEtherJAggMeasuredMinPosTW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The two-way minimum of all positive jitter values for
+        frames." 
+    ::= { ipslaEtherJitterAggStatsEntry 63 }
+
+ipslaEtherJAggMeasuredMinNegTW OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The two-way minimum of all negative jitter values for
+        frames." 
+    ::= { ipslaEtherJitterAggStatsEntry 64 }
+
+ipslaEtherJAggMeasuredTxFrmsSD OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of data frames sent from source to
+        destination." 
+    ::= { ipslaEtherJitterAggStatsEntry 65 }
+
+ipslaEtherJAggMeasuredTxFrmsDS OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of data frames sent from destination to
+        source." 
+    ::= { ipslaEtherJitterAggStatsEntry 66 }
+
+ipslaEtherJAggMeasuredRxFrmsSD OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of data frames received from source to
+        destination." 
+    ::= { ipslaEtherJitterAggStatsEntry 67 }
+
+ipslaEtherJAggMeasuredRxFrmsDS OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of data frames received from destination to
+        source." 
+    ::= { ipslaEtherJitterAggStatsEntry 68 }
+
+ipslaEtherJAggMeasuredMinLossNumeratorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the minimum loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 69 }
+
+ipslaEtherJAggMeasuredMinLossDenominatorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the minimum loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 70 }
+
+ipslaEtherJAggMeasuredMaxLossNumeratorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the maximum loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 71 }
+
+ipslaEtherJAggMeasuredMaxLossDenominatorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the maximum loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 72 }
+
+ipslaEtherJAggMeasuredAvgLossNumeratorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the average loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 73 }
+
+ipslaEtherJAggMeasuredAvgLossDenominatorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the average loss ratio recorded in
+        the source to destination direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 74 }
+
+ipslaEtherJAggMeasuredMinLossNumeratorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the minimum loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 75 }
+
+ipslaEtherJAggMeasuredMinLossDenominatorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the minimum loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 76 }
+
+ipslaEtherJAggMeasuredMaxLossNumeratorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the maximum loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 77 }
+
+ipslaEtherJAggMeasuredMaxLossDenominatorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the maximum loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 78 }
+
+ipslaEtherJAggMeasuredAvgLossNumeratorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the average loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 79 }
+
+ipslaEtherJAggMeasuredAvgLossDenominatorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the average loss ratio recorded in
+        the destination to source direction." 
+    ::= { ipslaEtherJitterAggStatsEntry 80 }
+
+ipslaEtherJAggMeasuredCumulativeLossNumeratorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the loss ratio recorded in
+        the source to destination direction.  This value is  
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 81 }
+
+ipslaEtherJAggMeasuredCumulativeLossDenominatorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the loss ratio recorded in
+        the source to destination direction.  This value is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 82 }
+
+ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the average loss ratio recorded in
+        the source to destination direction.  This value is 
+        cumulative over the perios of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 83 }
+
+ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorSD OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the average loss ratio recorded in
+        the source to destination direction.  This value is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 84 }
+
+ipslaEtherJAggMeasuredCumulativeLossNumeratorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the loss ratio recorded in
+        the destination to source direction.  This value is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 85 }
+
+ipslaEtherJAggMeasuredCumulativeLossDenominatorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the loss ratio recorded in
+        the destination to source direction.  This valued is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 86 }
+
+ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The numerator for the average loss ratio recorded in
+        the destination to source direction.  This value is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 87 }
+
+ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The denominator for the average loss ratio recorded in
+        the destination to source direction.  This value is 
+        cumulative over the period of this interval." 
+    ::= { ipslaEtherJitterAggStatsEntry 88 }
  
 
 -- Conformance Information
+
 ciscoIpSlaEthernetMIBConform  OBJECT IDENTIFIER
     ::= { ciscoIpSlaEthernetMIB 2 }
 
@@ -2317,8 +2708,11 @@ ciscoIpSlaEthernetMIBGroups  OBJECT IDENTIFIER
     ::= { ciscoIpSlaEthernetMIBConform 2 }
 
 
+-- ciscoIpSlaEthernetCompliance is superceded by
+-- ciscoIpSlaEthernetComplianceRev2
+
 ciscoIpSlaEthernetCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for
         (1) Ethernet Jitter operation and statistics"
@@ -2328,6 +2722,49 @@ ciscoIpSlaEthernetCompliance MODULE-COMPLIANCE
                         ciscoIpSlaEthernetStatsGroup
                     }
     ::= { ciscoIpSlaEthernetCompliances 1 }
+
+ciscoIpSlaEthernetComplianceRev2 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for
+        (1) Ethernet Jitter operation and statistics
+        (2) supporting IP SLA Auto-Ethernet-CFM"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoIpSlaEthernetAutoGroup,
+                        ciscoIpSlaEthernetStatsGroup
+                    }
+
+    GROUP           ciscoIpSlaEthernetAutoEVCGroup
+    DESCRIPTION
+        "ciscoIpSlaEthernetAutoEVCGroup is only mandatory
+        for the devices that support Ethernet CFM  with
+        Virtual Connection."
+    ::= { ciscoIpSlaEthernetCompliances 2 }
+
+ciscoIpSlaEthernetComplianceRev3 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for
+        (1) Ethernet Jitter operation and statistics
+        (2) supporting IP SLA Y1731"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoIpSlaEthernetAutoGroup,
+                        ciscoIpSlaEthernetStatsGroup
+                    }
+
+    GROUP           ciscoIpSlaEthernetY1731Group
+    DESCRIPTION
+        "ciscoIpSlaEthernetY1731Group is only mandatory
+        for the devices that support Ethernet CFM  with
+        Virtual Connection."
+
+    GROUP           ciscoIpSlaEthernetAutoEVCGroup
+    DESCRIPTION
+        "ciscoIpSlaEthernetAutoEVCGroup is only mandatory for devices
+        that support Ethernet CFM with Virtual Connection."
+    ::= { ciscoIpSlaEthernetCompliances 3 }
 
 ciscoIpSlaEthernetAutoGroup OBJECT-GROUP
     OBJECTS         {
@@ -2485,7 +2922,455 @@ ciscoIpSlaEthernetStatsGroup OBJECT-GROUP
         Ethernet Jitter Probe."
     ::= { ciscoIpSlaEthernetMIBGroups 2 }
 
+ciscoIpSlaEthernetAutoEVCGroup OBJECT-GROUP
+    OBJECTS         {
+                        ipslaEthernetGrpCtrlEVC,
+                        ipslaEthernetGrpCtrlServiceInsType
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects which provides the support for
+        Auto-Ethernet-CFM ping/jitter operation with Ethernet 
+        Virtual Connection."
+    ::= { ciscoIpSlaEthernetMIBGroups 3 }
+
+ciscoIpSlaEthernetY1731Group OBJECT-GROUP
+    OBJECTS         {
+                        ipslaEtherJAggMeasuredMaxPosTW,
+                        ipslaEtherJAggMeasuredMaxNegTW,
+                        ipslaEtherJAggMeasuredMinPosTW,
+                        ipslaEtherJAggMeasuredMinNegTW,
+                        ipslaEtherJAggMeasuredTxFrmsSD,
+                        ipslaEtherJAggMeasuredTxFrmsDS,
+                        ipslaEtherJAggMeasuredRxFrmsSD,
+                        ipslaEtherJAggMeasuredRxFrmsDS,
+                        ipslaEtherJAggMeasuredMinLossNumeratorSD,
+                        ipslaEtherJAggMeasuredMinLossDenominatorSD,
+                        ipslaEtherJAggMeasuredMaxLossNumeratorSD,
+                        ipslaEtherJAggMeasuredMaxLossDenominatorSD,
+                        ipslaEtherJAggMeasuredAvgLossNumeratorSD,
+                        ipslaEtherJAggMeasuredAvgLossDenominatorSD,
+                        ipslaEtherJAggMeasuredMinLossNumeratorDS,
+                        ipslaEtherJAggMeasuredMinLossDenominatorDS,
+                        ipslaEtherJAggMeasuredMaxLossNumeratorDS,
+                        ipslaEtherJAggMeasuredMaxLossDenominatorDS,
+                        ipslaEtherJAggMeasuredAvgLossNumeratorDS,
+                        ipslaEtherJAggMeasuredAvgLossDenominatorDS,
+                        ipslaEtherJAggMeasuredCumulativeLossNumeratorSD,
+                        ipslaEtherJAggMeasuredCumulativeLossDenominatorSD,
+                        ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorSD,
+                        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorSD,
+                        ipslaEtherJAggMeasuredCumulativeLossNumeratorDS,
+                        ipslaEtherJAggMeasuredCumulativeLossDenominatorDS,
+                        ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorDS,
+                        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects which provides the support for
+        Y1731 operation with Ethernet 
+        Virtual Connection."
+    ::= { ciscoIpSlaEthernetMIBGroups 4 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

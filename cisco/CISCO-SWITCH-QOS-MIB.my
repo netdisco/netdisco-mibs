@@ -3,7 +3,7 @@
 --   
 -- September 2006, Edward Pham
 --   
--- Copyright (c) 2006, 2009 by cisco Systems, Inc.
+-- Copyright (c) 2006, 2009-2010 by cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -16,31 +16,25 @@ IMPORTS
     Counter64,
     Unsigned32
         FROM SNMPv2-SMI
-
     MODULE-COMPLIANCE,
     OBJECT-GROUP
         FROM SNMPv2-CONF
-
     TruthValue,
     RowStatus
         FROM SNMPv2-TC
-
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
     ifIndex
         FROM IF-MIB
-
     entPhysicalIndex
         FROM ENTITY-MIB
-
+    Dscp
+        FROM DIFFSERV-DSCP-TC
+    IfDirection
+        FROM DIFFSERV-MIB
     QosLayer2Cos,
     Percent
         FROM CISCO-QOS-PIB-MIB
-
-    Dscp
-        FROM DIFFSERV-DSCP-TC
-
-    IfDirection
-        FROM DIFFSERV-MIB
-
     QosIpPrecedence,
     QosQueueNumber,
     QosThresholdNumber,
@@ -49,12 +43,12 @@ IMPORTS
     QosMutationMapNameOrEmpty,
     QosPolicerType
         FROM CISCO-QOS-TC-MIB
-
     ciscoMgmt
         FROM CISCO-SMI;
 
+
 ciscoSwitchQosMIB MODULE-IDENTITY
-    LAST-UPDATED "200902230000Z"
+    LAST-UPDATED    "201011170000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -137,18 +131,30 @@ ciscoSwitchQosMIB MODULE-IDENTITY
         ignored/overwritten due to an 'untrusted' source or
         previous hop.
 
-         BPDU (Bridge Protocol Data Unit) is used by bridges 
-         in a network to exchange information regarding their
-         status. The Spanning Tree Protocol uses the BPDU
-         information to elect the root switch and root port
-         for the switched network.
+        BPDU (Bridge Protocol Data Unit) is used by bridges 
+        in a network to exchange information regarding their
+        status. The Spanning Tree Protocol uses the BPDU
+        information to elect the root switch and root port
+        for the switched network.
 
         MPLS-EXP:  MPLS experimental field in MPLS label."
-    REVISION    "200902230000Z"
+    REVISION        "201011170000Z"
     DESCRIPTION
-        "Add ciscoSwitchQosModuleStatsExtGroup and 
-         ciscoSwitchQosIfStatsExtGroup."
-    REVISION    "200611200000Z"
+        "Add ciscoSwitchQosModuleClassChangedGroup,
+        ciscoSwitchQosTenGOnlyModeGroup, 
+        ciscoSwitchQosIfQueueModeGroup,
+        ciscoSwitchQosIfQueueSchedulingGroup,
+        ciscoSwitchQosIfQueueingGroup,
+        ciscoSwitchQosIfLanQueuingGroup and
+        ciscoSwitchQosIfQueueBufferGroup."
+    REVISION        "200907200000Z"
+    DESCRIPTION
+        "Add ciscoSwitchQosModuleDscpRewriteGroup."
+    REVISION        "200902230000Z"
+    DESCRIPTION
+        "Add ciscoSwitchQosModuleStatsExtGroup and
+        ciscoSwitchQosIfStatsExtGroup."
+    REVISION        "200611200000Z"
     DESCRIPTION
         "Add ciscoSwitchQosPolicerUsageGroup."
     REVISION        "200609180000Z"
@@ -156,33 +162,41 @@ ciscoSwitchQosMIB MODULE-IDENTITY
         "Initial revision of this MIB module."
     ::= { ciscoMgmt 580 }
 
---
+
 -- MIB object definitions
---
 
-ciscoSwitchQosMIBNotifs
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIB 0 }
-ciscoSwitchQosMIBObjects
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIB 1 }
-ciscoSwitchQosMIBConformance
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIB 2 }
+ciscoSwitchQosMIBNotifs  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIB 0 }
 
-csqGlobals
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 1 }
-csqMappings 
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 2 }
-csqMutations
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 3 }
-csqInterface
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 4 }
-csqStatistics
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 5 }
-csqPolicerUsage
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBObjects 6 }
+ciscoSwitchQosMIBObjects  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIB 1 }
 
---
+ciscoSwitchQosMIBConformance  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIB 2 }
+
+csqGlobals  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 1 }
+
+csqMappings  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 2 }
+
+csqMutations  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 3 }
+
+csqInterface  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 4 }
+
+csqStatistics  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 5 }
+
+csqPolicerUsage  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 6 }
+
+csqModule  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBObjects 7 }
+
+
 -- Global group
---
 
 csqDscpRewriteEnable OBJECT-TYPE
     SYNTAX          TruthValue
@@ -288,9 +302,21 @@ csqMarkingStatisticsEnable OBJECT-TYPE
         if 'false', statistics collection is disabled." 
     ::= { csqGlobals 4 }
 
---
+csqTenGOnlyMode OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies whether only 10-Gigabit Ethernet uplink
+        interfaces are used exclusively.
+
+        'true' indicates that only the 10-Gigabit Ethernet uplink
+        interfaces are used. The other uplink interfaces which are not
+        of 10-Gigabit capacity will be in administratively down state.
+
+        'false' indicates otherwise." 
+    ::= { csqGlobals 5 }
 -- The csqCosToDscpTable
---
 
 csqCosToDscpTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqCosToDscpEntry 
@@ -336,9 +362,9 @@ csqCosToDscpDscp OBJECT-TYPE
         "The DSCP value which the CoS value maps to." 
     ::= { csqCosToDscpEntry 2 }
  
---
+
 -- CsqIpPrecToDscpTable
---
+
 csqIpPrecToDscpTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIpPrecToDscpEntry 
     MAX-ACCESS      not-accessible
@@ -385,9 +411,7 @@ csqIpPrecToDscpDscp OBJECT-TYPE
     ::= { csqIpPrecToDscpEntry 2 }
  
 
---
 -- The csqExpToDscpTable
---
 
 csqExpToDscpTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqExpToDscpEntry 
@@ -431,9 +455,7 @@ csqExpToDscpDscp OBJECT-TYPE
     ::= { csqExpToDscpEntry 2 }
  
 
---
 -- csqDscpMappingTable
---
 
 csqDscpMappingTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqDscpMappingEntry 
@@ -512,9 +534,9 @@ csqDscpMappingMaxBurstDscp OBJECT-TYPE
         to." 
     ::= { csqDscpMappingEntry 5 }
  
---
+
+
 -- csqMutations group
---
 
 csqMaxCosMutationMap OBJECT-TYPE
     SYNTAX          Unsigned32
@@ -572,9 +594,8 @@ csqCosMutationRowStatus OBJECT-TYPE
         of rows in this table." 
     ::= { csqCosMutationEntry 2 }
  
---
+
 -- The csqCosMutationMappingTable
---
 
 csqCosMutationMappingTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqCosMutationMappingEntry 
@@ -600,7 +621,10 @@ csqCosMutationMappingEntry OBJECT-TYPE
         identity function. When the entry for csqCosMutationMapName
         in the csqCosMutationTable is removed, corresponding entries
         in this table will also be deleted."
-    INDEX { csqCosMutationMapName, csqCosMutationFromCos }
+    INDEX           {
+                        csqCosMutationMapName,
+                        csqCosMutationFromCos
+                    } 
     ::= { csqCosMutationMappingTable 1 }
 
 CsqCosMutationMappingEntry ::= SEQUENCE {
@@ -626,6 +650,7 @@ csqCosMutationToCos OBJECT-TYPE
     ::= { csqCosMutationMappingEntry 2 }
  
 
+
 csqMaxDscpMutationMap OBJECT-TYPE
     SYNTAX          Unsigned32
     MAX-ACCESS      read-only
@@ -634,10 +659,7 @@ csqMaxDscpMutationMap OBJECT-TYPE
         "The maximum number of DSCP mutation map that can be supported
         in the device." 
     ::= { csqMutations 4 }
-
---
 -- csqDscpMutationTable
---
 
 csqDscpMutationTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqDscpMutationEntry 
@@ -687,9 +709,7 @@ csqDscpMutationRowStatus OBJECT-TYPE
     ::= { csqDscpMutationEntry 2 }
  
 
---
 -- The csqDscpMutationMappingTable
---
 
 csqDscpMutationMappingTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqDscpMutationMappingEntry 
@@ -714,7 +734,10 @@ csqDscpMutationMappingEntry OBJECT-TYPE
         the identity function. When the entry for
         csqDscpMutationMapName in the csqDscpMutationTable is removed,
         corresponding entries in this table will also be deleted."
-    INDEX { csqDscpMutationMapName, csqDscpMutationFromDscp }
+    INDEX           {
+                        csqDscpMutationMapName,
+                        csqDscpMutationFromDscp
+                    } 
     ::= { csqDscpMutationMappingTable 1 }
 
 CsqDscpMutationMappingEntry ::= SEQUENCE {
@@ -740,6 +763,7 @@ csqDscpMutationToDscp OBJECT-TYPE
     ::= { csqDscpMutationMappingEntry 2 }
  
 
+
 csqMaxExpMutationMap OBJECT-TYPE
     SYNTAX          Unsigned32
     MAX-ACCESS      read-only
@@ -748,10 +772,7 @@ csqMaxExpMutationMap OBJECT-TYPE
         "The maximum number of EXP mutation can be supported
         in the device." 
     ::= { csqMutations 7 }
-
---
 -- csqExpMutationTable
---
 
 csqExpMutationTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqExpMutationEntry 
@@ -801,9 +822,7 @@ csqExpMutationRowStatus OBJECT-TYPE
     ::= { csqExpMutationEntry 2 }
  
 
---
 -- The csqExpMutationMappingTable
---
 
 csqExpMutationMappingTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqExpMutationMappingEntry 
@@ -828,7 +847,10 @@ csqExpMutationMappingEntry OBJECT-TYPE
         identity function. When the entry for csqExpMutationMapName
         in the csqExpMutationTable is removed, corresponding entries
         in this table will also be deleted."
-    INDEX { csqExpMutationMapName, csqExpMutationFromExp }
+    INDEX           {
+                        csqExpMutationMapName,
+                        csqExpMutationFromExp
+                    } 
     ::= { csqExpMutationMappingTable 1 }
 
 CsqExpMutationMappingEntry ::= SEQUENCE {
@@ -853,9 +875,8 @@ csqExpMutationToExp OBJECT-TYPE
         "The output EXP value which the input EXP value maps to." 
     ::= { csqExpMutationMappingEntry 2 }
  
---
+
 -- csqIfMutationConfigTable
---
 
 csqIfMutationConfigTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfMutationConfigEntry 
@@ -941,9 +962,7 @@ csqIfMutationRowStatus OBJECT-TYPE
     ::= { csqIfMutationConfigEntry 4 }
  
 
---
 -- csqIfConfigTable
---
 
 csqIfConfigTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfConfigEntry 
@@ -965,8 +984,15 @@ csqIfConfigEntry OBJECT-TYPE
     ::= { csqIfConfigTable 1 }
 
 CsqIfConfigEntry ::= SEQUENCE {
-        csqIfDefaultCos QosLayer2Cos,
-        csqIfTrustState INTEGER
+        csqIfDefaultCos            QosLayer2Cos,
+        csqIfTrustState            INTEGER,
+        csqIfQueueModeCpb          BITS,
+        csqIfConfigQueueMode       INTEGER,
+        csqIfIngressPolicyMap      SnmpAdminString,
+        csqIfEgressPolicyMap       SnmpAdminString,
+        csqIfIngressQueueingEnable TruthValue,
+        csqIfEgressQueueingEnable  TruthValue,
+        csqIfQueueingTrustState    INTEGER
 }
 
 csqIfDefaultCos OBJECT-TYPE
@@ -1017,10 +1043,132 @@ csqIfTrustState OBJECT-TYPE
         For non-IP packets, trustDscp(4) has identical behavior as
         trustCoS(2)." 
     ::= { csqIfConfigEntry 2 }
+
+csqIfQueueModeCpb OBJECT-TYPE
+    SYNTAX          BITS {
+                        cos(0),
+                        dscp(1)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the queue mode capability
+        at this interface. 
+
+        'cos' indicates that the interface is capable of 
+        queueing a packet based on the CoS value of the
+        packet.
+
+        'dscp' indicates that the interface is capable of
+        queueing a packet based on the DSCP value of the
+        packet." 
+    ::= { csqIfConfigEntry 3 }
+
+csqIfConfigQueueMode OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        cos(1),
+                        dscp(2)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the queueing mode at this interface.
+
+        'cos' indicates that the interface is queueing 
+        a packet based on the CoS value of the packet.
+        This value can only be set if the 'cos' bit
+        of csqIfQueueModeCpb is set.
+
+        'dscp' indicates that the interface is queueing 
+        a packet based on the DSCP value of the packet. 
+        This value can only be set if the 'dscp' bit
+        of csqIfQueueModeCpb is set." 
+    ::= { csqIfConfigEntry 4 }
+
+csqIfIngressPolicyMap OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the name of an existing policy-map attached to
+        this interface in ingress direction.
+        If there is no such policy-map attached, the value of this
+        object is zero-length string." 
+    ::= { csqIfConfigEntry 5 }
+
+csqIfEgressPolicyMap OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the name of an existing policy-map
+        attached to this interface in egress direction.
+        If there is no such policy-map attached, the value of this
+        object is zero-length string." 
+    ::= { csqIfConfigEntry 6 }
+
+csqIfIngressQueueingEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates if ingress queueing is enabled at this
+        interface.
+
+        'true' indicates ingress queueing is enabled.
+
+        'false' indicates ingress queueing is disabled." 
+    ::= { csqIfConfigEntry 7 }
+
+csqIfEgressQueueingEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates if egress queueing is enabled at this
+        interface.
+
+        'true' indicates egress queueing is enabled.
+
+        'false' indicates egress queueing is disabled." 
+    ::= { csqIfConfigEntry 8 }
+
+csqIfQueueingTrustState OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        untrusted(1),
+                        trustCoS(2),
+                        trustIpPrec(3),
+                        trustDscp(4)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the queueing trust state of an interface.
+
+        If the object is untrusted(1), then the DSCP assigned to the
+        packet is the layer2 CoS value denoted by csqIfDefaultCos
+        object mapped to a DSCP by the CoS-to-DSCP mapping defined in
+        object csqCosToDscpDscp.
+
+        If this object is trustCoS(2), then the DSCP assigned
+        to the packet is the layer2 CoS of the packet mapped to a
+        DSCP by the CoS-to-DSCP mapping defined in object
+        csqCosToDscpDscp.
+
+        When this object is trustIpPrec(3), a DSCP is assigned to
+        an IP packet according to the IP-Precedence-to-DSCP mapping
+        defined by the values contained in csqIpPrecToDscpTable. For
+        non-IP packets, trustIpPrec(3) has identical behavior as
+        trustCoS(2).
+
+        When this object is trustDscp(4), the DSCP contained in an IP
+        packet is trusted as being the correct value to assign to it.
+        For non-IP packets, trustDscp(4) has identical behavior as
+        trustCoS(2)." 
+    ::= { csqIfConfigEntry 9 }
  
---
+
 -- Cos to Queue assignment table
---
 
 csqIfCosToQueueTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfCosToQueueEntry 
@@ -1039,7 +1187,11 @@ csqIfCosToQueueEntry OBJECT-TYPE
     DESCRIPTION
         "The assignment of packets at an interface to a pair of queue
         and threshold based on their CoS value and traffic direction."
-    INDEX { ifIndex, csqIfCosToQueueDirection, csqIfCosToQueueCos }
+    INDEX           {
+                        ifIndex,
+                        csqIfCosToQueueDirection,
+                        csqIfCosToQueueCos
+                    } 
     ::= { csqIfCosToQueueTable 1 }
 
 CsqIfCosToQueueEntry ::= SEQUENCE {
@@ -1085,9 +1237,7 @@ csqIfCosToQueueThresholdNumber OBJECT-TYPE
     ::= { csqIfCosToQueueEntry 4 }
  
 
---
 -- DSCP to Queue assignment table
---
 
 csqIfDscpToQueueTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfDscpToQueueEntry 
@@ -1107,7 +1257,11 @@ csqIfDscpToQueueEntry OBJECT-TYPE
         "The assignment of packets at an interface to a pair of queue
         and threshold based on their DSCP value and packets traffic
         direction."
-    INDEX { ifIndex, csqIfDscpToQueueDirection, csqIfDscpToQueueDscp }
+    INDEX           {
+                        ifIndex,
+                        csqIfDscpToQueueDirection,
+                        csqIfDscpToQueueDscp
+                    } 
     ::= { csqIfDscpToQueueTable 1 }
 
 CsqIfDscpToQueueEntry ::= SEQUENCE {
@@ -1153,9 +1307,7 @@ csqIfDscpToQueueThresholdNumber OBJECT-TYPE
     ::= { csqIfDscpToQueueEntry 4 }
  
 
---
 -- The Interface Drop Table
---
 
 csqIfDropConfigTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfDropConfigEntry 
@@ -1173,10 +1325,12 @@ csqIfDropConfigEntry OBJECT-TYPE
     DESCRIPTION
         "For each threshold of a queue, there are parameters to set on
         the threshold. This entry contains the parameters."
-    INDEX   { ifIndex,
+    INDEX           {
+                        ifIndex,
                         csqIfDropConfigDirection,
                         csqIfDropConfigQueueIndex,
-              csqIfDropConfigThresholdIndex }
+                        csqIfDropConfigThresholdIndex
+                    } 
     ::= { csqIfDropConfigTable 1 }
 
 CsqIfDropConfigEntry ::= SEQUENCE {
@@ -1186,7 +1340,8 @@ CsqIfDropConfigEntry ::= SEQUENCE {
         csqIfDropConfigDropAlgorithm    INTEGER,
         csqIfDropConfigDropThreshold    Percent,
         csqIfDropConfigMinWredThreshold Percent,
-        csqIfDropConfigMaxWredThreshold Percent
+        csqIfDropConfigMaxWredThreshold Percent,
+        csqIfDropConfigQueueBuffer      INTEGER
 }
 
 csqIfDropConfigDirection OBJECT-TYPE
@@ -1196,7 +1351,6 @@ csqIfDropConfigDirection OBJECT-TYPE
     DESCRIPTION
         "Indicates the queue direction." 
     ::= { csqIfDropConfigEntry 1 }
-
 
 csqIfDropConfigQueueIndex OBJECT-TYPE
     SYNTAX          QosQueueNumber
@@ -1215,7 +1369,10 @@ csqIfDropConfigThresholdIndex OBJECT-TYPE
     ::= { csqIfDropConfigEntry 3 }
 
 csqIfDropConfigDropAlgorithm OBJECT-TYPE
-    SYNTAX      INTEGER { tailDrop(1), wred(2) } 
+    SYNTAX          INTEGER  {
+                        tailDrop(1),
+                        wred(2)
+                    }
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -1248,7 +1405,9 @@ csqIfDropConfigDropThreshold OBJECT-TYPE
         This object is configurable only if 'tailDrop' bit in 
         the value of qosIfCapabilities for the same ifIndex and traffic
         direction is set. If value of csqIfDropConfigAlgorithm is not
-        'tailDrop', this object value is ignored." 
+        'tailDrop', this object value has no effect. If value of 
+        csqIfDropConfigQueueBuffer is not 'percent',
+        this object value has no effect." 
     ::= { csqIfDropConfigEntry 5 }
 
 csqIfDropConfigMinWredThreshold OBJECT-TYPE
@@ -1268,7 +1427,7 @@ csqIfDropConfigMinWredThreshold OBJECT-TYPE
         This object is configurable only if 'wred' bit in the value
         of qosIfCapabilities object for the same ifIndex and traffic
         direction is set. If value of csqIfDropConfigAlgorithm is not
-        'wred', this object value is ignored." 
+        'wred', this object value has no effect." 
     ::= { csqIfDropConfigEntry 6 }
 
 csqIfDropConfigMaxWredThreshold OBJECT-TYPE
@@ -1283,13 +1442,40 @@ csqIfDropConfigMaxWredThreshold OBJECT-TYPE
         This object is configurable only if 'wred' bit in the value
         of qosIfCapabilities object for the same ifIndex and traffic
         direction is set. If value of csqIfDropConfigAlgorithm is not
-        'wred', this object value is ignored." 
+        'wred', this object value has no effect." 
     ::= { csqIfDropConfigEntry 7 }
+
+csqIfDropConfigQueueBuffer OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        shared(1),
+                        dedicated(2),
+                        percent(3)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies how the queue buffer behaves
+        when the drop algorithm is tail drop. 
+
+        'shared' indicates that the queue buffer is shared
+        among all queues at the interface. 
+
+        'dedicated' indicates that each queue will be
+        assigned a dedicated portion of the queue buffer.
+
+        'percent' indicates that a percentage of the queue
+        buffer can be configured for each queue. The percentage
+        value can be configured via csqIfDropConfigDropThreshold
+        object.
+
+        This object is configurable only if 'tailDrop' bit in 
+        the value of qosIfCapabilities for the same ifIndex and traffic
+        direction is set. If value of csqIfDropConfigAlgorithm is not
+        'tailDrop', this object value has no effect." 
+    ::= { csqIfDropConfigEntry 8 }
  
 
---
 -- The Queue Table
---
 
 csqIfQueueTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfQueueEntry 
@@ -1307,9 +1493,11 @@ csqIfQueueEntry OBJECT-TYPE
     DESCRIPTION
         "A set of WRR weight and queue size allocation weight for
         ingress or egress of a specific queue."
-    INDEX   { ifIndex, 
+    INDEX           {
+                        ifIndex,
                         csqIfQueueDirection,
-              csqIfQueueNumber }
+                        csqIfQueueNumber
+                    } 
     ::= { csqIfQueueTable 1 }
 
 CsqIfQueueEntry ::= SEQUENCE {
@@ -1317,7 +1505,10 @@ CsqIfQueueEntry ::= SEQUENCE {
         csqIfQueueNumber           QosQueueNumber,
         csqIfQueueWrrWeight        Unsigned32,
         csqIfQueueSizeWeight       Unsigned32,
-        csqIfQueueStatsGranularity INTEGER
+        csqIfQueueStatsGranularity INTEGER,
+        csqIfQueueClassMapName     SnmpAdminString,
+        csqIfQueueScheduling       INTEGER,
+        csqIfQueueSrrWeight        Unsigned32
 }
 
 csqIfQueueDirection OBJECT-TYPE
@@ -1327,7 +1518,6 @@ csqIfQueueDirection OBJECT-TYPE
     DESCRIPTION
         "Indicates the queue direction." 
     ::= { csqIfQueueEntry 1 }
-
 
 csqIfQueueNumber OBJECT-TYPE
     SYNTAX          QosQueueNumber
@@ -1342,7 +1532,10 @@ csqIfQueueWrrWeight OBJECT-TYPE
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "Specifies the WRR weight." 
+        "Specifies the WRR weight. This object is configurable
+        only if the value of csqIfQueueScheduling is 'wrr'.
+        When the value of csqIfQueueScheduling is not 'wrr',
+        the value of this object has no effect." 
     ::= { csqIfQueueEntry 3 }
 
 csqIfQueueSizeWeight OBJECT-TYPE
@@ -1354,7 +1547,10 @@ csqIfQueueSizeWeight OBJECT-TYPE
     ::= { csqIfQueueEntry 4 }
 
 csqIfQueueStatsGranularity OBJECT-TYPE
-    SYNTAX          INTEGER { perQueue(1), perQueueThresh(2) }  
+    SYNTAX          INTEGER  {
+                        perQueue(1),
+                        perQueueThresh(2)
+                    }
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -1367,10 +1563,48 @@ csqIfQueueStatsGranularity OBJECT-TYPE
         'perQueueThresh' indicates that QoS statistics is maintained
         per queue per threshold." 
     ::= { csqIfQueueEntry 5 }
+
+csqIfQueueClassMapName OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the name of an existing class-map attached at
+        this interface for a queue in the specified direction.
+        If there is no such class-map attached, the value of this
+        object is zero-length string." 
+    ::= { csqIfQueueEntry 6 }
+
+csqIfQueueScheduling OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        wrr(1),
+                        srr(2)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the queue scheduling method.
+
+        'wrr' indicates that the queue scheduling method is
+        Weight Round Robin.
+
+        'srr' indicates that the queue scheduling method is
+        Shaped Round Robin." 
+    ::= { csqIfQueueEntry 7 }
+
+csqIfQueueSrrWeight OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..255)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Specifies the SRR weight. This object is configurable
+        only if the value of csqIfQueueScheduling is 'srr'.
+        When the value of csqIfQueueScheduling is not 'srr',
+        the value of this object has no effect." 
+    ::= { csqIfQueueEntry 8 }
  
---
+
 -- The Interface Mode Config Table
---
 
 csqIfModeConfigTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfModeConfigEntry 
@@ -1404,16 +1638,14 @@ csqIfVlanBasedQosModeEnable OBJECT-TYPE
         the specified interface.
 
         If 'true', policy map that is attached to this interface
-        is ignored, and QoS is driven by the policy map that is
+        has no effect, and QoS is driven by the policy map that is
         attached to the corresponding VLAN interface that this
         interface belongs to. Otherwise, the value of this object
         is 'false'." 
     ::= { csqIfModeConfigEntry 1 }
  
 
---
 -- The Interface Consistency Check Table
---
 
 csqIfConsistencyCheckTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfConsistencyCheckEntry 
@@ -1453,9 +1685,8 @@ csqIfConsistencyCheckEnable OBJECT-TYPE
         If 'false', QoS-port attribute consistency check is disabled." 
     ::= { csqIfConsistencyCheckEntry 1 }
  
---
+
 -- The Interface Statistics Table
---
 
 csqIfStatsTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqIfStatsEntry 
@@ -1474,10 +1705,12 @@ csqIfStatsEntry OBJECT-TYPE
         "An entry contains statistics, such as a drop packet
         counter, which are per interface (ifIndex), per  
         direction, per queue and per threshold."
-    INDEX  { ifIndex,
+    INDEX           {
+                        ifIndex,
                         csqIfStatsDirection,
                         csqIfStatsQueueNumber,
-             csqIfStatsThresholdNumber  }
+                        csqIfStatsThresholdNumber
+                    } 
     ::= { csqIfStatsTable 1 }
 
 CsqIfStatsEntry ::= SEQUENCE {
@@ -1531,9 +1764,7 @@ csqIfStatsDropPkts OBJECT-TYPE
     ::= { csqIfStatsEntry 4 }
  
 
---
 -- The Module Statistics Table
---
 
 csqModuleStatsTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CsqModuleStatsEntry 
@@ -1610,83 +1841,87 @@ csqModuleExpChangedMplsPackets OBJECT-TYPE
         due to policing." 
     ::= { csqModuleStatsEntry 5 }
  
+
+
 csqModuleStatsExtTable OBJECT-TYPE
-    SYNTAX      SEQUENCE OF CsqModuleStatsExtEntry
+    SYNTAX          SEQUENCE OF CsqModuleStatsExtEntry 
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table describes additional QoS statistics counters per 
+        "This table describes additional QoS statistics counters per
         module that is capable of providing this information. Such
         module is identified by the entPhysicalIndex in ENTITY-MIB."
     ::= { csqStatistics 3 }
 
 csqModuleStatsExtEntry OBJECT-TYPE
-    SYNTAX      CsqModuleStatsExtEntry
+    SYNTAX          CsqModuleStatsExtEntry
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "Each entry contains additional per-module (entPhysicalIndex) 
-         QoS statistics."
-    INDEX  { entPhysicalIndex }
+        "Each entry contains additional per-module (entPhysicalIndex)
+        QoS statistics."
+    INDEX           { entPhysicalIndex } 
     ::= { csqModuleStatsExtTable 1 }
 
 CsqModuleStatsExtEntry ::= SEQUENCE {
-    csqModuleTunnelEncapPackets      Counter32,
-    csqModuleTunnelDecapPackets      Counter32,
-    csqModuleDropByPolicingInOctets  Counter64,
-    csqModuleDropByPolicingOutOctets Counter64,
-    csqModuleFwdByPolicingInPackets  Counter32,
-    csqModuleFwdByPolicingInOctets   Counter64,
-    csqModuleFwdByPolicingOutPackets Counter32,
-    csqModuleFwdByPolicingOutOctets  Counter64,
-    csqModuleHighExceedInPackets     Counter32,
-    csqModuleHighExceedInOctets      Counter64,
-    csqModuleHighExceedOutPackets    Counter32,
-    csqModuleHighExceedOutOctets     Counter64,
-    csqModuleLowExceedInPackets      Counter32,
-    csqModuleLowExceedInOctets       Counter64,
-    csqModuleLowExceedOutPackets     Counter32,
-    csqModuleLowExceedOutOctets      Counter64,
-    csqModuleDropByAggPolicerInPackets  Counter32,
-    csqModuleDropByAggPolicerInOctets   Counter64,
-    csqModuleDropByAggPolicerOutPackets Counter32,
-    csqModuleDropByAggPolicerOutOctets  Counter64,
-    csqModuleFwdByAggPolicerInPackets  Counter32,
-    csqModuleFwdByAggPolicerInOctets   Counter64,
-    csqModuleFwdByAggPolicerOutPackets Counter32,
-    csqModuleFwdByAggPolicerOutOctets  Counter64,
-    csqModuleAggHighExceedInPackets     Counter32,
-    csqModuleAggHighExceedInOctets      Counter64,
-    csqModuleAggHighExceedOutPackets    Counter32,
-    csqModuleAggHighExceedOutOctets     Counter64,
-    csqModuleAggLowExceedInPackets      Counter32,
-    csqModuleAggLowExceedInOctets       Counter64,
-    csqModuleAggLowExceedOutPackets     Counter32,
-    csqModuleAggLowExceedOutOctets      Counter64,
-    csqModuleDropByNetflowInPackets      Counter32,
-    csqModuleDropByNetflowInOctets       Counter64,
-    csqModuleDropByNetflowOutPackets     Counter32,
-    csqModuleDropByNetflowOutOctets      Counter64,
-    csqModuleFwdByNetflowInPackets      Counter32,
-    csqModuleFwdByNetflowInOctets       Counter64,
-    csqModuleFwdByNetflowOutPackets     Counter32,
-    csqModuleFwdByNetflowOutOctets      Counter64,
-    csqModuleNetflowExceedInPackets      Counter32,
-    csqModuleNetflowExceedInOctets       Counter64,
-    csqModuleNetflowExceedOutPackets     Counter32,
-    csqModuleNetflowExceedOutOctets      Counter64
+        csqModuleTunnelEncapPackets         Counter32,
+        csqModuleTunnelDecapPackets         Counter32,
+        csqModuleDropByPolicingInOctets     Counter64,
+        csqModuleDropByPolicingOutOctets    Counter64,
+        csqModuleFwdByPolicingInPackets     Counter32,
+        csqModuleFwdByPolicingInOctets      Counter64,
+        csqModuleFwdByPolicingOutPackets    Counter32,
+        csqModuleFwdByPolicingOutOctets     Counter64,
+        csqModuleHighExceedInPackets        Counter32,
+        csqModuleHighExceedInOctets         Counter64,
+        csqModuleHighExceedOutPackets       Counter32,
+        csqModuleHighExceedOutOctets        Counter64,
+        csqModuleLowExceedInPackets         Counter32,
+        csqModuleLowExceedInOctets          Counter64,
+        csqModuleLowExceedOutPackets        Counter32,
+        csqModuleLowExceedOutOctets         Counter64,
+        csqModuleDropByAggPolicerInPackets  Counter32,
+        csqModuleDropByAggPolicerInOctets   Counter64,
+        csqModuleDropByAggPolicerOutPackets Counter32,
+        csqModuleDropByAggPolicerOutOctets  Counter64,
+        csqModuleFwdByAggPolicerInPackets   Counter32,
+        csqModuleFwdByAggPolicerInOctets    Counter64,
+        csqModuleFwdByAggPolicerOutPackets  Counter32,
+        csqModuleFwdByAggPolicerOutOctets   Counter64,
+        csqModuleAggHighExceedInPackets     Counter32,
+        csqModuleAggHighExceedInOctets      Counter64,
+        csqModuleAggHighExceedOutPackets    Counter32,
+        csqModuleAggHighExceedOutOctets     Counter64,
+        csqModuleAggLowExceedInPackets      Counter32,
+        csqModuleAggLowExceedInOctets       Counter64,
+        csqModuleAggLowExceedOutPackets     Counter32,
+        csqModuleAggLowExceedOutOctets      Counter64,
+        csqModuleDropByNetflowInPackets     Counter32,
+        csqModuleDropByNetflowInOctets      Counter64,
+        csqModuleDropByNetflowOutPackets    Counter32,
+        csqModuleDropByNetflowOutOctets     Counter64,
+        csqModuleFwdByNetflowInPackets      Counter32,
+        csqModuleFwdByNetflowInOctets       Counter64,
+        csqModuleFwdByNetflowOutPackets     Counter32,
+        csqModuleFwdByNetflowOutOctets      Counter64,
+        csqModuleNetflowExceedInPackets     Counter32,
+        csqModuleNetflowExceedInOctets      Counter64,
+        csqModuleNetflowExceedOutPackets    Counter32,
+        csqModuleNetflowExceedOutOctets     Counter64,
+        csqModuleCosChangedPackets          Counter32,
+        csqModuleTrafficClassChangedPackets Counter32
 }
 
 csqModuleTunnelEncapPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
         "The total number of tunnel encapsulated packets." 
     ::= { csqModuleStatsExtEntry 1 }
 
 csqModuleTunnelDecapPackets OBJECT-TYPE
-    SYNTAX      Counter32 
+    SYNTAX          Counter32
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -1694,858 +1929,675 @@ csqModuleTunnelDecapPackets OBJECT-TYPE
     ::= { csqModuleStatsExtEntry 2 }
 
 csqModuleDropByPolicingInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
+    SYNTAX          Counter64
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "The total number of ingress octets which are dropped due 
+        "The total number of ingress octets which are dropped due
         to policing." 
     ::= { csqModuleStatsExtEntry 3 }
 
 csqModuleDropByPolicingOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of egress octets which are dropped due 
+        "The total number of egress octets which are dropped due
         to policing." 
     ::= { csqModuleStatsExtEntry 4 }
 
 csqModuleFwdByPolicingInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of policed ingress packets which are 
-        forwarded."
+        "The total number of policed ingress packets which are
+        forwarded." 
     ::= { csqModuleStatsExtEntry 5 }
 
 csqModuleFwdByPolicingInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of policed ingress octets which are
-        forwarded."
+        forwarded." 
     ::= { csqModuleStatsExtEntry 6 }
 
 csqModuleFwdByPolicingOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of policed egress packets which are
-        forwarded."
+        forwarded." 
     ::= { csqModuleStatsExtEntry 7 }
 
 csqModuleFwdByPolicingOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of policed egress octets which are
-        forwarded."
+        forwarded." 
     ::= { csqModuleStatsExtEntry 8 }
 
 csqModuleHighExceedInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets exceeding the high
         level policing rate." 
     ::= { csqModuleStatsExtEntry 9 }
 
 csqModuleHighExceedInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets exceeding the high level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 10 }
 
 csqModuleHighExceedOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets exceeding the high level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 11 }
 
 csqModuleHighExceedOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets exceeding the high level
         policing rate." 
     ::= { csqModuleStatsExtEntry 12 }
 
 csqModuleLowExceedInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets exceeding the low level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 13 }
 
 csqModuleLowExceedInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets exceeding the low level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 14 }
 
 csqModuleLowExceedOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets exceeding the low level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 15 }
 
 csqModuleLowExceedOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets exceeding the low level
-         policing rate." 
+        policing rate." 
     ::= { csqModuleStatsExtEntry 16 }
 
 csqModuleDropByAggPolicerInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets which are dropped
-         by aggregate policers." 
+        by aggregate policers." 
     ::= { csqModuleStatsExtEntry 17 }
 
 csqModuleDropByAggPolicerInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets which are dropped
-         by aggregate policer." 
+        by aggregate policer." 
     ::= { csqModuleStatsExtEntry 18 }
 
 csqModuleDropByAggPolicerOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets which are dropped by
-         aggregate policers."
+        aggregate policers." 
     ::= { csqModuleStatsExtEntry 19 }
 
 csqModuleDropByAggPolicerOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets which are dropped by
-         aggregate policers."
+        aggregate policers." 
     ::= { csqModuleStatsExtEntry 20 }
 
 csqModuleFwdByAggPolicerInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets which are forwarded
-         by aggregate policers."
+        by aggregate policers." 
     ::= { csqModuleStatsExtEntry 21 }
 
 csqModuleFwdByAggPolicerInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets which are forwarded
-         by aggregate policers."
+        by aggregate policers." 
     ::= { csqModuleStatsExtEntry 22 }
 
 csqModuleFwdByAggPolicerOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets which are forwarded
-         by aggregate policers."
+        by aggregate policers." 
     ::= { csqModuleStatsExtEntry 23 }
 
 csqModuleFwdByAggPolicerOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets which are forwarded
-         by aggregate policers."
+        by aggregate policers." 
     ::= { csqModuleStatsExtEntry 24 }
 
 csqModuleAggHighExceedInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of ingress packets (policed by 
+        "The total number of ingress packets (policed by
         aggregate policers) exceeding the high level policing 
-        rate."
+        rate." 
     ::= { csqModuleStatsExtEntry 25 }
 
 csqModuleAggHighExceedInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of ingress octets (policed by 
+        "The total number of ingress octets (policed by
         aggregate policers) exceeding the high level policing 
         rate." 
     ::= { csqModuleStatsExtEntry 26 }
 
 csqModuleAggHighExceedOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets (policed by aggregate
-        policers) exceeding the high level policing rate."
+        policers) exceeding the high level policing rate." 
     ::= { csqModuleStatsExtEntry 27 }
 
 csqModuleAggHighExceedOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets (policed by aggregate
-        policers) exceeding the high level policing rate."
+        policers) exceeding the high level policing rate." 
     ::= { csqModuleStatsExtEntry 28 }
 
 csqModuleAggLowExceedInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets (policed by aggregate
-        policers) exceeding the low level policing rate."
+        policers) exceeding the low level policing rate." 
     ::= { csqModuleStatsExtEntry 29 }
 
 csqModuleAggLowExceedInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets (policed by aggregate
-        policers) exceeding the low level policing rate."
+        policers) exceeding the low level policing rate." 
     ::= { csqModuleStatsExtEntry 30 }
 
 csqModuleAggLowExceedOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets (policed by aggregate
-        policers) exceeding the low level policing rate."
+        policers) exceeding the low level policing rate." 
     ::= { csqModuleStatsExtEntry 31 }
 
 csqModuleAggLowExceedOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets (policed by aggregate
-        policers) exceeding the low level policing rate."
+        policers) exceeding the low level policing rate." 
     ::= { csqModuleStatsExtEntry 32 }
 
 csqModuleDropByNetflowInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets which are dropped by
-         the netflow feature."  
+        the netflow feature." 
     ::= { csqModuleStatsExtEntry 33 }
 
 csqModuleDropByNetflowInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets which are dropped by
-        the netflow feature."  
+        the netflow feature." 
     ::= { csqModuleStatsExtEntry 34 }
 
 csqModuleDropByNetflowOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets which are dropped by
-         the netflow feature."  
+        the netflow feature." 
     ::= { csqModuleStatsExtEntry 35 }
 
 csqModuleDropByNetflowOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets which are dropped by
-         the netflow feature."  
+        the netflow feature." 
     ::= { csqModuleStatsExtEntry 36 }
 
 csqModuleFwdByNetflowInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress packets which are forwarded
-        by the netflow feature."  
+        by the netflow feature." 
     ::= { csqModuleStatsExtEntry 37 }
 
 csqModuleFwdByNetflowInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of ingress octets which are forwarded
-        by the netflow feature."  
+        by the netflow feature." 
     ::= { csqModuleStatsExtEntry 38 }
 
 csqModuleFwdByNetflowOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets which are forwarded
-         by the netflow feature."  
+        by the netflow feature." 
     ::= { csqModuleStatsExtEntry 39 }
 
 csqModuleFwdByNetflowOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets which are forwarded
-         by the netflow feature."  
+        by the netflow feature." 
     ::= { csqModuleStatsExtEntry 40 }
 
 csqModuleNetflowExceedInPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of ingress packets exceeding the netflow 
-        policing rate."
+        "The total number of ingress packets exceeding the netflow
+        policing rate." 
     ::= { csqModuleStatsExtEntry 41 }
 
 csqModuleNetflowExceedInOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of ingress octets exceeding the netflow 
-        policing rate."
+        "The total number of ingress octets exceeding the netflow
+        policing rate." 
     ::= { csqModuleStatsExtEntry 42 }
 
 csqModuleNetflowExceedOutPackets OBJECT-TYPE
-    SYNTAX      Counter32 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress packets exceeding the netflow
-        policing rate."
+        policing rate." 
     ::= { csqModuleStatsExtEntry 43 }
 
 csqModuleNetflowExceedOutOctets OBJECT-TYPE
-    SYNTAX      Counter64 
-    MAX-ACCESS  read-only
-    STATUS      current
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
         "The total number of egress octets exceeding the netflow
-        policing rate."
+        policing rate." 
     ::= { csqModuleStatsExtEntry 44 }
 
+csqModuleCosChangedPackets OBJECT-TYPE
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of packets (IP and non-IP) that have the CoS value
+        changed due to policing." 
+    ::= { csqModuleStatsExtEntry 45 }
+
+csqModuleTrafficClassChangedPackets OBJECT-TYPE
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of packets that have the Traffic Class changed
+        due to policing" 
+    ::= { csqModuleStatsExtEntry 46 }
+ 
+
+-- csqIfStatsExtTable
 
 csqIfStatsExtTable OBJECT-TYPE
-    SYNTAX      SEQUENCE OF CsqIfStatsExtEntry
-    MAX-ACCESS  not-accessible
-    STATUS      current
+    SYNTAX          SEQUENCE OF CsqIfStatsExtEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
     DESCRIPTION
         "A table containing QoS statistics counters per QoS manageable
-         interface."
+        interface."
     ::= { csqStatistics 4 }
 
 csqIfStatsExtEntry OBJECT-TYPE
-    SYNTAX      CsqIfStatsExtEntry
-    MAX-ACCESS  not-accessible
-    STATUS      current
+    SYNTAX          CsqIfStatsExtEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
     DESCRIPTION
-        "Each entry contains statistics, such as a drop BPDU packet  
-         counter, which are per interface (ifIndex), per direction."
-    INDEX  { ifIndex, csqIfStatsDirection }
+        "Each entry contains statistics, such as a drop BPDU packet
+        counter, which are per interface (ifIndex), per direction."
+    INDEX           {
+                        ifIndex,
+                        csqIfStatsDirection
+                    } 
     ::= { csqIfStatsExtTable 1 }
 
 CsqIfStatsExtEntry ::= SEQUENCE {
-    csqIfBpduDropPkts        Counter64
+        csqIfBpduDropPkts Counter64
 }
 
-csqIfBpduDropPkts  OBJECT-TYPE
-    SYNTAX      Counter64
-    MAX-ACCESS  read-only
-    STATUS      current
+csqIfBpduDropPkts OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of dropped BPDU packets."
+        "The total number of dropped BPDU packets." 
     ::= { csqIfStatsExtEntry 1 }
+ 
 
+-- csqPolicerUsage group
+--   
 
---
---  csqPolicerUsage group
---
+--   
+-- The csqPolicerUsageTable
 
---
--- The csqPolicerUsageTable 
---
-
-csqPolicerUsageTable    OBJECT-TYPE
-    SYNTAX        SEQUENCE OF CsqPolicerUsageEntry
-    MAX-ACCESS    not-accessible
-    STATUS        current
+csqPolicerUsageTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CsqPolicerUsageEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
     DESCRIPTION
         "This table contains the usage of policers in the device."
     ::= { csqPolicerUsage 1 }
 
-csqPolicerUsageEntry    OBJECT-TYPE
-    SYNTAX        CsqPolicerUsageEntry
-    MAX-ACCESS    not-accessible
-    STATUS        current
+csqPolicerUsageEntry OBJECT-TYPE
+    SYNTAX          CsqPolicerUsageEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
     DESCRIPTION
         "Each row contains the policer usage information for every
         module, denoted by its entPhysicalIndex, which is capable of
-        providing this information." 
-    INDEX { entPhysicalIndex, csqPolicerType }
+        providing this information."
+    INDEX           {
+                        entPhysicalIndex,
+                        csqPolicerType
+                    } 
     ::= { csqPolicerUsageTable 1 }
 
 CsqPolicerUsageEntry ::= SEQUENCE {
-    csqPolicerType     QosPolicerType,
-    csqPolicerUsed     Unsigned32,
-    csqPolicerTotal    Unsigned32 
+        csqPolicerType  QosPolicerType,
+        csqPolicerUsed  Unsigned32,
+        csqPolicerTotal Unsigned32
 }
 
-csqPolicerType        OBJECT-TYPE
-    SYNTAX        QosPolicerType 
-    MAX-ACCESS    not-accessible
-    STATUS        current
+csqPolicerType OBJECT-TYPE
+    SYNTAX          QosPolicerType
+    MAX-ACCESS      not-accessible
+    STATUS          current
     DESCRIPTION
-        "This object indicates the policer type."
+        "This object indicates the policer type." 
     ::= { csqPolicerUsageEntry 1 }
 
-csqPolicerUsed     OBJECT-TYPE
-    SYNTAX        Unsigned32 
-    MAX-ACCESS    read-only 
-    STATUS        current
+csqPolicerUsed OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The number of policers that are currently used."
+        "The number of policers that are currently used." 
     ::= { csqPolicerUsageEntry 2 }
 
-csqPolicerTotal     OBJECT-TYPE
-    SYNTAX        Unsigned32 
-    MAX-ACCESS    read-only 
-    STATUS        current
+csqPolicerTotal OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
     DESCRIPTION
-        "The total number of policers."
+        "The total number of policers." 
     ::= { csqPolicerUsageEntry 3 }
+ 
 
---
+-- Module group
+--   
+
+--   
+-- Module DSCP Rewrite Enable Table
+
+csqModuleDscpRewriteEnableTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CsqModuleDscpRewriteEnableEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The table containing information of DSCP Rewrite Enable for
+        each module. Such module is identified by the entPhysicalIndex
+        in ENTITY-MIB. The value of each entry needs to be viewed 
+        in association with the global value, csqDscpRewriteEnable."
+    ::= { csqModule 1 }
+
+csqModuleDscpRewriteEnableEntry OBJECT-TYPE
+    SYNTAX          CsqModuleDscpRewriteEnableEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry contains the configuration of DSCP Rewrite Enable
+        Status for a DSCP Rewrite managable module. such module is 
+        of type entPhysicalClass module(9) in ENTITY-MIB. 
+
+        Entries are created by the agent at the system power-up or
+        module insertion. Entries are deleted by the agent upon module
+        removal."
+    INDEX           { entPhysicalIndex } 
+    ::= { csqModuleDscpRewriteEnableTable 1 }
+
+CsqModuleDscpRewriteEnableEntry ::= SEQUENCE {
+        csqModuleDscpRewriteEnable TruthValue
+}
+
+csqModuleDscpRewriteEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies whether DSCP rewrite is enabled on a
+        particular module when the value of csqDscpRewriteEnable is 
+        set to 'true'. The value of this object has no effect (DSCP 
+        rewrite will be disabled on this module) when the value of 
+        csqDscpRewriteEnable is set to 'false'." 
+    ::= { csqModuleDscpRewriteEnableEntry 1 }
+ 
+
 -- Conformance
---
 
-ciscoSwitchQosMIBCompliances
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBConformance 1 }
+ciscoSwitchQosMIBCompliances  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBConformance 1 }
 
-ciscoSwitchQosMIBGroups
-    OBJECT IDENTIFIER ::= { ciscoSwitchQosMIBConformance 2 }
+ciscoSwitchQosMIBGroups  OBJECT IDENTIFIER
+    ::= { ciscoSwitchQosMIBConformance 2 }
+
 
 ciscoSwitchQosMIBCompliance MODULE-COMPLIANCE
-    STATUS deprecated 
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the CISCO-SWITCH-QOS-MIB.
-         This compliance is superceded by 
-         ciscoSwitchQosMIBComplianceRev2."
-    MODULE
-    MANDATORY-GROUPS { 
-         ciscoSwitchQosIfConfigGroup
-    }
-    GROUP ciscoSwitchQosIfStatsGroup
+        This compliance is superceded by 
+        ciscoSwitchQosMIBComplianceRev2."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoSwitchQosIfConfigGroup }
+
+    GROUP           ciscoSwitchQosIfStatsGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support port statictics." 
+        which support port statictics."
 
-    GROUP ciscoSwitchQosModuleStatsGroup
+    GROUP           ciscoSwitchQosModuleStatsGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support module statistics." 
+        which support module statistics."
 
-    GROUP ciscoSwitchQosPortQueueingGroup
+    GROUP           ciscoSwitchQosPortQueueingGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support port queueing mode." 
+        which support port queueing mode."
 
-    GROUP ciscoSwitchQosRedirectPolicingGroup
+    GROUP           ciscoSwitchQosRedirectPolicingGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support policing of ACL-redirected packets." 
+        which support policing of ACL-redirected packets."
 
-    GROUP ciscoSwitchQosDscpRewriteGroup
+    GROUP           ciscoSwitchQosDscpRewriteGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support DSCP rewrite." 
+        which support DSCP rewrite."
 
-    GROUP ciscoSwitchQosMappingGroup
+    GROUP           ciscoSwitchQosMappingGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support mapping between CoS, IpPrecedence,
-         MPLS-EXP and DSCP."
+        which support mapping between CoS, IpPrecedence,
+        MPLS-EXP and DSCP."
 
-    GROUP ciscoSwitchQosMutationGroup
+    GROUP           ciscoSwitchQosMutationGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support CoS, MPLS-EXP and DSCP mutation."
+        which support CoS, MPLS-EXP and DSCP mutation."
 
-    GROUP ciscoSwitchQosIfCosToQueueGroup
+    GROUP           ciscoSwitchQosIfCosToQueueGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support CoS to queue assignment at an interface." 
+        which support CoS to queue assignment at an interface."
 
-    GROUP ciscoSwitchQosIfDscpAssignGroup
+    GROUP           ciscoSwitchQosIfDscpAssignGroup
     DESCRIPTION
         "This group is mandatory only for platforms
-         which support Dscp to queue assignment at an interface." 
+        which support Dscp to queue assignment at an interface."
 
-    GROUP ciscoSwitchQosIfDropConfigGroup
+    GROUP           ciscoSwitchQosIfDropConfigGroup
     DESCRIPTION
         "This group is mandatory only for platforms which
-         support drop threshold configuration at an interface." 
+        support drop threshold configuration at an interface."
 
-    GROUP ciscoSwitchQosIfQueueGroup
+    GROUP           ciscoSwitchQosIfQueueGroup
     DESCRIPTION
         "This group is mandatory only for platforms which
-         support queue configuration at an interface." 
+        support queue configuration at an interface."
 
-    GROUP ciscoSwitchQosMarkingStatsGroup
+    GROUP           ciscoSwitchQosMarkingStatsGroup
     DESCRIPTION
         "This group is mandatory only for platforms which
-         support marking statistics at the device." 
+        support marking statistics at the device."
 
-    GROUP ciscoSwitchQosIfModeConfigGroup
+    GROUP           ciscoSwitchQosIfModeConfigGroup
     DESCRIPTION
         "This group is mandatory only for platforms which
-         support VLAN-based Qos mode configuration at an interface." 
+        support VLAN-based Qos mode configuration at an interface."
 
-    GROUP ciscoSwitchQosIfCCGroup
+    GROUP           ciscoSwitchQosIfCCGroup
     DESCRIPTION
         "This group is mandatory only for platforms which
-         support consistency check at an interface." 
+        support consistency check at an interface."
 
-    OBJECT      csqCosMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
+    OBJECT          csqCosMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
-    OBJECT      csqDscpMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
+    OBJECT          csqDscpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
-    OBJECT      csqExpMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
+    OBJECT          csqExpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
-    OBJECT      csqIfMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
-    DESCRIPTION
-        "Support for 'createAndWait' is not required."
-
-    OBJECT       csqIfCosMutationMap 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDscpMutationMap 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfExpMutationMap 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpRewriteEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqPoliceRedirectedTrafficEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqPortQueueingModeEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqMarkingStatisticsEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqCosToDscpDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIpPrecToDscpDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqExpToDscpDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpMappingCos 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpMappingExp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpMappingNormalBurstDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpMappingMaxBurstDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqCosMutationToCos 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqDscpMutationToDscp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqExpMutationToExp 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDefaultCos 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfTrustState 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfCosToQueueQueueNumber 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfCosToQueueThresholdNumber 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDscpToQueueQueueNumber 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDscpToQueueThresholdNumber 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDropConfigDropAlgorithm 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDropConfigDropThreshold 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDropConfigMinWredThreshold 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfDropConfigMaxWredThreshold 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfQueueWrrWeight 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfQueueSizeWeight 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfVlanBasedQosModeEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    OBJECT       csqIfConsistencyCheckEnable 
-    MIN-ACCESS   read-only
-    DESCRIPTION
-        "Write access is not required."
-
-    ::= { ciscoSwitchQosMIBCompliances 1 }
-
---
--- ciscoSwitchQosMIBComplianceRev2
---
-
-ciscoSwitchQosMIBComplianceRev2 MODULE-COMPLIANCE
-    STATUS  deprecated
-    DESCRIPTION
-        "The compliance statement for the CISCO-SWITCH-QOS-MIB.
-         This compliance is superceded by 
-         ciscoSwitchQosMIBComplianceRev3."
-    MODULE
-    MANDATORY-GROUPS { 
-         ciscoSwitchQosIfConfigGroup
-    }
-    GROUP ciscoSwitchQosIfStatsGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support port statictics." 
-
-    GROUP ciscoSwitchQosModuleStatsGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support module statistics." 
-
-    GROUP ciscoSwitchQosPortQueueingGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support port queueing mode." 
-
-    GROUP ciscoSwitchQosRedirectPolicingGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support policing of ACL-redirected packets." 
-
-    GROUP ciscoSwitchQosDscpRewriteGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support DSCP rewrite." 
-
-    GROUP ciscoSwitchQosMappingGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support mapping between CoS, IpPrecedence,
-         MPLS-EXP and DSCP."
-
-    GROUP ciscoSwitchQosMutationGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support CoS, MPLS-EXP and DSCP mutation."
-
-    GROUP ciscoSwitchQosIfCosToQueueGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support CoS to queue assignment at an interface." 
-
-    GROUP ciscoSwitchQosIfDscpAssignGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms
-         which support Dscp to queue assignment at an interface." 
-
-    GROUP ciscoSwitchQosIfDropConfigGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support drop threshold configuration at an interface." 
-
-    GROUP ciscoSwitchQosIfQueueGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support queue configuration at an interface." 
-
-    GROUP ciscoSwitchQosMarkingStatsGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support marking statistics at the device." 
-
-    GROUP ciscoSwitchQosIfModeConfigGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support VLAN-based Qos mode configuration at an interface." 
-
-    GROUP ciscoSwitchQosIfCCGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support consistency check at an interface." 
-
-    GROUP ciscoSwitchQosPolicerUsageGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support policer usage." 
-
-    OBJECT      csqCosMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
-    DESCRIPTION
-        "Support for 'createAndWait' is not required."
-
-    OBJECT      csqDscpMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
-    DESCRIPTION
-        "Support for 'createAndWait' is not required."
-
-    OBJECT      csqExpMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
-    DESCRIPTION
-        "Support for 'createAndWait' is not required."
-
-    OBJECT      csqIfMutationRowStatus 
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
-    MIN-ACCESS  read-only
+    OBJECT          csqIfMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
@@ -2703,21 +2755,19 @@ ciscoSwitchQosMIBComplianceRev2 MODULE-COMPLIANCE
     MIN-ACCESS      read-only
     DESCRIPTION
         "Write access is not required."
+    ::= { ciscoSwitchQosMIBCompliances 1 }
 
-    ::= { ciscoSwitchQosMIBCompliances 2 }
+-- ciscoSwitchQosMIBComplianceRev2
 
---
--- ciscoSwitchQosMIBComplianceRev3
---
-
-ciscoSwitchQosMIBComplianceRev3 MODULE-COMPLIANCE
-    STATUS          current
+ciscoSwitchQosMIBComplianceRev2 MODULE-COMPLIANCE
+    STATUS          deprecated
     DESCRIPTION
-        "The compliance statement for the CISCO-SWITCH-QOS-MIB."
-    MODULE
-    MANDATORY-GROUPS { 
-         ciscoSwitchQosIfConfigGroup
-    }
+        "The compliance statement for the CISCO-SWITCH-QOS-MIB.
+        This compliance is superceded by 
+        ciscoSwitchQosMIBComplianceRev3."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoSwitchQosIfConfigGroup }
+
     GROUP           ciscoSwitchQosIfStatsGroup
     DESCRIPTION
         "This group is mandatory only for platforms
@@ -2794,36 +2844,633 @@ ciscoSwitchQosMIBComplianceRev3 MODULE-COMPLIANCE
         "This group is mandatory only for platforms which
         support policer usage."
 
-    GROUP ciscoSwitchQosModuleStatsExtGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support additional module QoS statistics." 
-
-    GROUP ciscoSwitchQosIfStatsExtGroup
-    DESCRIPTION
-        "This group is mandatory only for platforms which
-         support additional interface QoS statistics." 
-
     OBJECT          csqCosMutationRowStatus
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
     MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
     OBJECT          csqDscpMutationRowStatus
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
     MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
     OBJECT          csqExpMutationRowStatus
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
     MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
 
     OBJECT          csqIfMutationRowStatus
-    SYNTAX      INTEGER { active(1), createAndGo(4), destroy(6) }
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfCosMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfExpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpRewriteEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPoliceRedirectedTrafficEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPortQueueingModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqMarkingStatisticsEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIpPrecToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingNormalBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingMaxBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosMutationToCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMutationToDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpMutationToExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDefaultCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfTrustState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropAlgorithm
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMinWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMaxWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueWrrWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueSizeWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfVlanBasedQosModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfConsistencyCheckEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoSwitchQosMIBCompliances 2 }
+
+-- ciscoSwitchQosMIBComplianceRev3
+
+ciscoSwitchQosMIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for the CISCO-SWITCH-QOS-MIB.
+        This compliance is superceded by 
+        ciscoSwitchQosMIBComplianceRev4."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoSwitchQosIfConfigGroup }
+
+    GROUP           ciscoSwitchQosIfStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port statictics."
+
+    GROUP           ciscoSwitchQosModuleStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support module statistics."
+
+    GROUP           ciscoSwitchQosPortQueueingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port queueing mode."
+
+    GROUP           ciscoSwitchQosRedirectPolicingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support policing of ACL-redirected packets."
+
+    GROUP           ciscoSwitchQosDscpRewriteGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support DSCP rewrite."
+
+    GROUP           ciscoSwitchQosMappingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support mapping between CoS, IpPrecedence,
+        MPLS-EXP and DSCP."
+
+    GROUP           ciscoSwitchQosMutationGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS, MPLS-EXP and DSCP mutation."
+
+    GROUP           ciscoSwitchQosIfCosToQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDscpAssignGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support Dscp to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDropConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support drop threshold configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support queue configuration at an interface."
+
+    GROUP           ciscoSwitchQosMarkingStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support marking statistics at the device."
+
+    GROUP           ciscoSwitchQosIfModeConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support VLAN-based Qos mode configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfCCGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support consistency check at an interface."
+
+    GROUP           ciscoSwitchQosPolicerUsageGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support policer usage."
+
+    GROUP           ciscoSwitchQosModuleStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional module QoS statistics."
+
+    GROUP           ciscoSwitchQosIfStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional interface QoS statistics."
+
+    OBJECT          csqCosMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqDscpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqExpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfCosMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfExpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpRewriteEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPoliceRedirectedTrafficEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPortQueueingModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqMarkingStatisticsEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIpPrecToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingNormalBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingMaxBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosMutationToCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMutationToDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpMutationToExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDefaultCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfTrustState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropAlgorithm
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMinWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMaxWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueWrrWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueSizeWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfVlanBasedQosModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfConsistencyCheckEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoSwitchQosMIBCompliances 3 }
+
+-- ciscoSwitchQosMIBComplianceRev4
+
+ciscoSwitchQosMIBComplianceRev4 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for the CISCO-SWITCH-QOS-MIB.
+        This compliance is deprecated and superceded by
+        ciscoSwitchQosMIBComplianceRev5."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoSwitchQosIfConfigGroup }
+
+    GROUP           ciscoSwitchQosIfStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port statictics."
+
+    GROUP           ciscoSwitchQosModuleStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support module statistics."
+
+    GROUP           ciscoSwitchQosPortQueueingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port queueing mode."
+
+    GROUP           ciscoSwitchQosRedirectPolicingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support policing of ACL-redirected packets."
+
+    GROUP           ciscoSwitchQosDscpRewriteGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support DSCP rewrite."
+
+    GROUP           ciscoSwitchQosMappingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support mapping between CoS, IpPrecedence,
+        MPLS-EXP and DSCP."
+
+    GROUP           ciscoSwitchQosMutationGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS, MPLS-EXP and DSCP mutation."
+
+    GROUP           ciscoSwitchQosIfCosToQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDscpAssignGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support Dscp to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDropConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support drop threshold configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support queue configuration at an interface."
+
+    GROUP           ciscoSwitchQosMarkingStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support marking statistics at the device."
+
+    GROUP           ciscoSwitchQosIfModeConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support VLAN-based Qos mode configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfCCGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support consistency check at an interface."
+
+    GROUP           ciscoSwitchQosPolicerUsageGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support policer usage."
+
+    GROUP           ciscoSwitchQosModuleStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional module QoS statistics."
+
+    GROUP           ciscoSwitchQosIfStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional interface QoS statistics."
+
+    GROUP           ciscoSwitchQosModuleDscpRewriteGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support DSCP Rewrite at module level."
+
+    OBJECT          csqCosMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqDscpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqExpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
     MIN-ACCESS      read-only
     DESCRIPTION
         "Support for 'createAndWait' is not required."
@@ -2983,8 +3630,392 @@ ciscoSwitchQosMIBComplianceRev3 MODULE-COMPLIANCE
     DESCRIPTION
         "Write access is not required."
 
-    ::= { ciscoSwitchQosMIBCompliances 3 }
+    OBJECT          csqModuleDscpRewriteEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoSwitchQosMIBCompliances 4 }
 
+-- ciscoSwitchQosMIBComplianceRev5
+
+ciscoSwitchQosMIBComplianceRev5 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the CISCO-SWITCH-QOS-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoSwitchQosIfConfigGroup }
+
+    GROUP           ciscoSwitchQosIfStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port statictics."
+
+    GROUP           ciscoSwitchQosModuleStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support module statistics."
+
+    GROUP           ciscoSwitchQosPortQueueingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support port queueing mode."
+
+    GROUP           ciscoSwitchQosRedirectPolicingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support policing of ACL-redirected packets."
+
+    GROUP           ciscoSwitchQosDscpRewriteGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support DSCP rewrite."
+
+    GROUP           ciscoSwitchQosMappingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support mapping between CoS, IpPrecedence,
+        MPLS-EXP and DSCP."
+
+    GROUP           ciscoSwitchQosMutationGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS, MPLS-EXP and DSCP mutation."
+
+    GROUP           ciscoSwitchQosIfCosToQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDscpAssignGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support Dscp to queue assignment at an interface."
+
+    GROUP           ciscoSwitchQosIfDropConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support drop threshold configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfQueueGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support queue configuration at an interface."
+
+    GROUP           ciscoSwitchQosMarkingStatsGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support marking statistics at the device."
+
+    GROUP           ciscoSwitchQosIfModeConfigGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support VLAN-based Qos mode configuration at an interface."
+
+    GROUP           ciscoSwitchQosIfCCGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support consistency check at an interface."
+
+    GROUP           ciscoSwitchQosPolicerUsageGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support policer usage."
+
+    GROUP           ciscoSwitchQosModuleStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional module QoS statistics."
+
+    GROUP           ciscoSwitchQosIfStatsExtGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms which
+        support additional interface QoS statistics."
+
+    GROUP           ciscoSwitchQosModuleDscpRewriteGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support DSCP Rewrite at module level."
+
+    GROUP           ciscoSwitchQosModuleClassChangedGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support CoS/TrafficClass changed packets count
+        for each module capable of providing this information."
+
+    GROUP           ciscoSwitchQosTenGOnlyModeGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support 10-Gigabit Ethernet only mode."
+
+    GROUP           ciscoSwitchQosIfQueueModeGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support queue mode configuration at 
+        an interface."
+
+    GROUP           ciscoSwitchQosIfLanQueuingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support LAN queuing configuration at 
+        an interface."
+
+    GROUP           ciscoSwitchQosIfQueueBufferGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support queue mode configuration at 
+        an interface."
+
+    GROUP           ciscoSwitchQosIfQueueSchedulingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support queue scheduling configuration at 
+        an interface."
+
+    GROUP           ciscoSwitchQosIfQueueingGroup
+    DESCRIPTION
+        "This group is mandatory only for platforms
+        which support queueing information at an interface."
+
+    OBJECT          csqCosMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqDscpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqExpMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfMutationRowStatus
+    SYNTAX          INTEGER  {
+                        active(1),
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Support for 'createAndWait' is not required."
+
+    OBJECT          csqIfCosMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfExpMutationMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpRewriteEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPoliceRedirectedTrafficEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqPortQueueingModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqMarkingStatisticsEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIpPrecToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpToDscpDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingNormalBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMappingMaxBurstDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqCosMutationToCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqDscpMutationToDscp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqExpMutationToExp
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDefaultCos
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfTrustState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfCosToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueQueueNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDscpToQueueThresholdNumber
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropAlgorithm
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigDropThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMinWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigMaxWredThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueWrrWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueSizeWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfVlanBasedQosModeEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfConsistencyCheckEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqModuleDscpRewriteEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqTenGOnlyMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfConfigQueueMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueClassMapName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfIngressPolicyMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfEgressPolicyMap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfDropConfigQueueBuffer
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueScheduling
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          csqIfQueueSrrWeight
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoSwitchQosMIBCompliances 5 }
 
 -- Units of Conformance
 
@@ -3074,9 +4105,7 @@ ciscoSwitchQosIfQueueGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 6 }
 
 ciscoSwitchQosIfStatsGroup OBJECT-GROUP
-    OBJECTS {
-        csqIfStatsDropPkts
-    }
+    OBJECTS         { csqIfStatsDropPkts }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides drop packets
@@ -3109,9 +4138,7 @@ ciscoSwitchQosIfDscpAssignGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 9 }
 
 ciscoSwitchQosDscpRewriteGroup OBJECT-GROUP
-    OBJECTS {
-        csqDscpRewriteEnable
-    }
+    OBJECTS         { csqDscpRewriteEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides DSCP rewrite
@@ -3119,9 +4146,7 @@ ciscoSwitchQosDscpRewriteGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 10 }
 
 ciscoSwitchQosRedirectPolicingGroup OBJECT-GROUP
-    OBJECTS {
-        csqPoliceRedirectedTrafficEnable
-    }
+    OBJECTS         { csqPoliceRedirectedTrafficEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides information on
@@ -3129,9 +4154,7 @@ ciscoSwitchQosRedirectPolicingGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 11 }
 
 ciscoSwitchQosPortQueueingGroup OBJECT-GROUP
-    OBJECTS {
-        csqPortQueueingModeEnable
-    }
+    OBJECTS         { csqPortQueueingModeEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides information on
@@ -3139,9 +4162,7 @@ ciscoSwitchQosPortQueueingGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 12 }
 
 ciscoSwitchQosMarkingStatsGroup OBJECT-GROUP
-    OBJECTS {
-        csqMarkingStatisticsEnable
-    }
+    OBJECTS         { csqMarkingStatisticsEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides information on
@@ -3149,9 +4170,7 @@ ciscoSwitchQosMarkingStatsGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 13 }
 
 ciscoSwitchQosIfCCGroup OBJECT-GROUP
-    OBJECTS {
-        csqIfConsistencyCheckEnable
-    }
+    OBJECTS         { csqIfConsistencyCheckEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides information on
@@ -3159,9 +4178,7 @@ ciscoSwitchQosIfCCGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 14 }
 
 ciscoSwitchQosIfModeConfigGroup OBJECT-GROUP
-    OBJECTS {
-        csqIfVlanBasedQosModeEnable
-    }
+    OBJECTS         { csqIfVlanBasedQosModeEnable }
     STATUS          current
     DESCRIPTION
         "A collection of object which provides information on
@@ -3180,66 +4197,148 @@ ciscoSwitchQosPolicerUsageGroup OBJECT-GROUP
     ::= { ciscoSwitchQosMIBGroups 16 }
 
 ciscoSwitchQosModuleStatsExtGroup OBJECT-GROUP
-    OBJECTS {
-        csqModuleTunnelEncapPackets,
-        csqModuleTunnelDecapPackets,
-        csqModuleDropByPolicingInOctets,
-        csqModuleDropByPolicingOutOctets,
-        csqModuleFwdByPolicingInPackets,
-        csqModuleFwdByPolicingOutPackets,
-        csqModuleFwdByPolicingInOctets,
-        csqModuleFwdByPolicingOutOctets,
-        csqModuleHighExceedInPackets,
-        csqModuleHighExceedOutPackets,
-        csqModuleHighExceedInOctets,
-        csqModuleHighExceedOutOctets,
-        csqModuleLowExceedOutPackets,
-        csqModuleLowExceedInPackets,
-        csqModuleLowExceedInOctets,
-        csqModuleLowExceedOutOctets,
-        csqModuleDropByAggPolicerInPackets,
-        csqModuleDropByAggPolicerOutPackets,
-        csqModuleDropByAggPolicerInOctets,
-        csqModuleDropByAggPolicerOutOctets,
-        csqModuleFwdByAggPolicerInPackets,
-        csqModuleFwdByAggPolicerOutPackets,
-        csqModuleFwdByAggPolicerInOctets,
-        csqModuleFwdByAggPolicerOutOctets,
-        csqModuleAggHighExceedInPackets,
-        csqModuleAggHighExceedOutPackets,
-        csqModuleAggHighExceedInOctets,
-        csqModuleAggHighExceedOutOctets,
-        csqModuleAggLowExceedInPackets,
-        csqModuleAggLowExceedOutPackets,
-        csqModuleAggLowExceedInOctets,
-        csqModuleAggLowExceedOutOctets,
-        csqModuleDropByNetflowInPackets,
-        csqModuleDropByNetflowOutPackets,
-        csqModuleDropByNetflowInOctets,
-        csqModuleDropByNetflowOutOctets,
-        csqModuleFwdByNetflowInPackets,
-        csqModuleFwdByNetflowOutPackets,
-        csqModuleFwdByNetflowInOctets,
-        csqModuleFwdByNetflowOutOctets,
-        csqModuleNetflowExceedInPackets,
-        csqModuleNetflowExceedOutPackets,
-        csqModuleNetflowExceedInOctets,
-        csqModuleNetflowExceedOutOctets
-    }
-    STATUS current
+    OBJECTS         {
+                        csqModuleTunnelEncapPackets,
+                        csqModuleTunnelDecapPackets,
+                        csqModuleDropByPolicingInOctets,
+                        csqModuleDropByPolicingOutOctets,
+                        csqModuleFwdByPolicingInPackets,
+                        csqModuleFwdByPolicingOutPackets,
+                        csqModuleFwdByPolicingInOctets,
+                        csqModuleFwdByPolicingOutOctets,
+                        csqModuleHighExceedInPackets,
+                        csqModuleHighExceedOutPackets,
+                        csqModuleHighExceedInOctets,
+                        csqModuleHighExceedOutOctets,
+                        csqModuleLowExceedOutPackets,
+                        csqModuleLowExceedInPackets,
+                        csqModuleLowExceedInOctets,
+                        csqModuleLowExceedOutOctets,
+                        csqModuleDropByAggPolicerInPackets,
+                        csqModuleDropByAggPolicerOutPackets,
+                        csqModuleDropByAggPolicerInOctets,
+                        csqModuleDropByAggPolicerOutOctets,
+                        csqModuleFwdByAggPolicerInPackets,
+                        csqModuleFwdByAggPolicerOutPackets,
+                        csqModuleFwdByAggPolicerInOctets,
+                        csqModuleFwdByAggPolicerOutOctets,
+                        csqModuleAggHighExceedInPackets,
+                        csqModuleAggHighExceedOutPackets,
+                        csqModuleAggHighExceedInOctets,
+                        csqModuleAggHighExceedOutOctets,
+                        csqModuleAggLowExceedInPackets,
+                        csqModuleAggLowExceedOutPackets,
+                        csqModuleAggLowExceedInOctets,
+                        csqModuleAggLowExceedOutOctets,
+                        csqModuleDropByNetflowInPackets,
+                        csqModuleDropByNetflowOutPackets,
+                        csqModuleDropByNetflowInOctets,
+                        csqModuleDropByNetflowOutOctets,
+                        csqModuleFwdByNetflowInPackets,
+                        csqModuleFwdByNetflowOutPackets,
+                        csqModuleFwdByNetflowInOctets,
+                        csqModuleFwdByNetflowOutOctets,
+                        csqModuleNetflowExceedInPackets,
+                        csqModuleNetflowExceedOutPackets,
+                        csqModuleNetflowExceedInOctets,
+                        csqModuleNetflowExceedOutOctets
+                    }
+    STATUS          current
     DESCRIPTION
-        "A collection of object which provides additional QoS 
-        statistics information at each QoS capable module." 
+        "A collection of object which provides additional QoS
+        statistics information at each QoS capable module."
     ::= { ciscoSwitchQosMIBGroups 17 }
 
 ciscoSwitchQosIfStatsExtGroup OBJECT-GROUP
-    OBJECTS {
-        csqIfBpduDropPkts 
-    }
-    STATUS current
+    OBJECTS         { csqIfBpduDropPkts }
+    STATUS          current
     DESCRIPTION
-        "A collection of objects which provides additional 
-         interface QoS statistics information." 
+        "A collection of objects which provides additional
+        interface QoS statistics information."
     ::= { ciscoSwitchQosMIBGroups 18 }
 
+ciscoSwitchQosModuleDscpRewriteGroup OBJECT-GROUP
+    OBJECTS         { csqModuleDscpRewriteEnable }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides DSCP
+        rewrite information for each module."
+    ::= { ciscoSwitchQosMIBGroups 19 }
+
+ciscoSwitchQosModuleClassChangedGroup OBJECT-GROUP
+    OBJECTS         {
+                        csqModuleCosChangedPackets,
+                        csqModuleTrafficClassChangedPackets
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides CoS/Traffic Class
+        changed packets count information for each module."
+    ::= { ciscoSwitchQosMIBGroups 20 }
+
+ciscoSwitchQosTenGOnlyModeGroup OBJECT-GROUP
+    OBJECTS         { csqTenGOnlyMode }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides 10Gigabit
+        Ethernet only mode information."
+    ::= { ciscoSwitchQosMIBGroups 21 }
+
+ciscoSwitchQosIfQueueModeGroup OBJECT-GROUP
+    OBJECTS         {
+                        csqIfQueueModeCpb,
+                        csqIfConfigQueueMode
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides queue mode
+        information for each QoS capable interface."
+    ::= { ciscoSwitchQosMIBGroups 22 }
+
+ciscoSwitchQosIfLanQueuingGroup OBJECT-GROUP
+    OBJECTS         {
+                        csqIfQueueClassMapName,
+                        csqIfIngressPolicyMap,
+                        csqIfEgressPolicyMap
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides LAN queueing mapping
+        information for each QoS capable interface."
+    ::= { ciscoSwitchQosMIBGroups 23 }
+
+ciscoSwitchQosIfQueueBufferGroup OBJECT-GROUP
+    OBJECTS         { csqIfDropConfigQueueBuffer }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides tail drop queue buffer
+        information for each QoS capable interface."
+    ::= { ciscoSwitchQosMIBGroups 24 }
+
+ciscoSwitchQosIfQueueSchedulingGroup OBJECT-GROUP
+    OBJECTS         {
+                        csqIfQueueScheduling,
+                        csqIfQueueSrrWeight
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides queue scheduling
+        information for each QoS capable interface."
+    ::= { ciscoSwitchQosMIBGroups 25 }
+
+ciscoSwitchQosIfQueueingGroup OBJECT-GROUP
+    OBJECTS         {
+                        csqIfIngressQueueingEnable,
+                        csqIfEgressQueueingEnable,
+                        csqIfQueueingTrustState
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object which provides queueing
+        information for each QoS capable interface."
+    ::= { ciscoSwitchQosMIBGroups 26 }
+
 END
+
+
+

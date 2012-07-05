@@ -3,7 +3,7 @@
 --   
 -- September 1996  Hongchi Shih
 --   
--- Copyright (c) 1996-1999, 2000-2003, 2004-2006, 2009-2010 by cisco Systems Inc.
+-- Copyright (c) 1996-1999, 2000-2003, 2004-2006, 2009-2011 by cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -29,7 +29,9 @@ IMPORTS
         FROM SNMPv2-TC
     callActiveSetupTime,
     callActiveIndex,
-    AbsoluteCounter32
+    AbsoluteCounter32,
+    callActivePeerAddress,
+    callActivePeerId
         FROM DIAL-CONTROL-MIB
     QosService
         FROM INT-SERV-MIB
@@ -59,7 +61,7 @@ IMPORTS
 
 
 ciscoVoiceDialControlMIB MODULE-IDENTITY
-    LAST-UPDATED    "201007260000Z"
+    LAST-UPDATED    "201105310000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -105,7 +107,41 @@ ciscoVoiceDialControlMIB MODULE-IDENTITY
                                 maximum call capacity of 
                                 the gateway.
 
-        iSAC    -  Internet Speech Audio Codec"
+        iSAC    -  Internet Speech Audio Codec
+
+        RPH    - Resource Priority Header
+
+        DSCP   - Diffserv Code Points"
+    REVISION        "201105310000Z"
+    DESCRIPTION
+        "The following changes is done for RPH to DSCP mapping and Media
+        policy feature.
+        1) Added two new objects in the cvVoIPCallActiveEntry 
+           ccVoIPCallActivePolicyName
+           cvVoIPCallActiveReversedDirectionPeerAddress
+        2) Added one new notification object
+           cvdcPolicyViolationNotification
+        3) Imported two objects from DIAL-CONTROL-MIB
+           callActivePeerId
+           callActivePeerAddress
+        4) Added four objects as part of new Notification
+        cvdcPolicyViolationNotification
+           ccVoIPCallActiveViolationReason
+           cvVoIPCallActiveCalledNumber
+           callActivePeerId
+           callActivePeerAddress
+        5) Added new notification group cvdcNotificationGroupRev4 and
+        changed the status of cvdcNotificationGroupRev3 to depricated.
+        6) Added new conformance group cvVoIPCallGroupSup2 and changed
+        the status of cvVoIPCallGroupSup1 to deprecated.
+        7) Modified cvdcMIBComplianceRev20 to add new groups and remove
+        the deprecated one
+        8) Added the following objects in CvVoIPPeerCfgEntry            
+           cvVoIPPeerCfgDSCPPolicyNotificationEnable 
+           cvVoIPPeerCfgMediaPolicyNotificationEnable
+        9) Added the following objects in cvdcGeneralCfgGroupRev6 
+           cvGeneralDSCPPolicyNotificationEnable
+           cvGeneralMediaPolicyNotificationEnable"
     REVISION        "201007260000Z"
     DESCRIPTION
         "[1] Modified MAX-ACCESS for cvVoIPPeerCfgFrameSize from read-only to read-write.
@@ -448,13 +484,15 @@ CvSessionProtocol ::= TEXTUAL-CONVENTION
         other - none of the following.
         cisco - cisco proprietary H.323 Lite session protocol.
         sdp   - Session Description Protocol.
-        sip   - Session Initiation Protocol."
+        sip   - Session Initiation Protocol.
+        sccp  - Skinny Call Control Protocol."
     SYNTAX          INTEGER  {
                         other(1),
                         cisco(2),
                         sdp(3),
                         sip(4),
-                        multicast(5)
+                        multicast(5),
+                        sccp(6)
                     }
 
 -- Channel Associated Signalling Group (CAS) group definition
@@ -803,6 +841,46 @@ cvGeneralFallbackNotificationEnable OBJECT-TYPE
         for all voice over IP peers."
     DEFVAL          { false } 
     ::= { cvGeneralConfiguration 2 }
+
+cvGeneralDSCPPolicyNotificationEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object indicates whether cvdcPolicyViolationNotification
+        traps should be generated for a RPH to DSCP mapping violation
+        for SIP voice calls.
+
+        If the value of this object is 'true',
+        cvdcPolicyViolationNotification traps will be generated for SIP
+        voice over IP peers when a RPH to DSCP violation condition is
+        detected .  If the value of this object is 'false',
+        cvdcPolicyViolationNotification traps will be generated only
+        for calls for which the 
+        cvVoIPPeerCfgDSCPPolicyNotificationEnable object of voice
+        over IP peers having set to 'true'."
+    DEFVAL          { false } 
+    ::= { cvGeneralConfiguration 3 }
+
+cvGeneralMediaPolicyNotificationEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object indicates whether cvdcPolicyViolationNotification
+        traps should be generated for Media violation
+        for SIP voice calls.
+
+        If the value of this object is 'true',
+        cvdcPolicyViolationNotification traps will be generated for SIP
+        voice over IP peers when media violation condition is
+        detected .  If the value of this object is 'false',
+        cvdcPolicyViolationNotification traps will be generated only
+        for calls for which the 
+        cvVoIPPeerCfgMediaPolicyNotificationEnable object of voice
+        over IP peers having set to 'true'."
+    DEFVAL          { false } 
+    ::= { cvGeneralConfiguration 4 }
 -- *********************************************************************
 -- Voice Dial Control Peer Group
 -- *********************************************************************
@@ -1188,34 +1266,36 @@ cvVoIPPeerCfgEntry OBJECT-TYPE
     ::= { cvVoIPPeerCfgTable 1 }
 
 CvVoIPPeerCfgEntry ::= SEQUENCE {
-        cvVoIPPeerCfgSessionProtocol           CvSessionProtocol,
-        cvVoIPPeerCfgDesiredQoS                QosService,
-        cvVoIPPeerCfgMinAcceptableQoS          QosService,
-        cvVoIPPeerCfgSessionTarget             DisplayString,
-        cvVoIPPeerCfgCoderRate                 CvcSpeechCoderRate,
-        cvVoIPPeerCfgFaxRate                   CvcFaxTransmitRate,
-        cvVoIPPeerCfgVADEnable                 TruthValue,
-        cvVoIPPeerCfgExpectFactor              Integer32,
-        cvVoIPPeerCfgIcpif                     Integer32,
-        cvVoIPPeerCfgPoorQoVNotificationEnable TruthValue,
-        cvVoIPPeerCfgUDPChecksumEnable         TruthValue,
-        cvVoIPPeerCfgIPPrecedence              Integer32,
-        cvVoIPPeerCfgTechPrefix                DisplayString,
-        cvVoIPPeerCfgDigitRelay                BITS,
-        cvVoIPPeerCfgCoderBytes                Integer32,
-        cvVoIPPeerCfgFaxBytes                  Integer32,
-        cvVoIPPeerCfgInBandSignaling           CvcInBandSignaling,
-        cvVoIPPeerCfgMediaSetting              INTEGER,
-        cvVoIPPeerCfgDesiredQoSVideo           QosService,
-        cvVoIPPeerCfgMinAcceptableQoSVideo     QosService,
-        cvVoIPPeerCfgRedirectip2ip             TruthValue,
-        cvVoIPPeerCfgOctetAligned              TruthValue,
-        cvVoIPPeerCfgBitRates                  CvAmrNbBitRateMode,
-        cvVoIPPeerCfgCRC                       TruthValue,
-        cvVoIPPeerCfgCoderMode                 CvIlbcFrameMode,
-        cvVoIPPeerCfgCodingMode                INTEGER,
-        cvVoIPPeerCfgBitRate                   Unsigned32,
-        cvVoIPPeerCfgFrameSize                 INTEGER
+        cvVoIPPeerCfgSessionProtocol               CvSessionProtocol,
+        cvVoIPPeerCfgDesiredQoS                    QosService,
+        cvVoIPPeerCfgMinAcceptableQoS              QosService,
+        cvVoIPPeerCfgSessionTarget                 DisplayString,
+        cvVoIPPeerCfgCoderRate                     CvcSpeechCoderRate,
+        cvVoIPPeerCfgFaxRate                       CvcFaxTransmitRate,
+        cvVoIPPeerCfgVADEnable                     TruthValue,
+        cvVoIPPeerCfgExpectFactor                  Integer32,
+        cvVoIPPeerCfgIcpif                         Integer32,
+        cvVoIPPeerCfgPoorQoVNotificationEnable     TruthValue,
+        cvVoIPPeerCfgUDPChecksumEnable             TruthValue,
+        cvVoIPPeerCfgIPPrecedence                  Integer32,
+        cvVoIPPeerCfgTechPrefix                    DisplayString,
+        cvVoIPPeerCfgDigitRelay                    BITS,
+        cvVoIPPeerCfgCoderBytes                    Integer32,
+        cvVoIPPeerCfgFaxBytes                      Integer32,
+        cvVoIPPeerCfgInBandSignaling               CvcInBandSignaling,
+        cvVoIPPeerCfgMediaSetting                  INTEGER,
+        cvVoIPPeerCfgDesiredQoSVideo               QosService,
+        cvVoIPPeerCfgMinAcceptableQoSVideo         QosService,
+        cvVoIPPeerCfgRedirectip2ip                 TruthValue,
+        cvVoIPPeerCfgOctetAligned                  TruthValue,
+        cvVoIPPeerCfgBitRates                      CvAmrNbBitRateMode,
+        cvVoIPPeerCfgCRC                           TruthValue,
+        cvVoIPPeerCfgCoderMode                     CvIlbcFrameMode,
+        cvVoIPPeerCfgCodingMode                    INTEGER,
+        cvVoIPPeerCfgBitRate                       Unsigned32,
+        cvVoIPPeerCfgFrameSize                     INTEGER,
+        cvVoIPPeerCfgDSCPPolicyNotificationEnable  TruthValue,
+        cvVoIPPeerCfgMediaPolicyNotificationEnable TruthValue
 }
 
 cvVoIPPeerCfgSessionProtocol OBJECT-TYPE
@@ -1681,6 +1761,28 @@ cvVoIPPeerCfgFrameSize OBJECT-TYPE
         frameSize60fixed - fixed frame size 60 ms"
     DEFVAL          { frameSize30 } 
     ::= { cvVoIPPeerCfgEntry 33 }
+
+cvVoIPPeerCfgDSCPPolicyNotificationEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies whether cvdcPolicyViolationNotification
+        traps should be generated for the call that is associated with
+        this peer for RPH to DSCP mapping and policing feature."
+    DEFVAL          { false } 
+    ::= { cvVoIPPeerCfgEntry 34 }
+
+cvVoIPPeerCfgMediaPolicyNotificationEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies whether cvdcPolicyViolationNotification
+        traps should be generated for the call that is associated with
+        this peer for Media policing feature.."
+    DEFVAL          { false } 
+    ::= { cvVoIPPeerCfgEntry 35 }
  
 
 -- Voice specific common Peer Configuration Table
@@ -2164,49 +2266,51 @@ cvVoIPCallActiveEntry OBJECT-TYPE
     ::= { cvVoIPCallActiveTable 1 }
 
 CvVoIPCallActiveEntry ::= SEQUENCE {
-        cvVoIPCallActiveConnectionId             CvcGUid,
-        cvVoIPCallActiveRemoteIPAddress          IpAddress,
-        cvVoIPCallActiveRemoteUDPPort            Integer32,
-        cvVoIPCallActiveRoundTripDelay           Gauge32,
-        cvVoIPCallActiveSelectedQoS              QosService,
-        cvVoIPCallActiveSessionProtocol          CvSessionProtocol,
-        cvVoIPCallActiveSessionTarget            DisplayString,
-        cvVoIPCallActiveOnTimeRvPlayout          AbsoluteCounter32,
-        cvVoIPCallActiveGapFillWithSilence       AbsoluteCounter32,
-        cvVoIPCallActiveGapFillWithPrediction    AbsoluteCounter32,
-        cvVoIPCallActiveGapFillWithInterpolation AbsoluteCounter32,
-        cvVoIPCallActiveGapFillWithRedundancy    AbsoluteCounter32,
-        cvVoIPCallActiveHiWaterPlayoutDelay      AbsoluteCounter32,
-        cvVoIPCallActiveLoWaterPlayoutDelay      Gauge32,
-        cvVoIPCallActiveReceiveDelay             Gauge32,
-        cvVoIPCallActiveVADEnable                TruthValue,
-        cvVoIPCallActiveCoderTypeRate            CvcCoderTypeRate,
-        cvVoIPCallActiveLostPackets              AbsoluteCounter32,
-        cvVoIPCallActiveEarlyPackets             AbsoluteCounter32,
-        cvVoIPCallActiveLatePackets              AbsoluteCounter32,
-        cvVoIPCallActiveUsername                 SnmpAdminString,
-        cvVoIPCallActiveProtocolCallId           OCTET STRING,
-        cvVoIPCallActiveRemSigIPAddrT            InetAddressType,
-        cvVoIPCallActiveRemSigIPAddr             InetAddress,
-        cvVoIPCallActiveRemSigPort               Integer32,
-        cvVoIPCallActiveRemMediaIPAddrT          InetAddressType,
-        cvVoIPCallActiveRemMediaIPAddr           InetAddress,
-        cvVoIPCallActiveRemMediaPort             Integer32,
-        cvVoIPCallActiveSRTPEnable               TruthValue,
-        cvVoIPCallActiveOctetAligned             TruthValue,
-        cvVoIPCallActiveBitRates                 CvAmrNbBitRateMode,
-        cvVoIPCallActiveModeChgPeriod            Integer32,
-        cvVoIPCallActiveModeChgNeighbor          TruthValue,
-        cvVoIPCallActiveMaxPtime                 Integer32,
-        cvVoIPCallActiveCRC                      TruthValue,
-        cvVoIPCallActiveRobustSorting            TruthValue,
-        cvVoIPCallActiveEncap                    CvAmrNbRtpEncap,
-        cvVoIPCallActiveInterleaving             Integer32,
-        cvVoIPCallActivePtime                    Integer32,
-        cvVoIPCallActiveChannels                 Integer32,
-        cvVoIPCallActiveCoderMode                CvIlbcFrameMode,
-        cvVoIPCallActiveCallId                   Unsigned32,
-        cvVoIPCallActiveCallReferenceId          CvcCallReferenceIdOrZero
+        cvVoIPCallActiveConnectionId                 CvcGUid,
+        cvVoIPCallActiveRemoteIPAddress              IpAddress,
+        cvVoIPCallActiveRemoteUDPPort                Integer32,
+        cvVoIPCallActiveRoundTripDelay               Gauge32,
+        cvVoIPCallActiveSelectedQoS                  QosService,
+        cvVoIPCallActiveSessionProtocol              CvSessionProtocol,
+        cvVoIPCallActiveSessionTarget                DisplayString,
+        cvVoIPCallActiveOnTimeRvPlayout              AbsoluteCounter32,
+        cvVoIPCallActiveGapFillWithSilence           AbsoluteCounter32,
+        cvVoIPCallActiveGapFillWithPrediction        AbsoluteCounter32,
+        cvVoIPCallActiveGapFillWithInterpolation     AbsoluteCounter32,
+        cvVoIPCallActiveGapFillWithRedundancy        AbsoluteCounter32,
+        cvVoIPCallActiveHiWaterPlayoutDelay          AbsoluteCounter32,
+        cvVoIPCallActiveLoWaterPlayoutDelay          Gauge32,
+        cvVoIPCallActiveReceiveDelay                 Gauge32,
+        cvVoIPCallActiveVADEnable                    TruthValue,
+        cvVoIPCallActiveCoderTypeRate                CvcCoderTypeRate,
+        cvVoIPCallActiveLostPackets                  AbsoluteCounter32,
+        cvVoIPCallActiveEarlyPackets                 AbsoluteCounter32,
+        cvVoIPCallActiveLatePackets                  AbsoluteCounter32,
+        cvVoIPCallActiveUsername                     SnmpAdminString,
+        cvVoIPCallActiveProtocolCallId               OCTET STRING,
+        cvVoIPCallActiveRemSigIPAddrT                InetAddressType,
+        cvVoIPCallActiveRemSigIPAddr                 InetAddress,
+        cvVoIPCallActiveRemSigPort                   Integer32,
+        cvVoIPCallActiveRemMediaIPAddrT              InetAddressType,
+        cvVoIPCallActiveRemMediaIPAddr               InetAddress,
+        cvVoIPCallActiveRemMediaPort                 Integer32,
+        cvVoIPCallActiveSRTPEnable                   TruthValue,
+        cvVoIPCallActiveOctetAligned                 TruthValue,
+        cvVoIPCallActiveBitRates                     CvAmrNbBitRateMode,
+        cvVoIPCallActiveModeChgPeriod                Integer32,
+        cvVoIPCallActiveModeChgNeighbor              TruthValue,
+        cvVoIPCallActiveMaxPtime                     Integer32,
+        cvVoIPCallActiveCRC                          TruthValue,
+        cvVoIPCallActiveRobustSorting                TruthValue,
+        cvVoIPCallActiveEncap                        CvAmrNbRtpEncap,
+        cvVoIPCallActiveInterleaving                 Integer32,
+        cvVoIPCallActivePtime                        Integer32,
+        cvVoIPCallActiveChannels                     Integer32,
+        cvVoIPCallActiveCoderMode                    CvIlbcFrameMode,
+        cvVoIPCallActiveCallId                       Unsigned32,
+        cvVoIPCallActiveCallReferenceId              CvcCallReferenceIdOrZero,
+        ccVoIPCallActivePolicyName                   DisplayString,
+        cvVoIPCallActiveReversedDirectionPeerAddress DisplayString
 }
 
 cvVoIPCallActiveConnectionId OBJECT-TYPE
@@ -2690,6 +2794,27 @@ cvVoIPCallActiveCallReferenceId OBJECT-TYPE
         call entry in cVideoSessionActive of CISCO-VIDEO-SESSION-MIB, in
         which the call reference ID is also identified." 
     ::= { cvVoIPCallActiveEntry 43 }
+
+ccVoIPCallActivePolicyName OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object holds the policy name. It could be media
+        policy, DSCP policy etc." 
+    ::= { cvVoIPCallActiveEntry 44 }
+
+cvVoIPCallActiveReversedDirectionPeerAddress OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object store the reversed direction peer address  If the
+        address is not available, then it will have a length of zero.
+
+        If the call is ingress then it contains called number and if the
+        call is egress then it contains calling number." 
+    ::= { cvVoIPCallActiveEntry 45 }
  
 
 
@@ -3886,6 +4011,21 @@ cvdcFallbackNotification NOTIFICATION-TYPE
             generated for beginning of each call, 
             with exception of existing cached entry."
    ::= { cvdcMIBNotifications 5 }
+
+cvdcPolicyViolationNotification NOTIFICATION-TYPE
+    OBJECTS         {
+                        ccVoIPCallActivePolicyName,
+                        cvVoIPCallActiveReversedDirectionPeerAddress,
+                        callActivePeerId,
+                        callActivePeerAddress
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Policy violation voice notification. A
+        cvdcPolicyViolationNotification is sent when the call is active
+        and has policy violation. It can be media policy violation or
+        DSCP policy violation."
+   ::= { cvdcMIBNotifications 6 }
 cvdcMIBConformance  OBJECT IDENTIFIER
     ::= { ciscoVoiceDialControlMIB 3 }
 
@@ -4736,10 +4876,6 @@ cvdcMIBComplianceRev20 MODULE-COMPLIANCE
         "This group is mandatory for all VoIP related active call
         and call history via IP network."
 
-    GROUP           cvdcNotificationGroupRev3
-    DESCRIPTION
-        "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB."
-
     GROUP           cvdcVoIPCfgAmrNbGroup
     DESCRIPTION
         "This group is mandatory only for those platforms
@@ -4765,11 +4901,6 @@ cvdcMIBComplianceRev20 MODULE-COMPLIANCE
         "This group is mandatory to track voice-related active
         calls and call-history via GSTN."
 
-    GROUP           cvVoIPCallGroupSup1
-    DESCRIPTION
-        "This group is mandatory to track VoIP-related active
-        calls and call-history via IP network."
-
     GROUP           cvCallVolumeGroup
     DESCRIPTION
         "This group is mandatory to track per-protocol active
@@ -4783,6 +4914,16 @@ cvdcMIBComplianceRev20 MODULE-COMPLIANCE
     DESCRIPTION
         "This group is mandatory only for those platforms which support
         iSAC codec configuration."
+
+    GROUP           cvVoIPCallGroupSup2
+    DESCRIPTION
+        "This group supplements cvVoIPCallGroup to
+        provide the call identifier and policy for the VoIP
+        leg of the gateway call"
+
+    GROUP           cvdcNotificationGroupRev4
+    DESCRIPTION
+        "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB."
     ::= { cvdcMIBCompliances 21 }
 
 -- units of conformance
@@ -5386,7 +5527,9 @@ cvdcVoIPCfgGroupRev4 OBJECT-GROUP
                         cvVoIPPeerCfgMediaSetting,
                         cvVoIPPeerCfgDesiredQoSVideo,
                         cvVoIPPeerCfgMinAcceptableQoSVideo,
-                        cvVoIPPeerCfgRedirectip2ip
+                        cvVoIPPeerCfgRedirectip2ip,
+                        cvVoIPPeerCfgDSCPPolicyNotificationEnable,
+                        cvVoIPPeerCfgMediaPolicyNotificationEnable
                     }
     STATUS          current
     DESCRIPTION
@@ -5674,7 +5817,9 @@ cvdcGeneralCfgGroupRev6 OBJECT-GROUP
                         cvPeerCommonCfgSourceCarrierId,
                         cvPeerCommonCfgTargetCarrierId,
                         cvPeerCommonCfgSourceTrunkGrpLabel,
-                        cvPeerCommonCfgTargetTrunkGrpLabel
+                        cvPeerCommonCfgTargetTrunkGrpLabel,
+                        cvGeneralDSCPPolicyNotificationEnable,
+                        cvGeneralMediaPolicyNotificationEnable
                     }
     STATUS          current
     DESCRIPTION
@@ -5690,9 +5835,12 @@ cvdcNotificationGroupRev3 NOTIFICATION-GROUP
                         cvdcActiveDS0sLowNotification,
                         cvdcFallbackNotification
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB"
+        "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB.
+
+        This group  cvdcNotificationGroupRev3 is deprecated and replaced
+        by cvdcNotificationGroupRev4."
     ::= { cvdcMIBGroups 31 }
 
 cvdcVoIPCfgAmrNbGroup OBJECT-GROUP
@@ -5776,11 +5924,14 @@ cvVoIPCallGroupSup1 OBJECT-GROUP
                         cvVoIPCallActiveCallReferenceId,
                         cvVoIPCallHistoryCallReferenceId
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "This group supplements cvVoIPCallGroup to
         provide the call identifier for the VoIP
-        leg of the gateway call."
+        leg of the gateway call.
+
+        The group cvVoIPCallGroupSup1 is deprecated and replaced by
+        cvVoIPCallGroupSup2."
     ::= { cvdcMIBGroups 37 }
 
 cvCallVolumeGroup OBJECT-GROUP
@@ -5824,7 +5975,44 @@ cvdcVoIPCfgISACGroup OBJECT-GROUP
         information."
     ::= { cvdcMIBGroups 40 }
 
+cvdcNotificationGroupRev4 NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        cvdcPoorQoVNotificationRev1,
+                        cvdcActiveDS0sHighNotification,
+                        cvdcActiveDS0sLowNotification,
+                        cvdcFallbackNotification,
+                        cvdcPolicyViolationNotification
+                    }
+    STATUS          current
+    DESCRIPTION
+        "The notifications for the CISCO-VOICE-DIAL-CONTROL-MIB."
+    ::= { cvdcMIBGroups 41 }
+
+cvVoIPCallGroupSup2 OBJECT-GROUP
+    OBJECTS         {
+                        cvVoIPCallActiveReversedDirectionPeerAddress,
+                        ccVoIPCallActivePolicyName,
+                        cvVoIPCallActiveCallId,
+                        cvVoIPCallActiveCallReferenceId,
+                        cvVoIPCallHistoryCallId,
+                        cvVoIPCallHistoryCallReferenceId
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group supplements cvVoIPCallGroup to
+        provide the call identifier and policy for the VoIP
+        leg of the gateway call."
+    ::= { cvdcMIBGroups 42 }
+
 END
+
+
+
+
+
+
+
+
 
 
 
