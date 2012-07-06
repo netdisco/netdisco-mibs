@@ -28,10 +28,10 @@ ENTERASYS-POWER-ETHERNET-EXT-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in 
 --  connection with the management of Enterasys Networks products.
 
---  Copyright 2004-2005 Enterasys Networks, Inc.
+--  Copyright 2004-2005, 2009 Enterasys Networks, Inc.
 
 IMPORTS
-    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, BITS
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
         FROM SNMPv2-CONF
@@ -47,7 +47,7 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysPowerEthernetMibExtMIB MODULE-IDENTITY
-    LAST-UPDATED "200501101630Z"  -- Mon Jan 10 16:30 GMT 2005
+    LAST-UPDATED "200908272031Z"  -- Thu Aug 27 20:31 UTC 2009
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -62,6 +62,15 @@ etsysPowerEthernetMibExtMIB MODULE-IDENTITY
         "This MIB module defines a portion of the SNMP MIB under
          the Enterasys Networks enterprise OID pertaining to the
          allocation of power in a Pse chassis."
+
+    REVISION    "200908272031Z"  -- Thu Aug 27 20:31 UTC 2009
+    DESCRIPTION 
+        "Adding objects to support IEEE Std. 802.3at functionality.
+
+        Changes to etsysPsePortPowerManagementTable:
+         - Increased max etsysPsePortPowerLimit range to 34000.
+         - Added etsysPsePortCapability, etsysPsePortCapabilitySelect,
+           and etsysPsePortDetectionStatus objects."
 
     REVISION    "200501101630Z"  -- Mon Jan 10 16:30 GMT 2005
     DESCRIPTION 
@@ -408,11 +417,14 @@ EtsysPsePortPowerManagementEntry ::=
     SEQUENCE {
         etsysPsePortPowerLimit   Integer32,
         etsysPsePortPowerUsage   Gauge32,
-        etsysPsePortPDType       INTEGER 
+        etsysPsePortPDType            INTEGER,
+        etsysPsePortCapability        BITS,
+        etsysPsePortCapabilitySelect  INTEGER,
+        etsysPsePortDetectionStatus   INTEGER
     }
 
 etsysPsePortPowerLimit OBJECT-TYPE
-    SYNTAX       Integer32 (0..15400)
+    SYNTAX       Integer32 (0..34000)
     UNITS        "milliwatts"
     MAX-ACCESS   read-write
     STATUS       current
@@ -422,7 +434,8 @@ etsysPsePortPowerLimit OBJECT-TYPE
          This object has effect only when its module is in realtime
          mode (specified by etsysPseModulePowerMode).  In class mode,
          the power limit of a port is defined by port's class upper
-         bound, according to IEEE 802.3af."
+         bound, according to the IEEE standard selected in
+         etsysPsePortCapabilitySelect."
     DEFVAL { 15400 }
     ::= { etsysPsePortPowerManagementEntry 1 }
 
@@ -439,13 +452,107 @@ etsysPsePortPDType OBJECT-TYPE
     SYNTAX       INTEGER { 
                    legacy       (1), 
                    ieee8023af   (2),
-                   other        (3)
+                   other        (3),
+                   ieee8023     (4),
+                   ieee8023at   (5)
                  }
     MAX-ACCESS   read-only
     STATUS       current
     DESCRIPTION
-        "This object indicates detected PD type on this port."    
+        "Describes the detected PD type on this port.
+         
+         A value of legacy(1) - indicates that the PD is using a
+         capacitive signature, which is pre-IEEE standard.
+         
+         A value of ieee8023af(2)- indicates that the PD is using a
+         resistive signature and is compliant with the IEEE Std 802.3af.
+         
+         A value of other(3) - indicates that the PD type could not be
+         determined.
+         
+         A value of ieee8023(4)- indicates that the PD is using a
+         resistive signature and is compliant with the IEEE Std 802.3af
+         and/or IEEE Std 802.3at specifications.
+         
+         A value of ieee8023at(5)- indicates that the PD is using a
+         resistive signature and is compliant with the IEEE Std 802.3at."
+    REFERENCE
+        "IEEE Std 802.3af
+         IEEE Std 802.3at"
     ::= { etsysPsePortPowerManagementEntry 3 }
+
+etsysPsePortCapability OBJECT-TYPE
+    SYNTAX       BITS {
+                   other(0),
+                   ieee8023afCapable(1),
+                   ieee8023atCapable(2)
+                 }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This object indicates the IEEE Power over Ethernet standard
+        this port supports."
+    REFERENCE
+        "IEEE Std 802.3af
+         IEEE Std 802.3at"
+    ::= { etsysPsePortPowerManagementEntry 4 }
+
+etsysPsePortCapabilitySelect OBJECT-TYPE
+    SYNTAX       INTEGER {
+                   ieee8023af (1),
+                   ieee8023at (2)
+                 }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object sets the port's power management capabilities
+        based on the IEEE standard.
+
+        ieee8023af (1) : IEEE Std 802.3af
+        ieee8023at (2) : IEEE Std 802.3at
+
+        Attempting to set this value to a capability that is not
+        supported, as indicated by etsysPsePortCapability, will result
+        in an inconsistentValue error."
+    REFERENCE
+        "IEEE Std 802.3af
+         IEEE Std 802.3at"
+    DEFVAL { ieee8023af }
+    ::= { etsysPsePortPowerManagementEntry 5 }
+
+etsysPsePortDetectionStatus OBJECT-TYPE
+    SYNTAX       INTEGER {
+                   disabled(1),
+                   searching(2),
+                   deliveringPower(3),
+                   fault(4),
+                   test(5),
+                   otherFault(6),
+                   requestingPower(7)
+                 }
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Describes the operational status of the port PD detection.
+         A value of disabled(1)- indicates that the PSE State diagram
+         is in the state DISABLED.
+         A value of deliveringPower(3) - indicates that the PSE State
+         diagram is in the state POWER_ON for a duration greater than
+         tlim max.
+         A value of fault(4) - indicates that the PSE State diagram is
+         in the state TEST_ERROR.
+         A value of test(5) - indicates that the PSE State diagram is
+         in the state TEST_MODE.
+         A value of otherFault(6) - indicates that the PSE State
+         diagram is in the state IDLE due to the variable
+         error_conditions.
+         A value of searching(2)- indicates the PSE State diagram is
+         in a state other than those listed above.
+         A value of requestingPower(7) - indicates the PSE State diagram
+         is in the state IDLE after transitioning from the state
+         POWER_DENIED due to insufficient PSE power being available to
+         satisfy the PD's requirements."
+    ::= { etsysPsePortPowerManagementEntry 6 }
 
 
 -- -------------------------------------------------------------
@@ -603,11 +710,24 @@ etsysPsePortPowerManagementGroup OBJECT-GROUP
         etsysPsePortPowerUsage,
         etsysPsePortPDType    
     }
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "Power over Ethernet Port Power Budget Management group."
     ::= { etsysPsePowerAllocationGroups 5 }
 
+etsysPsePortPowerManagementGroupRev2 OBJECT-GROUP
+    OBJECTS {
+        etsysPsePortPowerLimit,
+        etsysPsePortPowerUsage,
+        etsysPsePortPDType,
+        etsysPsePortCapability,
+        etsysPsePortCapabilitySelect,
+        etsysPsePortDetectionStatus
+    }
+    STATUS      current
+    DESCRIPTION
+        "Power over Ethernet Port Power Budget Management group."
+    ::= { etsysPsePowerAllocationGroups 6 }
 
 -- -------------------------------------------------------------
 -- Compliance statements
@@ -629,7 +749,7 @@ etsysPsePowerAllocationCompliance MODULE-COMPLIANCE
     ::= { etsysPsePowerAllocationCompliances 1 }
 
 etsysPsePowerAllocationCompliance2 MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "The compliance statement for devices that support 
          power budgets."
@@ -652,5 +772,30 @@ etsysPsePowerAllocationCompliance2 MODULE-COMPLIANCE
          support power management on a per port basis."
 
     ::= { etsysPsePowerAllocationCompliances 2 }
+
+etsysPsePowerAllocationCompliance2Rev2 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support 
+         power budgets."
+
+    MODULE
+        MANDATORY-GROUPS { 
+            etsysPsePowerAllocationControlGroup,
+            etsysPseChassisPowerStatusGroup,
+            etsysPsePowerNotificationGroup
+        }
+
+    GROUP etsysPseModulePowerManagementGroup
+    DESCRIPTION
+        "This group is conditionally mandatory for entities that
+         support power management on a per module basis."
+
+    GROUP etsysPsePortPowerManagementGroupRev2
+    DESCRIPTION
+        "This group is conditionally mandatory for entities that
+         support power management on a per port basis."
+
+    ::= { etsysPsePowerAllocationCompliances 3 }
 
 END

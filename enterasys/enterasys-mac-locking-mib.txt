@@ -28,7 +28,7 @@ ENTERASYS-MAC-LOCKING-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in
 --  connection with the management of Enterasys Networks products.
 
---  Copyright May, (2002-2007) Enterasys Networks, Inc.
+--  Copyright March, (2002-2011) Enterasys Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, Unsigned32
@@ -45,7 +45,7 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysMACLockingMIB MODULE-IDENTITY
-    LAST-UPDATED "200705171255Z"  -- Thu May 17 12:55 UTC 2007
+    LAST-UPDATED "201103081947Z"  -- March 08, 2011,  7:47PM UTC
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -63,6 +63,20 @@ etsysMACLockingMIB MODULE-IDENTITY
 
          This MIB is designed to provide configuration and status
          objects pertaining to per port MAC Locking."
+
+    REVISION "201103081947Z"  -- March 08, 2011,  7:47PM UTC
+    DESCRIPTION
+        "Added the etsysMACLockingThresholdEnable leaf and
+         etsysMACLockingMACThresholdNotification notification so that an
+         administrator can take appropriate action upon the MAC address
+         table threshold (etsysMACLockingFirstArrivalStationsAllocated)
+         being reached."
+
+    REVISION "200705211304Z"  -- Mon May 21 13:04 UTC 2007
+    DESCRIPTION
+        "Added the etsysMACLockingViolationSyslogEnable leaf
+         to control the sending of syslog messages for violating 
+         MAC addresses."
 
     REVISION "200705171255Z"  -- Thu May 17 12:55 UTC 2007
     DESCRIPTION
@@ -193,7 +207,10 @@ EtsysMACLockingPortEntry::=
      etsysMACLockingMoveFirstArrivalToStatic        TruthValue, 
      etsysMACLockingStaticStationsCount             Unsigned32,
      etsysMACLockingClearStaticStations             TruthValue,
-     etsysMACLockingFirstArrivalAging               TruthValue
+     etsysMACLockingFirstArrivalAging               TruthValue,
+     etsysMACLockingViolationSyslogEnable           EnabledStatus,
+     etsysMACLockingThresholdEnable                 EnabledStatus,
+     etsysMACLockingThresholdSyslogEnable           EnabledStatus
     }
 
 etsysMACLockingPort OBJECT-TYPE
@@ -304,7 +321,7 @@ etsysMACLockingMoveFirstArrivalToStatic OBJECT-TYPE
     STATUS        current
     DESCRIPTION
         "When set to true(1), moves First Arrival MACs locked on
-         the port, in lexigraphical order, into Statically Locked 
+         the port, in lexicographical order, into Statically Locked 
          MACs on the port. The move continues until all First 
          Arrival MACs are moved or until the number of allowable 
          static entries (etsysMACLockingStaticStationsAllocated) 
@@ -341,10 +358,64 @@ etsysMACLockingFirstArrivalAging OBJECT-TYPE
     MAX-ACCESS    read-write
     STATUS        current
     DESCRIPTION
-        "When set to true(1), firstarrival MACs that have aged
+        "When set to true(1), firstArrival MACs that have aged
          out of the forwarding database will be removed for the
          associated port lock"
     ::= { etsysMACLockingPortEntry 12 }
+
+etsysMACLockingViolationSyslogEnable OBJECT-TYPE
+    SYNTAX        EnabledStatus
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When set to enabled(1), the agent issues syslog messages
+         for violations detected by the agent.
+
+         Arrival of violation syslog messages at the management 
+         station is not guaranteed and the messages generation rate is 
+         not required to match the violation detection rate. A best 
+         effort delivery is acceptable.  When disabled(2), no syslog
+         messages are sent as a result of MAC locking violations."
+    DEFVAL { disabled }
+    ::= { etsysMACLockingPortEntry 13 }
+
+etsysMACLockingThresholdEnable OBJECT-TYPE
+    SYNTAX        EnabledStatus
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When set to enabled(1), the agent issues a trap when the MAC 
+         address threshold as defined in the 
+         etsysMACLockingFirstArrivalStationsAllocated object has been 
+         reached.
+         
+         Arrival of these traps at the management station is not 
+         guaranteed and the trap generation rate is not required to 
+         match the detection rate. A best effort delivery is acceptable.
+
+         When disabled(2), no traps are sent as a result of the
+         threshold being reached."
+    DEFVAL { disabled }
+    ::= { etsysMACLockingPortEntry 14 }
+
+etsysMACLockingThresholdSyslogEnable OBJECT-TYPE
+    SYNTAX        EnabledStatus
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When set to enabled(1), the agent issues a syslog message 
+         when the MAC address threshold as defined in the 
+         etsysMACLockingFirstArrivalStationsAllocated object has been 
+         reached.
+         
+         Arrival of these messages is not guaranteed and the message 
+         generation rate is not required to match the detection rate. 
+         A best effort delivery is acceptable.
+
+         When disabled(2), no messages are sent as a result of the
+         threshold being reached."
+    DEFVAL { disabled }
+    ::= { etsysMACLockingPortEntry 15 }
 
 -- -------------------------------------------------------------
 -- The Station Based Static MAC Locking Table
@@ -521,6 +592,15 @@ etsysMACLockingMACViolation NOTIFICATION-TYPE
          specified in this instance of the notification."
     ::= { etsysMACLockingTrapBranch 1 }
 
+etsysMACLockingMACThreshold NOTIFICATION-TYPE
+    OBJECTS { etsysMACLockingFirstArrivalStationsAllocated } 
+    STATUS current
+    DESCRIPTION
+        "MAC database threshold notification.  The device will send this
+         notification when the MAC address threshold configured in the
+         etsysMACLockingFirstArrivalStationsAllocated object has been
+         reached so that the administrator can take appropriate action."
+    ::= { etsysMACLockingTrapBranch 2 }
 
 -- -------------------------------------------------------------
 -- Conformance Information
@@ -589,7 +669,7 @@ etsysMACLockingPortFirstArrivalGroup OBJECT-GROUP
     STATUS  current
     DESCRIPTION
         "A collection of objects providing port based
-         configuration of firstarrival MAC Locking."
+         configuration of firstArrival MAC Locking."
     ::= { etsysMACLockingGroups 5 }
 
 etsysMACLockingStationGroup2 OBJECT-GROUP
@@ -602,6 +682,29 @@ etsysMACLockingStationGroup2 OBJECT-GROUP
         "A collection of objects providing status and configuration of
          all currently locked MAC addresses."
     ::= { etsysMACLockingGroups 6 }
+
+etsysMACLockingNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                    etsysMACLockingMACViolation,
+                    etsysMACLockingMACThreshold
+                  }
+    STATUS        current
+    DESCRIPTION
+        "The MAC Locking notifications."
+    ::= { etsysMACLockingGroups 7 }
+
+etsysMACLockingPortMessageGroup OBJECT-GROUP
+    OBJECTS {
+                etsysMACLockingViolationSyslogEnable,
+                etsysMACLockingThresholdEnable,
+                etsysMACLockingThresholdSyslogEnable
+            }
+    STATUS  current
+    DESCRIPTION
+        "A collection of objects providing port based
+         configuration and status for MAC Locking syslog 
+         messages and notifications."
+    ::= { etsysMACLockingGroups 8 }
 
 
 -- -------------------------------------------------------------
@@ -650,4 +753,17 @@ etsysMACLockingCompliance2 MODULE-COMPLIANCE
                 etsysMACLockingStationGroup2
             }
     ::= { etsysMACLockingCompliances 3 }
+
+etsysMACLockingNotificationCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for all devices that support
+         notifications and syslog messages for MAC Locking events."
+    MODULE
+        MANDATORY-GROUPS
+            {
+                etsysMACLockingNotificationGroup,
+                etsysMACLockingPortMessageGroup
+            }
+    ::= { etsysMACLockingCompliance 4 }
 END

@@ -16,7 +16,7 @@ IMPORTS
               FROM ENTERASYS-MIB-NAMES;
 
 etsysSyslogClientMIB  MODULE-IDENTITY
-    LAST-UPDATED "200311061515Z"  -- Thu Nov  6 15:15 GMT 2003
+    LAST-UPDATED "201103082015Z"  -- March 08, 2011,  8:15PM UTC
     ORGANIZATION "Enterasys Networks"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -32,6 +32,37 @@ etsysSyslogClientMIB  MODULE-IDENTITY
          MIBs under the Enterasys enterprise OID pertaining to the 
          configuration of the generation of Syslog compatible
          diagnostic messages for Enterasys products."
+
+    REVISION "201103082015Z"  -- March 08, 2011,  8:15PM UTC
+    DESCRIPTION
+        "Added etsysSyslogSecureLogArchiveNotification and
+         etsysSyslogSecureLogDroppedMsgNotification to notify an
+         administrator when a secure log file should be archived 
+         or messages destined for a secure log file have been dropped.
+         Also added etsysSyslogClientControlSecurePersistentLogging
+         option to object etsysSyslogClientControl to enable secure
+         syslog event logging to a secure file.  Also added
+         etsysSyslogServerSecureFile as an option for the object
+         etsysSyslogApplicationAllowedServers as a possible 
+         destination for syslog events."
+
+    REVISION "200907171438Z"  -- Fri Jul 17 14:38 UTC 2009
+    DESCRIPTION
+        "Reversed shifting of BIT assignments in
+         etsysSyslogApplicationAllowedServers for backwards 
+         compatability."
+    
+    REVISION "200902172053Z"  -- Tue Feb 17 20:53 UTC 2009
+    DESCRIPTION
+        "Fixed a typographical syntax error in 
+         etsysSyslogApplicationAllowedServers object."
+
+    REVISION "200901161859Z"  -- Fri Jan 16 18:59 UTC 2009
+    DESCRIPTION
+        "Augmented the BITS definition in the 
+         etsysSyslogApplicationAllowedServers leaf with correct
+         numbering of the bits for the servers and adding bits for
+         the console and file destinations."
 
     REVISION    "200311061515Z"  -- Thu Nov  6 15:15 GMT 2003
     DESCRIPTION
@@ -115,6 +146,9 @@ etsysSyslogServer          OBJECT IDENTIFIER
 etsysSyslogApplication     OBJECT IDENTIFIER 
                       ::= { etsysSyslogClientMIB 3 }
 
+etsysSyslogNotification    OBJECT IDENTIFIER
+                      ::= { etsysSyslogClientMIB 5 }
+
 -- -------------------------------------------------------------
 -- etsysSyslogClient group           
 -- -------------------------------------------------------------
@@ -153,8 +187,10 @@ etsysSyslogClientControl OBJECT-TYPE
     SYNTAX      BITS  {
         etsysSyslogClientControlConsoleLogging(0),
                                 -- Log messages to the console.
-        etsysSyslogClientControlPersistentLogging(1)
+        etsysSyslogClientControlPersistentLogging(1),
                                 -- Log messages to non-volatile store.
+        etsysSyslogClientControlSecurePersistentLogging(2)
+                                -- Log messages to secure non-volatile store.
     }
     MAX-ACCESS  read-write
     STATUS      current
@@ -163,6 +199,16 @@ etsysSyslogClientControl OBJECT-TYPE
          syslog client."
     DEFVAL { { etsysSyslogClientControlConsoleLogging } }
     ::= { etsysSyslogClient 4 }
+
+etsysSyslogClientSecureMessagesDropped OBJECT-TYPE
+    SYNTAX      Counter32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of messages unable to be queued to
+         the downstream side of the syslog client software
+         for transmitting to a secure file."
+    ::= { etsysSyslogClient 5 }
 
 -- -------------------------------------------------------------
 -- etsysSyslogServer table group
@@ -555,7 +601,10 @@ etsysSyslogApplicationAllowedServers OBJECT-TYPE
         etsysSyslogServerIndex5(4),
         etsysSyslogServerIndex6(5),
         etsysSyslogServerIndex7(6),
-        etsysSyslogServerIndex8(7)
+        etsysSyslogServerIndex8(7),
+        etsysSyslogServerConsole(8),
+        etsysSyslogServerFile(9),
+        etsysSyslogServerSecureFile(10)
     }
     MAX-ACCESS  read-write
     STATUS      current
@@ -565,11 +614,36 @@ etsysSyslogApplicationAllowedServers OBJECT-TYPE
          the etsysSyslogServerTable. Bit positions that are set, but for
          which the corresponding etsysSyslogServerRowStatus object is
          not active, will be ignored."
-    DEFVAL  { { etsysSyslogServerIndex1, etsysSyslogServerIndex2,
+    DEFVAL  { { 
+                etsysSyslogServerIndex1, etsysSyslogServerIndex2,
                 etsysSyslogServerIndex3, etsysSyslogServerIndex4,
                 etsysSyslogServerIndex5, etsysSyslogServerIndex6,
-                etsysSyslogServerIndex7, etsysSyslogServerIndex8 } }
+                etsysSyslogServerIndex7, etsysSyslogServerIndex8,
+                etsysSyslogServerConsole,etsysSyslogServerFile
+            } }
     ::= { etsysSyslogApplicationEntry 5 }
+
+
+-- -------------------------------------------------------------
+-- etsysSyslogNotification branch            
+-- -------------------------------------------------------------
+etsysSyslogSecureLogArchiveNotification NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+        "Syslog security log archive notification.  The device will send
+         this notification when the secure syslog file should be 
+         archived offline." 
+    ::= { etsysSyslogNotification 1 }
+
+etsysSyslogSecureLogDroppedMsgNotification NOTIFICATION-TYPE
+    OBJECTS { etsysSyslogClientSecureMessagesDropped }
+    STATUS  current
+    DESCRIPTION
+        "Syslog secure messages dropped notification.  The device will
+         send this notification when messages that are required to be
+         sent to the secure syslog file are dropped, failing to record
+         those events."
+    ::= { etsysSyslogNotification 2 }
 
 
 -- -------------------------------------------------------------
@@ -650,6 +724,27 @@ etsysSyslogServerDefaultsGroup OBJECT-GROUP
          on a per server basis with etsysSyslogServerFacility,
          etsysSyslogServerSeverity, or etsysSyslogServerUdpPort."
     ::= { etsysSyslogClientGroups 4 }
+
+etsysSyslogNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+                    etsysSyslogSecureLogArchiveNotification,
+                    etsysSyslogSecureLogDroppedMsgNotification
+                  }
+    STATUS        current
+    DESCRIPTION
+        "A collection of supported notifications regarding syslog 
+         events."
+    ::= { etsysSyslogClientGroups 5 }
+
+etsysSyslogSecureGroup OBJECT-GROUP
+    OBJECTS {
+                etsysSyslogClientSecureMessagesDropped
+            }
+    STATUS  current
+    DESCRIPTION
+        "A collection of objects providing statistics and information
+         for syslog events that are associated with a secure file."
+    ::= { etsysSyslogClientGroups 6 }
 
 
 -- -------------------------------------------------------------
@@ -737,5 +832,23 @@ etsysSyslogClientCompliance MODULE-COMPLIANCE
          per application."                    
 
     ::= { etsysSyslogClientCompliances 1 }
+
+etsysSyslogNotificationCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for devices that support sending
+         notifications upon specified syslog events."
+    MODULE -- this module
+    MANDATORY-GROUPS { etsysSyslogNotificationGroup }
+    ::= { etsysSyslogClientCompliances 2 }
+
+etsysSyslogSecureCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for devices that support sending
+         system messages to a secure syslog file."
+    MODULE -- this module
+    MANDATORY-GROUPS { etsysSyslogSecureGroup }
+    ::= { etsysSyslogClientCompliances 3 }
 
 END

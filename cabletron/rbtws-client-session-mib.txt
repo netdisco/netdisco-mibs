@@ -8,17 +8,18 @@ IMPORTS
         FROM SNMPv2-SMI
     TEXTUAL-CONVENTION, DisplayString, MacAddress, TimeStamp
         FROM SNMPv2-TC
-    RbtwsAccessType, RbtwsRadioNum, RbtwsApSerialNum, RbtwsRadioRate, RbtwsRssi
+    RbtwsAccessType, RbtwsRadioNum, RbtwsApSerialNum, RbtwsRadioRate, RbtwsRssi,
+    RbtwsApNum
         FROM RBTWS-AP-TC
     RbtwsClientSessionState, RbtwsClientAuthenProtocolType,
-    RbtwsUserAccessType
+    RbtwsUserAccessType, RbtwsClientAccessMode
         FROM RBTWS-CLIENT-SESSION-TC
     rbtwsMibs
         FROM RBTWS-ROOT-MIB;
 
 
 rbtwsClientSessionMib MODULE-IDENTITY
-    LAST-UPDATED "200611200913Z"
+    LAST-UPDATED "200805231604Z"
     ORGANIZATION "Enterasys Networks"
     CONTACT-INFO
         "www.enterasys.com"
@@ -29,7 +30,7 @@ rbtwsClientSessionMib MODULE-IDENTITY
         AC = Access Controller (wireless switch),
              the device that runs a SNMP Agent implementing this MIB.
 
-        Copyright 2006 Enterasys Networks, Inc.
+        Copyright 2008 Enterasys Networks, Inc.
         All rights reserved.
         This SNMP Management Information Base
         Specification (Specification) embodies
@@ -38,6 +39,32 @@ rbtwsClientSessionMib MODULE-IDENTITY
         This Specification is supplied 'AS IS' and Enterasys Networks
         makes no warranty, either express or implied, as to the use,
         operation, condition, or performance of the Specification."
+
+    REVISION "200805230055Z"
+    DESCRIPTION "v2.4.0: Updated conformance section
+                to reflect the history of changes to this MIB:
+                added more compliance statements and groups.
+                This will be published in 7.0 release."
+
+    REVISION "200711010054Z"
+    DESCRIPTION "v2.3.4: Added two new columnar objects:
+        - rbtwsClSessClientSessPhysPortNum,
+        - rbtwsClSessRoamHistPhysPortNum,
+        to indicate the port used by wired-auth clients.
+        (for 6.2 release)"
+
+    REVISION "200710090051Z"
+    DESCRIPTION "v2.3.1: Added four new columnar objects:
+        - rbtwsClSessClientSessAccessMode,
+                obsoleting rbtwsClSessClientSessAccessType;
+        - rbtwsClSessClientSessApNum,
+                obsoleting rbtwsClSessClientSessPortOrNum;
+        - rbtwsClSessRoamHistAccessMode,
+                obsoleting rbtwsClSessRoamHistAccessType;
+        - rbtwsClSessRoamHistApNum,
+                obsoleting rbtwsClSessRoamHistApNumOrPort.
+        Reason: in 6.0, direct- and network-attached APs were unified.
+        (for 6.2 release)"
 
     REVISION "200611160043Z"
     DESCRIPTION "v2.2.1: added one value (21) to RbtwsSessState"
@@ -186,7 +213,10 @@ RbtwsClSessClientSessionEntry ::= SEQUENCE {
         rbtwsClSessClientSessState            RbtwsSessState,
         rbtwsClSessClientSessLoginType        RbtwsUserAccessType,
         rbtwsClSessClientSessDot1xAuthMethod  RbtwsClientAuthenProtocolType,
-        rbtwsClSessClientSessSessionState     RbtwsClientSessionState
+        rbtwsClSessClientSessSessionState     RbtwsClientSessionState,
+        rbtwsClSessClientSessAccessMode       RbtwsClientAccessMode,
+        rbtwsClSessClientSessApNum            RbtwsApNum,
+        rbtwsClSessClientSessPhysPortNum      Unsigned32
     }
 
 rbtwsClSessClientSessMacAddress OBJECT-TYPE
@@ -260,9 +290,10 @@ rbtwsClSessClientSessRadioNum OBJECT-TYPE
 rbtwsClSessClientSessAccessType OBJECT-TYPE
     SYNTAX      RbtwsAccessType
     MAX-ACCESS  read-only
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
-        "Access type this client uses (via AP, DAP or wired)."
+        "Access type this client uses (via AP, DAP or wired).
+        Obsoleted by rbtwsClSessClientSessAccessMode."
     ::= { rbtwsClSessClientSessionEntry 9 }
 
 rbtwsClSessClientSessAuthMethod OBJECT-TYPE
@@ -287,9 +318,10 @@ rbtwsClSessClientSessAuthServer OBJECT-TYPE
 rbtwsClSessClientSessPortOrNum OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
-        "Port number."
+        "Port number.
+        Obsoleted by rbtwsClSessClientSessApNum."
     ::= { rbtwsClSessClientSessionEntry 12 }
     
 rbtwsClSessClientSessVlanTag OBJECT-TYPE
@@ -349,6 +381,46 @@ rbtwsClSessClientSessSessionState OBJECT-TYPE
         "Session non-intermediate state."
     ::= { rbtwsClSessClientSessionEntry 19 }
 
+rbtwsClSessClientSessAccessMode OBJECT-TYPE
+    SYNTAX      RbtwsClientAccessMode
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Access mode (type) this client uses (via AP or wired).
+        Obsoletes rbtwsClSessClientSessAccessType since in 6.0
+        directly attached APs and DAPs were unified."
+    ::= { rbtwsClSessClientSessionEntry 20 }
+
+rbtwsClSessClientSessApNum OBJECT-TYPE
+    SYNTAX      RbtwsApNum
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The AP providing wireless service to this client
+        is identified by its administratively assigned AP Number,
+        unique on same AC (switch),
+        regardless of how APs are attached to the AC.
+
+        Meaningful when rbtwsClSessClientSessAccessMode = 'ap'.
+
+        Obsoletes rbtwsClSessClientSessPortOrNum since in 6.0
+        directly attached APs and DAPs were unified."
+    ::= { rbtwsClSessClientSessionEntry 21 }
+
+rbtwsClSessClientSessPhysPortNum OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..1024)  -- see RbtwsPhysPortNumber from rbtwsPortMib
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The physical port used by this wired-auth client
+        is identified by its port number on the AC (switch).
+
+        Zero means the port is unknown or not applicable
+        (for example, when rbtwsClSessClientSessAccessMode = 'ap').
+
+        Meaningful when rbtwsClSessClientSessAccessMode = 'wired'."
+    ::= { rbtwsClSessClientSessionEntry 22 }
+
 
 -- Roaming History Table
 -- =====================
@@ -379,7 +451,10 @@ RbtwsClSessRoamingHistoryEntry ::= SEQUENCE {
         rbtwsClSessRoamHistAccessType      RbtwsAccessType,
         rbtwsClSessRoamHistApNumOrPort     Unsigned32,
         rbtwsClSessRoamHistIpAddress       IpAddress,
-        rbtwsClSessRoamHistTimeStamp       TimeStamp
+        rbtwsClSessRoamHistTimeStamp       TimeStamp,
+        rbtwsClSessRoamHistAccessMode      RbtwsClientAccessMode,
+        rbtwsClSessRoamHistApNum           RbtwsApNum,
+        rbtwsClSessRoamHistPhysPortNum     Unsigned32
     }
 
 rbtwsClSessRoamHistMacAddress OBJECT-TYPE
@@ -417,17 +492,19 @@ rbtwsClSessRoamHistRadioNum OBJECT-TYPE
 rbtwsClSessRoamHistAccessType OBJECT-TYPE
     SYNTAX      RbtwsAccessType
     MAX-ACCESS  read-only
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
-        "Access type used by this client (via AP, DAP or wired)."
+        "Access type used by this client (via AP, DAP or wired).
+        Obsoleted by rbtwsClSessRoamHistAccessMode."
     ::= { rbtwsClSessRoamingHistoryEntry 5 }
 
 rbtwsClSessRoamHistApNumOrPort OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
-        "AP port number, DAP number, or Port number for wired access."
+        "AP port number, DAP number, or Port number for wired access.
+        Obsoleted by rbtwsClSessRoamHistApNum."
     ::= { rbtwsClSessRoamingHistoryEntry 6 }
 
 rbtwsClSessRoamHistIpAddress OBJECT-TYPE
@@ -449,6 +526,42 @@ rbtwsClSessRoamHistTimeStamp OBJECT-TYPE
          the one where the user is at currently, started.
          The timestamp unit is in hundredths of seconds."
     ::= { rbtwsClSessRoamingHistoryEntry 8 }
+
+rbtwsClSessRoamHistAccessMode OBJECT-TYPE
+    SYNTAX      RbtwsClientAccessMode
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Access mode (type) used by this client (via AP or wired).
+        Obsoletes rbtwsClSessRoamHistAccessType since in 6.0
+        directly attached APs and DAPs were unified."
+    ::= { rbtwsClSessRoamingHistoryEntry 9 }
+
+rbtwsClSessRoamHistApNum OBJECT-TYPE
+    SYNTAX      RbtwsApNum
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The administratively assigned AP Number,
+        unique on same AC (switch),
+        regardless of how APs are attached to the AC.
+        Obsoletes rbtwsClSessRoamHistApNumOrPort since in 6.0
+        directly attached APs and DAPs were unified."
+    ::= { rbtwsClSessRoamingHistoryEntry 10 }
+
+rbtwsClSessRoamHistPhysPortNum OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..1024)  -- see RbtwsPhysPortNumber from rbtwsPortMib
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The physical port used by this wired-auth client
+        is identified by its port number on the AC (switch).
+
+        Zero means the port is unknown or not applicable
+        (for example, when rbtwsClSessRoamHistAccessMode = 'ap').
+
+        Meaningful when rbtwsClSessRoamHistAccessMode = 'wired'."
+    ::= { rbtwsClSessRoamingHistoryEntry 11 }
 
 
 -- Client Session Statistics Table
@@ -608,23 +721,85 @@ rbtwsClientSessionConformance  OBJECT IDENTIFIER ::= { rbtwsClientSessionObjects
 rbtwsClientSessionCompliances  OBJECT IDENTIFIER ::= { rbtwsClientSessionConformance 1 }
 rbtwsClientSessionGroups       OBJECT IDENTIFIER ::= { rbtwsClientSessionConformance 2 }
 
+
 -- Compliance
 
+
 rbtwsClientSessionCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
         "The compliance statement for devices that implement
-        the Client Session MIB."
-    MODULE  -- rbtwsClientSessionMib
+        the Client Session MIB.
+
+        This compliance statement was for releases 4.1 and 4.2
+        of AC (wireless switch) software.
+
+        This compliance statement is replaced by
+        rbtwsClientSessionComplianceRev2."
+
+    MODULE  -- this module (rbtwsClientSessionMib)
 
     MANDATORY-GROUPS { rbtwsClientSessionCommonGroup }
 
     ::= { rbtwsClientSessionCompliances 1 }
 
+
+rbtwsClientSessionComplianceRev2 MODULE-COMPLIANCE
+    STATUS      obsolete
+    DESCRIPTION
+        "The compliance statement for devices that implement
+        the Client Session MIB.
+
+        This compliance statement was for releases 5.0 and 6.0
+        of AC (wireless switch) software.
+
+        This compliance statement is replaced by
+        rbtwsClientSessionComplianceRev3."
+
+    MODULE  -- this module (rbtwsClientSessionMib)
+
+    MANDATORY-GROUPS {
+                rbtwsClientSessScalarsGroup,
+
+                rbtwsClientSessClientSessionTableGroup,
+                rbtwsClientSessRoamingHistoryTableGroup,
+
+                rbtwsClientSessClientSessionStatisticsTableGroup
+            }
+
+    ::= { rbtwsClientSessionCompliances 2 }
+
+
+rbtwsClientSessionComplianceRev3 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that implement
+        the Client Session MIB.
+
+        This compliance statement is for releases 6.2 and greater
+        of AC (wireless switch) software."
+
+    MODULE  -- this module (rbtwsClientSessionMib)
+
+    MANDATORY-GROUPS {
+                rbtwsClientSessScalarsGroup,
+
+                rbtwsClientSessClientSessionTableGroupRev2,
+                rbtwsClientSessRoamingHistoryTableGroupRev2,
+
+                rbtwsClientSessClientSessionStatisticsTableGroup
+            }
+
+    ::= { rbtwsClientSessionCompliances 3 }
+
+
 -- Units of Conformance
+
 
 rbtwsClientSessionCommonGroup OBJECT-GROUP
         OBJECTS {
+                 -- rbtwsClSessClientSessionTable:
+                 --
                  rbtwsClSessClientSessSessionId,
                  rbtwsClSessClientSessUsername,
                  rbtwsClSessClientSessIpAddress,
@@ -640,12 +815,18 @@ rbtwsClientSessionCommonGroup OBJECT-GROUP
                  rbtwsClSessClientSessTimeStamp,
                  rbtwsClSessClientSessSsid,
                  rbtwsClSessClientSessState,
+
+                 -- rbtwsClSessRoamingHistoryTable:
+                 --
                  rbtwsClSessRoamHistApSerialNum,
                  rbtwsClSessRoamHistRadioNum,
                  rbtwsClSessRoamHistAccessType,
                  rbtwsClSessRoamHistApNumOrPort,
                  rbtwsClSessRoamHistIpAddress,
                  rbtwsClSessRoamHistTimeStamp,
+
+                 -- rbtwsClSessClientSessionStatisticsTable:
+                 --
                  rbtwsClSessClientSessStatsUniPktIn,
                  rbtwsClSessClientSessStatsUniOctetIn,
                  rbtwsClSessClientSessStatsUniPktOut,
@@ -658,10 +839,149 @@ rbtwsClientSessionCommonGroup OBJECT-GROUP
                  rbtwsClSessClientSessStatsLastRssi,
                  rbtwsClSessClientSessStatsLastSNR
                 }
+        STATUS      obsolete
+        DESCRIPTION
+            "Mandatory group of objects implemented to provide Client Session info
+            in releases 4.1 and 4.2 of AC (wireless switch) software.
+
+            Replaced by rbtwsClientSessClientSessionTableGroup,
+                        rbtwsClientSessRoamingHistoryTableGroup,
+                        rbtwsClientSessClientSessionStatisticsTableGroup."
+        ::= { rbtwsClientSessionGroups 1 }
+
+
+rbtwsClientSessScalarsGroup OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessTotalSessions
+                }
         STATUS      current
         DESCRIPTION
-        "Mandatory group of objects implemented to provide
-        Client Session info."
-        ::= { rbtwsClientSessionGroups 1 }
+            "Group of scalar objects implemented to provide general Client info
+            in releases 5.0 and greater."
+        ::= { rbtwsClientSessionGroups 2 }
+
+
+rbtwsClientSessClientSessionTableGroup OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessClientSessSessionId,
+                 rbtwsClSessClientSessUsername,
+                 rbtwsClSessClientSessIpAddress,
+                 rbtwsClSessClientSessEncryptionType,
+                 rbtwsClSessClientSessVlan,
+
+                 rbtwsClSessClientSessApSerialNum,
+                 rbtwsClSessClientSessRadioNum,
+
+                 rbtwsClSessClientSessAccessType,
+                 rbtwsClSessClientSessAuthServer,
+                 rbtwsClSessClientSessPortOrNum,
+                 rbtwsClSessClientSessVlanTag,
+                 rbtwsClSessClientSessTimeStamp,
+                 rbtwsClSessClientSessSsid,
+
+                 rbtwsClSessClientSessLoginType,
+                 rbtwsClSessClientSessDot1xAuthMethod,
+                 rbtwsClSessClientSessSessionState
+                }
+        STATUS      obsolete
+        DESCRIPTION
+            "Group of columnar objects implemented to provide
+            Client Session info in releases 5.0 and 6.0.
+
+            Replaced by rbtwsClientSessClientSessionTableGroupRev2."
+        ::= { rbtwsClientSessionGroups 3 }
+
+
+rbtwsClientSessRoamingHistoryTableGroup OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessRoamHistApSerialNum,
+                 rbtwsClSessRoamHistRadioNum,
+
+                 rbtwsClSessRoamHistAccessType,
+                 rbtwsClSessRoamHistApNumOrPort,
+
+                 rbtwsClSessRoamHistIpAddress,
+                 rbtwsClSessRoamHistTimeStamp
+                }
+        STATUS      obsolete
+        DESCRIPTION
+            "Group of columnar objects implemented to provide
+            roaming history per Client Session in releases 5.0 and 6.0.
+
+            Replaced by rbtwsClientSessRoamingHistoryTableGroupRev2."
+        ::= { rbtwsClientSessionGroups 4 }
+
+
+rbtwsClientSessClientSessionStatisticsTableGroup OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessClientSessStatsUniPktIn,
+                 rbtwsClSessClientSessStatsUniOctetIn,
+                 rbtwsClSessClientSessStatsUniPktOut,
+                 rbtwsClSessClientSessStatsUniOctetOut,
+                 rbtwsClSessClientSessStatsMultiPktIn,
+                 rbtwsClSessClientSessStatsMultiOctetIn,
+                 rbtwsClSessClientSessStatsEncErrPkt,
+                 rbtwsClSessClientSessStatsEncErrOctet,
+
+                 rbtwsClSessClientSessStatsLastRate,
+                 rbtwsClSessClientSessStatsLastRssi,
+                 rbtwsClSessClientSessStatsLastSNR
+                }
+        STATUS      current
+        DESCRIPTION
+            "Group of columnar objects implemented to provide
+            statistics per Client Session in releases 5.0 and greater."
+        ::= { rbtwsClientSessionGroups 5 }
+
+
+rbtwsClientSessClientSessionTableGroupRev2 OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessClientSessSessionId,
+                 rbtwsClSessClientSessUsername,
+                 rbtwsClSessClientSessIpAddress,
+                 rbtwsClSessClientSessEncryptionType,
+                 rbtwsClSessClientSessVlan,
+
+                 rbtwsClSessClientSessApSerialNum,
+                 rbtwsClSessClientSessRadioNum,
+
+                 rbtwsClSessClientSessAuthServer,    
+                 rbtwsClSessClientSessVlanTag,
+                 rbtwsClSessClientSessTimeStamp,
+                 rbtwsClSessClientSessSsid,
+
+                 rbtwsClSessClientSessLoginType,
+                 rbtwsClSessClientSessDot1xAuthMethod,
+                 rbtwsClSessClientSessSessionState,
+
+                 rbtwsClSessClientSessAccessMode,
+                 rbtwsClSessClientSessApNum,
+                 rbtwsClSessClientSessPhysPortNum
+                }
+        STATUS      current
+        DESCRIPTION
+            "Group of columnar objects implemented to provide
+            Client Session info in releases 6.2 and greater."
+        ::= { rbtwsClientSessionGroups 6 }
+
+
+rbtwsClientSessRoamingHistoryTableGroupRev2 OBJECT-GROUP
+        OBJECTS {
+                 rbtwsClSessRoamHistApSerialNum,
+                 rbtwsClSessRoamHistRadioNum,
+
+                 rbtwsClSessRoamHistIpAddress,
+                 rbtwsClSessRoamHistTimeStamp,
+
+                 rbtwsClSessRoamHistAccessMode,
+                 rbtwsClSessRoamHistApNum,
+                 rbtwsClSessRoamHistPhysPortNum
+                }
+        STATUS      current
+        DESCRIPTION
+            "Group of columnar objects implemented to provide
+            roaming history per Client Session in releases 6.2 and greater."
+        ::= { rbtwsClientSessionGroups 7 }
+
 
 END

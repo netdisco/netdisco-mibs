@@ -28,7 +28,7 @@ ENTERASYS-POLICY-PROFILE-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in
 --  connection with the management of Enterasys Networks products.
 
---  Copyright 2001-2005 Enterasys Networks, Inc.
+--  Copyright 2001-2010 Enterasys Networks, Inc.
 
 
 IMPORTS
@@ -55,7 +55,7 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysPolicyProfileMIB  MODULE-IDENTITY
-    LAST-UPDATED "200606152040Z"  -- Thu Jun 15 20:40 UTC 2006
+    LAST-UPDATED "201008091511Z"  -- Mon Aug  9 15:11 UTC 2010
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -71,6 +71,45 @@ etsysPolicyProfileMIB  MODULE-IDENTITY
          MIBs under the Enterasys enterprise OID pertaining to the 
          mapping of per user policy profiles for Enterasys network
          edge devices or access products."
+
+    REVISION    "201008091511Z"  -- Mon Aug  9 15:11 UTC 2010
+    DESCRIPTION
+        "Add controls for syslogEveryTime, profile visibility of syslog/trap
+         statistics, egress-policy controls.
+         ICMPv6 and ACL rule types added, tcp/udp rule types augmented to
+         support IPv6 addresses."
+
+    REVISION    "200904101200Z"  -- Wed Apr 10 12:00 UTC 2009
+    DESCRIPTION
+        "Added tri-state textual convention and modified the etsysPolicyRules
+         group to use this convention for actions which previously used
+         EnabledStatus.
+         
+         Added syslog, trap, and disable-port actions to the 
+         etsysPolicyProfileTable."
+
+    REVISION    "200904011336Z"  -- Wed Apr 01 13:36 UTC 2009
+    DESCRIPTION
+        "Modified the capabilities group to support both OverwriteTci 
+         and Mirroring. A few other small corrections."
+
+    REVISION    "200802191429Z"  -- Tue Feb 19 14:29 UTC 2008
+    DESCRIPTION
+        "Capability has been added to define a packet mirroring index
+         for frames matching a policy profile or policy rule.
+
+         Further clarification is included in DESCRIPTION field of the
+         etsysPolicyProfileMirrorIndex and etsysPolicyRuleMirrorIndex
+         objects."
+
+    REVISION    "200703212102Z"  -- Wed Mar 21 21:02 GMT 2007
+    DESCRIPTION
+         "An additional scalar etsysPolicyRuleSylogExtendedFormat is
+         added to configure enabling/disabling the addition of extended
+         data to the rule-hit syslog messages.
+
+         Further clarifications are included in DESCRIPTION field of 
+         the etsysPolicyRuleSylogExtendedFormat object."
 
     REVISION "200606152040Z"  -- Thu Jun 15 20:40 UTC 2006
     DESCRIPTION
@@ -323,25 +362,34 @@ PolicyClassificationRuleType  ::=  TEXTUAL-CONVENTION
                                 
         ip6Source(9)            The source address in an IPv6 header, 
                                 postfixed with the source port (for 
-                                TCP/UDP frames). Length is 18 bytes.
+                                TCP/UDP frames). Length is 18 bytes
+                                for IPv6+TCP/UDP, or 16 bytes for
+                                IPv6.
                                 
         ip6Destination(10)      The destination address in an IPv6 
                                 header, postfixed with the destination 
                                 port (for TCP/UDP frames). Length is 18
-                                bytes.
+                                bytes for IPv6+TCP/UDP, or 16 bytes for
+                                IPv6.
 
         ip6FlowLabel(11)        The flow label field (traffic class and
                                 flow identifier) in an IPv6 header. 
-                                Length is 4 bytes.
+                                Length is 3 bytes, as only the first
+                                20 bits are valid and mask-able, only
+                                the data in the first 20 bits (the first
+                                five nibbles) is considered.
                                 
         ip4Source(12)           The source address in an IPv4 header, 
                                 postfixed with the source port (for 
-                                TCP/UDP frames). Length is 6 bytes.
+                                TCP/UDP frames). Length is 6 bytes
+                                for IPv4+TCP/UDP, or 4 bytes for
+                                IPv4.
                                 
         ip4Destination(13)      The destination address in an IPv4 
                                 header, postfixed with the destination 
                                 port (for TCP/UDP frames). Length is 6 
-                                bytes.
+                                bytes for IPv4+TCP/UDP, or 4 bytes for
+                                IPv4.
                                 
         ipFragment(14)          Truth value derived from the FLAGS and 
                                 FRAGMENTATION_OFFSET fields of an IP
@@ -352,20 +400,28 @@ PolicyClassificationRuleType  ::=  TEXTUAL-CONVENTION
                                 (there is no data, only presence).
                                 
         udpSourcePort(15)       The source UDP port(socket) in a UDP 
-                                header, postfixed with a source IPv4
-                                address. Length is 6 bytes.
+                                header, optionally postfixed with a 
+                                source IP address. Length is 2 bytes 
+                                for UDP, 6 bytes for UDP+IPv4, or 18 
+                                bytes for UDP+IPv6.
                                 
         udpDestinationPort(16)  The destination UDP port(socket) in a 
-                                UDP header, postfixed with a destination
-                                IPv4 address. Length is 6 bytes.
+                                UDP header, optionally postfixed with a 
+                                destination IP address. Length is 2 
+                                bytes for UDP, 6 bytes for UDP+IPv4, or
+                                18 bytes for UDP+IPv6.
                                 
         tcpSourcePort(17)       The source TCP port(socket) in an TCP 
-                                header, postfixed with a source IPv4
-                                address. Length is 6 bytes.
+                                header, optionally postfixed with a 
+                                source IPv4 address. Length is 2 bytes 
+                                for TCP, 6 bytes for TCP+IPv4, or 18 
+                                bytes for TCP+IPv6.
                                 
         tcpDestinationPort(18)  The destination TCP port(socket) in an 
-                                TCP header, postfixed with a destination
-                                IPv4 address. Length is 6 bytes.
+                                TCP header, optionally postfixed with a 
+                                destination IPv4 address. Length is 2 
+                                bytes for TCP, 6 bytes for TCP+IPv4, or
+                                18 bytes for TCP+IPv6.
                                 
         icmpTypeCode(19)        The Type and Code fields from an ICMP 
                                 frame.  These are encoded in 2 bytes, 
@@ -381,6 +437,13 @@ PolicyClassificationRuleType  ::=  TEXTUAL-CONVENTION
                                 
         ipType(22)              The protocol type in an IP header. 
                                 Length is 1 byte.
+                                
+        icmpTypeCodeV6(23)      The Type and Code fields from an ICMP 
+                                frame.  These are encoded in 2 bytes, 
+                                network-byte-order, Type in the first 
+                                (left-most) byte, Code in the second 
+                                byte. For ICMPv6, which redefines the
+                                types and codes.
                                 
         etherType(25)           The type field in an Ethernet II frame.
                                 Length is 2 bytes.
@@ -405,6 +468,9 @@ PolicyClassificationRuleType  ::=  TEXTUAL-CONVENTION
                                 in an 802.1D Tagged frame (include both
                                 VLAN ID and Priority bits.
                                 Length is 2 bytes.
+
+        acl(30)                 A numbered ACL, represented by a 4 byte
+                                integer value.  This is not maskable.
 
         bridgePort(31)          The dot1dBasePort on which the frame was
                                 received.  Length is 2 bytes."
@@ -432,10 +498,12 @@ PolicyClassificationRuleType  ::=  TEXTUAL-CONVENTION
                     ipTtl(20),
                     ipTos(21),
                     ipType(22),
+                    icmpTypeCodeV6(23),
                     etherType(25),
                     llcDsapSsap(26),
                     vlanId(27),
                     ieee8021dTci(28),
+                    acl(30),
                     bridgePort(31)
                     }
 
@@ -492,6 +560,8 @@ PolicyRulesSupported  ::=  TEXTUAL-CONVENTION
         ipTtl(20)               The TTL(HopCount) field in an IP header.
         ipTos(21)               The ToS(DSCP) field in an IP header.
         ipType(22)              The protocol type in an IP header.
+        icmpTypeCodeV6(23)      The Type and Code fields from an ICMPv6 
+                                frame.
         etherType(25)           The type field in an Ethernet II frame.
         llcDsapSsap(26)         The DSAP/SSAP/CTRL field in an LLC 
                                 encapsulated frame, includes SNAP 
@@ -502,6 +572,7 @@ PolicyRulesSupported  ::=  TEXTUAL-CONVENTION
         ieee8021dTci(28)        The entire 16 bit TCI field present 
                                 in an 802.1D Tagged frame (include both
                                 VLAN ID and Priority bits.
+        acl(30)                 A number ACL list to which the frame is applied.
         bridgePort(31)          The dot1dBasePort on which the frame was
                                 received."
                                 
@@ -528,12 +599,30 @@ PolicyRulesSupported  ::=  TEXTUAL-CONVENTION
                     ipTtl(20),
                     ipTos(21),
                     ipType(22),
+                    icmpTypeCodeV6(23),
                     etherType(25),
                     llcDsapSsap(26),
                     vlanId(27),
                     ieee8021dTci(28),
+                    acl(30),
                     bridgePort(31)
                     }
+
+TriStateStatus ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "A simple status value for the object.
+
+         enabled(1)     indicates the action will occur
+         disabled(2)    indicates no action will be asserted
+         prohibited(3)  indicates the action will be prevented from occurring
+
+         This is useful (over and above the standard EnabledStatus
+         TC) in the context of hierachical decision trees,
+         whereby a decision to prevent an action may revoke another,
+         lower precedent decision to take the action."
+
+    SYNTAX      INTEGER { enabled(1), disabled(2), prohibited(3) }
 
 
 -- -------------------------------------------------------------
@@ -691,7 +780,17 @@ EtsysPolicyProfileEntry ::=
         etsysPolicyProfileRulePrecedence
              OCTET STRING,
         etsysPolicyProfileVlanRFC3580Mappings
-             VlanList
+             VlanList,
+        etsysPolicyProfileMirrorIndex
+             Integer32,
+        etsysPolicyProfileAuditSyslogEnable
+             EnabledStatus,
+        etsysPolicyProfileAuditTrapEnable
+             EnabledStatus,
+        etsysPolicyProfileDisablePort
+             EnabledStatus,
+        etsysPolicyProfileUsageList
+             PortList
     }
 
 etsysPolicyProfileIndex OBJECT-TYPE
@@ -978,6 +1077,62 @@ etsysPolicyProfileVlanRFC3580Mappings OBJECT-TYPE
          RADIUS in an RFC3580 context."
     ::= { etsysPolicyProfileEntry 13 }
 
+etsysPolicyProfileMirrorIndex OBJECT-TYPE
+    SYNTAX      Integer32 (-1|0|1..255)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "A reference to a packet mirror destination (defined elsewhere).
+
+         A value of (-1) indicates no mirror is specified, but a mirror is
+         not explicitly prohibitted.  
+         
+         A value of (0) indicates that mirroring is explicitly prohibitted,
+         unless a high precedent source (a rule) has specified a mirror."
+    DEFVAL { -1 }
+    ::= { etsysPolicyProfileEntry 14 }
+
+etsysPolicyProfileAuditSyslogEnable OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-create 
+    STATUS      current
+    DESCRIPTION
+        "Enables the sending of a syslog message if no rule bound to this
+         profile has prohibited it."
+    DEFVAL { disabled }
+    ::= { etsysPolicyProfileEntry 15 }
+
+etsysPolicyProfileAuditTrapEnable OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-create 
+    STATUS      current
+    DESCRIPTION
+        "Enables the sending of a SNMP NOTIFICATION if no rule bound to this
+         profile has prohibited it."
+    DEFVAL { disabled }
+    ::= { etsysPolicyProfileEntry 16 }
+
+etsysPolicyProfileDisablePort OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Will set the ifOperStatus of the port, on which the frame 
+         which used this profile was received, to disable, if 
+         if no rule bound to this profile has prohibited it."
+    DEFVAL { disabled }
+    ::= { etsysPolicyProfileEntry 17 }
+
+etsysPolicyProfileUsageList OBJECT-TYPE
+    SYNTAX      PortList
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "When read, a set bit indicates that this profile was used to
+         send a syslog or trap message for corresponding port.  When set, 
+         the native PortList will be bit-wise AND'ed with the set PortList,
+         allowing the agent to clear the usage indication."
+    ::= { etsysPolicyProfileEntry 18 }
 
 -- -------------------------------------------------------------
 -- etsysPolicyClassification group        
@@ -1582,12 +1737,16 @@ etsysPolicyCapabilities OBJECT-TYPE
                        -- and thus supports the etsysPolicyRFC3580Map 
                        -- group.
 
-        supportsPolicyEnabledTable(17)
+        supportsPolicyEnabledTable(17),
                        -- supports the etsysPolicyEnabledTable which
                        -- reports and controls the state of 
                        -- PolicyProfile assignment on the device.
 
+        supportsMirror(18),
+                       -- supports mirroring
 
+        supportsEgressPolicy(19)
+                       -- supports the application of policy on egress.
    }
    MAX-ACCESS  read-only
    STATUS      current
@@ -1755,7 +1914,9 @@ EtsysPolicyEnabledTableEntry ::=
         etsysPolicyEnabledSupportedRuleTypes
              PolicyRulesSupported,
         etsysPolicyEnabledEnabledRuleTypes
-             PolicyRulesSupported
+             PolicyRulesSupported,
+        etsysPolicyEnabledEgressEnabled
+             EnabledStatus
        }
 
 etsysPolicyEnabledSupportedRuleTypes OBJECT-TYPE
@@ -1781,6 +1942,17 @@ etsysPolicyEnabledEnabledRuleTypes OBJECT-TYPE
          A set of all cleared bits will effectively disable policy in 
          the port."
     ::= { etsysPolicyEnabledTableEntry 2 }
+
+etsysPolicyEnabledEgressEnabled OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Controls the enabling and disabling the application of policy
+         as packets egress the switching process on the dot1dBasePort 
+         specified in the indexing."
+    DEFVAL { disabled }
+    ::= { etsysPolicyEnabledTableEntry 3 }
 
 etsysPolicyRuleAttributeTable    OBJECT-TYPE
     SYNTAX      SEQUENCE OF EtsysPolicyRuleAttributeTableEntry
@@ -1846,6 +2018,35 @@ etsysPolicyRuleAttributeMaxCreatable OBJECT-TYPE
         "If this value is non-zero, the value indicates the maximum
          number of rules of this type the agent can support."
     ::= { etsysPolicyRuleAttributeTableEntry 3 }
+
+etsysPolicyRuleTciOverwriteCapabilities OBJECT-TYPE
+   SYNTAX      PolicyRulesSupported 
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+        "A list of rule types which are supported by this device
+        for the purpose of overwriting the TCI in received packets described 
+        by the bit. A set bit, with the value 1, indicates support
+        for the described functionality.  A clear bit, with the
+        value 0, indicates the described functionality is not
+        supported."
+   ::= { etsysPolicyCapability 14 }
+   
+etsysPolicyRuleMirrorCapabilities OBJECT-TYPE
+   SYNTAX      PolicyRulesSupported 
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+        "A list of rule types which are supported by this device
+        for the purpose of mirroring the network traffic described 
+        by the bit. A set bit, with the value 1, indicates support
+        for the described functionality.  A clear bit, with the
+        value 0, indicates the described functionality is not
+        supported."
+   ::= { etsysPolicyCapability 15 }
+
+
+
 
 -- -------------------------------------------------------------
 -- etsysPolicyMap group 
@@ -2092,12 +2293,16 @@ EtsysPolicyRuleEntry ::=
         etsysPolicyRuleResult2
              Integer32,
         etsysPolicyRuleAuditSyslogEnable
-             EnabledStatus,
+             TriStateStatus,
         etsysPolicyRuleAuditTrapEnable
-             EnabledStatus,
+             TriStateStatus,
         etsysPolicyRuleDisablePort
-             EnabledStatus,
+             TriStateStatus,
         etsysPolicyRuleOperPid
+             Integer32,
+        etsysPolicyRuleOverwriteTCI
+             EnabledStatus,
+        etsysPolicyRuleMirrorIndex
              Integer32
     }
 
@@ -2285,7 +2490,7 @@ etsysPolicyRuleResult2 OBJECT-TYPE
     ::= { etsysPolicyRuleEntry 11 }
 
 etsysPolicyRuleAuditSyslogEnable OBJECT-TYPE
-    SYNTAX      EnabledStatus
+    SYNTAX      TriStateStatus
     MAX-ACCESS  read-create 
     STATUS      current
     DESCRIPTION
@@ -2295,7 +2500,7 @@ etsysPolicyRuleAuditSyslogEnable OBJECT-TYPE
     ::= { etsysPolicyRuleEntry 12 }
 
 etsysPolicyRuleAuditTrapEnable OBJECT-TYPE
-    SYNTAX      EnabledStatus
+    SYNTAX      TriStateStatus
     MAX-ACCESS  read-create 
     STATUS      current
     DESCRIPTION
@@ -2305,7 +2510,7 @@ etsysPolicyRuleAuditTrapEnable OBJECT-TYPE
     ::= { etsysPolicyRuleEntry 13 }
 
 etsysPolicyRuleDisablePort OBJECT-TYPE
-    SYNTAX      EnabledStatus
+    SYNTAX      TriStateStatus
     MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION
@@ -2339,6 +2544,34 @@ etsysPolicyRuleOperPid OBJECT-TYPE
     DEFVAL { -1 }
     ::= { etsysPolicyRuleEntry 15 }
 
+etsysPolicyRuleOverwriteTCI OBJECT-TYPE
+    SYNTAX      TriStateStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "If set, the information contained within the TCI field of
+         inbound, tagged packets will not be used by the device after 
+         the ingress classification stage of packet relay.  The net 
+         effect will be that the TCI information may be used to classify
+         the packet, but will be overwritten (and ignored) by subsequent
+         stages of packet relay."
+    DEFVAL { disabled }
+    ::= { etsysPolicyRuleEntry 16 }
+
+etsysPolicyRuleMirrorIndex OBJECT-TYPE
+    SYNTAX      Integer32 (-1|0|1..255)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "A reference to a packet mirror destination (defined elsewhere).
+
+         A value of (-1) indicates no mirror is specified, but a mirror is
+         not explicitly prohibitted.  
+         
+         A value of (0) indicates that mirroring is explicitly prohibitted,
+         unless a high precedent rule has specified a mirror."
+    DEFVAL { -1 }
+    ::= { etsysPolicyRuleEntry 17 }
 
 -- -------------------------------------------------------------
 -- etsysPolicyRulePortTable
@@ -2409,7 +2642,7 @@ etsysPolicyRuleDynamicProfileAssignmentOverride OBJECT-TYPE
     ::= { etsysPolicyRules 8 }
 
 etsysPolicyRuleDefaultDynamicSyslogStatus OBJECT-TYPE
-    SYNTAX      EnabledStatus 
+    SYNTAX      TriStateStatus 
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -2422,7 +2655,7 @@ etsysPolicyRuleDefaultDynamicSyslogStatus OBJECT-TYPE
     ::= { etsysPolicyRules 9 }
 
 etsysPolicyRuleDefaultDynamicTrapStatus OBJECT-TYPE
-    SYNTAX      EnabledStatus 
+    SYNTAX      TriStateStatus 
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -2533,6 +2766,31 @@ etsysPolicyRuleSylogMachineReadableFormat OBJECT-TYPE
          consumption."
     DEFVAL { disabled }
     ::= { etsysPolicyRules 16 }
+
+etsysPolicyRuleSylogExtendedFormat OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "If enabled, the device should provide additional information
+         in rule-hit syslog messages.  This information MAY include what
+         actions may have been initiated by the rule (if any) or 
+         data mined from the packet which matched the rule."
+    DEFVAL { disabled }
+    ::= { etsysPolicyRules 17 }
+
+etsysPolicyRuleSylogEveryTime OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "If enabled, the device will syslog on every rule hit (or profile
+         hit) which specifies SYSLOG as the action, instead of only when
+         the associated bit in the etsysPolicyProfileUsageList or the
+         etsysPolicyRuleUsageList is clear. It should be noted that this may
+         cause MANY messages to be generated."
+    DEFVAL { disabled }
+    ::= { etsysPolicyRules 18 }
 
 -- -------------------------------------------------------------
 -- etsysPolicyRFC3580Map group 
@@ -2726,7 +2984,7 @@ etsysPolicyProfileGroup OBJECT-GROUP
                 etsysPolicyProfileRulePrecedence,
                 etsysPolicyProfileVlanRFC3580Mappings
             }
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
         "A collection of objects providing Policy Profile Creation."
     ::= { etsysPolicyProfileGroups 1 }
@@ -2919,7 +3177,7 @@ etsysPolicyCapabilitiesGroup2 OBJECT-GROUP
                 etsysPolicyRuleAttributeBitLength,
                 etsysPolicyRuleAttributeMaxCreatable
             }
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
         "An object that indicates the capabilities of 
          the managed entity with respect to Policy Profiles and
@@ -2954,9 +3212,11 @@ etsysPolicyRulesGroup2 OBJECT-GROUP
                 etsysPolicyRuleStatsDroppedNotifications,
                 etsysPolicyRuleSylogMachineReadableFormat
             }
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
-        "An object that indicates the capabilities of the managed
+        "********* THIS GROUP IS DEPRECATED **********
+
+         An object that indicates the capabilities of the managed
          entity with respect to Policy Profiles."
     ::= { etsysPolicyProfileGroups 14 }
 
@@ -2970,6 +3230,228 @@ etsysPolicyRulePortHitNotificationGroup NOTIFICATION-GROUP
          etsysPolicyRulePortHit event."
     ::= { etsysPolicyProfileGroups 15 }
 
+etsysPolicyRulesGroup3 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyRulesMaxEntries,
+                etsysPolicyRulesNumEntries,
+                etsysPolicyRulesLastChange,
+                etsysPolicyRulesAccountingEnable,
+                etsysPolicyRulesPortDisabledList,
+                etsysPolicyRuleRowStatus,
+                etsysPolicyRuleStorageType,
+                etsysPolicyRuleUsageList,
+                etsysPolicyRuleResult1,
+                etsysPolicyRuleResult2,
+                etsysPolicyRuleAuditSyslogEnable,
+                etsysPolicyRuleAuditTrapEnable,
+                etsysPolicyRuleDisablePort,
+                etsysPolicyRuleOperPid,
+                etsysPolicyRulePortHit,
+                etsysPolicyRuleDynamicProfileAssignmentOverride,
+                etsysPolicyRuleDefaultDynamicSyslogStatus,
+                etsysPolicyRuleDefaultDynamicTrapStatus,
+                etsysPolicyRuleStatsAutoClearOnLink,
+                etsysPolicyRuleStatsAutoClearInterval,
+                etsysPolicyRuleStatsAutoClearPorts,
+                etsysPolicyRuleStatsAutoClearOnProfile,
+                etsysPolicyRuleStatsDroppedNotifications,
+                etsysPolicyRuleSylogMachineReadableFormat,
+                etsysPolicyRuleSylogExtendedFormat
+            }
+    STATUS  deprecated
+    DESCRIPTION
+        "An object that indicates the capabilities of the managed
+         entity with respect to Policy Profiles."
+    ::= { etsysPolicyProfileGroups 16 }
+
+etsysPolicyRulesGroup4 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyRulesMaxEntries,
+                etsysPolicyRulesNumEntries,
+                etsysPolicyRulesLastChange,
+                etsysPolicyRulesAccountingEnable,
+                etsysPolicyRulesPortDisabledList,
+                etsysPolicyRuleRowStatus,
+                etsysPolicyRuleStorageType,
+                etsysPolicyRuleUsageList,
+                etsysPolicyRuleResult1,
+                etsysPolicyRuleResult2,
+                etsysPolicyRuleAuditSyslogEnable,
+                etsysPolicyRuleAuditTrapEnable,
+                etsysPolicyRuleDisablePort,
+                etsysPolicyRuleOperPid,
+                etsysPolicyRulePortHit,
+                etsysPolicyRuleDynamicProfileAssignmentOverride,
+                etsysPolicyRuleDefaultDynamicSyslogStatus,
+                etsysPolicyRuleDefaultDynamicTrapStatus,
+                etsysPolicyRuleStatsAutoClearOnLink,
+                etsysPolicyRuleStatsAutoClearInterval,
+                etsysPolicyRuleStatsAutoClearPorts,
+                etsysPolicyRuleStatsAutoClearOnProfile,
+                etsysPolicyRuleStatsDroppedNotifications,
+                etsysPolicyRuleSylogMachineReadableFormat,
+                etsysPolicyRuleSylogExtendedFormat,
+                etsysPolicyRuleOverwriteTCI,
+                etsysPolicyRuleMirrorIndex
+            }
+    STATUS  current
+    DESCRIPTION
+        "An object that indicates the capabilities of the managed
+         entity with respect to Policy Profiles."
+    ::= { etsysPolicyProfileGroups 17 }
+
+etsysPolicyCapabilitiesGroup3 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyCapabilities,
+                etsysPolicyVlanRuleCapabilities,
+                etsysPolicyCosRuleCapabilities,
+                etsysPolicyDropRuleCapabilities,
+                etsysPolicyForwardRuleCapabilities,
+                etsysPolicyDynaPIDRuleCapabilities ,
+                etsysPolicyAdminPIDRuleCapabilities,
+                etsysPolicySyslogRuleCapabilities,
+                etsysPolicyTrapRuleCapabilities,
+                etsysPolicyDisablePortRuleCapabilities,
+                etsysPolicySupportedPortList,
+                etsysPolicyEnabledSupportedRuleTypes,
+                etsysPolicyEnabledEnabledRuleTypes,
+                etsysPolicyRuleAttributeByteLength,
+                etsysPolicyRuleAttributeBitLength,
+                etsysPolicyRuleAttributeMaxCreatable,
+                etsysPolicyRuleTciOverwriteCapabilities,
+                etsysPolicyRuleMirrorCapabilities
+            }
+    STATUS  deprecated
+    DESCRIPTION
+        "An object that indicates the capabilities of
+         the managed entity with respect to Policy Profiles and
+         defines the characteristics of policy rule data by rule
+         type."
+    ::= { etsysPolicyProfileGroups 18 }
+
+etsysPolicyProfileGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyProfileMaxEntries,
+                etsysPolicyProfileNumEntries,
+                etsysPolicyProfileLastChange,
+                etsysPolicyProfileTableNextAvailableIndex,
+                etsysPolicyProfileName,
+                etsysPolicyProfileRowStatus,
+                etsysPolicyProfilePortVidStatus,
+                etsysPolicyProfilePortVid,
+                etsysPolicyProfilePriorityStatus,
+                etsysPolicyProfilePriority,
+                etsysPolicyProfileEgressVlans,
+                etsysPolicyProfileForbiddenVlans,
+                etsysPolicyProfileUntaggedVlans,
+                etsysPolicyProfileOverwriteTCI,
+                etsysPolicyProfileRulePrecedence,
+                etsysPolicyProfileVlanRFC3580Mappings,
+                etsysPolicyProfileMirrorIndex,
+                etsysPolicyProfileAuditSyslogEnable,
+                etsysPolicyProfileAuditTrapEnable,
+                etsysPolicyProfileDisablePort
+            }
+    STATUS  deprecated
+    DESCRIPTION
+        "A collection of objects providing Policy Profile Creation."
+    ::= { etsysPolicyProfileGroups 19 }
+
+etsysPolicyRulesGroup5 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyRulesMaxEntries,
+                etsysPolicyRulesNumEntries,
+                etsysPolicyRulesLastChange,
+                etsysPolicyRulesAccountingEnable,
+                etsysPolicyRulesPortDisabledList,
+                etsysPolicyRuleRowStatus,
+                etsysPolicyRuleStorageType,
+                etsysPolicyRuleUsageList,
+                etsysPolicyRuleResult1,
+                etsysPolicyRuleResult2,
+                etsysPolicyRuleAuditSyslogEnable,
+                etsysPolicyRuleAuditTrapEnable,
+                etsysPolicyRuleDisablePort,
+                etsysPolicyRuleOperPid,
+                etsysPolicyRulePortHit,
+                etsysPolicyRuleDynamicProfileAssignmentOverride,
+                etsysPolicyRuleDefaultDynamicSyslogStatus,
+                etsysPolicyRuleDefaultDynamicTrapStatus,
+                etsysPolicyRuleStatsAutoClearOnLink,
+                etsysPolicyRuleStatsAutoClearInterval,
+                etsysPolicyRuleStatsAutoClearPorts,
+                etsysPolicyRuleStatsAutoClearOnProfile,
+                etsysPolicyRuleStatsDroppedNotifications,
+                etsysPolicyRuleSylogMachineReadableFormat,
+                etsysPolicyRuleSylogExtendedFormat,
+                etsysPolicyRuleSylogEveryTime,
+                etsysPolicyRuleOverwriteTCI,
+                etsysPolicyRuleMirrorIndex
+            }
+    STATUS  current
+    DESCRIPTION
+        "An object that indicates the capabilities of the managed
+         entity with respect to Policy Profiles."
+    ::= { etsysPolicyProfileGroups 20 }
+
+etsysPolicyCapabilitiesGroup4 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyCapabilities,
+                etsysPolicyVlanRuleCapabilities,
+                etsysPolicyCosRuleCapabilities,
+                etsysPolicyDropRuleCapabilities,
+                etsysPolicyForwardRuleCapabilities,
+                etsysPolicyDynaPIDRuleCapabilities ,
+                etsysPolicyAdminPIDRuleCapabilities,
+                etsysPolicySyslogRuleCapabilities,
+                etsysPolicyTrapRuleCapabilities,
+                etsysPolicyDisablePortRuleCapabilities,
+                etsysPolicySupportedPortList,
+                etsysPolicyEnabledSupportedRuleTypes,
+                etsysPolicyEnabledEnabledRuleTypes,
+                etsysPolicyEnabledEgressEnabled,
+                etsysPolicyRuleAttributeByteLength,
+                etsysPolicyRuleAttributeBitLength,
+                etsysPolicyRuleAttributeMaxCreatable,
+                etsysPolicyRuleTciOverwriteCapabilities,
+                etsysPolicyRuleMirrorCapabilities
+            }
+    STATUS  current
+    DESCRIPTION
+        "An object that indicates the capabilities of
+         the managed entity with respect to Policy Profiles and
+         defines the characteristics of policy rule data by rule
+         type."
+    ::= { etsysPolicyProfileGroups 21 }
+
+etsysPolicyProfileGroup3 OBJECT-GROUP
+    OBJECTS {
+                etsysPolicyProfileMaxEntries,
+                etsysPolicyProfileNumEntries,
+                etsysPolicyProfileLastChange,
+                etsysPolicyProfileTableNextAvailableIndex,
+                etsysPolicyProfileName,
+                etsysPolicyProfileRowStatus,
+                etsysPolicyProfilePortVidStatus,
+                etsysPolicyProfilePortVid,
+                etsysPolicyProfilePriorityStatus,
+                etsysPolicyProfilePriority,
+                etsysPolicyProfileEgressVlans,
+                etsysPolicyProfileForbiddenVlans,
+                etsysPolicyProfileUntaggedVlans,
+                etsysPolicyProfileOverwriteTCI,
+                etsysPolicyProfileRulePrecedence,
+                etsysPolicyProfileVlanRFC3580Mappings,
+                etsysPolicyProfileMirrorIndex,
+                etsysPolicyProfileAuditSyslogEnable,
+                etsysPolicyProfileAuditTrapEnable,
+                etsysPolicyProfileDisablePort,
+                etsysPolicyProfileUsageList
+            }
+    STATUS  current
+    DESCRIPTION
+        "A collection of objects providing Policy Profile Creation."
+    ::= { etsysPolicyProfileGroups 22 }
 
 -- -------------------------------------------------------------
 -- compliance statements
@@ -3087,7 +3569,7 @@ etsysPolicyProfileCompliance3 MODULE-COMPLIANCE
     ::= { etsysPolicyProfileCompliances 3 }
 
 etsysPolicyProfileCompliance4 MODULE-COMPLIANCE
-    STATUS  current
+    STATUS  deprecated
     DESCRIPTION
         "The compliance statement for devices that support Policy 
          Profiles."
@@ -3127,5 +3609,131 @@ etsysPolicyProfileCompliance4 MODULE-COMPLIANCE
         "The etsysPolicyRulePortHitNotificationGroup is optional for 
          agents that support rule use accounting."
     ::= { etsysPolicyProfileCompliances 4 }
+
+etsysPolicyProfileCompliance5 MODULE-COMPLIANCE
+    STATUS  deprecated
+    DESCRIPTION
+        "The compliance statement for devices that support Policy 
+         Profiles."
+    MODULE -- this module
+    MANDATORY-GROUPS { etsysPolicyProfileGroup, 
+                       etsysPortPolicyProfileGroup2,
+                       etsysPolicyCapabilitiesGroup2 }
+
+    GROUP etsysStationPolicyProfileGroup
+    DESCRIPTION
+        "The etsysStationPolicyProfileGroup is mandatory only
+         for agents which support station-based policy application."
+         
+    GROUP etsysInvalidPolicyPolicyGroup
+    DESCRIPTION  
+        "The etsysInvalidPolicyPolicyGroup is mandatory only 
+         for agents which support provisioning of policy based on 
+         AAA services such as RADIUS."
+
+    GROUP etsysDevicePolicyProfileGroup
+    DESCRIPTION  
+        "The etsysDevicePolicyProfileGroup is mandatory for agents
+         that cannot support complete policies on a per port basis."
+
+    GROUP etsysPolicyRFC3580MapGroup
+    DESCRIPTION
+         "The etsysPolicyRFC3580MapGroup is mandatory for agents that
+          support RFC 3580 compliance."
+
+    GROUP etsysPolicyRulesGroup3
+    DESCRIPTION
+         "The etsysPolicyRulesGroup is mandatory for agents that
+          support Policy rule accounting and usage reporting."
+
+    GROUP etsysPolicyRulePortHitNotificationGroup
+    DESCRIPTION
+        "The etsysPolicyRulePortHitNotificationGroup is optional for 
+         agents that support rule use accounting."
+    ::= { etsysPolicyProfileCompliances 5 }
+
+etsysPolicyProfileCompliance6 MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for devices that support Policy
+         Profiles."
+    MODULE -- this module
+    MANDATORY-GROUPS { etsysPolicyProfileGroup,
+                       etsysPortPolicyProfileGroup2,
+                       etsysPolicyCapabilitiesGroup3 }
+
+    GROUP etsysStationPolicyProfileGroup
+    DESCRIPTION
+        "The etsysStationPolicyProfileGroup is mandatory only
+         for agents which support station-based policy application."
+
+    GROUP etsysInvalidPolicyPolicyGroup
+    DESCRIPTION
+        "The etsysInvalidPolicyPolicyGroup is mandatory only
+         for agents which support provisioning of policy based on
+         AAA services such as RADIUS."
+
+    GROUP etsysDevicePolicyProfileGroup
+    DESCRIPTION
+        "The etsysDevicePolicyProfileGroup is mandatory for agents
+         that cannot support complete policies on a per port basis."
+
+    GROUP etsysPolicyRFC3580MapGroup
+    DESCRIPTION
+         "The etsysPolicyRFC3580MapGroup is mandatory for agents that
+          support RFC 3580 compliance."
+
+    GROUP etsysPolicyRulesGroup4
+    DESCRIPTION
+         "The etsysPolicyRulesGroup is mandatory for agents that
+          support Policy rule accounting and usage reporting."
+
+    GROUP etsysPolicyRulePortHitNotificationGroup
+    DESCRIPTION
+        "The etsysPolicyRulePortHitNotificationGroup is optional for
+         agents that support rule use accounting."
+    ::= { etsysPolicyProfileCompliances 6 }
+
+etsysPolicyProfileCompliance7 MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for devices that support Policy
+         Profiles."
+    MODULE -- this module
+    MANDATORY-GROUPS { etsysPolicyProfileGroup3,
+                       etsysPortPolicyProfileGroup2,
+                       etsysPolicyCapabilitiesGroup4 }
+
+    GROUP etsysStationPolicyProfileGroup
+    DESCRIPTION
+        "The etsysStationPolicyProfileGroup is mandatory only
+         for agents which support station-based policy application."
+
+    GROUP etsysInvalidPolicyPolicyGroup
+    DESCRIPTION
+        "The etsysInvalidPolicyPolicyGroup is mandatory only
+         for agents which support provisioning of policy based on
+         AAA services such as RADIUS."
+
+    GROUP etsysDevicePolicyProfileGroup
+    DESCRIPTION
+        "The etsysDevicePolicyProfileGroup is mandatory for agents
+         that cannot support complete policies on a per port basis."
+
+    GROUP etsysPolicyRFC3580MapGroup
+    DESCRIPTION
+         "The etsysPolicyRFC3580MapGroup is mandatory for agents that
+          support RFC 3580 compliance."
+
+    GROUP etsysPolicyRulesGroup5
+    DESCRIPTION
+         "The etsysPolicyRulesGroup is mandatory for agents that
+          support Policy rule accounting and usage reporting."
+
+    GROUP etsysPolicyRulePortHitNotificationGroup
+    DESCRIPTION
+        "The etsysPolicyRulePortHitNotificationGroup is optional for
+         agents that support rule use accounting."
+    ::= { etsysPolicyProfileCompliances 7 }
 
 END
