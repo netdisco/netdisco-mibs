@@ -15,7 +15,7 @@ IMPORTS
 
 
 rcMltMib MODULE-IDENTITY
-       LAST-UPDATED     "200912160000Z"
+       LAST-UPDATED     "201010200000Z"
        ORGANIZATION     "Bay Networks, Rapid-City Group"
        CONTACT-INFO     "Yu-Ten Lee
                          Postal:        Nortel Networks
@@ -27,6 +27,28 @@ rcMltMib MODULE-IDENTITY
                          E-mail:        ylee@nortelnetworks.com"
 
        DESCRIPTION      "Enterprise MIB for the Accelar product family."
+
+       REVISION "201010200000Z" -- 20 October 2010
+       DESCRIPTION "Version 22: Added rcStatMltUtilTable."
+
+       REVISION "201009210000Z" -- 21 September 2010
+       DESCRIPTION "Version 21: Added rcMltEntryOwner,
+                                      rcMltDatapathProgrammingState
+                                        to rcMltTable." 
+
+       REVISION "201009140000Z" -- 14 September 2010
+       DESCRIPTION "Version 20: Increased MLT ID range for
+                                    rcStatMltIfExtnMltId,
+                                    rcStatMltEtherMltId.
+                                    rcMltId, rcMltSmltId.
+                                Added:
+                                    rcMltPeerPortMembers,
+                                    rcMltCpLimitPktRate,
+                                    rcMltCpLimitShutDownEnable,
+                                    rcMltVlanIdList to rcMltTable.
+                                Added:
+                                    synchronizeInProgress(11)
+                                       to rcL2RedundancyHaCpuState."
 
        REVISION "200912160000Z" -- 16 December 2009
        DESCRIPTION "Version 19: Added rcMltDisablePortsOnShutdown."
@@ -126,7 +148,7 @@ RcStatMltIfExtnEntry ::= SEQUENCE {
         }
  
 rcStatMltIfExtnMltId OBJECT-TYPE
-        SYNTAX        Integer32 (1..32)
+        SYNTAX        Integer32 (1..512)
         MAX-ACCESS    read-only
         STATUS        current
         DESCRIPTION   "Mlt Id"
@@ -276,7 +298,7 @@ RcStatMltEtherEntry ::= SEQUENCE {
         }
  
 rcStatMltEtherMltId OBJECT-TYPE
-        SYNTAX        Integer32 (1..32)
+        SYNTAX        Integer32 (1..512)
         MAX-ACCESS    read-only
         STATUS        current
         DESCRIPTION   "A value that uniquely identifies the Multi-Link 
@@ -887,6 +909,72 @@ rcStatSmltLacpInfoTxMsgCnt OBJECT-TYPE
         DESCRIPTION   "LACP info msgs transmitted."
         ::= { rcStatMlt 32 } 
 
+-- MLT utilization statistics per port
+
+rcStatMltUtilTable OBJECT-TYPE
+        SYNTAX        SEQUENCE OF RcStatMltUtilEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION
+            "A table used to store statistics for MLT members utilization."
+        ::= { rcStatMlt 33 }
+ 
+rcStatMltUtilEntry OBJECT-TYPE
+        SYNTAX        RcStatMltUtilEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "An entry for MLT members utilization statistics table."
+        INDEX         { rcMltId,
+                        rcStatMltUtilPortIfIndex,
+                        rcStatMltUtilTrafficType }
+        ::= { rcStatMltUtilTable 1 }
+ 
+RcStatMltUtilEntry ::= SEQUENCE {
+        rcStatMltUtilPortIfIndex           InterfaceIndex,
+        rcStatMltUtilTrafficType           INTEGER,
+        rcStatMltUtilTrafficLast5Min       Gauge32,
+        rcStatMltUtilTrafficLast30Min      Gauge32,
+        rcStatMltUtilTrafficLast1Hour      Gauge32
+        }
+
+rcStatMltUtilPortIfIndex OBJECT-TYPE
+        SYNTAX        InterfaceIndex
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "Port ifIndex, member of rcMltId."
+        ::= { rcStatMltUtilEntry 1 }
+
+rcStatMltUtilTrafficType OBJECT-TYPE
+        SYNTAX        INTEGER {
+                              rx(1),
+                              tx(2),
+                              rxTx(3)
+                      }
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "Type of traffic for one MLT port interface."
+        ::= { rcStatMltUtilEntry 2 }
+
+rcStatMltUtilTrafficLast5Min OBJECT-TYPE
+        SYNTAX        Gauge32 (0..100)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "This object returns the percentage of traffic on one MLT port interface for the last 5 minutes."
+        ::= { rcStatMltUtilEntry 3 }
+
+rcStatMltUtilTrafficLast30Min OBJECT-TYPE
+        SYNTAX        Gauge32 (0..100)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "This object returns the percentage of traffic on one MLT port interface for the last 30 minutes."
+        ::= { rcStatMltUtilEntry 4 }
+
+rcStatMltUtilTrafficLast1Hour OBJECT-TYPE
+        SYNTAX        Gauge32 (0..100)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "This object returns the percentage of traffic on one MLT port interface for the last hour."
+        ::= { rcStatMltUtilEntry 5 }
 
 
 -- Multi-Link Trunking Table
@@ -1000,11 +1088,17 @@ RcMltEntry ::= SEQUENCE {
                 rcMltMtu                    Integer32,
                 rcMltInterfaceType          INTEGER,
                 rcMltConfiguredMembers      PortSet,
-                rcMltMtuAdminState          EnableValue
+                rcMltMtuAdminState          EnableValue,
+                rcMltPeerPortMembers        PortSet,
+                rcMltCpLimitPktRate         Integer32,
+                rcMltCpLimitShutDownEnable  TruthValue,
+                rcMltVlanIdList             OCTET STRING,
+                rcMltEntryOwner              INTEGER,
+                rcMltDatapathProgrammingState INTEGER
         }
 
 rcMltId OBJECT-TYPE
-        SYNTAX        	Integer32 (1..256)
+        SYNTAX        	Integer32 (1..512)
         MAX-ACCESS        	read-only
         STATUS        	current
         DESCRIPTION   	"A value that uniquely identifies the Multi-Link 
@@ -1110,7 +1204,7 @@ rcMltMltType OBJECT-TYPE
         ::= { rcMltEntry 12 }
 
 rcMltSmltId OBJECT-TYPE
-        SYNTAX        Integer32 (0..256)
+        SYNTAX        Integer32 (0..512)
         MAX-ACCESS    read-create
         STATUS        current
         DESCRIPTION   "Split MLT id."
@@ -1345,6 +1439,68 @@ rcMltMtuAdminState   OBJECT-TYPE
         DEFVAL        { disable }
         ::= { rcMltEntry 38 }
 
+rcMltPeerPortMembers OBJECT-TYPE
+        SYNTAX          PortSet
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The set of Peer ports which are connected to local
+                         ports (rcMltPortMember) of this MLT"
+        ::= { rcMltEntry 39 }
+
+rcMltCpLimitPktRate OBJECT-TYPE
+        SYNTAX          Integer32(1000..20000)
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Used to limit Control packets on the
+                         port to qos-levels 6 and 7.
+                         Sets the limit in packets per second."
+        DEFVAL          { 8000 }
+        ::= { rcMltEntry 40 }
+
+rcMltCpLimitShutDownEnable OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Used to indicate if the mlt-ports should  be
+                         shutdown when the CpLimitPktRate is exceeded."
+        DEFVAL          { false }
+        ::= { rcMltEntry 41 }
+
+rcMltVlanIdList OBJECT-TYPE
+        SYNTAX          OCTET STRING (SIZE (0..512))
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This bitfield is used to identify which VLANs this MLT
+                        is associated with. Each VLAN ID is stored as a bit.
+                        The most-significant (left-most) bit represents
+                        Vlan Id 1."
+        ::= { rcMltEntry 42 }
+
+rcMltEntryOwner OBJECT-TYPE
+        SYNTAX          INTEGER {
+                                none(1),
+                                local(2),
+                                remote(3),
+                                localAndRemote(4)
+                        }
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Defines the owner of the MLT."
+        ::= { rcMltEntry 43 }
+
+rcMltDatapathProgrammingState OBJECT-TYPE
+        SYNTAX          INTEGER {
+                                none(1),
+                                local(2),
+                                remote(3),
+                                localAndRemote(4)                         }
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Defines the datapath programming state of
+                         the MLT."
+        ::= { rcMltEntry 44 }
+
+
 rcMltMcastDistribution OBJECT IDENTIFIER       ::= { rcMlt 11 }
 
 rcMltMcastDistributionEnable OBJECT-TYPE
@@ -1393,7 +1549,7 @@ rcSltPortTable OBJECT-TYPE
         SYNTAX          SEQUENCE OF RcSltPortEntry
         MAX-ACCESS      not-accessible
         STATUS          current
-        DESCRIPTION     ""
+        DESCRIPTION     "Table containing config info for SLT"
         ::= { rcMlt 12 }
 
 rcSltPortEntry OBJECT-TYPE
@@ -1639,7 +1795,8 @@ rcL2RedundancyHaCpuState OBJECT-TYPE
                             peerNotConnected(7),
                             peerConnected(8),
                             lostPeerConnection(9),
-                            notSynchronized(10)
+                            notSynchronized(10),
+                            synchronizeInProgress(11)
                         }
         MAX-ACCESS      read-only
         STATUS          current
@@ -1661,7 +1818,8 @@ rcL2RedundancyHaCpuState OBJECT-TYPE
                          peerNotConnected - no peer connection is established (7).
                          peerConnected - peer connection is established (8).
                          lostPeerConnection - lost connection to peer/Standby CPU (9).
-                         notSynchronized - Table Sync is not complete (10)."
+                         notSynchronized - Table Sync is not complete (10).
+                         synchronizeInProgress - Table Sync is in progress (11)."
         ::= { rcL2Redundancy 1 }
 
 rcL2RedundancyHaEvent OBJECT-TYPE

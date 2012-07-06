@@ -2,9 +2,9 @@
 BAY-STACK-RADIUS-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Unsigned32
+    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Unsigned32, NOTIFICATION-TYPE
         FROM SNMPv2-SMI
-    RowStatus, TruthValue
+    RowStatus, TruthValue, DisplayString
         FROM SNMPv2-TC
     InetAddressType, InetAddress, InetPortNumber
         FROM INET-ADDRESS-MIB
@@ -12,12 +12,25 @@ IMPORTS
         FROM SYNOPTICS-ROOT-MIB;
 
 bayStackRadiusMib MODULE-IDENTITY
-      LAST-UPDATED "201002100000Z"
-      ORGANIZATION "Nortel Ltd."
-      CONTACT-INFO "nortel.com"
+      LAST-UPDATED "201010150000Z"
+      ORGANIZATION "Avaya"
+      CONTACT-INFO "avaya.com"
       DESCRIPTION
               "This MIB module is used for RADIUS configuration
                settings in Nortel's software and products."
+
+      REVISION     "201010150000Z"  -- Oct 15, 2010
+      DESCRIPTION
+              "Ver 12:  Added notification types for reachability up/down."
+
+      REVISION     "201010140000Z"  -- Oct 14, 2010
+      DESCRIPTION
+              "Ver 11:  Added additional radius server settings."
+
+      REVISION     "201009070000Z"  -- Sep 07, 2010
+      DESCRIPTION
+              "Ver 10:  Added bsRadiusReachabilityUserName and
+                         bsRadiusReachabilityPassword."
 
       REVISION     "201002100000Z"  -- Feb 10, 2010
       DESCRIPTION
@@ -63,9 +76,9 @@ bayStackRadiusMib MODULE-IDENTITY
 bsRadiusNotifications OBJECT IDENTIFIER ::= { bayStackRadiusMib 0 }
 bsRadiusObjects       OBJECT IDENTIFIER ::= { bayStackRadiusMib 1 }
 
---
+-- ============================================================================
 -- RADIUS scalar objects
---
+-- ============================================================================
 
 bsRadiusScalars       OBJECT IDENTIFIER ::= { bsRadiusObjects 1 }
 
@@ -161,9 +174,27 @@ bsRadiusReachability OBJECT-TYPE
     DEFVAL { useIcmp }
     ::= { bsRadiusScalars 9 }
 
---
+bsRadiusReachabilityUserName OBJECT-TYPE
+    SYNTAX       DisplayString (SIZE (1..16))
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "The username used for the RADIUS server reachability useRadius option."
+    DEFVAL { "avaya" }
+    ::= { bsRadiusScalars 10 }
+
+bsRadiusReachabilityPassword OBJECT-TYPE
+    SYNTAX       DisplayString (SIZE (1..16))
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "The password used for the RADIUS server reachability useRadius option."
+    DEFVAL { "avaya" }
+    ::= { bsRadiusScalars 11 }
+
+-- ============================================================================
 -- RADIUS server configuration table
---
+-- ============================================================================
 
 bsRadiusServerTable   OBJECT-TYPE
     SYNTAX SEQUENCE OF BsRadiusServerEntry
@@ -179,20 +210,23 @@ bsRadiusServerEntry OBJECT-TYPE
     STATUS       current
     DESCRIPTION
         "An entry containing objects defining how to connect to a
-        single RADIUS server."
+        RADIUS server."
     INDEX { bsRadiusServerIndex }
     ::= { bsRadiusServerTable 1 }
 
 BsRadiusServerEntry ::=
     SEQUENCE {
-        bsRadiusServerIndex        Integer32,
-        bsRadiusServerPriority     Integer32,
-        bsRadiusServerAddressType  InetAddressType,
-        bsRadiusServerAddress      InetAddress,
-        bsRadiusServerUdpPort      InetPortNumber,
-        bsRadiusServerTimeout      Integer32,
-        bsRadiusServerSecret       OCTET STRING,
-        bsRadiusServerRowStatus    RowStatus
+        bsRadiusServerIndex             Integer32,
+        bsRadiusServerPriority          Integer32,
+        bsRadiusServerAddressType       InetAddressType,
+        bsRadiusServerAddress           InetAddress,
+        bsRadiusServerUdpPort           InetPortNumber,
+        bsRadiusServerTimeout           Integer32,
+        bsRadiusServerSecret            OCTET STRING,
+        bsRadiusServerRowStatus         RowStatus,
+        bsRadiusServerAccountingPort    InetPortNumber,
+        bsRadiusServerAccountingEnabled TruthValue,
+        bsRadiusServerRetryLimit        Integer32
     }
 
 bsRadiusServerIndex OBJECT-TYPE
@@ -274,9 +308,39 @@ bsRadiusServerRowStatus OBJECT-TYPE
         "Controls row creation/deletion in this table."
     ::= { bsRadiusServerEntry 8 }
 
---
+bsRadiusServerAccountingPort OBJECT-TYPE
+    SYNTAX      InetPortNumber
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The UDP accounting port number to use when trying to contact the
+        RADIUS server at the address contained in the corresponding instance
+        of bsRadiusServerAddress."
+    ::= { bsRadiusServerEntry 9 }
+
+bsRadiusServerAccountingEnabled OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object controls whether RADIUS accounting is enabled for this
+        RADIUS server instance."
+    DEFVAL      { false }
+    ::= { bsRadiusServerEntry 10 }
+
+bsRadiusServerRetryLimit OBJECT-TYPE
+    SYNTAX      Integer32 (1..5)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the number of RADIUS retry attempts, for this
+        RADIUS server instance."
+    DEFVAL      { 3 }
+    ::= { bsRadiusServerEntry 11 }
+
+-- ============================================================================
 -- RADIUS Dynamic Authorization Clients configuration table
---
+-- ============================================================================
 
 bsRadiusDynAuthClientTable   OBJECT-TYPE
     SYNTAX SEQUENCE OF BsRadiusDynAuthClientEntry
@@ -324,7 +388,7 @@ bsRadiusDynAuthClientAddressType OBJECT-TYPE
     ::= { bsRadiusDynAuthClientEntry 1 }
 
 bsRadiusDynAuthClientAddress OBJECT-TYPE
-    SYNTAX       InetAddress
+    SYNTAX       InetAddress (SIZE(0..113))
     MAX-ACCESS   not-accessible
     STATUS       current
     DESCRIPTION
@@ -399,6 +463,34 @@ bsRadiusDynAuthClientReplayProtection OBJECT-TYPE
     DESCRIPTION
         "Enable or disable RADIUS replay protection."
     ::= { bsRadiusDynAuthClientEntry 9 }
+
+-- ============================================================================
+-- Notifications
+-- ============================================================================
+
+bsRadiusReachabilityServerDown NOTIFICATION-TYPE
+     OBJECTS {
+                 bsRadiusServerAddressType,
+                 bsRadiusServerAddress
+             }
+     STATUS      current
+     DESCRIPTION
+         "This notification is generated when a Radius server fails to
+         respond to reachability requests."
+     ::= { bsRadiusNotifications 1 }
+
+
+bsRadiusReachabilityServerUp NOTIFICATION-TYPE
+     OBJECTS {
+                 bsRadiusServerAddressType,
+                 bsRadiusServerAddress
+             }
+     STATUS      current
+     DESCRIPTION
+         "This notification is generated when a Radius server, which has
+         previously failed to respond to reachability requests, responds
+         to a reachability request."
+     ::= { bsRadiusNotifications 2 }
 
 END
 
