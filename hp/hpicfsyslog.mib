@@ -4,7 +4,7 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
        hpicfSyslog
                  FROM HP-ICF-OID
        MODULE-IDENTITY, OBJECT-TYPE,
-                 Counter32, Integer32,
+                 Counter32, Integer32, Unsigned32,
                  NOTIFICATION-TYPE
                  FROM SNMPv2-SMI
        RowStatus, 
@@ -19,7 +19,7 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
 
     hpicfSyslogMIB MODULE-IDENTITY
-        LAST-UPDATED "201011030000Z"  --   November 03, 2010
+        LAST-UPDATED "201201300000Z"  --   Jan 30, 2012
         ORGANIZATION "HP Networking"
         CONTACT-INFO
             "Hewlett-Packard Company
@@ -31,10 +31,34 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
              The HP syslog application sends syslog messages."
 
-       REVISION "201011030000Z"  --   November 03, 2010
+       REVISION "201201300000Z"  --   Jan 30, 2012
+       DESCRIPTION
+           "Added 'securemode' entry in HpicfSyslogSystemModule"
+
+       REVISION "201107190000Z"  --   July 19, 2011
+       DESCRIPTION
+           "Added 'ra-guard' entry in HpicfSyslogSystemModule"
+
+       REVISION "201105270000Z"  --   May 27, 2011
+       DESCRIPTION
+           "Added 'rfs', 'crypto' and 'testmode' entries in 
+	    HpicfSyslogSystemModule"
+
+       REVISION "201103210000Z"  --   March 21, 2011
+       DESCRIPTION
+           "Added 'stacking' entry in HpicfSyslogSystemModule
+            'stacking' is applicable only for platforms
+            which support true stacking solution"
+
+       REVISION "201103050000Z"  --   March 05, 2011
+       DESCRIPTION
+           "Added 'hpicfSyslogAlerts' group of objects.
+            Objects 'hpicfSyslogAlertIndex', 'hpicfSyslogAlertStatus',
+            and 'hpicfSyslogAlertTransmitInterval' added to this group."
+
+       REVISION "201011090000Z"  --   November 09, 2010
        DESCRIPTION
            "Added 'sftp' entry in HpicfSyslogSystemModule"
-
 
        REVISION "201010250000Z"  --   October 25, 2010
        DESCRIPTION
@@ -260,11 +284,18 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
               trmode         (78),
               ospf3          (79),
               dhcpv6r        (80),
-	      bgp            (81),
+              bgp            (81),
               ufd            (82),
               fips           (83),
               dt             (84),
-              sftp           (86)
+	      dcbx           (85),
+              sftp           (86),
+              stacking       (87),
+	      rfs            (88),
+	      testmode       (89),
+	      crypto         (90),
+              ra-guard       (92),
+              securemode     (96)
            }
 
 
@@ -321,11 +352,11 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
            hpicfSyslogControlBindAddrIsOobm
                 TruthValue,
 	   hpicfSyslogControlSmmLog
-	        Integer32,
+                INTEGER,
            hpicfSyslogControlTransportProtocol
                 INTEGER,
 	   hpicfSyslogControlDestinationPort
-	        Integer32
+                InetPortNumber  
         }
 
    hpicfSyslogControlIndex OBJECT-TYPE
@@ -959,7 +990,74 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
             are ready to be transmitted. "
        ::= { hpicfSyslogServerStatisticsEntry 7 }
 
+   -- -------------------------------------------------------------
+   -- hpicfSyslogAlerts
+   -- -------------------------------------------------------------
 
+   hpicfSyslogAlerts OBJECT IDENTIFIER
+                         ::= { hpicfSyslogObjects 7 }
+
+   hpicfSyslogAlertsTable OBJECT-TYPE
+       SYNTAX      SEQUENCE OF HpicfSyslogAlertsEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION "A table of entries containing configuration information
+                    for transmitting alerts in syslog messages."
+        ::= { hpicfSyslogAlerts 1 }
+
+   hpicfSyslogAlertsEntry OBJECT-TYPE
+       SYNTAX      HpicfSyslogAlertsEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION "An entry in the 'hpicfSyslogAlertsTable'."
+       INDEX { hpicfSyslogAlertIndex }
+       ::= { hpicfSyslogAlertsTable 1 }
+
+   HpicfSyslogAlertsEntry ::=
+       SEQUENCE {
+           hpicfSyslogAlertIndex            INTEGER,
+           hpicfSyslogAlertAdminStatus      INTEGER,
+           hpicfSyslogAlertTransmitInterval Unsigned32
+       }
+
+   hpicfSyslogAlertIndex OBJECT-TYPE
+       SYNTAX      INTEGER {
+                       runningCfgChg(1)
+                    }
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The index which uniquely identifies a row in
+                     the 'hpicfSyslogAlertsTable'.
+                     runningCfgChg - the alert type indicating that
+                                     a change was made made to the 
+                                     switch's running configuration."
+        ::= { hpicfSyslogAlertsEntry 1 }
+
+   hpicfSyslogAlertAdminStatus OBJECT-TYPE
+       SYNTAX      INTEGER {
+                       enable (1),
+                       disable(2)
+                   }
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION "Indicates whether the syslog application is permitted
+                    to generate given type of alerts in transmitted
+                    syslog messages. Default is disabled."
+       DEFVAL      { 2 }
+       ::= { hpicfSyslogAlertsEntry 2 }
+
+     hpicfSyslogAlertTransmitInterval OBJECT-TYPE
+        SYNTAX      Unsigned32
+        UNITS       "seconds"
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Specifies the transmission interval in seconds for
+                     sending alerts in syslog messages. Only one syslog
+                     message is allowed for transmission within this time
+                     interval. Default value is 0, indicating there is no
+                     rate limit for alerts transmission."
+        DEFVAL      { 0 }
+        ::=  { hpicfSyslogAlertsEntry 3}
  
   -- -------------------------------------------------------------
    -- Notification Information
@@ -1162,7 +1260,27 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
             statistics counter information."
        ::= { hpicfSyslogGroups 13}
 
+   hpicfSyslogPriorityGroup1 OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogPriorityFacility,
+                   hpicfSyslogPrioritySeverity,
+                   hpicfSyslogSystemModule
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of object for syslog priority."
+       ::= { hpicfSyslogGroups 14 }
 
+
+   hpicfSyslogAlertsGroup OBJECT-GROUP
+       OBJECTS {
+                   hpicfSyslogAlertAdminStatus,
+                   hpicfSyslogAlertTransmitInterval
+               }
+       STATUS  current
+       DESCRIPTION
+           "A collection of objects representing syslog alerts information."
+       ::= { hpicfSyslogGroups 15}
 
    -- -------------------------------------------------------------
    -- compliance statements
@@ -1359,5 +1477,28 @@ HP-ICF-SYSLOG-MIB DEFINITIONS ::= BEGIN
 
        ::= { hpicfSyslogCompliances 11 }
 
-   END
+   hpicfSyslogPriorityCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+           "The compliance statement for syslog
+            priority ."
+       MODULE -- this module
+       MANDATORY-GROUPS {
+          hpicfSyslogPriorityGroup1 
+       }
 
+       ::= { hpicfSyslogCompliances 12 }
+
+   hpicfSyslogAlertsCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+           "The compliance statement for syslog alerts."
+       MODULE -- this module
+       MANDATORY-GROUPS {
+           hpicfSyslogAlertsGroup
+       }
+
+       ::= { hpicfSyslogCompliances 14 }
+
+
+END

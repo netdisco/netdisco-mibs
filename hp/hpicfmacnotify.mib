@@ -11,17 +11,24 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
       PortList, VlanId
             FROM Q-BRIDGE-MIB
       hpSwitch
-            FROM HP-ICF-OID;
+            FROM HP-ICF-OID
+      InterfaceIndex
+            FROM IF-MIB;
    
    hpicfMacNotifyMIB MODULE-IDENTITY
-      LAST-UPDATED  "201002080000Z"  -- February 08, 2010      
+      LAST-UPDATED  "201107210000Z"  -- July 21, 2011
       ORGANIZATION  "HP Networking"
       CONTACT-INFO  "Hewlett Packard Company
                      8000 Foothills Blvd.
                      Roseville, CA 95747"
     
-      DESCRIPTION   "The MIB module for managing MAC address
+      DESCRIPTION
+                    "The MIB module for managing MAC address
                      notifications."
+
+      REVISION      "201107210000Z"  -- July 21, 2011
+      DESCRIPTION   "Additions for mac count notifications feature"
+
       REVISION      "201002080000Z"  -- February 08, 2010
       DESCRIPTION   "Additions for the Clear portion of feature"
             
@@ -29,6 +36,9 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
       DESCRIPTION
                      "The initial revision."
           ::= { hpSwitch 66 }           
+
+   hpicfMacCountNotifyConfigObjects  OBJECT IDENTIFIER
+          ::= { hpicfMacNotifyMIB 5 }
 
    hpicfMacNotifyClearObjects  OBJECT IDENTIFIER 
           ::= { hpicfMacNotifyMIB 4 }
@@ -129,7 +139,7 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                     represented by a single bit within the value of 
                     this  object.
                     If that bit has a value of '1' then that port is
-                    enabled to send traps for learned MAC addresses; 
+                    enabled to send traps for learned MAC addresses;
                     the port is not enabled if its bit has a value of '0'.
 
                     Enabling hpicfMacNotifyLearnedPortConfig on a trunk port
@@ -156,7 +166,7 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                     represented by a single bit within the value of 
                     this  object.  
                     If that bit has a value of '1' then that port is
-                    enabled to send traps for removed MAC addresses; 
+                    enabled to send traps for removed MAC addresses;
                     the port is not enabled if its bit has a value of '0'.
 
                     Enabling hpicfMacNotifyRemovedPortConfig on a trunk port
@@ -200,7 +210,7 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                      in hpicfMacNotifyAction.
                      Action:
                      Learned: The value will be zero
-                     Moved: The port from which the MAC was moved
+                     Moved:   The port from which the MAC was moved
                      Removed: The port from which MAC was removed"
         ::= { hpicfMacNotifyConfigObjects 8 }
 
@@ -214,7 +224,7 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                      in hpicfMacNotifyAction.
                      Action:
                      Learned: The actual port the MAC was learned
-                     Moved: The port to which the MAC was moved
+                     Moved:   The port to which the MAC was moved
                      Removed: The value will be zero"
         ::= { hpicfMacNotifyConfigObjects 9 }
 
@@ -228,10 +238,99 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                      in hpicfMacNotifyAction.
                      Action:
                      Learned: VLAN that the hpicfMacNotifyToPortId belongs to
-                     Moved: VLAN that the hpicfMacNotifyToPortId belongs to
+                     Moved:   VLAN that the hpicfMacNotifyToPortId belongs to
                      Removed: VLAN that hpicfMacNotifyFromPortId belongs to
                      "
         ::= { hpicfMacNotifyConfigObjects 10 }
+
+-- MAC_COUNT_NOTIFY MIB Objects 
+   hpicfMacNotifyPortLearnedCountEnable  OBJECT-TYPE
+        SYNTAX      INTEGER
+           {
+              enable (1),
+              disable(2)
+           }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Indicates whether or not to generate
+                     hpicfMacNotifyPortMacAddressCount trap.
+                     Notifications are generated when the MAC
+                     address count on a switch port equals the
+                     defined MAC count as in  
+                     hpicfMacNotifyPortLearnedCount object. 
+                     Default is disabled."
+        DEFVAL      { 2 } -- Notifications disabled
+        ::= { hpicfMacCountNotifyConfigObjects 1 }
+
+
+   hpicfMacNotifyPortLearnedCountConfig  OBJECT-TYPE
+        SYNTAX      PortList
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Used to config the MAC address learned 
+                     notification traps on specific ports.
+                     
+                     Each octet within this value specifies a
+                     set of eight ports, with the first octet 
+                     specifying ports 1 through 8, the second 
+                     octet specifying ports 9 through 16, etc.  
+                     Within each octet, the most significant 
+                     bit represents the lowest numbered port,
+                     and the least significant bit represents the
+                     highest numbered port.  Thus, each port is
+                     represented by a single bit within the value 
+                     of this  object.
+                     If that bit has a value of '1' then that
+                     port is enabled to send traps for learned 
+                     MAC addresses;the port is not enabled if 
+                     its bit has a value of '0'.
+
+                     Enabling picfMacNotifyPortLearnedCountConfig     
+                     on a trunk port is permitted but not 
+                     recommended.
+
+                     hpicfMacNotifyPortLearnedCountEnable  must 
+                     be enabled for traps to be sent."
+        ::= { hpicfMacCountNotifyConfigObjects 2 }
+
+   hpicfMacNotifyPortLearnedCountConfigTable OBJECT-TYPE
+      SYNTAX	   SEQUENCE OF HpicfMacNotifyPortLearnedCountConfigEntry 
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION  "Table containing the configured MAC count 
+                    for sending mac-count-notify traps on a port."
+      ::=  { hpicfMacCountNotifyConfigObjects 3 }
+
+  hpicfMacNotifyPortLearnedCountConfigEntry OBJECT-TYPE
+      SYNTAX       HpicfMacNotifyPortLearnedCountConfigEntry
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION  "An entry in hpicfMacNotifyPortLearnedCountConfigTable
+                    containing MAC count for sending mac-count-notify traps 
+                    for a port."
+      INDEX  { hpicfMacNotifyPortIndex }
+      ::= { hpicfMacNotifyPortLearnedCountConfigTable 1}
+
+  HpicfMacNotifyPortLearnedCountConfigEntry ::= SEQUENCE {
+	hpicfMacNotifyPortIndex		InterfaceIndex,
+	hpicfMacNotifyPortLearnedCount	Unsigned32
+        }
+
+   hpicfMacNotifyPortIndex OBJECT-TYPE
+        SYNTAX      InterfaceIndex
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Indicates the ifIndex of the port"
+        ::=  { hpicfMacNotifyPortLearnedCountConfigEntry 1}
+
+   hpicfMacNotifyPortLearnedCount OBJECT-TYPE
+        SYNTAX      Unsigned32(1..128)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Indicates the count of MAC learns when
+                     reached to send the mac-notify traps"
+        DEFVAL      { 32 }
+        ::=  { hpicfMacNotifyPortLearnedCountConfigEntry 2}
 
 -- Mac Notify Stats
 
@@ -306,6 +405,25 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                      notification events"  
         ::= { hpicfMacNotifyNotificationObjects 1 }
 
+    hpicfMacNotifyPortMacAddressCount NOTIFICATION-TYPE
+        OBJECTS
+              {
+                 hpicfMacNotifyToPortId,
+                 hpicfMacNotifyVlanId,
+                 hpicfMacNotifyPortLearnedCount,
+                 hpicfMacNotifyMacAddress
+              }
+        STATUS      current
+        DESCRIPTION "The hpicfMacNotifyPortMacAddressCount
+                     notification signifies that			       
+                     hpicfMacNotifyPortLearnedCountEnable is
+                     enabled and the number of MAC address learn
+                     has reached the configured MAC count on
+                     switch port. The hpicfMacNotifyMacAddress
+                     specifies the exceeded MAC learn address."
+        ::= { hpicfMacNotifyNotificationObjects 2 }
+
+
 -- **********************************************
 -- Attributes for Clearing the Mac Address Table
 -- ********************************************** 
@@ -334,7 +452,7 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
         STATUS      current
         DESCRIPTION "Used to clear the MAC address table on a specific
                      VLAN. VLAN ID identifies the VLAN that will be 
-                     cleared."        
+                     cleared."
         ::= { hpicfMacNotifyClearObjects 2  }
 
 --   MAC Notify MIB Conformance
@@ -358,6 +476,17 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
                             hpicfMacNotifyClearGroup }
         ::= { hpicfMacNotifyCompliances 1 }
 
+   hpicfMacCountNotifyCompliance  MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance steatement for SNMP entities which
+                     implement the mac count notify mib objects."
+        MODULE  -- this module
+        MANDATORY-GROUPS  {
+                            hpicfMacCountNotifyConfigGroup,
+                            hpicfMacCountNotifyNotifications
+                          }
+        ::= { hpicfMacNotifyCompliances 2 }
+
 -- ******************
 -- Conformance Groups
 -- ******************
@@ -367,12 +496,12 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
            {
               hpicfMacNotifyEnable,
               hpicfMacNotifyTrapInterval,
-              hpicfMacNotifyMoveEnable 
+              hpicfMacNotifyMoveEnable
            }
         STATUS      current
         DESCRIPTION " A collection of objects used to globally
                       configure the SNMP traps used to monitor
-                      the MAC address table using the MAC-notify 
+                      the MAC address table using the MAC-notify
                       feature"
         ::= { hpicfMacNotifyGroups 1 }  
       
@@ -431,6 +560,26 @@ HP-ICF-MACNOTIFY-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION " A collection of objects used to clear
                       the MAC address tables"
         ::= { hpicfMacNotifyGroups 5 }  
+
+   hpicfMacCountNotifyConfigGroup OBJECT-GROUP
+        OBJECTS
+           {
+              hpicfMacNotifyPortLearnedCountEnable,
+              hpicfMacNotifyPortLearnedCountConfig,
+              hpicfMacNotifyPortLearnedCount
+           }
+        STATUS      current
+        DESCRIPTION "A collection of objects used to configure
+                     and to montior, through SNMP traps, for the
+                     MAC address learn count on the ports."
+        ::= { hpicfMacNotifyGroups 6 }
+
+   hpicfMacCountNotifyNotifications NOTIFICATION-GROUP
+        NOTIFICATIONS { hpicfMacNotifyPortMacAddressCount }
+        STATUS      current
+        DESCRIPTION "A group of Notifications used to signal
+                     mac address learn count on a port."
+        ::= { hpicfMacNotifyGroups 7 }
 
 END
 

@@ -23,7 +23,7 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
             FROM SNMP-TARGET-MIB;
 
     hpicfBasicMib MODULE-IDENTITY
-        LAST-UPDATED "201011111357Z"  -- November 11, 2010
+        LAST-UPDATED "201108301357Z"  -- August 30, 2011
         ORGANIZATION "HP Networking"
         CONTACT-INFO "Hewlett Packard Company
                      8000 Foothills Blvd.
@@ -31,6 +31,10 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
         DESCRIPTION  "This MIB module describes objects for basic
                      management of devices in the HP Integrated
                      Communication Facility product line."
+
+        REVISION     "201108301357Z"  -- August 30,, 2011
+        DESCRIPTION  "Added hpicfDNSConfigMode, hpicfCurDNSConfig
+                      objects."
 
         REVISION     "201011111357Z"  -- November 11,, 2010
         DESCRIPTION  "Added new option radiusTacacsOnly to 
@@ -1263,7 +1267,9 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
                      queries to name servers.  An example of a valid 
                      default domain suffix is 'hp.com'.  The resolver
                      will not use a default domain suffix if this object 
-                     is set to empty-string (which is the default value.)" 
+                     is set to empty-string (which is the default value.)
+		     This can set only if the 'hpicfDNSConfigMode'is
+		     manual(2)."
         ::= { hpicfBasicDNSConfig 1 }
 
     hpicfDNSNameServerTable OBJECT-TYPE
@@ -1274,6 +1280,7 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
                     (DNS) Name Server configuration in this 
                     device."
         ::= { hpicfBasicDNSConfig 2 }
+
 
     hpicfDNSNameServerEntry OBJECT-TYPE
         SYNTAX      HpicfDNSNameServerEntry
@@ -1311,17 +1318,20 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
         DESCRIPTION "A table that contains information about the 
                     (DNS) Name Server configuration in this 
                     device.This table has 3 index's PRIORITY ADDRTYPE
-                    ADDR,for each pririoty only one address can be configured."
-
+                    ADDR,for each pririoty only one address can be 
+                    configured. An address can be created in this 
+                    table only if the 'hpicfDNSConfigMode' is 
+                    manual(2)."
         ::= { hpicfBasicDNSConfig 3 }
 
     hpicfInetDNSNameServerEntry OBJECT-TYPE
         SYNTAX      HpicfInetDNSNameServerEntry
         MAX-ACCESS  not-accessible
         STATUS      current
-        DESCRIPTION "An entry in hpicfInetDNSNameServerEntry contains single 
-                     manually configured DNS Address
-                     on this resolver device. "
+        DESCRIPTION "An entry in hpicfInetDNSNameServerEntry contains
+                     single manually configured DNS Address on this
+                     resolver device. This can created only if the
+                     'hpicfDNSConfigMode' is set to manual(2)."
         INDEX       { hpicfInetDNSNameServerAddrIndex,
 		      hpicfInetDNSNameServerAddrType, 
                       hpicfInetDNSNameServerAddress }
@@ -1337,19 +1347,19 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
         }
 
     hpicfInetDNSNameServerAddrIndex OBJECT-TYPE
-        SYNTAX	    Integer32(0..255)	
-	MAX-ACCESS  not-accessible
-	STATUS      current
-        DESCRIPTION "Index(which is also treated as priority) of DNS server address
-                     configured."
-        ::= { hpicfInetDNSNameServerEntry 1 }
+	SYNTAX		Integer32(0..255)	
+	MAX-ACCESS 	not-accessible
+	STATUS	        current
+	DESCRIPTION     "Index(which is also treated as priority) 
+                         of DNS server address configured."
+	::= { hpicfInetDNSNameServerEntry 1 }
 			
     hpicfInetDNSNameServerAddrType OBJECT-TYPE
         SYNTAX      InetAddressType
         MAX-ACCESS  not-accessible
         STATUS      current 
-        DESCRIPTION "Address Type of the DNS Name server stored in hpicfInetDNSNameServer
-                     Address."
+        DESCRIPTION "Address Type of the DNS Name server stored in 
+                     hpicfInetDNSNameServer Address."
         ::= { hpicfInetDNSNameServerEntry 2 }
 
     hpicfInetDNSNameServerAddress OBJECT-TYPE
@@ -1379,6 +1389,55 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
                   only if there is a physical OOBM port on the device."
       DEFVAL      {false}
       ::= {  hpicfInetDNSNameServerEntry 5 }
+
+    hpicfDNSDefaultDomainSuffixIsOobm OBJECT-TYPE
+        SYNTAX      DisplayString (SIZE (0..255))
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "The default domain name (A unique designator on the
+                     network composed of symbols separated by dots) to
+                     which resolver appends host names before sending the
+                     queries to name servers on OOBM plane.  An example of
+                     a valid default domain suffix is 'hp.com'.  The resolver
+                     will not use a default domain suffix if this object
+                     is set to empty-string (which is the default value). 
+		     This can be set only if the 'hpicfDNSConfigMode'
+		     is set to manual(2)."
+        ::= { hpicfBasicDNSConfig 4 }
+
+    hpicfDNSConfigMode OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        dhcp(1),
+                        manual(2),
+                        disabled(3)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Setting this flag to 'dhcp' will cause the device
+                     to use DHCP to obtain its DNS configuration parameters (such as
+                     dns servers and domain name suffix).
+
+                     Setting this flag to 'manual' will allow manual DNS
+                     configuration.
+
+                     Setting this flag to 'disabled' will clear any existing DNS
+                     configuration."
+        ::= { hpicfBasicDNSConfig 5 }
+
+    hpicfCurDNSConfig OBJECT IDENTIFIER ::= { hpicfBasicDNSConfig 6}
+
+    hpicfCurDNSDefaultDomainSuffix OBJECT-TYPE
+        SYNTAX      DisplayString (SIZE (0..255))
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The default domain name (A unique designator on the 
+                     network composed of symbols separated by dots) to 
+                     which resolver appends host names before sending the 
+                     queries to name servers.  An example of a valid 
+                     default domain suffix is 'hp.com'.  The resolver
+                     will not use a default domain suffix if this object 
+                     is set to empty-string (which is the default value.)" 
+        ::= { hpicfCurDNSConfig 1 }
 
     -- HP ICF BASIC Banner 
 
@@ -1966,6 +2025,18 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
 
        ::= { hpicfBasicCompliances 11 }
 
+    hpicfBasicCompliance9 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for SNMP entities
+                    which implements DNS domain configurations."
+        MODULE       -- this module
+
+        GROUP       hpicfBasicDNSGroup1
+        DESCRIPTION "A group of objects for DNS configuration 
+                    parameters."
+
+        ::= { hpicfBasicCompliances 12 }
+
     -- units of conformance
 
     hpicfBasicGroup OBJECT-GROUP
@@ -2233,5 +2304,15 @@ HP-ICF-BASIC DEFINITIONS ::= BEGIN
         STATUS      current
         DESCRIPTION "A collection of deprecated objects"
         ::= { hpicfBasicGroups 24 }
+
+    hpicfBasicDNSGroup1 OBJECT-GROUP
+        OBJECTS     { hpicfDNSDefaultDomainSuffixIsOobm,
+                      hpicfDNSConfigMode,
+                      hpicfCurDNSDefaultDomainSuffix
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects for DNS configuration
+                    parameters."
+        ::= { hpicfBasicGroups 25 }
 
 END
