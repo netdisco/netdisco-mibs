@@ -1,0 +1,435 @@
+-- =================================================================
+-- Copyright (C) 2008 by H3C Technologies. All rights reserved.
+--
+-- Description: This file describes the enterprise mib implementation
+--              of sending some traps.
+-- Reference:
+-- Version: V1.3
+-- History:
+--   V1.0 created by Huang Yang
+--     Initial version 2005-01-25
+--   V1.1 2005-10-27  added h3cArpPortDynamicEntryFullTrap by ZhangLin
+--   V1.2 2007-02-06  added h3cNdTabTrapEnable, h3cNdTabTrapInterval,
+--                    h3cNdTabLen and h3cNdTabFullTrap by lizuxing04859
+--   V1.3 2008-07-18  added h3cPeriodicalTrapGroup by songhao
+-- =================================================================
+H3C-TRAP-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        h3cCommon
+            FROM HUAWEI-3COM-OID-MIB
+        ifIndex, ifDescr
+            FROM IF-MIB
+        Integer32, Unsigned32, OBJECT-TYPE,
+        MODULE-IDENTITY, NOTIFICATION-TYPE
+            FROM SNMPv2-SMI;
+
+    h3cTrap MODULE-IDENTITY
+        LAST-UPDATED "200807181150Z"
+        ORGANIZATION
+            "H3C Technologies Co., Ltd."
+        CONTACT-INFO
+            "Platform Team H3C Technologies Co., Ltd.
+            Hai-Dian District Beijing P.R. China
+            http://www.h3c.com
+            Zip:100085
+            "
+        DESCRIPTION
+            "This MIB is applicable to routers, switches and other products.
+
+            Some objects in this may be used only for some specific products,
+            so users should refer to the related documents to acquire more
+            detail information.
+            "
+        REVISION "200501251354Z"        -- January 25, 2005 at 13:54 GMT
+        DESCRIPTION
+            "The initial revision of this MIB module."
+        ::= { h3cCommon 38 }
+
+
+--
+-- Node definitions
+--
+    h3cTableGroup OBJECT IDENTIFIER ::= { h3cTrap 1 }
+
+-- Describe objects for MAC table
+    h3cMacTabStatGroup OBJECT IDENTIFIER ::= { h3cTableGroup 1 }
+
+    h3cMacTabTrapEnable OBJECT-TYPE
+        SYNTAX INTEGER{
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cMacTabFullTrap and
+            h3cMacTabAlmostFullTrap traps should be generated
+            when the MAC table is filled."
+        DEFVAL { enable }
+        ::= { h3cMacTabStatGroup 1 }
+
+    h3cMacTabTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (30..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the minimum interval between two
+            traps which occur when the MAC table is full or
+            two traps which occur when the MAC table is almost full."
+        DEFVAL { 30 }
+        ::= { h3cMacTabStatGroup 2 }
+
+    h3cMacTabTrapInfo OBJECT IDENTIFIER ::= { h3cMacTabStatGroup 3 }
+
+    h3cMacTabLen OBJECT-TYPE
+        SYNTAX Integer32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The length of the MAC table."
+        ::= { h3cMacTabTrapInfo 1 }
+
+    h3cMacTabTrap OBJECT IDENTIFIER ::= { h3cMacTabStatGroup 4 }
+
+    h3cMacTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cMacTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the MAC table is filled.  The
+                interval between two traps generated should be longer
+                than h3cMacTabTrapInterval."
+            ::= { h3cMacTabTrap 1 }
+
+    h3cMacTabAlmostFullTrap NOTIFICATION-TYPE
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the MAC table is almost full.  The
+                interval between two traps generated should be longer
+                than h3cMacTabTrapInterval."
+            ::= { h3cMacTabTrap 2 }
+
+-- Describe objects for ARP table
+    h3cArpTabStatGroup OBJECT IDENTIFIER ::= { h3cTableGroup 2 }
+
+    h3cArpTabTrapEnable OBJECT-TYPE
+        SYNTAX INTEGER {
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cArpTabFullTrap traps
+            should be generated when the ARP table is filled."
+        DEFVAL { enable }
+        ::= { h3cArpTabStatGroup 1 }
+
+    h3cArpTabTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (30..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the minimum interval between two traps
+            which occur when the ARP table is filled."
+        DEFVAL { 30 }
+        ::= { h3cArpTabStatGroup 2 }
+
+    h3cArpTabTrapInfo OBJECT IDENTIFIER ::= { h3cArpTabStatGroup 3 }
+
+    h3cArpTabLen OBJECT-TYPE
+        SYNTAX Integer32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The length of the ARP table."
+        ::= { h3cArpTabTrapInfo 1 }
+
+    h3cArpTabTrap OBJECT IDENTIFIER ::= { h3cArpTabStatGroup 4 }
+
+    h3cArpTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cArpTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the ARP table is filled.  The
+                interval between two traps generated should be longer
+                than h3cArpTabTrapInterval."
+            ::= { h3cArpTabTrap 1 }
+
+    h3cArpPortDynamicEntryFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cArpTabLen, ifIndex, ifDescr }
+            STATUS current
+            DESCRIPTION
+                 "Send this trap when the dynamic ARP number of the
+                port exceeds the limitation. The object h3cArpTabLen
+                describes the limitation of the max dynamic ARP number
+                of this port. The interval between two traps should be
+                longer than h3cArpTabTrapInterval."
+            ::= { h3cArpTabTrap 2 }
+
+-- Describe objects for routing table
+    h3cRtTabStatGroup OBJECT IDENTIFIER ::= { h3cTableGroup 3 }
+
+    h3cDetailRtTrapTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF H3cDetailRtTrapEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "This table contains objects to decide what kind of
+            trap should be sent."
+        ::= { h3cRtTabStatGroup 1 }
+
+    h3cDetailRtTrapEntry OBJECT-TYPE
+        SYNTAX H3cDetailRtTrapEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "Entry items"
+        INDEX { h3cDetailRtProType }
+        ::= { h3cDetailRtTrapTable 1 }
+
+    H3cDetailRtTrapEntry ::=
+        SEQUENCE {
+            h3cDetailRtProType
+                INTEGER,
+            h3cDetailRtEnable
+                INTEGER
+        }
+
+    h3cDetailRtProType OBJECT-TYPE
+        SYNTAX INTEGER {
+            other(1),       -- none of the following
+
+                            -- non-protocol information,
+                            -- e.g., manually configured
+            local(2),       -- entries
+            rip(3),
+            isis(4),
+            ospf(5),
+            bgp(6)
+        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The index value which uniquely identifies an entry
+            in the h3cDetailRtTrapTable."
+        ::= { h3cDetailRtTrapEntry 1 }
+
+    h3cDetailRtEnable OBJECT-TYPE
+        SYNTAX INTEGER {
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cDetailRtTabFullTrap traps
+            should be generated when a specific routing table
+            is filled."
+        DEFVAL { enable }
+        ::= { h3cDetailRtTrapEntry 2 }
+
+    h3cRtTabTrapEnable OBJECT-TYPE
+        SYNTAX INTEGER {
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cRtTabFullTrap traps should
+            be generated when the routing table is filled."
+        DEFVAL { enable }
+        ::= { h3cRtTabStatGroup 2 }
+
+    h3cRtTabTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (30..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the minimum interval between two
+            traps which occur when the routing table is filled."
+        DEFVAL { 30 }
+        ::= { h3cRtTabStatGroup 3 }
+
+    h3cRtTabTrapInfo OBJECT IDENTIFIER ::= { h3cRtTabStatGroup 4 }
+
+    h3cRtTabLen OBJECT-TYPE
+        SYNTAX Integer32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The length of the routing table.  The detail
+            routing tables also use the same object."
+        ::= { h3cRtTabTrapInfo 1 }
+
+    h3cRtTabTrap OBJECT IDENTIFIER ::= { h3cRtTabStatGroup 5 }
+
+    h3cRtTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cRtTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the routing table is filled.  The
+                interval between two traps generated should be longer
+                than h3cRtTabTrapInterval."
+            ::= { h3cRtTabTrap 1 }
+
+    h3cDetailRtTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cDetailRtProType, h3cRtTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the detail routing table is filled.  The
+                interval between two traps generated should be longer than
+                h3cRtTabTrapInterval."
+            ::= { h3cRtTabTrap 2 }
+
+-- Describe objects for multicast table
+    h3cMulticastTabStatGroup OBJECT IDENTIFIER ::= { h3cTableGroup 4 }
+
+    h3cMulticastTabTrapEnable OBJECT-TYPE
+        SYNTAX INTEGER {
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cMulticastTabFullTrap traps
+            should be generated when the multicast table is filled."
+        DEFVAL { enable }
+        ::= { h3cMulticastTabStatGroup 1 }
+
+    h3cMulticastTabTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (30..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the minimum interval between two traps
+            which occur when the multicast table is filled."
+        DEFVAL { 30 }
+        ::= { h3cMulticastTabStatGroup 2 }
+
+    h3cMulticastTabTrapInfo OBJECT IDENTIFIER ::= { h3cMulticastTabStatGroup 3 }
+
+    h3cMulticastTabType OBJECT-TYPE
+        SYNTAX INTEGER {
+                        lay2(1),
+                        lay3(2)
+                        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "Defining the type of the multicast table, layer2 or layer3."
+        ::= { h3cMulticastTabTrapInfo 1 }
+
+    h3cMulticastTabLen OBJECT-TYPE
+        SYNTAX Integer32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The length of the multicast table."
+        ::= { h3cMulticastTabTrapInfo 2 }
+
+    h3cMulticastTabTrap OBJECT IDENTIFIER ::= { h3cMulticastTabStatGroup 4 }
+
+    h3cMulticastTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cMulticastTabType, h3cMulticastTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the multicast table is filled.  The
+                interval between two traps generated should be longer
+                than h3cMulticastTabTrapInterval."
+            ::= { h3cMulticastTabTrap 1 }
+
+
+-- Describe objects for Neighbor table
+    h3cNdTabStatGroup OBJECT IDENTIFIER ::= { h3cTableGroup 5 }
+
+    h3cNdTabTrapEnable OBJECT-TYPE
+        SYNTAX INTEGER {
+                        enable(1),
+                        disable(2)
+                        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Indicates whether h3cNdTabFullTrap traps
+            should be generated when the ND table is filled."
+        DEFVAL { enable }
+        ::= { h3cNdTabStatGroup 1 }
+
+    h3cNdTabTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (30..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the minimum interval between two traps
+            which occur when the ND table is filled."
+        DEFVAL { 30 }
+        ::= { h3cNdTabStatGroup 2 }
+
+    h3cNdTabTrapInfo OBJECT IDENTIFIER ::= { h3cNdTabStatGroup 3 }
+
+    h3cNdTabLen OBJECT-TYPE
+        SYNTAX Integer32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The length of the ND table."
+        ::= { h3cNdTabTrapInfo 1 }
+
+    h3cNdTabTrap OBJECT IDENTIFIER ::= { h3cNdTabStatGroup 4 }
+
+    h3cNdTabFullTrap NOTIFICATION-TYPE
+            OBJECTS { h3cNdTabLen }
+            STATUS current
+            DESCRIPTION
+                "Send this trap when the ND table is filled.  The
+                interval between two traps generated should be longer
+                than h3cNdTabTrapInterval."
+            ::= { h3cNdTabTrap 1 }
+
+-- Describe SNMP periodical trap group
+    h3cPeriodicalTrapGroup OBJECT IDENTIFIER ::= { h3cTableGroup 6 }
+
+-- Describe objects for SNMP periodical trap
+    h3cPeriodicalTrapObjects OBJECT IDENTIFIER
+        ::= { h3cPeriodicalTrapGroup 1 }
+
+    h3cPeriodicalTrapInterval OBJECT-TYPE
+        SYNTAX Integer32 (10..3600)
+        UNITS "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "Definition of the periodical interval.
+            If no trap occurs during the certain interval, an h3cPeriodicalTrap
+            will be generated."
+        DEFVAL { 60 }
+        ::= { h3cPeriodicalTrapObjects 1 }
+
+-- Describe information for SNMP periodical trap
+    h3cPeriodicalTrapInfo OBJECT IDENTIFIER
+        ::= { h3cPeriodicalTrapGroup 2 }
+
+-- Describe SNMP periodical trap
+    h3cPeriodicalNotification OBJECT IDENTIFIER
+        ::= { h3cPeriodicalTrapGroup 3 }
+
+    h3cPeriodicalNotificationPrefix OBJECT IDENTIFIER
+        ::= { h3cPeriodicalNotification 0 }
+
+    h3cPeriodicalTrap NOTIFICATION-TYPE
+            STATUS current
+            DESCRIPTION
+                "If no trap occurs during the interval spicified by
+                h3cPeriodicalTrapInterval, a h3cPeriodicalTrap
+                will be generated."
+            ::= { h3cPeriodicalNotificationPrefix 1 }
+
+END
