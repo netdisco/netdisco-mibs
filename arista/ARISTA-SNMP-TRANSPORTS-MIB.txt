@@ -4,12 +4,16 @@
 ARISTA-SNMP-TRANSPORTS-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
+    MODULE-COMPLIANCE, 
+    OBJECT-GROUP                FROM SNMPv2-CONF
     MODULE-IDENTITY, 
-    OBJECT-IDENTITY        FROM SNMPv2-SMI        -- [RFC2578]
-    TEXTUAL-CONVENTION     FROM SNMPv2-TC
-    aristaModules          FROM ARISTA-SMI-MIB;
+    OBJECT-TYPE,
+    OBJECT-IDENTITY             FROM SNMPv2-SMI        -- [RFC2578]
+    TEXTUAL-CONVENTION,
+    TAddress, TDomain           FROM SNMPv2-TC
+    aristaMibs                  FROM ARISTA-SMI-MIB;
 
-aristaSnmpTransportDomains MODULE-IDENTITY
+aristaSnmpTransportMIB MODULE-IDENTITY
     LAST-UPDATED "201201091300Z"
     ORGANIZATION "Arista Networks, Inc."
     CONTACT-INFO
@@ -25,51 +29,23 @@ aristaSnmpTransportDomains MODULE-IDENTITY
             "The Arista Networks specific SNMP transport domains."
        REVISION           "201201091300Z"
        DESCRIPTION
-           "Updated imports"
-        REVISION      "201201051830Z"
-        DESCRIPTION
-                "Initial version."
-        ::= { aristaModules 1 }
-
-aristaUDPNSDomain OBJECT-IDENTITY
-    STATUS current
-    DESCRIPTION
-        "The SNMP over UDP transport domain.  The corresponding socket is
-        opened in a specific namespace."
-    ::= { aristaSnmpTransportDomains 1 }
-
-aristaTCPNSDomain OBJECT-IDENTITY
-    STATUS current
-    DESCRIPTION
-        "The SNMP over TCP transport domain.  The corresponding socket is
-        opened in a specific namespace."
-::= { aristaSnmpTransportDomains 2 }
-
-aristaUDPNS6Domain OBJECT-IDENTITY
-   STATUS current
-   DESCRIPTION
-      "The SNMP over UDP6 transport domain. The corresponding socket is
-      opened in a specific namespace."
-::= { aristaSnmpTransportDomains 3 }
-
-aristaTCPNS6Domain OBJECT-IDENTITY
-   STATUS current
-   DESCRIPTION
-      "The SNMP over TCP6 transport domain. The corresponding socket is
-      opened in a specific namespace."
-::= { aristaSnmpTransportDomains 4 }
+            "Updated imports; moved module under aristaMibs"
+       REVISION      "201201051830Z"
+       DESCRIPTION
+               "Initial version."
+       ::= { aristaMibs 10 }
 
 TransportAddressIPv4NS ::= TEXTUAL-CONVENTION
-   DISPLAY-HINT "*1a0a:1d.1d.1d.1d:2d"
+   DISPLAY-HINT "1d.1d.1d.1d:2d@*1t"
    STATUS       current
    DESCRIPTION
       "Represents a transport address consisting of a namespace string, an IPv4
        address and a port number (as used for example by UDP, TCP and SCTP):
 
         octets          contents           encoding
-         1-n            Namespace string   ASCII
-         [n+1]-[n+4]    IPv4 address       network-byte order
-         [n+5]-[n+6]    port number        network-byte order
+         1-4            IPv4 address       network-byte order
+         5-6            port number        network-byte order
+         7-n            Namespace string   ASCII
        
        This textual convention SHOULD NOT be used directly in object
        definitions since it restricts addresses to a specific format. However,
@@ -78,21 +54,95 @@ TransportAddressIPv4NS ::= TEXTUAL-CONVENTION
    SYNTAX      OCTET STRING (SIZE(7..255))
 
 TransportAddressIPv6NS ::= TEXTUAL-CONVENTION
-   DISPLAY-HINT "*1a0a:0a[2x:2x:2x:2x:2x:2x:2x:2x]0a:2d"
+   DISPLAY-HINT "0a[2x:2x:2x:2x:2x:2x:2x:2x]0a:2d@*1t"
    STATUS       current
    DESCRIPTION
       "Represents a transport address consisting of a namespace string, an IPv6
        address and a port number (as used for example by UDP, TCP and SCTP):
 
         octets          contents           encoding
-         1-n            Namespace string   ASCII
-         [n+1]-[n+16]   IPv6 address       network-byte order
-         [n+17]-[n+18]  port number        network-byte order
+         1-16           IPv6 address       network-byte order
+         17-18          port number        network-byte order
+         19-n           Namespace string   ASCII
        
        This textual convention SHOULD NOT be used directly in object
        definitions since it restricts addresses to a specific format. However,
        if it is used, it MAY be used either on its own or in conjunction with
        TransportAddressType or TransportDomain as a pair."
    SYNTAX      OCTET STRING (SIZE(19..255))
+
+aristaUDPNSDomain OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION
+        "The SNMP over UDP transport domain.  The corresponding socket is
+        opened in a specific namespace."
+    ::= { aristaSnmpTransportMIB 1 }
+
+aristaTCPNSDomain OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION
+        "The SNMP over TCP transport domain.  The corresponding socket is
+        opened in a specific namespace."
+::= { aristaSnmpTransportMIB 2 }
+
+aristaUDPNS6Domain OBJECT-IDENTITY
+   STATUS current
+   DESCRIPTION
+      "The SNMP over UDP6 transport domain. The corresponding socket is
+      opened in a specific namespace."
+::= { aristaSnmpTransportMIB 3 }
+
+aristaTCPNS6Domain OBJECT-IDENTITY
+   STATUS current
+   DESCRIPTION
+      "The SNMP over TCP6 transport domain. The corresponding socket is
+      opened in a specific namespace."
+::= { aristaSnmpTransportMIB 4 }
+
+aristaAuthFailTrapObjects     OBJECT IDENTIFIER ::= {aristaSnmpTransportMIB 5 }
+aristaTransportConformance    OBJECT IDENTIFIER ::= {aristaSnmpTransportMIB 6 }
+
+--
+-- ARISTA Authentication Failure MIB Objects
+--
+
+aristaAuthFailTrapTDomain OBJECT-TYPE
+    SYNTAX       TDomain
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Transport Domain of the offending request that caused this trap"
+    ::= { aristaAuthFailTrapObjects 1 }
+
+aristaAuthFailTrapSrcTAddress OBJECT-TYPE
+    SYNTAX       TAddress
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "Source Transport Address of the offending request that caused 
+        this trap"
+    ::= { aristaAuthFailTrapObjects 2 }
+
+aristaAuthFailTrapGroups  OBJECT IDENTIFIER ::= { aristaTransportConformance 1 }
+aristaAuthFailCompliances OBJECT IDENTIFIER ::= { aristaTransportConformance 2 }
+
+aristaAuthFailCompliance MODULE-COMPLIANCE
+   STATUS  current
+   DESCRIPTION
+      "The compliance statement for SNMP entities which implement
+       the ARISTA AuthFailure MIB."
+   MODULE  -- this module
+      MANDATORY-GROUPS { aristaAuthFailTrapObjectsGroup }
+   ::= { aristaAuthFailCompliances 1 }
+
+aristaAuthFailTrapObjectsGroup  OBJECT-GROUP
+    OBJECTS {
+       aristaAuthFailTrapTDomain,
+       aristaAuthFailTrapSrcTAddress
+    }
+    STATUS  current
+    DESCRIPTION
+       "Collections of objects for Authentication Failure Trap."
+    ::= { aristaAuthFailTrapGroups 1 }
 
 END
