@@ -1,7 +1,7 @@
 -- *****************************************************************
 -- CISCO-TELEPRESENCE-CALL-MIB.my: Cisco MIB to manage a
 -- Telepresence call.
--- Copyright (c) 2007 - 2011 by Cisco Systems Inc.
+-- Copyright (c) 2007, 2011 - 2012 by Cisco Systems Inc.
 -- All rights reserved.
 --   
 -- ****************************************************************
@@ -24,15 +24,20 @@ IMPORTS
         FROM SNMPv2-CONF
     TEXTUAL-CONVENTION,
     RowStatus,
+    DisplayString,
     TruthValue,
     DateAndTime,
     VariablePointer
         FROM SNMPv2-TC
     SnmpAdminString
         FROM SNMP-FRAMEWORK-MIB
+    Dscp
+        FROM DIFFSERV-DSCP-TC
     InetAddress,
     InetAddressType
         FROM INET-ADDRESS-MIB
+    QosLayer2Cos
+        FROM CISCO-QOS-PIB-MIB
     Unsigned64
         FROM CISCO-TC
     ciscoMgmt
@@ -40,7 +45,7 @@ IMPORTS
 
 
 ciscoTelepresenceCallMIB MODULE-IDENTITY
-    LAST-UPDATED    "201105160000Z"
+    LAST-UPDATED    "201211080000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -72,6 +77,24 @@ ciscoTelepresenceCallMIB MODULE-IDENTITY
         Some Telepresence systems support Telepresence meeting, the 
         agent of the corresponding systems may also support
         CISCO-TELEPRESENCE-MEETING-MIB."
+    REVISION        "201211080000Z"
+    DESCRIPTION
+        "Added ctpcExtNumberMask to ctpcLocalDirNumTable."
+    REVISION        "201204200000Z"
+    DESCRIPTION
+        "Added ctpcTxDscpTelepresenceConfigured, and
+        ctpcTxDscpAudioConfigured to ctpcInfoObjects. 
+        Added ctpcRxDscpCurrent, ctpcRxDscpPrevious, 
+        ctpcRxCoSCurrent, ctpcRxCoSPrevious, to 
+        ctpcStatStreamTypeTable.
+        Added ctpcTxCallBitRate, ctpcTxPeriodBitRate,
+        ctpcRxCallBitRate, ctpcRxPeriodBitRate,
+        ctpcRxMaxPeriodLostPackets, ctpcRxMaxCallLostPackets,
+        ctpcRxMaxCallLostPacketsRecTime to ctpcStatStreamSourceTable."
+    REVISION        "201201110000Z"
+    DESCRIPTION
+        "Added 'content' enum to CtpcStreamMediaType to support BFCP protocol or
+        other standard protocols in the future."
     REVISION        "201105160000Z"
     DESCRIPTION
         "Updated CtpcCallTerminationCode."
@@ -132,10 +155,12 @@ CtpcStreamMediaType ::= TEXTUAL-CONVENTION
         an audio add-in call only has one media stream, audio.
 
            video (1) -- Video stream of a call.
-           audio (2) -- Audio stream of a call."
+           audio (2) -- Audio stream of a call.
+           content(3)-- Content stream of a call, such as presentation"
     SYNTAX          INTEGER  {
                         video(1),
-                        audio(2)
+                        audio(2),
+                        content(3)
                     }
 
 CtpcStreamSourceType ::= TEXTUAL-CONVENTION
@@ -604,7 +629,8 @@ ctpcLocalDirNumEntry OBJECT-TYPE
 
 CtpcLocalDirNumEntry ::= SEQUENCE {
         ctpcLocalDirNumIndex Unsigned32,
-        ctpcLocalDirNum      CtpcE164Address
+        ctpcLocalDirNum      CtpcE164Address,
+        ctpcExtNumberMask    SnmpAdminString
 }
 
 ctpcLocalDirNumIndex OBJECT-TYPE
@@ -624,6 +650,17 @@ ctpcLocalDirNum OBJECT-TYPE
         "This object specifies the directory number of the Telepresence
         system." 
     ::= { ctpcLocalDirNumEntry 2 }
+
+ctpcExtNumberMask OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the external number mask that configured in
+        the management system.  For example, if ctpcExtNumberMask is 
+        configured as 9728XXXXX, and ctpcLocalDirNum is configured as 12345,
+        the external caller shall see the Directory Number (DN) as 972812345" 
+    ::= { ctpcLocalDirNumEntry 3 }
  
 
 
@@ -738,6 +775,23 @@ ctpcMgmtSysSIPRespCode OBJECT-TYPE
     ::= { ctpcMgmtSysEntry 5 }
  
 
+
+ctpcTxDscpTelepresenceConfigured OBJECT-TYPE
+    SYNTAX          Dscp
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the configured DSCP for all outgoing
+        streams for a Telepresence call." 
+    ::= { ctpcInfoObjects 7 }
+
+ctpcTxDscpAudioConfigured OBJECT-TYPE
+    SYNTAX          Dscp
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the configured DSCP for outgoing streams for audio-only call." 
+    ::= { ctpcInfoObjects 8 }
 -- Cisco Telepresence Call Statistical Data Monitoring
 
 ctpcStatMonitoredTable OBJECT-TYPE
@@ -1375,7 +1429,11 @@ CtpcStatStreamTypeEntry ::= SEQUENCE {
         ctpcMaxCallLatency        Gauge32,
         ctpcMaxCallLatencyRecTime Unsigned32,
         ctpcMediaSrcPort          Unsigned32,
-        ctpcMediaDestPort         Unsigned32
+        ctpcMediaDestPort         Unsigned32,
+        ctpcRxDscpCurrent         Dscp,
+        ctpcRxDscpPrevious        Dscp,
+        ctpcRxCoSCurrent          QosLayer2Cos,
+        ctpcRxCoSPrevious         QosLayer2Cos
 }
 
 ctpcStreamType OBJECT-TYPE
@@ -1415,9 +1473,7 @@ ctpcMaxPeriodLatency OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "This object specifies the maximum latency among all the
-        sample periods.        
-
-        When a call is terminated, the value will be reset to '0'." 
+        sample periods." 
     ::= { ctpcStatStreamTypeEntry 4 }
 
 ctpcMaxCallLatency OBJECT-TYPE
@@ -1457,6 +1513,42 @@ ctpcMediaDestPort OBJECT-TYPE
         "This object specifies the dest port to transmit and receive
         the media." 
     ::= { ctpcStatStreamTypeEntry 8 }
+
+ctpcRxDscpCurrent OBJECT-TYPE
+    SYNTAX          Dscp
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the DSCP marking for the current call's
+        incoming stream." 
+    ::= { ctpcStatStreamTypeEntry 9 }
+
+ctpcRxDscpPrevious OBJECT-TYPE
+    SYNTAX          Dscp
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the previous DSCP marking for the
+        current call's incoming stream." 
+    ::= { ctpcStatStreamTypeEntry 10 }
+
+ctpcRxCoSCurrent OBJECT-TYPE
+    SYNTAX          QosLayer2Cos
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the COS marking for the current call's
+        incoming stream." 
+    ::= { ctpcStatStreamTypeEntry 11 }
+
+ctpcRxCoSPrevious OBJECT-TYPE
+    SYNTAX          QosLayer2Cos
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the previous COS marking for the
+        current call's incoming stream." 
+    ::= { ctpcStatStreamTypeEntry 12 }
  
 
 
@@ -1485,40 +1577,47 @@ ctpcStatStreamSourceEntry OBJECT-TYPE
     ::= { ctpcStatStreamSourceTable 1 }
 
 CtpcStatStreamSourceEntry ::= SEQUENCE {
-        ctpcStreamSource         CtpcStreamSourceType,
-        ctpcTxActive             TruthValue,
-        ctpcTxTotalBytes         Counter64,
-        ctpcTxTotalPackets       Counter64,
-        ctpcTxLostPackets        Counter64,
-        ctpcTxPeriodLostPackets  Gauge32,
-        ctpcTxCallLostPackets    Gauge32,
-        ctpcTxIDRPackets         Counter64,
-        ctpcTxShapingWindow      Gauge32,
-        ctpcRxActive             TruthValue,
-        ctpcRxTotalBytes         Counter64,
-        ctpcRxTotalPackets       Counter64,
-        ctpcRxLostPackets        Counter64,
-        ctpcRxPeriodLostPackets  Gauge32,
-        ctpcRxCallLostPackets    Gauge32,
-        ctpcRxOutOfOrderPackets  Counter64,
-        ctpcRxDuplicatePackets   Counter64,
-        ctpcRxLatePackets        Counter64,
-        ctpcRxIDRPackets         Counter64,
-        ctpcRxShapingWindow      Gauge32,
-        ctpcRxCallAuthFailure    Counter64,
-        ctpcAvgPeriodJitter      Unsigned64,
-        ctpcAvgCallJitter        Unsigned64,
-        ctpcMaxPeriodJitter      Unsigned64,
-        ctpcMaxCallJitter        Unsigned64,
-        ctpcMaxCallJitterRecTime Unsigned32,
-        ctpcTxCodec              CtpcCodecType,
-        ctpcTxFrameRate          Unsigned32,
-        ctpcRxCodec              CtpcCodecType,
-        ctpcRxFrameRate          Unsigned32,
-        ctpcTxVideoHorzPixels    Gauge32,
-        ctpcTxVideoVertPixels    Gauge32,
-        ctpcRxVideoHorzPixels    Gauge32,
-        ctpcRxVideoVertPixels    Gauge32
+        ctpcStreamSource                CtpcStreamSourceType,
+        ctpcTxActive                    TruthValue,
+        ctpcTxTotalBytes                Counter64,
+        ctpcTxTotalPackets              Counter64,
+        ctpcTxLostPackets               Counter64,
+        ctpcTxPeriodLostPackets         Gauge32,
+        ctpcTxCallLostPackets           Gauge32,
+        ctpcTxIDRPackets                Counter64,
+        ctpcTxShapingWindow             Gauge32,
+        ctpcRxActive                    TruthValue,
+        ctpcRxTotalBytes                Counter64,
+        ctpcRxTotalPackets              Counter64,
+        ctpcRxLostPackets               Counter64,
+        ctpcRxPeriodLostPackets         Gauge32,
+        ctpcRxCallLostPackets           Gauge32,
+        ctpcRxOutOfOrderPackets         Counter64,
+        ctpcRxDuplicatePackets          Counter64,
+        ctpcRxLatePackets               Counter64,
+        ctpcRxIDRPackets                Counter64,
+        ctpcRxShapingWindow             Gauge32,
+        ctpcRxCallAuthFailure           Counter64,
+        ctpcAvgPeriodJitter             Unsigned64,
+        ctpcAvgCallJitter               Unsigned64,
+        ctpcMaxPeriodJitter             Unsigned64,
+        ctpcMaxCallJitter               Unsigned64,
+        ctpcMaxCallJitterRecTime        Unsigned32,
+        ctpcTxCodec                     CtpcCodecType,
+        ctpcTxFrameRate                 Unsigned32,
+        ctpcRxCodec                     CtpcCodecType,
+        ctpcRxFrameRate                 Unsigned32,
+        ctpcTxVideoHorzPixels           Gauge32,
+        ctpcTxVideoVertPixels           Gauge32,
+        ctpcRxVideoHorzPixels           Gauge32,
+        ctpcRxVideoVertPixels           Gauge32,
+        ctpcTxCallBitRate               Gauge32,
+        ctpcTxPeriodBitRate             Gauge32,
+        ctpcRxCallBitRate               Gauge32,
+        ctpcRxPeriodBitRate             Gauge32,
+        ctpcRxMaxPeriodLostPackets      Gauge32,
+        ctpcRxMaxCallLostPackets        Gauge32,
+        ctpcRxMaxCallLostPacketsRecTime Gauge32
 }
 
 ctpcStreamSource OBJECT-TYPE
@@ -1891,6 +1990,81 @@ ctpcRxVideoVertPixels OBJECT-TYPE
         recorded number of vertical pixels for the incoming video
         stream." 
     ::= { ctpcStatStreamSourceEntry 34 }
+
+ctpcTxCallBitRate OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Kbps"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bit rate transmitted from a
+        stream source." 
+    ::= { ctpcStatStreamSourceEntry 35 }
+
+ctpcTxPeriodBitRate OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Kbps"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bit rate transmitted from a
+        stream source within the last sample period that
+        specified in ctpcSamplePeriod." 
+    ::= { ctpcStatStreamSourceEntry 36 }
+
+ctpcRxCallBitRate OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Kbps"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bit rate received from a
+        stream source." 
+    ::= { ctpcStatStreamSourceEntry 37 }
+
+ctpcRxPeriodBitRate OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Kbps"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the bit rate received from a
+        stream source within the last sample period that
+        specified in ctpcSamplePeriod." 
+    ::= { ctpcStatStreamSourceEntry 38 }
+
+ctpcRxMaxPeriodLostPackets OBJECT-TYPE
+    SYNTAX          Gauge32 (0..100000000)
+    UNITS           "micropercent"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the maximum micropercent of packets
+        failed to reach a stream source within the last sample
+        period that specified in ctpcSamplePeriod.
+
+        When a call is terminated, the value will be reset to '0'." 
+    ::= { ctpcStatStreamSourceEntry 39 }
+
+ctpcRxMaxCallLostPackets OBJECT-TYPE
+    SYNTAX          Gauge32 (0..100000000)
+    UNITS           "micropercent"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the maximum micropercent of packets failed
+        to reach a stream source for the duration of a call." 
+    ::= { ctpcStatStreamSourceEntry 40 }
+
+ctpcRxMaxCallLostPacketsRecTime OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "seconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the elapsed time since the call is
+        established when the maximum packet loss of a call is recorded." 
+    ::= { ctpcStatStreamSourceEntry 41 }
  
 
 
@@ -2353,7 +2527,7 @@ ciscoTpCallMIBComplianceRev1 MODULE-COMPLIANCE
     ::= { ciscoTpCallMIBCompliances 2 }
 
 ciscoTpCallMIBComplianceRev2 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities which implement the Cisco
         Telepresence Call MIB."
@@ -2445,6 +2619,189 @@ ciscoTpCallMIBComplianceRev2 MODULE-COMPLIANCE
     DESCRIPTION
         "Write access is not required."
     ::= { ciscoTpCallMIBCompliances 3 }
+
+ciscoTpCallMIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which implement the Cisco
+        Telepresence Call MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoTpCallInformationGroup,
+                        ciscoTpCallInformationGroupSup1,
+                        ciscoTpCallStatisticsGroup,
+                        ciscoTpCallStatisticsGroupSup1,
+                        ciscoTpCallStatisticsGroupSup2,
+                        ciscoTpCallStatisticsGroupSup3
+                    }
+
+    GROUP           ciscoTpCallConfigurationGroup
+    DESCRIPTION
+        "The Telepresence Call Configuration Group is optional."
+
+    GROUP           ciscoTpCallEventHistoryGroup
+    DESCRIPTION
+        "The Telepresence Call Event History Group is optional."
+
+    GROUP           ciscoTpCallMgmtSysConnEventHistGroup
+    DESCRIPTION
+        "The Call Management System Connection Event History Group
+        is optional."
+
+    OBJECT          ctpcStatNotifyEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcMgmtSysConnNotifyEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcSamplePeriod
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcSecurity
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcInitialBitRate
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcRowStatus
+    SYNTAX          INTEGER  {
+                        active(1)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/delete/modify access to the ctpcRowStatus is not
+        required.
+        Support of the values notInService(2), notReady(3), 
+        createAndGo(4), createAndWait(5), and destroy(6) are not
+        required."
+
+    OBJECT          ctpcState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcStatEventHistTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcMgmtSysConnEventHistTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoTpCallMIBCompliances 4 }
+
+ciscoTpCallMIBComplianceRev4 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which implement the Cisco
+        Telepresence Call MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoTpCallInformationGroup,
+                        ciscoTpCallInformationGroupSup1,
+                        ciscoTpCallInformationGroupSup2,
+                        ciscoTpCallStatisticsGroup,
+                        ciscoTpCallStatisticsGroupSup1,
+                        ciscoTpCallStatisticsGroupSup2,
+                        ciscoTpCallStatisticsGroupSup3
+                    }
+
+    GROUP           ciscoTpCallConfigurationGroup
+    DESCRIPTION
+        "The Telepresence Call Configuration Group is optional."
+
+    GROUP           ciscoTpCallEventHistoryGroup
+    DESCRIPTION
+        "The Telepresence Call Event History Group is optional."
+
+    GROUP           ciscoTpCallMgmtSysConnEventHistGroup
+    DESCRIPTION
+        "The Call Management System Connection Event History Group
+        is optional."
+
+    OBJECT          ctpcStatNotifyEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcMgmtSysConnNotifyEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcSamplePeriod
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcSecurity
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcInitialBitRate
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcRowStatus
+    SYNTAX          INTEGER  {
+                        active(1)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Create/delete/modify access to the ctpcRowStatus is not
+        required.
+        Support of the values notInService(2), notReady(3), 
+        createAndGo(4), createAndWait(5), and destroy(6) are not
+        required."
+
+    OBJECT          ctpcState
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcStatEventHistTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctpcMgmtSysConnEventHistTableSize
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoTpCallMIBCompliances 5 }
 
 -- Units of Conformance
 
@@ -2627,7 +2984,43 @@ ciscoTpCallStatisticsGroupSup2 OBJECT-GROUP
         "A supplemental group of ciscoTpCallStatisticsGroup."
     ::= { ciscoTpCallMIBGroups 10 }
 
+ciscoTpCallStatisticsGroupSup3 OBJECT-GROUP
+    OBJECTS         {
+                        ctpcTxCallBitRate,
+                        ctpcTxPeriodBitRate,
+                        ctpcRxCallBitRate,
+                        ctpcRxPeriodBitRate,
+                        ctpcRxMaxPeriodLostPackets,
+                        ctpcRxMaxCallLostPackets,
+                        ctpcRxMaxCallLostPacketsRecTime,
+                        ctpcTxDscpTelepresenceConfigured,
+                        ctpcTxDscpAudioConfigured,
+                        ctpcRxDscpCurrent,
+                        ctpcRxDscpPrevious,
+                        ctpcRxCoSCurrent,
+                        ctpcRxCoSPrevious
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A supplemental group of ciscoTpCallStatisticsGroup."
+    ::= { ciscoTpCallMIBGroups 11 }
+
+ciscoTpCallInformationGroupSup2 OBJECT-GROUP
+    OBJECTS         { ctpcExtNumberMask }
+    STATUS          current
+    DESCRIPTION
+        "A supplemental group of ciscoTpCallInformationGroup."
+    ::= { ciscoTpCallMIBGroups 12 }
+
 END
+
+
+
+
+
+
+
+
 
 
 

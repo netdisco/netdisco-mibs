@@ -2,7 +2,7 @@
 -- CISCO-LWAPP-AAA-MIB.my
 -- November 2006, Devesh Pujari, Srinath Candadai
 --   
--- Copyright (c) 2006 by Cisco Systems, Inc.
+-- Copyright (c) 2006, 2009-2010 by Cisco Systems Inc.
 -- All rights reserved.
 -- *******************************************************************
 
@@ -12,7 +12,9 @@ IMPORTS
     MODULE-IDENTITY,
     OBJECT-TYPE,
     NOTIFICATION-TYPE,
-    Unsigned32
+    Unsigned32,
+    Integer32,
+    Gauge32
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     NOTIFICATION-GROUP,
@@ -22,25 +24,29 @@ IMPORTS
     DisplayString,
     TruthValue,
     StorageType,
-    RowStatus
+    RowStatus,
+    TimeInterval
         FROM SNMPv2-TC
-    CLSecKeyFormat
-        FROM CISCO-LWAPP-TC-MIB
-    ciscoMgmt
-        FROM CISCO-SMI
     InetAddressType,
     InetAddress,
     InetPortNumber
         FROM INET-ADDRESS-MIB
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
+    CLSecKeyFormat
+        FROM CISCO-LWAPP-TC-MIB
     cLWlanIndex
-        FROM CISCO-LWAPP-WLAN-MIB;
+        FROM CISCO-LWAPP-WLAN-MIB
+    ciscoMgmt
+        FROM CISCO-SMI;
+
 
 -- ********************************************************************
 -- *  MODULE IDENTITY
 -- ********************************************************************
 
 ciscoLwappAAAMIB MODULE-IDENTITY
-    LAST-UPDATED    "200611210000Z"
+    LAST-UPDATED    "201007250000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -149,17 +155,64 @@ ciscoLwappAAAMIB MODULE-IDENTITY
         It uses radio communication to accomplish the same 
         functionality of a wired LAN.
 
+        PAP - Password Authentication Protocol
+        CHAP - Challenge Handshake Authentication Protocol
+        MD5-CHAP - Message Digest 5 Challenge Handshake Authentication
+                   Protocol
+
+        LSC - Local Significant Certificate
+
+        LSC can be used if we want our own public key 
+        infrastructure (PKI) to provide better security, 
+        to have control of our certificate authority (CA), 
+        and to define policies, restrictions, and usages 
+        on the generated certificates.
+
         REFERENCE
 
         [1] Wireless LAN Medium Access Control ( MAC ) and
         Physical Layer ( PHY ) Specifications
 
         [2] Draft-obara-capwap-lwapp-00.txt, IETF Light 
-        Weight Access Point Protocol "
+        Weight Access Point Protocol"
+    REVISION        "201007250000Z"
+    DESCRIPTION
+        "A new variable, claWlanAuthServerEnabled
+        has been added to the existing table, claWlanTable.
+
+        A new scalar variable, claSaveUserData has been 
+        added to support saving of user configuration data to NVRAM.
+
+        The following scalar variables have been added to support 
+        RADIUS web auth and fallback configuration.
+
+        claWebRadiusAuthentication
+        claRadiusFallbackMode
+        claRadiusFallbackUsername
+        claRadiusFallbackInterval
+        claRadiusAuthMacDelimiter
+        claRadiusAcctMacDelimiter
+
+        The following scalar vriables have been added to support
+        AP policy configuration
+
+        claAcceptMICertificate
+        claAcceptLSCertificate
+        claAllowAuthorizeLscApAgainstAAA
+
+
+        A new scalar read-only variable, claDBCurrentUsedEntries 
+        has been added to show the total number of database entries used.
+
+        The groups, ciscoLwappAAAMIBRev1ConfigGroup and
+        ciscoLwappAAAMIBDBEntriesGroup have been added.
+
+        ciscoLwappAAAMIBCompliance has been deprecated by  
+        ciscoLwappAAAMIBComplianceRev1."
     REVISION        "200611210000Z"
     DESCRIPTION
         "Initial version of this MIB module."
-          ::= { ciscoMgmt 598 }
+    ::= { ciscoMgmt 598 }
 
 
 ciscoLwappAAAMIBNotifs  OBJECT IDENTIFIER
@@ -209,7 +262,7 @@ claPriorityEntry OBJECT-TYPE
     ::= { claPriorityTable 1 }
 
 ClaPriorityEntry ::= SEQUENCE {
-        claPriorityAuth  INTEGER ,
+        claPriorityAuth  INTEGER,
         claPriorityOrder Unsigned32
 }
 
@@ -235,7 +288,7 @@ claPriorityAuth OBJECT-TYPE
     ::= { claPriorityEntry 1 }
 
 claPriorityOrder OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..10 )
+    SYNTAX          Unsigned32 (0..10)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -293,7 +346,7 @@ claTacacsServerEntry OBJECT-TYPE
     ::= { claTacacsServerTable 1 }
 
 ClaTacacsServerEntry ::= SEQUENCE {
-        claTacacsServerType        INTEGER ,
+        claTacacsServerType        INTEGER,
         claTacacsServerPriority    Unsigned32,
         claTacacsServerAddressType InetAddressType,
         claTacacsServerAddress     InetAddress,
@@ -402,7 +455,7 @@ claTacacsServerSecret OBJECT-TYPE
     ::= { claTacacsServerEntry 8 }
 
 claTacacsServerTimeout OBJECT-TYPE
-    SYNTAX          Unsigned32 (2..30 )
+    SYNTAX          Unsigned32 (5..30)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -410,7 +463,7 @@ claTacacsServerTimeout OBJECT-TYPE
         "The number of seconds between retransmissions. This
         object can be modified when a row is in the 'active' 
         state."
-    DEFVAL          { 2 } 
+    DEFVAL          { 5 } 
     ::= { claTacacsServerEntry 9 }
 
 claTacacsServerStorageType OBJECT-TYPE
@@ -465,7 +518,8 @@ claWlanEntry OBJECT-TYPE
     ::= { claWlanTable 1 }
 
 ClaWlanEntry ::= SEQUENCE {
-        claWlanAcctServerEnabled TruthValue
+        claWlanAcctServerEnabled TruthValue,
+        claWlanAuthServerEnabled TruthValue
 }
 
 claWlanAcctServerEnabled OBJECT-TYPE
@@ -474,10 +528,172 @@ claWlanAcctServerEnabled OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "Status to indicate whether the account server
-        is enabled(true) or disabled(false) for this WLAN." 
+        is enabled(true) or disabled(false) for this WLAN."
+    DEFVAL          { true } 
     ::= { claWlanEntry 1 }
+
+claWlanAuthServerEnabled OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object represents the status whether the authentication
+        server is enabled(true) or disabled(false) for this WLAN."
+    DEFVAL          { true } 
+    ::= { claWlanEntry 2 }
  
 
+
+-- *******************************************************************
+-- *     Users Database
+-- *******************************************************************
+
+claSaveUserData OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used to save the guest user config to NVRAM.
+        Setting to the value of 'true' would save the data.
+        Setting to the value of 'false' would have no implications
+        here."
+    DEFVAL          { true } 
+    ::= { claConfigObjects 9 }
+
+-- *******************************************************************
+-- *    RADIUS web auth and Fallback params.
+-- *******************************************************************
+
+claWebRadiusAuthentication OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        pap(1),
+                        chap(2),
+                        md5-chap(3)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used to configure the Web RADIUS Authentication
+        parameters on the WLC.
+        PAP (1) - Configure Web RADIUS Authentication in PAP mode.
+        CHAP (2) - Configure Web RADIUS Authentication in CHAP mode.
+        MD5-CHAP (3) - Configure Web RADIUS Authentication in MD5-CHAP mode."
+    DEFVAL          { pap } 
+    ::= { claConfigObjects 10 }
+
+claRadiusFallbackMode OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        off(1),
+                        passive(2),
+                        active(3)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used to configure the RADIUS Fallback Test mode
+        on the WLC. Following are the configurable options:
+        off (1) - Disables RADIUS server fallback test.
+        passive (2) - Sets server status based on last transaction.
+        active (3) - Sends probes to dead servers to test status."
+    DEFVAL          { off } 
+    ::= { claConfigObjects 11 }
+
+claRadiusFallbackUsername OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used to configure the RADIUS Fallback Test
+        username to be sent in dead server probes" 
+    ::= { claConfigObjects 12 }
+
+claRadiusFallbackInterval OBJECT-TYPE
+    SYNTAX          TimeInterval (180..3600)
+    UNITS           "seconds"
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used to configure the probe interval (when
+        claRadiusFallbackMode is in active mode) or inactive time 
+        (when claRadiusFallbackMode is in passive mode)"
+    DEFVAL          { 300 } 
+    ::= { claConfigObjects 13 }
+
+claRadiusAuthMacDelimiter OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        noDelimiter(1),
+                        colon(2),
+                        hyphen(3),
+                        singleHyphen(4)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "The delimiter to be used for RADIUS authentication servers.
+        The possible values allowed are - 
+        no delimiter (1)  - as in xxxxxxxxxxxx.
+        colon (2)         - as in xx:xx:xx:xx:xx:xx.  
+        hyphen (3)        - as in xx-xx-xx-xx-xx-xx.  
+        single hyphen (4) - as in xxxxxx-xxxxxx."
+    DEFVAL          { hyphen } 
+    ::= { claConfigObjects 14 }
+
+claRadiusAcctMacDelimiter OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        noDelimiter(1),
+                        colon(2),
+                        hyphen(3),
+                        singleHyphen(4)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "The delimiter to be used for RADIUS accounting servers.
+        The possible values allowed are - 
+        no delimiter (1)  - as in xxxxxxxxxxxx. 
+        colon (2)         - as in xx:xx:xx:xx:xx:xx.  
+        hyphen (3)        - as in xx-xx-xx-xx-xx-xx.  
+        single hyphen (4) - as in xxxxxx-xxxxxx."
+    DEFVAL          { hyphen } 
+    ::= { claConfigObjects 15 }
+
+-- *******************************************************************
+-- *    AP Policy Configuration params.
+-- *******************************************************************
+
+claAcceptMICertificate OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if controller will accept
+        Manufactured Installed Certificate from the
+        access points  as part of authorization."
+    DEFVAL          { false } 
+    ::= { claConfigObjects 16 }
+
+claAcceptLSCertificate OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if controller will accept
+        Local Significant Certificate from access points
+        as part of authorization."
+    DEFVAL          { false } 
+    ::= { claConfigObjects 17 }
+
+claAllowAuthorizeLscApAgainstAAA OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if access points to be authorized
+        using a AAA RADIUS server or local database.
+        If this object is false, the access points would be
+        authorized using a local database."
+    DEFVAL          { false } 
+    ::= { claConfigObjects 18 }
 -- ********************************************************************
 -- *    Status objects
 -- ********************************************************************
@@ -552,7 +768,7 @@ claRadiusPortNum OBJECT-TYPE
     ::= { claRadiusServerEntry 4 }
 
 claRadiusWlanIdx OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..17 )
+    SYNTAX          Unsigned32 (1..17)
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
@@ -580,9 +796,20 @@ claRadiusUserName OBJECT-TYPE
  
 
 
+claDBCurrentUsedEntries OBJECT-TYPE
+    SYNTAX          Gauge32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the current database entries used.
+        This includes the number of users, mac filters
+        configured in the system." 
+    ::= { claStatusObjects 2 }
+
 -- ********************************************************************
 -- *    NOTIFICATION Control objects
 -- ********************************************************************
+
 claRadiusServerGlobalActivatedEnabled OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-write
@@ -598,7 +825,7 @@ claRadiusServerGlobalActivatedEnabled OBJECT-TYPE
 
         A value of 'false' indicates that the agent doesn't
         generate ciscoLwappAAARadiusServerGlobalActivated 
-        notification. "
+        notification."
     DEFVAL          { true } 
     ::= { claConfigObjects 4 }
 
@@ -617,7 +844,7 @@ claRadiusServerGlobalDeactivatedEnabled OBJECT-TYPE
 
         A value of 'false' indicates that the agent doesn't
         generate ciscoLwappAAARadiusServerGlobalDeactivated 
-        notification. "
+        notification."
     DEFVAL          { true } 
     ::= { claConfigObjects 5 }
 
@@ -636,7 +863,7 @@ claRadiusServerWlanActivatedEnabled OBJECT-TYPE
 
         A value of 'false' indicates that the agent doesn't
         generate ciscoLwappAAARadiusServerWlanActivated 
-        notification. "
+        notification."
     DEFVAL          { true } 
     ::= { claConfigObjects 6 }
 
@@ -655,7 +882,7 @@ claRadiusServerWlanDeactivatedEnabled OBJECT-TYPE
 
         A value of 'false' indicates that the agent doesn't
         generate ciscoLwappAAARadiusServerWlanDeactivated 
-        notification. "
+        notification."
     DEFVAL          { true } 
     ::= { claConfigObjects 7 }
 
@@ -674,10 +901,10 @@ claRadiusReqTimedOutEnabled OBJECT-TYPE
         generate ciscoLwappAAARadiusReqTimedOut notification."
     DEFVAL          { true } 
     ::= { claConfigObjects 8 }
+
 -- ********************************************************************
 -- *    NOTIFICATION TYPE objects
 -- ********************************************************************
-
 
 ciscoLwappAAARadiusServerGlobalActivated NOTIFICATION-TYPE
     OBJECTS         {
@@ -694,7 +921,6 @@ ciscoLwappAAARadiusServerGlobalActivated NOTIFICATION-TYPE
         and port number (claRadiusPortNum)."
    ::= { ciscoLwappAAAMIBNotifs 1 }
 
-
 ciscoLwappAAARadiusServerGlobalDeactivated NOTIFICATION-TYPE
     OBJECTS         {
                         claRadiusAddressType,
@@ -709,7 +935,6 @@ ciscoLwappAAARadiusServerGlobalDeactivated NOTIFICATION-TYPE
         is identified by the address (claRadiusAddress)
         and port number (claRadiusPortNum)."
    ::= { ciscoLwappAAAMIBNotifs 2 }
-
 
 ciscoLwappAAARadiusServerWlanActivated NOTIFICATION-TYPE
     OBJECTS         {
@@ -727,7 +952,6 @@ ciscoLwappAAARadiusServerWlanActivated NOTIFICATION-TYPE
         and port number (claRadiusPortNum)."
    ::= { ciscoLwappAAAMIBNotifs 3 }
 
-
 ciscoLwappAAARadiusServerWlanDeactivated NOTIFICATION-TYPE
     OBJECTS         {
                         claRadiusAddressType,
@@ -743,7 +967,6 @@ ciscoLwappAAARadiusServerWlanDeactivated NOTIFICATION-TYPE
         is identified by the address (claRadiusAddress)
         and port number (claRadiusPortNum)."
    ::= { ciscoLwappAAAMIBNotifs 4 }
-
 
 ciscoLwappAAARadiusReqTimedOut NOTIFICATION-TYPE
     OBJECTS         {
@@ -762,6 +985,7 @@ ciscoLwappAAARadiusReqTimedOut NOTIFICATION-TYPE
         and port number (claRadiusPortNum)."
    ::= { ciscoLwappAAAMIBNotifs 5 }
 -- ********************************************************************
+
 ciscoLwappAAAMIBCompliances  OBJECT IDENTIFIER
     ::= { ciscoLwappAAAMIBConform 1 }
 
@@ -770,7 +994,7 @@ ciscoLwappAAAMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoLwappAAAMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappAAAMIB module."
@@ -782,9 +1006,28 @@ ciscoLwappAAAMIBCompliance MODULE-COMPLIANCE
                     }
     ::= { ciscoLwappAAAMIBCompliances 1 }
 
+ciscoLwappAAAMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the SNMP entities that
+        implement the ciscoLwappAAAMIB module."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoLwappAAAMIBConfigGroup,
+                        ciscoLwappAAAMIBSaveUserConfigGroup,
+                        ciscoLwappAAAMIBRadiusConfigGroup,
+                        ciscoLwappAAAMIBAPPolicyConfigGroup,
+                        ciscoLwappAAAMIBWlanAuthAccServerConfigGroup,
+                        ciscoLwappAAAMIBNotifsGroup,
+                        ciscoLwappAAAMIBStatusObjsGroup,
+                        ciscoLwappAAAMIBDBEntriesGroup
+                    }
+    ::= { ciscoLwappAAAMIBCompliances 2 }
+
 -- ********************************************************************
 -- *    Units of conformance
 -- ********************************************************************
+
 ciscoLwappAAAMIBConfigGroup OBJECT-GROUP
     OBJECTS         {
                         claPriorityOrder,
@@ -797,7 +1040,6 @@ ciscoLwappAAAMIBConfigGroup OBJECT-GROUP
                         claTacacsServerTimeout,
                         claTacacsServerStorageType,
                         claTacacsServerRowStatus,
-                        claWlanAcctServerEnabled,
                         claRadiusServerGlobalActivatedEnabled,
                         claRadiusServerGlobalDeactivatedEnabled,
                         claRadiusServerWlanActivatedEnabled,
@@ -809,6 +1051,14 @@ ciscoLwappAAAMIBConfigGroup OBJECT-GROUP
         "This collection of objects specifies the required
         parameters for AAA."
     ::= { ciscoLwappAAAMIBGroups 1 }
+
+ciscoLwappAAAMIBSaveUserConfigGroup OBJECT-GROUP
+    OBJECTS         { claSaveUserData }
+    STATUS          current
+    DESCRIPTION
+        "These is the configuration parameter related to
+        guest user configuration saving."
+    ::= { ciscoLwappAAAMIBGroups 2 }
 
 ciscoLwappAAAMIBNotifsGroup NOTIFICATION-GROUP
    NOTIFICATIONS    {
@@ -822,7 +1072,7 @@ ciscoLwappAAAMIBNotifsGroup NOTIFICATION-GROUP
     DESCRIPTION
         "This collection of objects specifies the
         notifications for AAA."
-    ::= { ciscoLwappAAAMIBGroups 2 }
+    ::= { ciscoLwappAAAMIBGroups 3 }
 
 ciscoLwappAAAMIBStatusObjsGroup OBJECT-GROUP
     OBJECTS         {
@@ -835,11 +1085,71 @@ ciscoLwappAAAMIBStatusObjsGroup OBJECT-GROUP
                     }
     STATUS          current
     DESCRIPTION
-        "This collection of objects specifies the
-        notification objects for AAA."
-    ::= { ciscoLwappAAAMIBGroups 3 }
+        "This collection of objects represents the information
+        about the general status attributes for AAA."
+    ::= { ciscoLwappAAAMIBGroups 4 }
+
+ciscoLwappAAAMIBDBEntriesGroup OBJECT-GROUP
+    OBJECTS         { claDBCurrentUsedEntries }
+    STATUS          current
+    DESCRIPTION
+        "This is the additional object which represent
+        the information about the general status 
+        attributes for AAA."
+    ::= { ciscoLwappAAAMIBGroups 5 }
+
+ciscoLwappAAAMIBRadiusConfigGroup OBJECT-GROUP
+    OBJECTS         {
+                        claWebRadiusAuthentication,
+                        claRadiusFallbackMode,
+                        claRadiusFallbackUsername,
+                        claRadiusFallbackInterval,
+                        claRadiusAuthMacDelimiter,
+                        claRadiusAcctMacDelimiter
+                    }
+    STATUS          current
+    DESCRIPTION
+        "These are the RADIUS web authentication and
+        fallback related configuration parameters on the WLC."
+    ::= { ciscoLwappAAAMIBGroups 6 }
+
+ciscoLwappAAAMIBAPPolicyConfigGroup OBJECT-GROUP
+    OBJECTS         {
+                        claAcceptMICertificate,
+                        claAcceptLSCertificate,
+                        claAllowAuthorizeLscApAgainstAAA
+                    }
+    STATUS          current
+    DESCRIPTION
+        "These are the AP Policy related configuration
+        parameters on the WLC."
+    ::= { ciscoLwappAAAMIBGroups 7 }
+
+ciscoLwappAAAMIBWlanAuthAccServerConfigGroup OBJECT-GROUP
+    OBJECTS         {
+                        claWlanAuthServerEnabled,
+                        claWlanAcctServerEnabled
+                    }
+    STATUS          current
+    DESCRIPTION
+        "These are the authentication and account server configuration
+        parameters per wlan."
+    ::= { ciscoLwappAAAMIBGroups 8 }
 
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

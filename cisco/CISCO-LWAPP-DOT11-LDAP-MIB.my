@@ -2,7 +2,7 @@
 -- CISCO-LWAPP-DOT11-LDAP-MIB.my
 -- January 2007, Devesh Pujari, Srinath Candadai
 --   
--- Copyright (c) 2007 by Cisco Systems, Inc.
+-- Copyright (c) 2007, 2009 by Cisco Systems Inc.
 -- All rights reserved.
 -- *******************************************************************
 
@@ -19,23 +19,27 @@ IMPORTS
     DisplayString,
     RowStatus,
     TruthValue,
-    StorageType
+    StorageType,
+    TEXTUAL-CONVENTION
         FROM SNMPv2-TC
     InetAddressType,
     InetAddress,
     InetPortNumber
         FROM INET-ADDRESS-MIB
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
+    cLWlanIndex
+        FROM CISCO-LWAPP-WLAN-MIB
     ciscoMgmt
-        FROM CISCO-SMI
-    cLWlanConfigEntry
-        FROM CISCO-LWAPP-WLAN-MIB;
+        FROM CISCO-SMI;
+
 
 -- ********************************************************************
 -- *  MODULE IDENTITY
 -- ********************************************************************
 
 ciscoLwappDot11LdapMIB MODULE-IDENTITY
-    LAST-UPDATED    "200701130000Z"
+    LAST-UPDATED    "200912100000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -150,6 +154,24 @@ ciscoLwappDot11LdapMIB MODULE-IDENTITY
 
         [2] Draft-obara-capwap-lwapp-00.txt, IETF Light 
         Weight Access Point Protocol"
+    REVISION        "200912100000Z"
+    DESCRIPTION
+        "A new textual-convention named CldlBindType
+        has been defined.
+        
+        The range for cldlServerTimeout has been modified from
+        1-3600 to 2-30 due to modification in back-end code.
+        
+        The following objects have been added to cldlServerTable.
+        1)cldlServerBindType
+        2)cldlServerAuthBindUserName
+        3)cldlServerAuthBindPassword
+
+        The group ciscoLwappDot11LdapMIBConfigGroupSup1 
+        has been added.
+
+        ciscoLwappDot11LdapMIBCompliance has been deprecated by  
+        ciscoLwappDot11LdapMIBComplianceRev1."
     REVISION        "200701130000Z"
     DESCRIPTION
         "Initial version of this MIB module."
@@ -170,6 +192,26 @@ cldlConfig  OBJECT IDENTIFIER
 
 cldlStatus  OBJECT IDENTIFIER
     ::= { ciscoLwappDot11LdapMIBObjects 2 }
+    
+CldlBindType ::= TEXTUAL-CONVENTION
+    STATUS          current
+
+    DESCRIPTION
+        "This textual convention represents the kind of 
+        authentications done by the LDAP server. 
+        The semantics are as follows.  
+  
+        anonymous(1) - This indicates that the LDAP server accepts  
+        anonymous authentication attempts.  
+  
+        authenticated(2) - This indicates that the LDAP server  
+        authenticates based on the credentials provided in the 
+        form of username/password."  
+  
+    SYNTAX          INTEGER  {
+                        anonymous(1),
+                        authenticated(2)
+                    } 
 
 -- ********************************************************************
 -- LDAP Servers configuration
@@ -208,11 +250,14 @@ CldlServerEntry ::= SEQUENCE {
         cldlServerUserName          DisplayString,
         cldlServerSecurityEnable    TruthValue,
         cldlServerStorageType       StorageType,
-        cldlServerRowStatus         RowStatus
+        cldlServerRowStatus         RowStatus,
+        cldlServerBindType          CldlBindType,
+        cldlServerAuthBindUserName  SnmpAdminString,
+        cldlServerAuthBindPassword  SnmpAdminString
 }
 
 cldlServerIndex OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..255 )
+    SYNTAX          Unsigned32 (1..255)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -261,7 +306,7 @@ cldlServerState OBJECT-TYPE
     ::= { cldlServerEntry 5 }
 
 cldlServerTimeout OBJECT-TYPE
-    SYNTAX          Unsigned32 (1..3600 )
+    SYNTAX          Unsigned32 (2..30)
     UNITS           "seconds"
     MAX-ACCESS      read-create
     STATUS          current
@@ -332,6 +377,42 @@ cldlServerRowStatus OBJECT-TYPE
         "This object represents the status column for a
         conceptual row in this table." 
     ::= { cldlServerEntry 12 }
+
+cldlServerBindType OBJECT-TYPE
+    SYNTAX          CldlBindType
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the kind of authentication the 
+        Controller does with the LDAP server."
+    DEFVAL          { anonymous } 
+    ::= { cldlServerEntry 13 }
+
+cldlServerAuthBindUserName OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the name used by the Controller
+        for the authentication with the LDAP server. 
+        For values other than 'authenticated', as identified through 
+        cldlServerBindType,  this object will be populated with an 
+        empty string." 
+    ::= { cldlServerEntry 14 }
+
+cldlServerAuthBindPassword OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the password used by the Controller
+        for authentication with the LDAP server.  
+        For security purposes,  this object will be populated with 
+        the string '****', when a valid password has been configured.  
+        For values other than 'authenticated', as identified through 
+        cldlServerBindType,  this object will be populated with an 
+        empty string." 
+    ::= { cldlServerEntry 15 }
  
 
 -- ********************************************************************
@@ -372,8 +453,7 @@ cldlWlanLdapEntry OBJECT-TYPE
         cldlWlanLdapTable and represents the LDAP 
         configuration for a particular WLAN 
         identified by cLWlanIndex."
-    AUGMENTS           { cLWlanConfigEntry  } 
- 
+    INDEX           { cLWlanIndex } 
     ::= { cldlWlanLdapTable 1 }
 
 CldlWlanLdapEntry ::= SEQUENCE {
@@ -383,7 +463,7 @@ CldlWlanLdapEntry ::= SEQUENCE {
 }
 
 cldlWlanLdapPrimaryServerIndex OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..255 )
+    SYNTAX          Unsigned32 (0..255)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -395,7 +475,7 @@ cldlWlanLdapPrimaryServerIndex OBJECT-TYPE
     ::= { cldlWlanLdapEntry 1 }
 
 cldlWlanLdapSecondaryServerIndex OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..255 )
+    SYNTAX          Unsigned32 (0..255)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -407,7 +487,7 @@ cldlWlanLdapSecondaryServerIndex OBJECT-TYPE
     ::= { cldlWlanLdapEntry 2 }
 
 cldlWlanLdapTertiaryServerIndex OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..255 )
+    SYNTAX          Unsigned32 (0..255)
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
@@ -420,6 +500,7 @@ cldlWlanLdapTertiaryServerIndex OBJECT-TYPE
  
 
 -- ********************************************************************
+
 ciscoLwappDot11LdapMIBCompliances  OBJECT IDENTIFIER
     ::= { ciscoLwappDot11LdapMIBConform 1 }
 
@@ -428,8 +509,9 @@ ciscoLwappDot11LdapMIBGroups  OBJECT IDENTIFIER
 
 
 -- ********************************************************************
+
 ciscoLwappDot11LdapMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappDot11LdapMIB module."
@@ -437,9 +519,22 @@ ciscoLwappDot11LdapMIBCompliance MODULE-COMPLIANCE
     MANDATORY-GROUPS { ciscoLwappDot11LdapMIBConfigGroup }
     ::= { ciscoLwappDot11LdapMIBCompliances 1 }
 
+ciscoLwappDot11LdapMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the SNMP entities that
+        implement the ciscoLwappDot11LdapMIB module."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoLwappDot11LdapMIBConfigGroup,
+                        ciscoLwappDot11LdapMIBConfigGroupSup1
+                    }
+    ::= { ciscoLwappDot11LdapMIBCompliances 2 }
+
 -- ********************************************************************
 -- *    Units of conformance
 -- ********************************************************************
+
 ciscoLwappDot11LdapMIBConfigGroup OBJECT-GROUP
     OBJECTS         {
                         cldlServerAddressType,
@@ -463,7 +558,30 @@ ciscoLwappDot11LdapMIBConfigGroup OBJECT-GROUP
         configuration on the controller."
     ::= { ciscoLwappDot11LdapMIBGroups 1 }
 
+ciscoLwappDot11LdapMIBConfigGroupSup1 OBJECT-GROUP
+    OBJECTS         {
+                        cldlServerBindType,
+                        cldlServerAuthBindUserName,
+                        cldlServerAuthBindPassword
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group of objects supplements the 
+        ciscoLwappDot11LdapMIBConfigGroup,  
+        to configure the information about the Controller's 
+        authentication done with the LDAP server."
+    ::= { ciscoLwappDot11LdapMIBGroups 2 }
+
 END
+
+
+
+
+
+
+
+
+
 
 
 

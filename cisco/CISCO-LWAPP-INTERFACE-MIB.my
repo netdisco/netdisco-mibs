@@ -1,6 +1,6 @@
 -- *******************************************************************
 -- CISCO-LWAPP-INTERFACE-MIB.my
--- Ambika Prasad Mohanty,Arun Kumar A
+-- April 2007, Devesh Pujari, Prasanna Viswakumar
 --   
 -- *******************************************************************
 
@@ -14,8 +14,11 @@ IMPORTS
     MODULE-COMPLIANCE,
     OBJECT-GROUP
         FROM SNMPv2-CONF
-    TruthValue
+    TruthValue,
+    RowStatus
         FROM SNMPv2-TC
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
     ciscoMgmt
         FROM CISCO-SMI;
 
@@ -25,7 +28,7 @@ IMPORTS
 -- ********************************************************************
 
 ciscoLwappInterfaceMIB MODULE-IDENTITY
-    LAST-UPDATED    "200901090000Z"
+    LAST-UPDATED    "201205300000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -122,6 +125,21 @@ ciscoLwappInterfaceMIB MODULE-IDENTITY
 
         [2] Draft-obara-capwap-lwapp-00.txt, IETF Light 
         Weight Access Point Protocol"
+    REVISION        "201205300000Z"
+    DESCRIPTION
+        "Added clInterfaceDhcpOpt82Enabled object.
+        Added ciscoLwappInterfaceMIBComplianceRev02 module compliance.
+        Added ciscoLwappInterfaceConfigGroupSup1 conformance group.
+        Deprecated ciscoLwappInterfaceMIBComplianceRev01 module
+        compliance."
+    REVISION        "201008220000Z"
+    DESCRIPTION
+        "Added the clInterfaceGroupsConfigTable table.
+        Added the clInterfaceGroupsMappingTable table. 
+
+        Replaced ciscoLwappInterfaceMIBCompliance with 
+        ciscoLwappInterfaceMIBComplianceRev01. 
+        Added ciscoLwappInterfaceGroupConfigSup1 Group."
     REVISION        "200901090000Z"
     DESCRIPTION
         "Initial version of this MIB module."
@@ -166,7 +184,8 @@ clInterfaceConfigEntry OBJECT-TYPE
 ClInterfaceConfigEntry ::= SEQUENCE {
         clInterfaceName             OCTET STRING,
         clInterfaceWired            TruthValue,
-        clInterfaceQuarantineVlanId Unsigned32
+        clInterfaceQuarantineVlanId Unsigned32,
+        clInterfaceDhcpOpt82Enabled TruthValue
 }
 
 clInterfaceName OBJECT-TYPE
@@ -208,6 +227,128 @@ clInterfaceQuarantineVlanId OBJECT-TYPE
         security device."
     DEFVAL          { 0 } 
     ::= { clInterfaceConfigEntry 3 }
+
+clInterfaceDhcpOpt82Enabled OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object indicates whether the interface
+        represented by clInterfaceName, has DHCP Option 82
+        enabled on it or not."
+    DEFVAL          { false } 
+    ::= { clInterfaceConfigEntry 4 }
+ 
+
+-- ********************************************************************
+-- * Begin of clInterfaceGroupsConfigTable
+-- ********************************************************************
+
+clInterfaceGroupsConfigTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF ClInterfaceGroupsConfigEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table is used to maintain the interface groups.
+        An interface group is a logical grouping of interfaces 
+        with unique VLAN ids."
+    ::= { ciscoLwappInterfaceConfig 2 }
+
+clInterfaceGroupsConfigEntry OBJECT-TYPE
+    SYNTAX          ClInterfaceGroupsConfigEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This represents an entry in clInterfaceGroupsConfigTable.
+        Entries can be added or deleted by explicit management
+        action by NMS or by user console."
+    INDEX           { clInterfaceGroupName } 
+    ::= { clInterfaceGroupsConfigTable 1 }
+
+ClInterfaceGroupsConfigEntry ::= SEQUENCE {
+        clInterfaceGroupName         SnmpAdminString,
+        clInterfaceGroupDescr        SnmpAdminString,
+        clInterfaceGroupIsQuarantine TruthValue,
+        clInterfaceGroupRowStatus    RowStatus
+}
+
+clInterfaceGroupName OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object represents the name
+        assigned to  identify the interface group." 
+    ::= { clInterfaceGroupsConfigEntry 1 }
+
+clInterfaceGroupDescr OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object describes the interface group." 
+    ::= { clInterfaceGroupsConfigEntry 2 }
+
+clInterfaceGroupIsQuarantine OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates whether the interface group
+        has quarantine interfaces. A value of 'true' specifies
+        the interface group has quarantine interfaces. A value
+        of 'false' specifies the group has nonquarantine interfaces." 
+    ::= { clInterfaceGroupsConfigEntry 3 }
+
+clInterfaceGroupRowStatus OBJECT-TYPE
+    SYNTAX          RowStatus
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object is used to add or delete entries
+        in clInterfaceGroupsConfigTable" 
+    ::= { clInterfaceGroupsConfigEntry 4 }
+ 
+
+-- ********************************************************************
+-- * Begin of clInterfaceGroupsMappingTable
+-- ********************************************************************
+
+clInterfaceGroupsMappingTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF ClInterfaceGroupsMappingEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table represents the mapping between the interface
+        and the interface group."
+    ::= { ciscoLwappInterfaceConfig 3 }
+
+clInterfaceGroupsMappingEntry OBJECT-TYPE
+    SYNTAX          ClInterfaceGroupsMappingEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This represents an entry in clInterfaceGroupsMappingTable
+        Entries can be added or deleted by explicit management action
+        By NMS or by user console ."
+    INDEX           {
+                        clInterfaceGroupName,
+                        clInterfaceName
+                    } 
+    ::= { clInterfaceGroupsMappingTable 1 }
+
+ClInterfaceGroupsMappingEntry ::= SEQUENCE {
+        clInterfaceGroupMappingRowStatus RowStatus
+}
+
+clInterfaceGroupMappingRowStatus OBJECT-TYPE
+    SYNTAX          RowStatus
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object is used to add or delete entries
+        in clInterfaceGroupsMappingTable" 
+    ::= { clInterfaceGroupsMappingEntry 1 }
  
 
 -- ********************************************************************
@@ -222,13 +363,68 @@ ciscoLwappInterfaceMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoLwappInterfaceMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappInterfaceMIB module."
     MODULE          -- this module
     MANDATORY-GROUPS { ciscoLwappInterfaceConfigGroup }
     ::= { ciscoLwappInterfaceMIBCompliances 1 }
+
+ciscoLwappInterfaceMIBComplianceRev01 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for the SNMP entities that
+        implement the ciscoLwappInterfaceMIB module."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoLwappInterfaceConfigGroup,
+                        ciscoLwappInterfaceGroupConfigSup1
+                    }
+    ::= { ciscoLwappInterfaceMIBCompliances 2 }
+
+ciscoLwappInterfaceMIBComplianceRev02 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the SNMP entities that
+        implement the ciscoLwappInterfaceMIB module."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoLwappInterfaceConfigGroup,
+                        ciscoLwappInterfaceGroupConfigSup1,
+                        ciscoLwappInterfaceConfigGroupSup1
+                    }
+
+    OBJECT          clInterfaceWired
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          clInterfaceQuarantineVlanId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          clInterfaceDhcpOpt82Enabled
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          clInterfaceGroupDescr
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          clInterfaceGroupRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          clInterfaceGroupMappingRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoLwappInterfaceMIBCompliances 3 }
 
 -- ********************************************************************
 -- *    Units of conformance
@@ -245,4 +441,39 @@ ciscoLwappInterfaceConfigGroup OBJECT-GROUP
         configuration of interfaces on the controller."
     ::= { ciscoLwappInterfaceMIBGroups 1 }
 
+ciscoLwappInterfaceGroupConfigSup1 OBJECT-GROUP
+    OBJECTS         {
+                        clInterfaceGroupDescr,
+                        clInterfaceGroupIsQuarantine,
+                        clInterfaceGroupRowStatus,
+                        clInterfaceGroupMappingRowStatus
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This collection of objects represent the
+        configuration of interface groups on the controller."
+    ::= { ciscoLwappInterfaceMIBGroups 2 }
+
+ciscoLwappInterfaceConfigGroupSup1 OBJECT-GROUP
+    OBJECTS         { clInterfaceDhcpOpt82Enabled }
+    STATUS          current
+    DESCRIPTION
+        "This collection of objects represent the configuration of
+        interfaces on the controller."
+    ::= { ciscoLwappInterfaceMIBGroups 3 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
+

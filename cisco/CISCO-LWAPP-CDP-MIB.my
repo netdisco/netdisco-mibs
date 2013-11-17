@@ -1,7 +1,7 @@
 -- *******************************************************************
 -- CISCO-LWAPP-CDP-MIB.my
--- Mar 2007 ,   Ambika Prasad Mohanty
--- Copyright (c) 2007 by Cisco Systems Inc.
+-- Oct 2009 ,   Jobin Jose Sebastian
+-- Copyright (c) 2007, 2009 by Cisco Systems Inc.
 -- All rights reserved.
 -- ******************************************************************
 
@@ -33,12 +33,13 @@ IMPORTS
     ciscoMgmt
         FROM CISCO-SMI;
 
+
 -- ********************************************************************
 -- *  MODULE IDENTITY
 -- ********************************************************************
 
 ciscoLwappCdpMIB MODULE-IDENTITY
-    LAST-UPDATED    "200703280000Z"
+    LAST-UPDATED    "200911230000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -158,6 +159,10 @@ ciscoLwappCdpMIB MODULE-IDENTITY
 
         [2] Draft-obara-capwap-lwapp-00.txt, IETF Light 
         Weight Access Point Protocol."
+    REVISION        "200911230000Z"
+    DESCRIPTION
+        "Added the variables clcCdpApCacheDuplex and
+        clcCdpApCacheInterfaceSpeed to clcCdpApCacheTable."
     REVISION        "200703280000Z"
     DESCRIPTION
         "This is the initial version of this module."
@@ -189,6 +194,7 @@ clcCdpApCacheConfig  OBJECT IDENTIFIER
 -- *******************************************************************
 -- The CDP Traffic Metrics
 -- *******************************************************************
+
 clcCdpInPackets OBJECT-TYPE
     SYNTAX          Counter32
     UNITS           "packets"
@@ -239,6 +245,7 @@ clcCdpInvalidPackets OBJECT-TYPE
 -- ********************************************************************
 -- *  Global CDP Configuration
 -- ********************************************************************
+
 clcCdpAdvtVersion OBJECT-TYPE
     SYNTAX          CLCdpAdvtVersionType
     MAX-ACCESS      read-write
@@ -249,7 +256,7 @@ clcCdpAdvtVersion OBJECT-TYPE
     ::= { clcCdpGlobalConfig 1 }
 
 clcCdpMessageInterval OBJECT-TYPE
-    SYNTAX          Unsigned32 (5..900 )
+    SYNTAX          Unsigned32 (5..900)
     UNITS           "seconds"
     MAX-ACCESS      read-write
     STATUS          current
@@ -469,6 +476,10 @@ clcCdpApCacheEntry OBJECT-TYPE
         | clcCdpApCacheCapabilities    | RSI               | RSI              |
         ----------------------------------------------------------------------
         | clcCdpApCacheHoldtimeLeft    | 179               | 165              |
+        ----------------------------------------------------------------------
+        | clcCdpApCacheDuplex          | fullduplex(3)     | fullduplex(3)    | 
+        ----------------------------------------------------------------------
+        | clcCdpApCacheInterfaceSpeed  | hundredMbps(2)    | hundredMbps(2)   |
         ----------------------------------------------------------------------"
     INDEX           {
                         cLApSysMacAddress,
@@ -490,11 +501,13 @@ ClcCdpApCacheEntry ::= SEQUENCE {
         clcCdpApCacheAdvtVersion      CLCdpAdvtVersionType,
         clcCdpApCachePlatform         DisplayString,
         clcCdpApCacheCapabilities     OCTET STRING,
-        clcCdpApCacheHoldtimeLeft     Unsigned32
+        clcCdpApCacheHoldtimeLeft     Unsigned32,
+        clcCdpApCacheDuplex           INTEGER,
+        clcCdpApCacheInterfaceSpeed   INTEGER
 }
 
 clcCdpApCacheDeviceIndex OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..2147483647 )
+    SYNTAX          Unsigned32 (0..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -628,7 +641,7 @@ clcCdpApCacheCapabilities OBJECT-TYPE
     ::= { clcCdpApCacheEntry 13 }
 
 clcCdpApCacheHoldtimeLeft OBJECT-TYPE
-    SYNTAX          Unsigned32 (10..255 )
+    SYNTAX          Unsigned32 (10..255)
     UNITS           "seconds"
     MAX-ACCESS      read-only
     STATUS          current
@@ -637,11 +650,51 @@ clcCdpApCacheHoldtimeLeft OBJECT-TYPE
         neighbor entry gets aged-out."
     DEFVAL          { 180 } 
     ::= { clcCdpApCacheEntry 14 }
+
+clcCdpApCacheDuplex OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        unknown(1),
+                        fullduplex(2),
+                        halfduplex(3),
+                        auto(4)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object denotes the duplex mode of the
+        Ethernet interface between the AP and it's 
+        neighboring CDP device, as reported in the most recent 
+        CDP message. The value unknown(1) indicates no duplex
+        mode field (TLV) was reported in the most recent CDP 
+        message or the neighboring device is not connected to the 
+        AP though ethernet interface." 
+    ::= { clcCdpApCacheEntry 15 }
+
+clcCdpApCacheInterfaceSpeed OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        tenMbps(2),
+                        hundredMbps(3),
+                        thousandMbps(4),
+                        auto(5)
+                    }
+    UNITS           "Mbps"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This variable denotes the speed of the Ethernet
+        interface between the AP  and it's neighboring CDP
+        device. The unit is Mbps. This variable would be
+        populated at AP join and periodically thereafter.
+        The value none(1), would be shown if the interface 
+        is not an ethernet interface." 
+    ::= { clcCdpApCacheEntry 16 }
  
 
 -- *******************************************************************
 -- *    Compliance statements
 -- *******************************************************************
+
 ciscoLwappCdpMIBCompliances  OBJECT IDENTIFIER
     ::= { ciscoLwappCdpMIBConform 1 }
 
@@ -650,7 +703,7 @@ ciscoLwappCdpMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoLwappCdpMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappCdpMIB module."
@@ -661,9 +714,23 @@ ciscoLwappCdpMIBCompliance MODULE-COMPLIANCE
                     }
     ::= { ciscoLwappCdpMIBCompliances 1 }
 
+ciscoLwappCdpMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the SNMP entities that
+        implement the ciscoLwappCdpMIB module."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        clcCdpRev01ConfigGroup,
+                        clcCdpRev01StatusGroup,
+                        clcCdpRev02StatusGroup
+                    }
+    ::= { ciscoLwappCdpMIBCompliances 2 }
+
 -- *******************************************************************
 -- *    Units of conformance
 -- *******************************************************************
+
 clcCdpRev01ConfigGroup OBJECT-GROUP
     OBJECTS         {
                         clcCdpApCdpEnable,
@@ -707,55 +774,19 @@ clcCdpRev01StatusGroup OBJECT-GROUP
         Protocol in WLAN controllers and LWAPP APs."
     ::= { ciscoLwappCdpMIBGroups 2 }
 
+clcCdpRev02StatusGroup OBJECT-GROUP
+    OBJECTS         {
+                        clcCdpApCacheDuplex,
+                        clcCdpApCacheInterfaceSpeed
+                    }
+    STATUS          current
+    DESCRIPTION
+        "These are the additional objects which represent
+        the information about the general status attributes 
+        of Cisco Discovery Protocol in WLAN controllers and LWAPP APs."
+    ::= { ciscoLwappCdpMIBGroups 3 }
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
