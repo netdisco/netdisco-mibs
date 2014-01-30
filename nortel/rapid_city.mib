@@ -20,6 +20,7 @@ IMPORTS
     MODULE-COMPLIANCE, OBJECT-GROUP         FROM SNMPv2-CONF
     AtmAddr                         FROM ATM-TC-MIB
     PhysAddress,ifIndex             FROM RFC1213-MIB
+    lldpRemPortIdSubtype, lldpRemPortId     FROM LLDP-MIB
     InetAddressType, InetAddress            FROM INET-ADDRESS-MIB
     InetAddressPrefixLength                 FROM INET-ADDRESS-MIB
     InetPortNumber                          FROM INET-ADDRESS-MIB
@@ -36,6 +37,7 @@ IMPORTS
     igmpCacheAddress, igmpCacheIfIndex		 	FROM IGMP-STD-MIB 
     ipNetToMediaNetAddress, ipNetToMediaPhysAddress       FROM RFC1213-MIB
     VrId                                          FROM VRRP-MIB
+    PolicyAppType                           FROM LLDP-EXT-MED-MIB
     SnmpAdminString,SnmpSecurityLevel,SnmpSecurityModel FROM SNMP-FRAMEWORK-MIB
     IndexInteger                                        FROM DIFFSERV-MIB
     MplsTunnelIndex, MplsLabel, MplsExtendedTunnelId,
@@ -188,6 +190,20 @@ KhiStatusValue ::= TEXTUAL-CONVENTION
 		   adminDisable(4),
 		   notApplicable(5)
                  }
+
+LPortSet         ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "The string is 256 octets long, for a total of 2048 bits. Each bit
+         corresponds to a logical port (for example, WLAN tunnel).
+         When a bit has the value one(1), the corresponding port is a member 
+         of the set. When a bit has the value zero(0), the corresponding 
+         logical port (for example, WLAN tunnel) is not a member of the set. 
+         The encoding is such that the most significant bit of octet #1 
+         corresponds to tPort 704, while the least significant bit of octet 
+         #256 corresponds to tPort 2752. "
+    SYNTAX      OCTET STRING (SIZE (0..256))
+
 --
 -- Additions to resolve some SNMP V2 dependencies so we don't
 -- have to pull-in a lot of mib modules.
@@ -313,6 +329,7 @@ rc2k			OBJECT IDENTIFIER ::= { rcMgmt 100 }
 rcPowerRanger           OBJECT IDENTIFIER ::= { rcMgmt 202 }
 rcVrf                   OBJECT IDENTIFIER ::= { rcMgmt 203 }
 rcVrrpv3                OBJECT IDENTIFIER ::= { rcMgmt 206 }
+rcLldp                  OBJECT IDENTIFIER ::= { rcMgmt 210 }
 
 -- Need to check, can we use 86 for rcPlsb (mcn) ??
 
@@ -1773,6 +1790,17 @@ rcSysLicenseTrialDaysLeft OBJECT-TYPE
                       Period will expire."
         ::= { rcSystem 100}
 
+rcSysAuthSuccessTrapEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Used to enable/disable the trap send for authenticaion
+			success trap rcnAuthenticationSuccess. It only allow
+			to be set when snmpEnableAuthenTraps is enabled.
+			I will be set to disable when snmpEnableAuthenTraps is
+			disabled"
+        ::= { rcSystem 118 }
+
 rcSysFrcMsgControlEntry OBJECT-TYPE
         SYNTAX        RcSysFrcMsgControlEntry
         MAX-ACCESS    not-accessible
@@ -1973,7 +2001,12 @@ RcVlanEntry ::= SEQUENCE {
                 rcVlanNumOfNodalMipLevel Integer32,
 		rcVlanIpMultinettingEnable TruthValue,
 		rcVlanAssociatedIpMultinettingVlan Integer32,
-                rcVlanPlsbIsid Integer32
+                rcVlanPlsbIsid Integer32,
+                rcVlanLPortMembers LPortSet,
+                rcVlanLPortActiveMembers LPortSet,
+                rcVlanLPortStaticMembers LPortSet,
+                rcVlanLPortNotAllowToJoin LPortSet,
+                rcVlanSpbMcast EnableValue
         }
 
 rcVlanId OBJECT-TYPE
@@ -2040,7 +2073,9 @@ rcVlanAction OBJECT-TYPE
                          all(6),              -- flush all tables 
 			 flushSnoopMemb(7),   -- flush IGMP Snoop Members
                          triggerRipUpdate(8), -- manually trigger rip update
-			 flushSnoopMRtr(9)    -- flush snoop multicast router
+			 flushSnoopMRtr(9),   -- flush snoop multicast route
+			 flushIpRsmltEdgePeer(10), -- flush IP rsmlt edge peer
+			 flushWlanFdb(11)     -- flush entries learned via WLAN tunnel	
                       }
         MAX-ACCESS    read-write
         STATUS        current
@@ -2488,6 +2523,50 @@ rcVlanPlsbIsid OBJECT-TYPE
 		       indicates that no i-sid has been assinged."
 	DEFVAL { 0 }
         ::= { rcVlanEntry 61 }
+
+rcVlanLPortMembers OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The set of logical ports (for example, WLAN tunnels)
+                      that are members (dynamic) of this VLAN."
+        ::= { rcVlanEntry 65 }
+ 
+rcVlanLPortActiveMembers OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The set of logical ports (for example, WLAN tunnels) 
+                      that are currently active in this VLAN. Active ports 
+                      include all dynamic ports where the VLAN policy was met."
+        ::= { rcVlanEntry 66 }
+ 
+rcVlanLPortStaticMembers OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The set of logical ports (for example, WLAN tunnels)
+                      that are static members of this VLAN. A static member 
+                      of a VLAN is always active and is never aged out."
+        ::= { rcVlanEntry 67 }
+
+rcVlanLPortNotAllowToJoin OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The set of logical ports (for example, WLAN tunnels) 
+                      that are not allowed to become members of this VLAN."
+        ::= { rcVlanEntry 68 }
+
+
+rcVlanSpbMcast OBJECT-TYPE
+        SYNTAX        EnableValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Enable/disable SPB multicast on Vlan"
+        DEFVAL        { disable }
+        ::= { rcVlanEntry 70 }
+
 
 -- VLAN Port Table
 
@@ -3543,7 +3622,8 @@ RcChasPowerSupplyDetailEntry ::=
 		rcChasPowerSupplyDetailPartNumber DisplayString,
 		rcChasPowerSupplyDetailDescription DisplayString,
                 rcChasPowerSupplyDetailInputLineVoltage INTEGER,
-                rcChasPowerSupplyDetailOperLineVoltage INTEGER
+                rcChasPowerSupplyDetailOperLineVoltage INTEGER,
+                rcChasPowerSupplyDetailDualAcInput INTEGER
 	}
 
 rcChasPowerSupplyDetailId OBJECT-TYPE
@@ -3557,7 +3637,8 @@ rcChasPowerSupplyDetailType OBJECT-TYPE
       SYNTAX   	   INTEGER {
                        unknown(0),
                        ac(1),
-                       dc(2)
+                       dc(2),
+                       dualAc(3)
                    }
       MAX-ACCESS   	   read-only
       STATUS   	   current
@@ -3616,6 +3697,24 @@ rcChasPowerSupplyDetailOperLineVoltage OBJECT-TYPE
       DESCRIPTION  "The power supply Line voltage considered for
                     Power Management calculation."
       ::= { rcChasPowerSupplyDetailEntry 9 }
+
+rcChasPowerSupplyDetailDualAcInput  OBJECT-TYPE
+      SYNTAX      INTEGER {
+                       line1(1),
+                       line2(2),                          
+                       both(3),
+                       none(4),
+                       notApplicable(5)
+                   }
+      MAX-ACCESS   read-only
+      STATUS       current
+      DESCRIPTION  "The dual input power supply has two input AC lines.
+                    This Mib defines which of those AC lines are supplying power.
+                    For a single input power supply this Mib will be set to notApplicable(5)"
+      DEFVAL        {5}
+      ::= { rcChasPowerSupplyDetailEntry 11}
+
+ 
 
 rcCard OBJECT IDENTIFIER ::= { rcChassis 9 }
 
@@ -3997,7 +4096,25 @@ rcPortType OBJECT-TYPE
                          rc10GbDWDMR(96),    -- (10 Gig DWDM Ethernet)
                          rc10GbDWDMW(97),    -- (10 Gig DWDM Sonet)	
 			 rcGbic1300SeFx(104),-- (1300SE-FX Gbic Ethernet)
-			 rc10GbCX(106)       -- (copper direct attach cable up to 15 meter)
+			 rc10GbCX(106),      -- (copper direct attach cable up to 15 meter)
+			 rc10GbERCWDM(111),  -- (10G ER CWDM SFP+)
+			 rc10GbZRCWDM(112),  -- (10G ZR CWDM SFP+)
+			 rc10GbER1470(113),  -- (10G ER 40Km CWDM SFP+ 1470NM)
+			 rc10GbER1490(114),  -- (10G ER 40Km CWDM SFP+ 1490NM)
+			 rc10GbER1510(115),  -- (10G ER 40Km CWDM SFP+ 1510NM)
+			 rc10GbER1530(116),  -- (10G ER 40Km CWDM SFP+ 1530NM)
+			 rc10GbER1550(117),  -- (10G ER 40Km CWDM SFP+ 1550NM)
+			 rc10GbER1570(118),  -- (10G ER 40Km CWDM SFP+ 1570NM)
+			 rc10GbER1590(119),  -- (10G ER 40Km CWDM SFP+ 1590NM)
+			 rc10GbER1610(120),  -- (10G ER 40Km CWDM SFP+ 1610NM)
+			 rc10GbZR1470(121),  -- (10G ZR 70Km CWDM SFP+ 1470NM)
+			 rc10GbZR1490(122),  -- (10G ZR 70Km CWDM SFP+ 1490NM)
+			 rc10GbZR1510(123),  -- (10G ZR 70Km CWDM SFP+ 1510NM)
+			 rc10GbZR1530(124),  -- (10G ZR 70Km CWDM SFP+ 1530NM)
+			 rc10GbZR1550(125),  -- (10G ZR 70Km CWDM SFP+ 1550NM)
+			 rc10GbZR1570(126),  -- (10G ZR 70Km CWDM SFP+ 1570NM)
+			 rc10GbZR1590(127),  -- (10G ZR 70Km CWDM SFP+ 1590NM)
+			 rc10GbZR1610(128)   -- (10G ZR 70Km CWDM SFP+ 1610NM)
  	              }
 	MAX-ACCESS    read-only
 	STATUS        current
@@ -4217,7 +4334,7 @@ rcPortUnknownMacDiscard OBJECT-TYPE
 rcPortNumStateTransition OBJECT-TYPE
         SYNTAX        	Counter32
         MAX-ACCESS        	read-only
-        STATUS        	current
+        STATUS          deprecated	
         DESCRIPTION   	"# state transitions."
         ::= { rcPortEntry 21 }
 
@@ -5305,6 +5422,153 @@ rcPortFlushMacVlanId OBJECT-TYPE
         DESCRIPTION   "Vlan Id associated with the Mac Address."
         ::= { rcPortFlushMacEntry 3 }
 
+------------------------------------------------------------------------------
+-- LLDP-MED - Local Device Information
+------------------------------------------------------------------------------
+---
+--- rcLldpXMedLocMediaPolicyTable: Local Media Policy
+---                        Information Table
+---
+---
+rcLldpXMedLocMediaPolicyTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF RcLldpXMedLocMediaPolicyEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "This table contains one row per policy type per port
+             of media policy information (as a part of the MED
+             organizational extension) on the local system known
+             to this agent."
+    ::= { rcPort 12 }
+
+rcLldpXMedLocMediaPolicyEntry OBJECT-TYPE
+    SYNTAX      RcLldpXMedLocMediaPolicyEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "Information about a particular policy on a specific
+             port component."
+    INDEX   { rcLldpXMedLocMediaPolicyPortNum, rcLldpXMedLocMediaPolicyAppType }
+    ::= { rcLldpXMedLocMediaPolicyTable 1 }
+
+RcLldpXMedLocMediaPolicyEntry ::=
+              SEQUENCE {
+                  rcLldpXMedLocMediaPolicyPortNum        InterfaceIndex,
+                  rcLldpXMedLocMediaPolicyAppType        PolicyAppType,
+                  rcLldpXMedLocMediaPolicyVlanID         Integer32,
+                  rcLldpXMedLocMediaPolicyPriority       Integer32,
+                  rcLldpXMedLocMediaPolicyDscp           Integer32,
+                  rcLldpXMedLocMediaPolicyUnknown        TruthValue,
+                  rcLldpXMedLocMediaPolicyTagged         TruthValue,
+                  rcLldpXMedLocMediaPolicyRowStatus      RowStatus
+}
+
+rcLldpXMedLocMediaPolicyPortNum OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "."
+    ::= { rcLldpXMedLocMediaPolicyEntry 1 }
+
+rcLldpXMedLocMediaPolicyAppType OBJECT-TYPE
+    SYNTAX      PolicyAppType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "The media type that defines the primary function of the
+             application for the policy advertised by an endpoint."
+    REFERENCE
+            "ANSI/TIA-1057, Section 10.2.3.1"
+    ::= { rcLldpXMedLocMediaPolicyEntry 2 }
+
+rcLldpXMedLocMediaPolicyVlanID  OBJECT-TYPE
+    SYNTAX      Integer32 (0|1..4094|4095)
+
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "An extension of the VLAN Identifier for the port,
+             as defined in IEEE 802.1P-1998.
+
+
+             A value of 1 through 4094 is used to define a valid PVID.
+
+             A value of 0 shall be used if the device is using priority tagged
+             frames, meaning that only the 802.1p priority level is significant
+             and the default VID of the ingress port is being used instead.
+
+             A value of 4095 is reserved for implementation use."
+    REFERENCE
+            " ANSI/TIA-1057, Section 10.2.3.5"
+    ::= { rcLldpXMedLocMediaPolicyEntry 3 }
+
+rcLldpXMedLocMediaPolicyPriority  OBJECT-TYPE
+    SYNTAX      Integer32 (0..7)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "This object contains the value of the 802.1p priority
+            which is associated with the given port on the
+            local system."
+    REFERENCE
+            " ANSI/TIA-1057, Section 10.2.3.6 "
+    ::= { rcLldpXMedLocMediaPolicyEntry 4 }
+
+rcLldpXMedLocMediaPolicyDscp  OBJECT-TYPE
+    SYNTAX      Integer32(0..63)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "This object contains the value of the Differentiated Service
+            Code Point (DSCP) as defined in IETF RFC 2474 and RFC 2475
+            which is associated with the given port on the local system."
+    REFERENCE
+            " ANSI/TIA-1057, Section 10.2.3.7"
+    ::= { rcLldpXMedLocMediaPolicyEntry 5 }
+
+rcLldpXMedLocMediaPolicyUnknown  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "A value of 'true' indicates that the
+             network policy for the specified application type is
+             currently unknown.  In this case, the VLAN ID, the
+             layer 2 priority and the DSCP value fields are ignored.
+             A value of 'false' indicates that this network policy
+             is defined  "
+    REFERENCE
+            " ANSI/TIA-1057, Section 10.2.3.2"
+    ::= { rcLldpXMedLocMediaPolicyEntry 6 }
+
+rcLldpXMedLocMediaPolicyTagged  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "A value of 'true' indicates that the application is using a
+
+             tagged VLAN.
+             A value of 'false' indicates that for the specific application
+             the device either is using an untagged VLAN or does not
+             support port based VLAN operation.  In this case, both the
+             VLAN ID and the Layer 2 priority fields are ignored and
+             only the DSCP value has relevance "
+    REFERENCE
+            " ANSI/TIA-1057, Section 10.2.3.3"
+    ::= { rcLldpXMedLocMediaPolicyEntry 7 }
+
+rcLldpXMedLocMediaPolicyRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+            "Used to create/delete entries."
+
+    ::= { rcLldpXMedLocMediaPolicyEntry 8 }
+
+
 -- Additional Chassis Group Variables
 
 rcChasAruMode OBJECT-TYPE
@@ -5910,7 +6174,7 @@ rcChasTakeIOCardOfflineEnable OBJECT-TYPE
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   "Enable/Disable IO Card to go offline when 
-		       F2E sees excessive resets."
+		       F2E sees excessive resets." 
         DEFVAL           { false }
         ::= { rcChassis 61 }
 
@@ -5922,6 +6186,16 @@ rcChasAutoResetFabricEnable OBJECT-TYPE
 		       on fab mem full error."
         DEFVAL           { false }
         ::= { rcChassis 62 }
+
+rcChasRcBridgeFdbOldQueryFlagEnable OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Used to enable/disable rcBridgeNewFdbTable for 
+                         fdb query " 
+        DEFVAL          { false }
+        ::= { rcChassis 64 }
+
 
 -- Agent Table
  
@@ -6457,7 +6731,9 @@ RcIpConfEntry ::= SEQUENCE {
                 rcIpConfReversePathCheckMode         INTEGER,
                 rcIpConfIsisEnable	      TruthValue,
          	rcIpConfBfdEnable	      TruthValue,
-                rcIpConfIpVpnLiteEnable       TruthValue
+                rcIpConfIpVpnLiteEnable       TruthValue,
+                rcIpConfSpbMulticastEnable   TruthValue
+
         }
 
 rcIpConfIfIndex OBJECT-TYPE
@@ -6690,6 +6966,15 @@ rcIpConfIpVpnLiteEnable OBJECT-TYPE
         DESCRIPTION   "Enable or disable ipvpn-lite capability on the specified
                       circuitless ip interface."
         ::= { rcIpConfEntry 26 }
+
+rcIpConfSpbMulticastEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Enable or disable spb-multicast on this port"
+        DEFVAL  { false }
+        ::= { rcIpConfEntry 27 }
+
 
 -- Ospf Configuration Table
  
@@ -7117,7 +7402,6 @@ rcIpConfGlobalSuperNetEnable OBJECT-TYPE
                    routing for IP"
      DEFVAL       { false }
      ::= { rcIpConfGlobal 20 }
-
 
 -- Ospf Area Table
  
@@ -14863,6 +15147,50 @@ rcIpPrefixListRowStatus OBJECT-TYPE
         ::= { rcIpPrefixListEntry 7 }  
 
 
+-- Ip Prefix List Name Table
+
+rcIpPrefixListNameTableSize OBJECT-TYPE
+        SYNTAX        Integer32
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "table size"
+        ::= { rcIpGenPolicy 26 }
+
+rcIpPrefixListNameTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcIpPrefixListNameEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "Prefix List Name table"
+        ::= { rcIpGenPolicy 27 }
+
+rcIpPrefixListNameEntry OBJECT-TYPE
+        SYNTAX          RcIpPrefixListNameEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "An entry of Prefix List Name Table."
+        INDEX           { rcIpPrefixListNameId }
+        ::= { rcIpPrefixListNameTable 1 }
+
+RcIpPrefixListNameEntry ::=
+        SEQUENCE {
+                rcIpPrefixListNameId           Integer32,
+                rcIpPrefixListNameName         DisplayString
+        }
+
+rcIpPrefixListNameId OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "list id"
+        ::= { rcIpPrefixListNameEntry 1 }
+
+rcIpPrefixListNameName OBJECT-TYPE
+        SYNTAX        DisplayString (SIZE(1..64))
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "list name"
+        ::= { rcIpPrefixListNameEntry 2 }
+
 
 -- Ip Route Policy Table
 
@@ -20071,7 +20399,9 @@ RcBfdTmpSessEntry ::= SEQUENCE {
     rcBfdTmpSessStorType                 StorageType,
     rcBfdTmpSessRowStatus                RowStatus,
     rcBfdTmpSessAuthPresFlag             TruthValue,
-    rcBfdTmpSessAuthenticationType       INTEGER
+    rcBfdTmpSessAuthenticationType       INTEGER,
+    rcBfdTmpSessDestAddr		 InetAddress,
+    rcBfdTmpSessOldState                 INTEGER			
   }
 
 rcBfdTmpSessIndex  OBJECT-TYPE
@@ -20341,6 +20671,29 @@ rcBfdTmpSessAuthenticationType OBJECT-TYPE
         "The Authentication Type used for this BFD session. This
          field is valid only when the Authentication Present bit is set"
     ::= { rcBfdTmpSessEntry 22 }
+
+rcBfdTmpSessDestAddr OBJECT-TYPE
+    SYNTAX        InetAddress
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+        "This object specifies destination IP address of the interface
+         associated with this BFD session."
+    ::= { rcBfdTmpSessEntry 23 }
+
+rcBfdTmpSessOldState OBJECT-TYPE
+    SYNTAX   INTEGER {
+                       adminDown(1),
+                       down(2),
+                       init(3),
+                       up(4)
+                     }
+    MAX-ACCESS   read-only
+    STATUS   current
+    DESCRIPTION
+        "The old state of the BFD session."
+    ::= { rcBfdTmpSessEntry 24 }
+
 
 -- BFD Session Performance Table
 
@@ -21362,7 +21715,8 @@ rcKhiChassisStandbyCpuMezzOperState OBJECT-TYPE
 			   unsupported(1),
 			   notPresent(2),
 			   present(3),	
-			   running(4)
+			   running(4),
+                           notapplicable(5)
 			}
         MAX-ACCESS      read-only
         STATUS          current
@@ -21388,7 +21742,9 @@ rcKhiChassisStandbyCpuState OBJECT-TYPE
                             peerNotConnected(8),
                             peerConnected(9),
                             lostPeerConnection(10),
-                            notSynchronized(11)
+                            notSynchronized(11),
+                            notapplicable(12)
+
 			}
         MAX-ACCESS      read-only
         STATUS          current
@@ -26878,7 +27234,8 @@ RcArpExtEntry ::=
                 rcArpExtEntIfIndex InterfaceIndex,
                 rcArpExtEntDoProxy INTEGER,
                 rcArpExtEntDoResp INTEGER,
-                rcArpExtEntDoFlood INTEGER
+                rcArpExtEntDoFlood INTEGER,
+                rcArpExtEntForcedRearp TruthValue
         }
 
 rcArpExtEntIfIndex OBJECT-TYPE
@@ -26927,6 +27284,19 @@ rcArpExtEntDoFlood OBJECT-TYPE
                       NLBS Virtual Mac on the specified interface."
         DEFVAL        { disable }
         ::= { rcArpExtEntry 4 }
+
+rcArpExtEntForcedRearp OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Enable or disable the activity check on ARP entries 
+                       with respect to aging on the specified interface. 
+                       When enabled and the timer expires, the ARP entry is 
+                       removed from the active list and placed in the list 
+                       for re-arping, regardless of whether the ARP entry 
+                       was being active at the time or not."
+	DEFVAL        { false }
+        ::= { rcArpExtEntry 5 }
 
 -- rcArpExtV2Table
 
@@ -31049,7 +31419,8 @@ RcStgEntry ::= SEQUENCE {
 		rcStgRowStatus RowStatus,
 		rcStgPortStpState OCTET STRING,
 		rcStgType   INTEGER,
-		rcStgNtStgEnable   TruthValue
+		rcStgNtStgEnable   TruthValue,
+		rcStgLPortMembers LPortSet
         }
 
 rcStgId OBJECT-TYPE 
@@ -31357,6 +31728,15 @@ rcStgNtStgEnable OBJECT-TYPE
         DEFVAL         { true }
         ::= { rcStgEntry 26 }
 
+rcStgLPortMembers OBJECT-TYPE
+        SYNTAX          LPortSet
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "A bitfield used to identify which logical ports 
+                        (for example, WLAN tunnels) in the system are members 
+                        of this STG. The bitfield is 256 octets long 
+                        representing ports 704 to 2752 (inclusive)."
+        ::= { rcStgEntry 27 }
 
 -- STG Port Table
 
@@ -32778,6 +33158,126 @@ rcBridgeNewFdbVlanId OBJECT-TYPE
                       MAC address."
         ::= { rcBridgeNewFdbEntry 7 }
 
+-- Forwarding Database for Transparent(TP) Bridges
+
+rcBridgeTpFdbTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcBridgeTpFdbEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "This table is an replacement to the standard
+                        dot1dTpFdbTable in rfc1493."
+        ::= { rcBridge 20 }
+
+rcBridgeTpFdbEntry OBJECT-TYPE
+        SYNTAX          RcBridgeTpFdbEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "Information about a specific unicast MAC address
+                        for which the bridge has some forwarding information."
+        INDEX { rcBridgeTpFdbVlanId, rcBridgeTpFdbAddress}
+        ::= { rcBridgeTpFdbTable 1 }
+
+RcBridgeTpFdbEntry ::=
+        SEQUENCE {
+                  rcBridgeTpFdbVlanId       INTEGER,
+                  rcBridgeTpFdbAddress      MacAddress,
+                  rcBridgeTpFdbStatus       INTEGER,
+                  rcBridgeTpFdbPort         InterfaceIndex,
+                  rcBridgeTpFdbSmltRemote   TruthValue,
+                  rcBridgeTpFdbMonitor      TruthValue,
+                  rcBridgeTpFdbQosLevel     INTEGER
+                 }
+
+rcBridgeTpFdbVlanId OBJECT-TYPE
+        SYNTAX      INTEGER
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION  "Used to indicate the Vlan ID for this
+                      MAC address."
+        ::= { rcBridgeTpFdbEntry 1 }
+
+
+rcBridgeTpFdbAddress OBJECT-TYPE
+        SYNTAX          MacAddress
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "A unicast MAC address for which the bridge
+                        has forwarding and/or filtering information."
+        REFERENCE "IEEE 802.1D-1990: Section 3.9.1, 3.9.2"
+        ::= { rcBridgeTpFdbEntry 2 }
+
+rcBridgeTpFdbStatus OBJECT-TYPE
+        SYNTAX          INTEGER {
+                              other(1),
+                              invalid(2),
+                              learned(3),
+                              self(4),
+                              mgmt(5)
+                        }
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object indicates the status of this entry."
+        ::= { rcBridgeTpFdbEntry 3 }
+
+rcBridgeTpFdbPort OBJECT-TYPE
+        SYNTAX          InterfaceIndex
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Either the value '0', or the port number of the
+                        port on which a frame having a source address
+                        equal to the value of the corresponding instance
+                        of rcBridgeTpFdbAddress has been seen.  A value of
+                        '0' indicates that the port number has not been
+                        learned but that the bridge does have some
+                        forwarding/filtering information about this
+                        address (e.g. in the dot1dStaticTable).
+                        Implementors are encouraged to assign the port
+                        value to this object whenever it is learned even
+                        for addresses for which the corresponding value of
+                        rcBridgeTpFdbStatus is not learned(3)."
+        ::= { rcBridgeTpFdbEntry 4 }
+
+rcBridgeTpFdbSmltRemote OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION  "Used to indicate whether a MAC address 
+                      has been learned either remotely through 
+                      the SMLT peer switch or locally."
+        ::= { rcBridgeTpFdbEntry 5 }
+
+rcBridgeTpFdbMonitor OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Used to indicate whether monitoring should be
+                        performed on this unicast MAC address.  If
+                        monitoring is enabled, any packet received
+                        with a matching destination MAC address
+                        will be forwarded to the port configured to
+                        receive monitor traffic."
+        DEFVAL          { false }
+        ::= { rcBridgeTpFdbEntry 7 }
+
+rcBridgeTpFdbQosLevel OBJECT-TYPE
+        SYNTAX          INTEGER {
+                            level0(1),
+                            level1(2),
+                            level2(3),
+                            level3(4),
+                            level4(5),
+                            level5(6),
+                            level6(7),
+                            level7(8)
+                        }
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Used to indicate the qos level of the incoming
+                        frames with this destination Mac Address."
+        DEFVAL          { level1 }
+        ::= { rcBridgeTpFdbEntry 8 }
+
+
 -- rcBridgeRemoteMacTable
 
 rcBridgeRemoteMacTable OBJECT-TYPE
@@ -33399,10 +33899,11 @@ rcMltIstPeerIp OBJECT-TYPE
         ::= { rcMlt 5 }
 
 rcMltIstVlanId OBJECT-TYPE
-        SYNTAX      	INTEGER (1..4095)
+        SYNTAX        INTEGER (0..4094)
         MAX-ACCESS    read-write
         STATUS        current
-        DESCRIPTION   "IST mlt Vlan Id."
+        DESCRIPTION   "IST mlt Vlan Id. vlan id of 0 indicates deletion of the vlan"
+        DEFVAL        {0}
         ::= { rcMlt 6 }
 
 
@@ -33982,15 +34483,14 @@ rcWebHttpPort OBJECT-TYPE
                     Setting this variable to false will make the server support both HTTP & HTTPS"
         DEFVAL        { true }
         ::= { rcWeb 26 }
-
 rcWebHttpsPort OBJECT-TYPE
         SYNTAX        Integer32 (443 | 1024..49151)
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   "the HTTPs port for web access"
-        DEFVAL        { 443 }
+	DEFVAL	      { 443 }
         ::= { rcWeb 27 }
-
+ 
 
 -- rcCli related information
 
@@ -34373,7 +34873,7 @@ rcIpv6IcmpRedirectMsg OBJECT-TYPE
 
 -- IPv6 ICMP rate limiting
 rcIpv6IcmpErrorQuota OBJECT-TYPE
-        SYNTAX        INTEGER (1..2000000)
+        SYNTAX        INTEGER (0..2000000)
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   "The number of icmp error messages that 
@@ -34381,6 +34881,24 @@ rcIpv6IcmpErrorQuota OBJECT-TYPE
                       A value of zero means not be send any."
         DEFVAL        { 50 }
         ::= { rcIpv6Scalars 5 }
+
+-- IPv6 Clear Static Routes
+rcIpv6RouteStaticClear OBJECT-TYPE
+       SYNTAX          TruthValue
+       MAX-ACCESS      read-write
+       STATUS          current
+       DESCRIPTION     "Clear all IPv6 static routes."
+       DEFVAL          { false }
+       ::= { rcIpv6Scalars 10 }
+
+-- IPv6 Static Routes Global Admin Status
+rcIpv6RouteStaticGlobalAdminEnabled OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Used to globally enable/disable all IPv6 static routes."
+        DEFVAL        { true }
+        ::= { rcIpv6Scalars 11 }
 
 -- IPv6 Interface Table
 rcIpv6InterfaceTable OBJECT-TYPE
@@ -34417,7 +34935,18 @@ RcIpv6InterfaceEntry ::=
                   rcIpv6InterfaceMulticastAdminStatus   TruthValue,
                   rcIpv6InterfaceRowStatus              RowStatus,
 		  rcIpv6InterfaceDhcpEnabled            TruthValue,
-                  rcIpv6InterfaceMacOffset              Integer32
+                  rcIpv6InterfaceClearIcmpStats         TruthValue,
+                  rcIpv6InterfaceClearGeneralStats      TruthValue,
+                  rcIpv6InterfaceClearNeighborCache     TruthValue,
+                  rcIpv6InterfaceClearDestinationCache  TruthValue,
+                  rcIpv6InterfaceMacOffset              Integer32,
+		  rcIpv6InterfaceRetransmitTimer        Unsigned32,
+		  rcIpv6InterfaceCurHopLimit            Integer32,
+		  rcIpv6InterfaceReversePathCheckEnable TruthValue,
+                  rcIpv6InterfaceReversePathCheckMode   INTEGER,
+		  rcIpv6InterfaceForwardingEnabled      TruthValue,
+                  rcIpv6InterfaceRsmltEnable            TruthValue,
+		  rcIpv6InterfaceBfdEnable         TruthValue
                  }
 
 rcIpv6InterfaceIfIndex OBJECT-TYPE
@@ -34477,12 +35006,13 @@ rcIpv6InterfaceType OBJECT-TYPE
         ::= { rcIpv6InterfaceEntry 6 }
 
 rcIpv6InterfaceReasmMaxSize    OBJECT-TYPE
-        SYNTAX        INTEGER (1280..1500 | 9600)
+        SYNTAX        INTEGER (1280..1500 | 1850 | 9500)
         MAX-ACCESS    read-create
         STATUS        current
         DESCRIPTION   "MTU for this IPv6 interface, this value should
                        be same for all the ip addresses defined on
-                       this interface."
+                       this interface.In ERS 8600/8800, Supported range for IO interfaces,
+                       is (1280..1500 | 1850 | 9500)."
         DEFVAL        { 1500 }
         ::= { rcIpv6InterfaceEntry 7 }
 
@@ -34517,7 +35047,7 @@ rcIpv6InterfaceOperStatus OBJECT-TYPE
         ::= { rcIpv6InterfaceEntry 10 }
 
 rcIpv6InterfaceReachableTime  OBJECT-TYPE
-    SYNTAX     INTEGER (0..3600000)
+    SYNTAX     INTEGER (1..3600000)
     MAX-ACCESS read-create
     STATUS     current
     DESCRIPTION
@@ -34530,12 +35060,9 @@ rcIpv6InterfaceReachableTime  OBJECT-TYPE
 rcIpv6InterfaceRetransmitTime OBJECT-TYPE
     SYNTAX     INTEGER (0..3600000)
     MAX-ACCESS read-create
-    STATUS     current
-    DESCRIPTION
-           "The time (in milliseconds) between retransmissions of
-            Neighbor Solicitation messages to a neighbor when
-            resolving the address or when probing the reachability
-            of a neighbor. REFERENCE RFC2461, Section 6.3.2"
+    STATUS     deprecated
+    DESCRIPTION 
+            "Deprecated. Use rcIpv6InterfaceRetransmitTimer instead."
         DEFVAL        { 1000 }
         ::= { rcIpv6InterfaceEntry 12 }
 
@@ -34576,6 +35103,113 @@ rcIpv6InterfaceMacOffset OBJECT-TYPE
                        mention a mac offset while configuring IPv6 on a vlan or it can 
                        be alloted by the system within the above range."
         ::= { rcIpv6InterfaceEntry 16 }
+
+rcIpv6InterfaceRetransmitTimer OBJECT-TYPE
+       SYNTAX     Unsigned32 (1..4294967295)
+       MAX-ACCESS    read-create
+       STATUS        current
+       DESCRIPTION   "The time (in milliseconds) between retransmissions of
+            Neighbor Solicitation messages to a neighbor when
+            resolving the address or when probing the reachability
+            of a neighbor. REFERENCE RFC2461, Section 6.3.2"
+       DEFVAL        { 1000 }
+ ::= { rcIpv6InterfaceEntry 17 }
+
+rcIpv6InterfaceCurHopLimit OBJECT-TYPE
+        SYNTAX        Integer32 (1..255)
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION
+           "The default value to be placed in the current hop limit
+            field in router advertisements sent from this interface.
+            The value should be set to the current diameter of the
+            Internet.
+
+            The default should be set to the value specified in the IANA
+            web pages (www.iana.org) at the time of implementation.
+            REFERENCE RFC2461 Section 6.2.1"
+
+        DEFVAL        { 64 }
+        ::= {  rcIpv6InterfaceEntry 18 }
+
+rcIpv6InterfaceClearIcmpStats  OBJECT-TYPE
+       SYNTAX         TruthValue
+       MAX-ACCESS     read-create
+       STATUS         current
+       DESCRIPTION    "Clear ICMP statistics for an interface"
+       DEFVAL             {false}
+       ::= { rcIpv6InterfaceEntry 20 }
+
+rcIpv6InterfaceClearGeneralStats  OBJECT-TYPE
+       SYNTAX         TruthValue
+       MAX-ACCESS     read-create
+       STATUS         current
+       DESCRIPTION    "Clear general statistics for an interface"
+       DEFVAL             {false}
+       ::= { rcIpv6InterfaceEntry 21 }
+
+rcIpv6InterfaceClearNeighborCache  OBJECT-TYPE
+       SYNTAX         TruthValue
+       MAX-ACCESS     read-create
+       STATUS         current
+       DESCRIPTION    "Clear Neighbor Cache for an interface"
+       DEFVAL             {false}
+       ::= { rcIpv6InterfaceEntry 22 }
+
+rcIpv6InterfaceClearDestinationCache  OBJECT-TYPE
+       SYNTAX         TruthValue
+       MAX-ACCESS     read-create
+       STATUS         current
+       DESCRIPTION    "Clear Destination Cache for an interface"
+       DEFVAL             {false}
+       ::= { rcIpv6InterfaceEntry 23 }
+
+rcIpv6InterfaceReversePathCheckEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Used to indicate whether this interface should
+                      perform Reverse Path Check"
+        DEFVAL        { false }
+        ::= { rcIpv6InterfaceEntry 24 }
+
+rcIpv6InterfaceReversePathCheckMode OBJECT-TYPE
+        SYNTAX   INTEGER    {           
+                    existonly (1),     
+                    strict (2)     
+                  }                
+        MAX-ACCESS    read-create
+        STATUS        current   
+        DESCRIPTION   "Reverse Path Checking mode."
+        DEFVAL        { existonly }
+        ::= { rcIpv6InterfaceEntry 25 }
+
+rcIpv6InterfaceForwardingEnabled OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Used to indicate whether this interface should
+                      perform forwarding"
+        DEFVAL        { true }
+        ::= { rcIpv6InterfaceEntry 26 }
+
+rcIpv6InterfaceRsmltEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Used to indicate whether this interface has 
+                      rsmlt enabled or not"
+        DEFVAL        { false }
+        ::= { rcIpv6InterfaceEntry 27 }
+		
+rcIpv6InterfaceBfdEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Used to indicate whether this interface has 
+                      BFD enabled or not"
+        DEFVAL        { false }
+        ::= { rcIpv6InterfaceEntry 28 }
 
 
 -- End of IPv6 Interface Table
@@ -35019,7 +35653,8 @@ RcIpv6RouterAdvertEntry ::=
                 rcIpv6RouterAdvertManagedFlag      TruthValue,
                 rcIpv6RouterAdvertOtherConfigFlag  TruthValue,
                 rcIpv6RouterAdvertDadNsNum      INTEGER,
-                rcIpv6RouterAdvertLinkMTU       Unsigned32
+                rcIpv6RouterAdvertLinkMTU       Unsigned32,
+		rcIpv6RouterAdvertRetransmitTime   Unsigned32
                  }
 
 rcIpv6RouterAdvertIfIndex OBJECT-TYPE
@@ -35053,7 +35688,10 @@ rcIpv6RouterAdvertUseDefaultVal   OBJECT-TYPE
                       hop-limit(6),
                       managed-flag(7),
                       other-config-flag(8),
-                      dad-ns-num(9)
+                      dad-ns-num(9),
+		      linkMtu(10),
+                      reachableTime(11),
+		      retransmitTime(12)	
                   }
         MAX-ACCESS    read-write
         STATUS        current
@@ -35089,7 +35727,7 @@ rcIpv6RouterAdvertMaxInterval OBJECT-TYPE
 
  rcIpv6RouterAdvertReachableTime OBJECT-TYPE
         SYNTAX        INTEGER (0..36000000)
-        MAX-ACCESS    read-only
+        MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION   "The value (in milliseconds) to be placed                               in the router advertisement message
                       sent by the router. The value zero means 
@@ -35104,14 +35742,15 @@ rcIpv6RouterAdvertMaxInterval OBJECT-TYPE
 rcIpv6RouterAdvertRetransmitTimer OBJECT-TYPE
         SYNTAX        INTEGER (0..36000000) 
         MAX-ACCESS    read-only
-        STATUS        current
+        STATUS        deprecated
         DESCRIPTION   "The value (in milliseconds) to be placed                               in the retransmit timer field in router 
                       advertisement message sent from this 
                       interface. The value zero means 
                       unspecified (by this router). Used to 
                       configure the amount of time that router
                       should wait for the transmit to occur.
-                      REFERENCE RFC2461 Section 6.2.1"
+                      REFERENCE RFC2461 Section 6.2.1
+		      Deprecated by rcIpv6RouterAdvertRetransmitTime"
         ::= {  rcIpv6RouterAdvertEntry 7 }
 
 rcIpv6RouterAdvertDefaultLifeTime OBJECT-TYPE
@@ -35134,7 +35773,7 @@ rcIpv6RouterAdvertDefaultLifeTime OBJECT-TYPE
         ::= {  rcIpv6RouterAdvertEntry 8 }
 
 rcIpv6RouterAdvertCurHopLimit OBJECT-TYPE
-        SYNTAX        INTEGER (1..255)
+        SYNTAX        INTEGER (0..255)
         MAX-ACCESS    read-write
         STATUS        current
         DESCRIPTION
@@ -35188,8 +35827,8 @@ rcIpv6RouterAdvertDadNsNum OBJECT-TYPE
         ::= {  rcIpv6RouterAdvertEntry 12 }
 
 rcIpv6RouterAdvertLinkMTU OBJECT-TYPE
-    SYNTAX     Unsigned32
-    MAX-ACCESS read-only
+    SYNTAX     Unsigned32 (0 | 1280..1500 | 1850 | 9500)
+    MAX-ACCESS read-write
     STATUS     current
     DESCRIPTION
            "The value to be placed in MTU options sent by the 
@@ -35197,6 +35836,22 @@ rcIpv6RouterAdvertLinkMTU OBJECT-TYPE
             indicates that no MTU options are sent. REFERENCE 
             RFC2461 Section 6.2.1"
     ::= { rcIpv6RouterAdvertEntry 13 }
+
+rcIpv6RouterAdvertRetransmitTime OBJECT-TYPE
+        SYNTAX        Unsigned32 (0..4294967295) 
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "The value (in milliseconds) to be placed                               in the retransmit timer field in router 
+                      advertisement message sent from this 
+                      interface. The value zero means 
+                      unspecified (by this router). Used to 
+                      configure the amount of time that router
+                      should wait for the transmit to occur.
+                      REFERENCE RFC2461 Section 6.2.1.
+           	      Use this object to replace
+		      rcIpv6RouterAdvertRetransmitTimer"
+        ::= {  rcIpv6RouterAdvertEntry 14 }
+
 
 -- IPV6 Static Route Table
 
@@ -36884,7 +37539,9 @@ RcOspfv3IfEntry ::= SEQUENCE {
         rcOspfv3IfDemandNbrProbeRetxLimit
                 Unsigned32,
         rcOspfv3IfDemandNbrProbeInterval
-                Unsigned32
+                Unsigned32,
+        rcOspfv3IfBfdEnable
+                EnableValue
         }
 
 rcOspfv3IfIndex OBJECT-TYPE
@@ -36913,7 +37570,8 @@ rcOspfv3IfType OBJECT-TYPE
                         broadcast(1),
                         nbma(2),
                         pointToPoint(3),
-                        pointToMultipoint(5)
+                        pointToMultipoint(5),
+			passive(6)
                         }
         MAX-ACCESS      read-write
         STATUS          current
@@ -37182,6 +37840,15 @@ rcOspfv3IfDemandNbrProbeInterval OBJECT-TYPE
           " Defines how often the neighbor will be probed."
        DEFVAL          { 120 }
        ::= { rcOspfv3IfEntry 26 }
+
+rcOspfv3IfBfdEnable OBJECT-TYPE
+       SYNTAX       EnableValue
+       MAX-ACCESS   read-write
+       STATUS       current
+       DESCRIPTION
+          " Used to enable/disable BFD for OSPFv3."
+       DEFVAL          { disable }
+       ::= { rcOspfv3IfEntry 27 }
 
 -- OSPFv3 Virtual Interface Table
 
@@ -39060,6 +39727,242 @@ rcIpMRouteStatsPktsPerSecond OBJECT-TYPE
 
 -- End of IpMRoute MIB
 
+
+-- BEGIN OF IPV6 DESTINATION CACHE SECTION
+
+rcIpv6DestinationCacheTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcIpv6DestinationCacheEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "Ipv6 Destination Cache table"
+    ::= { rcIpv6Objects  13 }
+
+rcIpv6DestinationCacheEntry OBJECT-TYPE
+        SYNTAX          RcIpv6DestinationCacheEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "Used to display Destination Cache"
+        INDEX           { rcIpv6DCacheDestAddr, rcIpv6DCacheIfIndex }
+        ::= { rcIpv6DestinationCacheTable 1 }
+
+RcIpv6DestinationCacheEntry ::=
+        SEQUENCE {
+                rcIpv6DCacheDestAddr              Ipv6Address,
+                rcIpv6DCacheIfIndex               Unsigned32,
+                rcIpv6DCacheNextHop               Ipv6Address,
+                rcIpv6DCacheIfType                INTEGER,
+                rcIpv6DCacheIfData                DisplayString,
+                rcIpv6DCachePmtu                  Integer32,
+                rcIpv6DCachePmtuAge               Counter32
+        }
+
+rcIpv6DCacheDestAddr OBJECT-TYPE
+        SYNTAX          Ipv6Address
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "IPv6 Destination Address from the
+                         Destination Cache."
+        ::= { rcIpv6DestinationCacheEntry 1 }
+
+rcIpv6DCacheIfIndex OBJECT-TYPE
+        SYNTAX          Unsigned32
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "The last 16 bits of this object's value are interpreted as InterfaceIndex 
+                         (it can represent either a physical, or a VLAN, or a tunnel interface); 
+                         the first 16 bits are ignored when the object's value is interpreted."
+        ::= { rcIpv6DestinationCacheEntry 2 }
+
+rcIpv6DCacheNextHop OBJECT-TYPE
+        SYNTAX          Ipv6Address
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Ipv6 Next Hop for a Destination Cache entry."
+        ::= { rcIpv6DestinationCacheEntry 3 }
+
+rcIpv6DCacheIfType OBJECT-TYPE
+        SYNTAX          INTEGER {real(1), virtual(2)}
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Interface type; it can be a real (i.e. VLAN, brouter, tunnel) 
+                         or a virtual circuit (i.e. VRRP, RSMLT)."
+        ::= { rcIpv6DestinationCacheEntry 4 }
+
+rcIpv6DCacheIfData OBJECT-TYPE
+        SYNTAX        DisplayString (SIZE (0..20))
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Used to display additional information about virtual
+                      circuits (i.e. if it is a VRRP or RSMLT circuit, the vrId 
+                      if it is a VRRP circuit); no information is displayed for
+                      real circuits."
+        ::= { rcIpv6DestinationCacheEntry 5 }
+
+rcIpv6DCachePmtu OBJECT-TYPE
+        SYNTAX        Integer32
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Path MTU for the entry."
+        ::= { rcIpv6DestinationCacheEntry 6 }
+
+rcIpv6DCachePmtuAge OBJECT-TYPE
+        SYNTAX        Counter32
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Indicates how much time (in seconds) has passed since the PMTU
+                       was updated the last time."
+        ::= { rcIpv6DestinationCacheEntry 7 }
+
+--END OF IPv6 DESTINATION CACHE SECTION
+
+-- IPv6 BFD Table 
+
+rcIpv6InterfaceBfdTable OBJECT-TYPE
+        SYNTAX	      SEQUENCE OF RcIpv6InterfaceBfdEntry
+        MAX-ACCESS    not-accessible
+        STATUS	      current
+        DESCRIPTION   "BFD configuration table"
+        ::= { rcIpv6Objects 14 }
+
+rcIpv6InterfaceBfdEntry OBJECT-TYPE
+        SYNTAX	      RcIpv6InterfaceBfdEntry
+        MAX-ACCESS    not-accessible
+        STATUS	      current
+        DESCRIPTION   "Used to configure BFD on a particular interface. An
+                       entry is created automatically when the variable 
+                       rcIpv6InterfaceBfdEnable is set to TRUE and deleted when 
+                       rcIpv6InterfaceBfdEnable is set to FALSE."
+        INDEX	      { rcIpv6InterfaceBfdIfIndex }
+        ::= { rcIpv6InterfaceBfdTable 1 }
+
+RcIpv6InterfaceBfdEntry ::= SEQUENCE {
+                rcIpv6InterfaceBfdIfIndex	      InterfaceIndex,
+                rcIpv6InterfaceBfdMinRxInterval  	Integer32,
+                rcIpv6InterfaceBfdTxInterval	    	Integer32,
+                rcIpv6InterfaceBfdMultiplier	    	Integer32,
+                rcIpv6InterfaceBfdHoldOffInterval  	Unsigned32,
+                rcIpv6InterfaceBfdStaticFlag       EnableValue
+        }
+
+rcIpv6InterfaceBfdIfIndex OBJECT-TYPE
+        SYNTAX        InterfaceIndex
+        MAX-ACCESS    not-accessible	
+        STATUS        current
+        DESCRIPTION   "Interface number.  The number can represent either
+                       a physical or logical(VLAN) interface."
+        ::= { rcIpv6InterfaceBfdEntry 1 }
+
+rcIpv6InterfaceBfdMinRxInterval OBJECT-TYPE
+        SYNTAX        Integer32 (100..65535)
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "the min rx interval in milliseconds"
+        DEFVAL        { 200 }
+        ::= { rcIpv6InterfaceBfdEntry 2 }
+
+rcIpv6InterfaceBfdTxInterval	  OBJECT-TYPE
+        SYNTAX        Integer32 (100..65535)
+        MAX-ACCESS    read-write	
+        STATUS        current
+        DESCRIPTION   "the desired tx interval in milliseconds"
+        DEFVAL        { 200 }
+        ::= { rcIpv6InterfaceBfdEntry 3 }
+
+rcIpv6InterfaceBfdMultiplier	  OBJECT-TYPE
+        SYNTAX        Integer32 (1..20)
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "the multiplier BFD wait before rx timeout"
+        DEFVAL        { 3 }  
+        ::= { rcIpv6InterfaceBfdEntry 4 }
+
+rcIpv6InterfaceBfdHoldOffInterval    OBJECT-TYPE
+        SYNTAX        Unsigned32 (0..65535)
+        MAX-ACCESS    read-write  
+        STATUS        current
+        DESCRIPTION 
+                "This object specifies the hold off timer interval, in
+                seconds. 0 means that hold off timer is disabled."
+        DEFVAL        { 0 }
+        ::= { rcIpv6InterfaceBfdEntry 6 }
+
+rcIpv6InterfaceBfdStaticFlag  OBJECT-TYPE
+        SYNTAX        EnableValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION
+                "This object specifies the static-flag for bfd. When
+                disabled, the static route will go down, when bfd is
+		    disabled."
+       DEFVAL        { enable }  
+       ::= { rcIpv6InterfaceBfdEntry 7}
+	   
+-- End of IPv6 BFD Table 
+
+-- Start of IPv6 Static route BFD Table
+
+rcIpv6StaticRouteBfdTable OBJECT-TYPE 
+        SYNTAX          SEQUENCE OF RcIpv6StaticRouteBfdEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "This table is used to hold next hop addresses on which BFD is enabled."
+        ::= { rcIpv6Objects 15  }
+
+rcIpv6StaticRouteBfdEntry OBJECT-TYPE
+        SYNTAX        	RcIpv6StaticRouteBfdEntry
+        MAX-ACCESS      not-accessible
+        STATUS        	current
+        DESCRIPTION   	"An IPv6 address of the next hop of the BFD session."
+        INDEX         	{rcIpv6StaticRouteBfdIfIndex,
+                         rcIpv6StaticRouteBfdNextHop}
+        ::= { rcIpv6StaticRouteBfdTable 1 }
+
+RcIpv6StaticRouteBfdEntry ::=
+        SEQUENCE {
+                 rcIpv6StaticRouteBfdIfIndex       InterfaceIndex,
+                rcIpv6StaticRouteBfdNextHop	   Ipv6Address,
+                rcIpv6StaticRouteBfdRowStatus      RowStatus
+        }
+rcIpv6StaticRouteBfdIfIndex OBJECT-TYPE
+        SYNTAX        InterfaceIndex
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The IfIndex value which identifies the local
+                interface through which the next hop of this route
+                should be reached.  A value of 0 is valid and
+                represents the scenario where no interface is specified."
+        ::= { rcIpv6StaticRouteBfdEntry 1 }
+
+rcIpv6StaticRouteBfdNextHop OBJECT-TYPE
+        SYNTAX        	Ipv6Address 
+        MAX-ACCESS      read-only
+        STATUS        	current
+        DESCRIPTION   	"The IPv6 address of the next hop of the BFD session."
+        ::= { rcIpv6StaticRouteBfdEntry 2 }
+
+rcIpv6StaticRouteBfdRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION     "Used to create/delete entries"
+        ::= { rcIpv6StaticRouteBfdEntry 3 }
+
+--End of Static Route Bfd Table. 
+
+-- LLDP enable config
+rcLldpEnable OBJECT-TYPE
+     SYNTAX     TruthValue
+     MAX-ACCESS read-write
+     STATUS     current
+     DESCRIPTION
+            "This object controls the LLDP protocols.
+             It is used to enable/disable LLDP protocol."
+     DEFVAL  { false }
+     ::= { rcLldp 1 }
+
+-- End of LLDP enable config
+
+
 -- 
 -- *** THIS SECTION IS GENERATED FROM ../mib_tools/error.mib ***
 
@@ -39575,6 +40478,12 @@ rcErrorReturnCode OBJECT-TYPE
 		ntpNoServerConfigured(602),
 		ntpMaxServerNumExceeded(603),
 		ntpInvalidIntervalValue(604),
+		ntpSourceIpDoesNotExist(5002),
+		brouterIpIsBeingUsedByNtpAsSourceIp(5003),
+		clipIpIsBeingUsedByNtpAsSourceIp(5004),
+		vlanIpIsbeingUsedByNtpAsSourceIp(5005),
+		mgmtPortIsBeingUsedByNtpAsSourceIp(5006),
+		mgmtVirtualIpIsBeingUsedByNtpAsSourceIp(5007),
 		ecmpNotEnabled(605),
 		ipfInvalidProtocolType(606),
 		assignIpToPortInRouteVlan(607),
@@ -39610,6 +40519,8 @@ rcErrorReturnCode OBJECT-TYPE
 		cannotChangeCurrentAndDeprecatedMib(9107),
 		duplicateTargetAddress(9110),
 		notifyTagIsOnlyAllowedUpTo32Chars(9112),
+		authenticationFailureTrapMustBeEnabledFirst(9113),
+		invalidSaveConfigFilename(9120),
 		portMirroringTxNotSupportForThisHardwareRevision(9301),
 		cannotSetMode(9302),
 		cannotSetFraming(9303),
@@ -39697,8 +40608,10 @@ rcErrorReturnCode OBJECT-TYPE
 		cpuActionNotAllowedPwrPrio(9428),
 		ntpIncorrectKeyValue(9435),
 		accessPolicyGroupNameInvalid(9436),
+		powerIsAlreadyOn(9448),
 		sysTakeIOCardOfflineMustBeEnabledFirst(9456),
 		sysAutoResetFabricMustBeDisabledFirst(9457),
+		cannotModifyTheAdminStatusOfMasterFabric(9458),
 		tenGEMltPortCannotBeAddedToStgWithSMLT(9501),
 		tenGEPortCannotBeAddedToStgWithSMLT(9502),
 		rstpInvalidVal(9504),
@@ -39824,8 +40737,31 @@ rcErrorReturnCode OBJECT-TYPE
 		arpNoIpAddrAssociatedWithPort(1546),
 		arpIncorrectIpAddress(1547),
 		ipCircuitShouldExistForDhcpEnable(1548),
+		arpEntryCreateionRequiresMacAddress(1549),
+		arpEntryMofifcationNotAllowed(1550),
+		interfaceDoesNotHaveIpAddressAssigned(1551),
+		cannotConfigSameAddrWithDiffPrefixLength(1552),
+		cannotConfigureAddrWhichIsSiteLocal(1553),
 		webInvalidHttpsPort(1603),
 		identicalHttpPortHttpsPortNotSupported(1604),
+		agentIpAddrMandatory(13401),
+		slamonInvalidAgentStatusValue(13402),
+		slamonInvalidTimeoutValue(13403),
+		slamonInvalidUdpPort(13404),
+		slamonInvalidServerPort(13405),
+		slamonAgentSupportedAddrTypeIsOnlyIpv4(13406),
+		slamonServerSupportedAddrTypeIsOnlyIpv4(13407),
+		slamonInvalidAgentIpAddr(13408),
+		slamonInvalidAgentCliAvailableStatusValue(13409),
+		slamonInvalidAgentCliTimeoutModeValue(13410),
+		slamonAltServerSupportedAddrTypeIsOnlyIpv4(13411),
+		slamonInvalidServerIpAddr(13412),
+		slamonInvalidAltServerIpAddr(13413),
+		slamonAgentDisableAgentStatus(13414),
+		slamonAgentPortAlreadyInUse(13415),
+		slamonAgentIpAlreadyInUse(13416),
+		slamonInstallCertRequiresCertFile(13417),
+		slamoncertfilenotfound(13423),
 		invalidDdmMonitorInterval(1801),
 		invalidDdmMonitor(1802),
 		invalidDdmTrapsSend(1803),
@@ -39859,7 +40795,12 @@ rcErrorReturnCode OBJECT-TYPE
 		igmpQueryMaxResponseUnsupportedOnV1(2328),
 		igmpMvrVlanIstSmlt(2331),
 		igmpMvrVlanMlt(2332),
+		igmpCannotDeleteLastPortStaticGroup(2335),
 		portIsRequiredForIgmpStaticEntryCreation(2339),
+		snoopCannotBeEnabledWithPim(2340),
+		snoopCannotBeEnabledWithDvmrp(2341),
+		dvmrpCannotBeEnabledWithSnoop(2342),
+		pimCannotBeEnabledWithSnoop(2343),
 		ipfStreamAlreadyExists(2401),
 		ipfStreamDoesNotExists(2402),
 		ipfStreamInvalidStreamType(2403),
@@ -39936,6 +40877,7 @@ rcErrorReturnCode OBJECT-TYPE
 		ipmcTimePruneConflictsWithSsmEntry(2710),
 		rcSnmpSyslogDisableSyslogFirst(2801),
 		rcSnmpInvalidSyslogHeader(2802),
+		configSyslogHostAddrBeforeEnabling(2803),
 		dvmrpMBRNotAllowed(2901),
 		dvmrpInvalidIntfTypeChange(2902),
 		ipxPolicyNetEntryNotFound(3101),
@@ -40304,6 +41246,7 @@ rcErrorReturnCode OBJECT-TYPE
 		aclNoAccept(7653),
 		aceDebugMirrorDisableToRemoveDest(7658),
 		actPatternWrongIpVersion(7678),
+		actIpAddressRangeNotSupported(7688),
 		qosPolicyLaneExist(7701),
 		qosPolicyLaneNotExist(7702),
 		qosPolicyPkRateInvalid(7703),
@@ -40329,6 +41272,8 @@ rcErrorReturnCode OBJECT-TYPE
 		qosTxQSetQLengthLessThanDefaultNotAllowed(7769),
 		qosTxQSetQCannotBeCreated(7770),
 		qosTxQSetQCannotBeDeleted(7771),
+		qosTxQSetWlanModificationNotAllowed(7772),
+		qosTxQSetDeleteNotAllowed(7773),
 		ipv6InterfaceAdminDisabled(7802),
 		ipv6ForwadingDisabled(7803),
 		noVrrpLinkLocalAddressSpecified(7804),
@@ -40340,6 +41285,8 @@ rcErrorReturnCode OBJECT-TYPE
 		ipv6ValidLifeCanOnlyBeInfinityForInfinite(7810),
 		invalidVrrpPrefixEntry(7811),
 		vrrpPrefixExists(7812),
+		ipv6InterfaceForwardingAlreadyEnabled(7856),
+		ipv6InterfaceForwardingAlreadyDisabled(7857),
 		ipfixStateAlreadyEnabled(8101),
 		ipfixStateAlreadyDisabled(8102),
 		ipfixInvalidSlotNumber(8103),
@@ -40450,6 +41397,7 @@ rcErrorReturnCode OBJECT-TYPE
 		isisPlsbMLTISTConflictWithCvlan(8379),
 		isisSpbmBvlanNotAllowToRunSlpp(8380),
 		isisSpbmInvalidEtherType(8381),
+		isisMaxLspGenIntCannotBeLessThan30(8382),
 		nsnaNoRedVlan(8401),
 		nsnaRedVlanExists(8402),
 		nsnaGlobalEnabled(8403),
@@ -40480,6 +41428,8 @@ rcErrorReturnCode OBJECT-TYPE
 		nsnaVlanCannotBeMadeGuestVlan(8428),
 		nsnaPortCannotBeConfiguredOnNonPrPorts(8429),
 		nsnaNotAllowedOnSmltPort(8431),
+		nsnaNotAllowedOnDhcpSnoopEnabledVlan(8442),
+		filterNotAllowedOnDhcpSnoopEnabledVlan(8443),
 		cfmNoParamChange(8501),
 		cfmDomainExists(8502),
 		cfmDomainDoesNotExists(8503),
@@ -40699,9 +41649,12 @@ rcErrorReturnCode OBJECT-TYPE
 		noAdminSettingForSpeed1000(10330),
 		portAlwaysRunAt10GSpeed(10331),
 		cannotSetAdminSpeed1000AsPerIEEE(10338),
+		forcedRearpNotAllowedOnPortInterface(10397),
 		portCustomAutoNegAdv1000HalfInvalid(10370),
 		cannotSetDuplexWhenSpeedIs1000(10371),
 		invalidAdminSpeedCannotDisableAutoneg(10372),
+		slppTimeToClrPktRxCountNotConfigurable(10386),
+		lldpMedCapabilityTlvMandatory(10312),
 		plsbVlanIsidNotAllowed(10459),
 		plsbVlanIsidAlreadyExist(10460),
 		plsbVlanIsidWithSingleBvlan(10461),
@@ -40829,6 +41782,28 @@ rcErrorReturnCode OBJECT-TYPE
 		plsbConfigIpSourceAddrBeforeEnableIpSc(10730),
 		inUsedAsIsisIpSourceAddr(10731),
 		plsbCannotSetIpSourceAddrToZeroWhenIpScEnabled(10732),
+		spbMcConflictingCVlanIsid(10733),
+		spbMcConflictingVrfIsid(10734),
+		spbMcIsidInDynRange(10735),
+		spbmVlanSpbMcastCannotBeEnabledWithPim(10736),
+		spbmVlanSpbMcastCannotBeEnabledWithSnoop(10737),
+		vlanPimCannotBeEnabledWithSpbMcast(10738),
+		vlanSnoopCannotBeEnabledWithSpbMcast(10739),
+		spbMcastCannotBeEnabledWithPim(10742),
+		pimCannotBeEnabledWithSpbMcast(10743),
+		spbMcastCannotBeEnabledWithDvmrp(10744),
+		dvmrpCannotBeEnabledWithSpbMcast(10745),
+		spbmVlanSpbMcastCannotBeEnabledWithDvmrp(10746),
+		spbmVlanDvmrpCannotBeEnabledWithSpbMcast(10747),
+		vlanSpbMcastCannotBeEnabledWithoutIpAddr(10749),
+		portSpbMcastCannotBeEnabledWithoutIpAddr(10750),
+		cmdNotAllowedInNonSpbmMode(10751),
+		spbmDeleteRedistributeBeforeResetSpbmFlag(10752),
+		spbmSmltVirtBmacCannotBeInChassisBmacRange(10753),
+		spbmSmltVirtBmacMustBeSetWhenPeerBmacIsNotZero(10754),
+		spbmAssociateVlanToSpbmInstBefCreation(10755),
+		spbmDeleteVlanBefDeassociateFromSpbmInst(10756),
+		spbmDeassociateVlanToSpbmInstBefCreation(10757),
 		cfmCannotAbortWhenNoLtmInProgress(10442),
 		esmMltCannotBeNonUni(10443),
 		cfmCannotAbortWhenNoLbmInProgress(10446),
@@ -40875,6 +41850,20 @@ rcErrorReturnCode OBJECT-TYPE
 		invalidIpAddrType(11458),
 		cfmL2IpPingEntryMustCreatedFirst(11459),
 		cfmL2IpTraceEntryMustCreatedFirst(11460),
+		cfmCannotAbortWhenNoL2IpPingInProgress(11464),
+		cfmCannotSetTtlTo0(11465),
+		ipv6InvalidInvalidIpv6AddrInterfaceId(12701),
+		ipv6ReasmMaxSizeExceedSysMtu(12702),
+		ipv6InvalidDescriptionLength(12703),
+		ipv6InvalidReasmSizeForMgmtPort(12704),
+		ipv6AddrCreatedByVirtualManagment(12705),
+		ipv6RsmltTempDefRtDeleteModify(12706),
+		ipv6OspfAreaCannotModifyAreaType(12707),
+		ipv6OspfAreaSetToNssaForTransRole(12708),
+		ipv6OspfAreaHasActiveInterface(12709),
+		ipv6InterfaceMacOffsetCannotReset(12710),
+		ipv6InterfaceMacOffsetDiffSameVlan(12711),
+		ipv6InterfaceCannotModifyTunnelEntry(12712),
 		vlanAdminStatusConfigNotAllowed(12803),
 		configNotAllowedOnVlanInterfaces(12804),
 		configNotAllowedMdNameUsed(12807),
@@ -40894,6 +41883,87 @@ rcErrorReturnCode OBJECT-TYPE
 		cfmCannotDeleteVlanWithCfmMsgInProgress(12821),
 		cfmCannotChangeMepWithCfmMsgInProgress(12822),
 		onlyGlobalCfmSupportForNonSpbmVlan(12823),
+		cfmInvalidMacToL2Trace(12824),
+		cfmInvalidNodalMipLevel(12825),
+		cannotModifyCfmEthertype(12826),
+		l2McastRequiresServiceType(12827),
+		needIsidAndIgmpSnoopVlanToL2Mcast(12828),
+		mustSpecifyMvpnEnabledVrfToL2Mcast(12829),
+		l2McastVlanDoesNotExist(12830),
+		l2TraceOnlyIpv4AddrTypeSupported(12831),
+		lldpVlanDoesNotExist(13001),
+		lldpPortNotVlanMember(13002),
+		lldpMstpProtocolAllowedOnlyInMstpMode(13009),
+		lldpRstpProtocolAllowedOnlyInRstpMode(13010),
+		lldpInvalidProtocol(13011),
+		lldpOneSpanningTreeProtocolAllowed(13012),
+		lldpPortNotOperatingInMstpMode(13013),
+		lldpPortNotOperatingInRstpMode(13014),
+		lldpPortNotOperatingInStpCompatibleMode(13015),
+		wlanVlanUsedByRemoteVlan(13101),
+		wlanCannotReserveVlanIdUsedByLocalVlan(13102),
+		wlanCannotRemoveUsedVlanFromReservationPool(13103),
+		wlanInvalidMtTunnelHoldUpTime(13104),
+		stgInUseByWlan(13105),
+		wlanCannotChangeRemoteVlanStgWhenRvlanCreated(13106),
+		wlanInterfaceIpMustBeCircuitlessIp(13107),
+		wlanOnlySupportIpv4(13108),
+		wlanCannotChangeInterfaceIpWhenWlanEnabled(13109),
+		wlanCannotChangeTcpUdpBasePortWhenWlanEnabled(13110),
+		wlanAlreadyEnabled(13111),
+		wlanAlreadyDisabled(13112),
+		wlanCannotEnableWithoutMaInitialized(13113),
+		wlanCannotEnableWithoutSettingInterfaceIp(13114),
+		wlanCannotEnableWithoutSettingTcpUdpBasePort(13115),
+		wlanCannotEnableWithoutSettingRemoteVlanStg(13116),
+		wlanInterfaceIpAlreadySetToTheSame(13117),
+		wlanVlanReserved(13118),
+		wlanControllerIpAlreadyExists(13119),
+		wlanControllerIpUpperLimitReached(13120),
+		wlanCannotDeleteActiveController(13121),
+		wlanControllerIpDoesNotExists(13122),
+		wlanMobilityVlanMappingAlreadyExists(13123),
+		wlanLocalVidUsedByAnotherMobilityVlanMapping(13124),
+		wlanLocalVidUsedByAnotherRemoteVlan(13125),
+		wlanCannotUseLocalVidAlreadyAllocated(13126),
+		wlanMobilityVlanMappingDoesNotExists(13127),
+		wlanCannotEnableSmltWithoutSettingSmltDataIp(13128),
+		wlanCannotEnableSmltWithoutSettingSmltTcpUdpBasePort(13129),
+		wlanSmltAlreadyEnabled(13130),
+		wlanSmltAlreadyDisabled(13131),
+		wlanSmltCannotEnableWhenSmltDisabled(13132),
+		wlanSmltCannotEnableWhenWlanDisabled(13133),
+		wlanCannotDisableWhenWlanSmltEnabled(13134),
+		cannotDisableSmltWhenWlanSmltEnabled(13135),
+		wlanVlanUsedByLocalVlanId(13136),
+		wlanControllerIdIsAlreadyInUse(13137),
+		wlanControllerIdDoesNotMatch(13138),
+		wlanCannotEnableWlanWithSpbmEnabled(13139),
+		plsbCannotEnableSpbmWithWlanEnabled(13140),
+		wlanCannotEnableInRstpMode(13141),
+		inUseAsWlanInterfaceIpAddr(13142),
+		wlanVlanMappingNameIsInvalid(13143),
+		invalidMstiInstance(13144),
+		wlanMgmtInterfaceAlreadySetToTheSame(13145),
+		wlanMgmtInterfaceMustBeOneOfTheIpInterface(13146),
+		wlanInvalidRemoteVlanStg(13147),
+		wlanLvidCannotBeZero(13148),
+		rcBridgeNewFdbTableHasBeenDeprecated(13149),
+		wlanCannotCreateVlanMappingWithoutL3mobilityAndLvid(13150),
+		wlanCannotDeleteOrChangeLearnedVlanMappingEntry(13151),
+		wlanCannotChangeVlanMappingL3mobility(13152),
+		wlanWeightCannotBeZero(13153),
+		wlanOnlyCanEnableBothWlanAndSpbmInPrivMode(13154),
+		wlanCannotSetWlanAndNlbOnVlan(13155),
+		wlanCannotSetL3MobilityToClient(13156),
+		wlanCannotDeleteLastController(13157),
+		wlanCannotEnableWlanWithoutController(13158),
+		wlanCannotReserveVlanWithoutSettingRemoteVlanStg(13159),
+		wlanCannotDeleteCLientVlanMap(13160),
+		wlanCannotClearRemoteVlanStgWhenReservedVlan(13161),
+		wlanCannotEnabledWithoutControlWlanEnable(13162),
+		wlanCannotModifyLearnedVlanMappingEntry(13163),
+		wlanCannotModifyWeightOfClientVlanMappingEntry(13164),
 		readWriteAccessReadOnly(900),
 		readWriteAccessLevelOne(901),
 		readWriteAccessLevelTwo(902),
@@ -40918,7 +41988,7 @@ rcErrorSendTrap OBJECT-TYPE
         SYNTAX        TruthValue
         MAX-ACCESS    read-write
         STATUS        current
-        DESCRIPTION   "Indicates whether to send trap upon receiving an
+       DESCRIPTION   "Indicates whether to send trap upon receiving an
                       error in the system."
 	DEFVAL	      { true }
         ::= { rcError 5 }
@@ -41481,9 +42551,10 @@ rcSshSessionLogin NOTIFICATION-TYPE
 
 rcnSshSessionLogin NOTIFICATION-TYPE
         OBJECTS       { rcSshGlobalHostIpAddr }
-        STATUS        current
+        STATUS        deprecated
         DESCRIPTION   "A rcSshSessionLogin trap signifies that there
-                       is a SSH session login."
+                       is a SSH session login.
+		       It is deprecated by rcnaSshSessionLogin."
         ::= { rcTrapsMib 32 }
 
 rcSshSessionLogout NOTIFICATION-TYPE
@@ -41495,9 +42566,10 @@ rcSshSessionLogout NOTIFICATION-TYPE
 
 rcnSshSessionLogout NOTIFICATION-TYPE
         OBJECTS       { rcSshGlobalHostIpAddr }
-        STATUS        current
+        STATUS        deprecated
         DESCRIPTION   "A rcSshSessionLogout trap signifies that there
-                       is a SSH session logout."
+                       is a SSH session logout.
+		       It is deprecated by rcnaSshSessionLogout."
         ::= { rcTrapsMib 33 }
 
 rcSshUnauthorizedAccess NOTIFICATION-TYPE
@@ -41509,9 +42581,10 @@ rcSshUnauthorizedAccess NOTIFICATION-TYPE
 
 rcnSshUnauthorizedAccess NOTIFICATION-TYPE
         OBJECTS       { rcSshGlobalHostIpAddr }
-        STATUS        current
+        STATUS        deprecated
         DESCRIPTION   "A rcSshUnauthorizedAccess trap signifies that
-                       an unauthorized access has occured."
+                       an unauthorized access has occured.
+		       It is deprecated by rcnaSshUnauthorizedAccess"
         ::= { rcTrapsMib 34 }
 
 rcHaCpuState NOTIFICATION-TYPE
@@ -42069,6 +43142,22 @@ rcnRstpNewRoot NOTIFICATION-TYPE
                       spanning tree."
         ::= { rcTrapsMib 120 }
 
+rcDuplexMismatch NOTIFICATION-TYPE
+    OBJECTS       { rcPortIndex,lldpRemPortIdSubtype,lldpRemPortId }
+    STATUS        current
+    DESCRIPTION   "A rcDuplexMismatch trap signifies that
+                   a LLDP Neighbor Port's Duplex/Speed mismatchs
+                   with local port"
+    ::= { rcTraps 123 }
+
+rcnDuplexMismatch NOTIFICATION-TYPE
+    OBJECTS       { rcPortIndex,lldpRemPortIdSubtype,lldpRemPortId }
+    STATUS        current
+    DESCRIPTION   "A rcnDuplexMismatch trap signifies that
+                   a LLDP Neighbor Port's Duplex/Speed mismatchs
+                   with local port"
+    ::= { rcTrapsMib 123 }
+
 rcnRsmltEdgePeerModified NOTIFICATION-TYPE
         OBJECTS      { rcVlanName }
         STATUS        current
@@ -42203,18 +43292,18 @@ rcnAggLinkStateChange NOTIFICATION-TYPE
 
 rcnBfdSessExceedThreshold NOTIFICATION-TYPE
         OBJECTS      { rcBfdTmpSessDiscriminator,rcBfdTmpSessAddr }
-        STATUS	     current
+        STATUS	     deprecated
         DESCRIPTION  "A rcnBfdSessExceedThreshold signifies that 
                       the BFD session have exceed system limit and hence
-                      creation of new session failed."
+                      creation of new session failed.Deprecated by rcnaBfdSessExceedThreshold."
         ::= { rcTrapsMib 183 }
 
 rcnBfdStatusChange NOTIFICATION-TYPE
         OBJECTS      { rcBfdTmpSessDiscriminator, rcBfdTmpSessRemoteDiscr, rcBfdTmpSessAddr, 
                        rcBfdTmpSessState, rcBfdTmpSessState }
-        STATUS	     current
+        STATUS	     deprecated
         DESCRIPTION  "A rcnBfdSessChange signifies that the status
-                    of BFD session changed."
+                    of BFD session changed.Deprecated by rcnaBfdNewStatusChange"
         ::= { rcTrapsMib 184 }
 
 rcnChasPowerSupplyRunningLow NOTIFICATION-TYPE
@@ -42417,6 +43506,39 @@ rcnIsisPlsbMultiLinkAdjTrap NOTIFICATION-TYPE
 
         ::= { rcTrapsMib 284 }      
 
+rcnaSshSessionLogout NOTIFICATION-TYPE
+        OBJECTS       { rcLoginHostAddressType, rcLoginHostInetAddress }
+        STATUS        current
+        DESCRIPTION   "A rcnaSshSessionLogout trap signifies that there
+                       is a SSH session logout. This trap deprecates the
+	 	       rcnSshSessionLogout trap."
+        ::= { rcTrapsMib 285 }
+
+rcnaSshUnauthorizedAccess NOTIFICATION-TYPE
+        OBJECTS       { rcLoginHostAddressType, rcLoginHostInetAddress }
+        STATUS        current
+        DESCRIPTION   "A rcnaSshUnauthorizedAccess trap signifies that
+                       an unauthorized access has occured. This trap 
+		       deprecates the rcnSshUnauthorizedAccess trap."
+        ::= { rcTrapsMib 286 }
+
+rcnaAuthenticationSuccess NOTIFICATION-TYPE
+        OBJECTS       { rcLoginUserName, rcLoginHostAddressType, rcLoginHostInetAddress }  
+        STATUS        current
+        DESCRIPTION  "A rcnaAuthenticationSuccess trap signifies that a login
+		      is success. Trap includes login username and address 
+		      type and inet address. This trap deprecates the  
+	              rcnAuthenticationSuccess trap."
+        ::= { rcTrapsMib 287 }
+
+rcnaSshSessionLogin NOTIFICATION-TYPE
+        OBJECTS       { rcLoginHostAddressType, rcLoginHostInetAddress }
+        STATUS        current
+        DESCRIPTION   "A rcnaSshSessionLogin trap signifies that there
+                       is a SSH session login. This trap deprecates the
+	 	       rcnSshSessionLogin trap."
+        ::= { rcTrapsMib 288 }
+
 rcnVLacpFlapDetectShutDown NOTIFICATION-TYPE
         OBJECTS       { rcPortIndex }
         STATUS        current
@@ -42426,6 +43548,54 @@ rcnVLacpFlapDetectShutDown NOTIFICATION-TYPE
                        on this port.The port can be brought UP by toggling the port
                        admin state manually."
         ::= { rcTrapsMib 289 }
+
+rcnBfdNewStatusChange NOTIFICATION-TYPE
+        OBJECTS      { rcBfdTmpSessDiscriminator,
+		       rcBfdTmpSessRemoteDiscr,
+		       rcBfdTmpSessAddr,
+                       rcBfdTmpSessState,
+		       rcBfdTmpSessDestAddr,
+		       rcBfdTmpSessOldState  }
+        STATUS       deprecated
+        DESCRIPTION  "A rcnBfdNewStatusChange signifies that the status
+                    of BFD session changed.Deprecated by rcnaBfdNewStatusChange."
+        ::= { rcTrapsMib 293 }
+
+
+rcnLacpMisconfig NOTIFICATION-TYPE
+        OBJECTS       { rcPortIndex,
+                        rcLacpMisconfigType }
+        STATUS        current
+        DESCRIPTION   "A link aggregation misconfiguration trap signifies that,
+                       this port is receiving LACP PDU without LACP being 
+                       configured completely."
+        ::= { rcTrapsMib 294}
+
+rcnaBfdStatusChange NOTIFICATION-TYPE
+        OBJECTS      { rcBfdTmpSessDiscriminator,
+                       rcBfdTmpSessRemoteDiscr,
+                       rcBfdTmpSessAddrType,
+                       rcBfdTmpSessAddr,
+                       rcBfdTmpSessState,
+                       rcBfdTmpSessDestAddr,
+                       rcBfdTmpSessOldState  }
+        STATUS       current
+        DESCRIPTION  "A rcnaBfdNewStatusChange signifies that the status
+                      of BFD session changed. rcBfdTmpSessAddrType 
+                      indicates the address type for rcBfdTmpSessAddr
+                      and rcBfdTmpSessDestAddr.
+                      This trap deprecates rcnBfdNewStatusChange."
+        ::= { rcTrapsMib 296 }
+
+
+rcnaBfdSessExceedThreshold NOTIFICATION-TYPE
+        OBJECTS      { rcBfdTmpSessDiscriminator, rcBfdTmpSessAddrType,rcBfdTmpSessAddr }
+        STATUS       current
+        DESCRIPTION  "A rcnaBfdSessExceedThreshold signifies that
+                      the BFD session has exceeded system limit and hence
+                      creation of new session failed.This trap deprecates rcnBfdSessExceedThreshold."
+        ::= { rcTrapsMib 297 }
+
 
 -- Syslog Group
  
@@ -46597,7 +47767,10 @@ RcIgmpInterfaceExtnEntry ::=
                 rcIgmpInterfaceExtnMvrProxyEnable        TruthValue,
                 rcIgmpInterfaceExtnDynamicDowngradeEnable TruthValue,
                 rcIgmpInterfaceExtnCompatibilityModeEnable TruthValue,
-                rcIgmpInterfaceExtnOperVersion           INTEGER 
+                rcIgmpInterfaceExtnOperVersion           INTEGER,
+                rcIgmpInterfaceExtnMcastMode             INTEGER,
+                rcIgmpInterfaceExtnSnoopMRouterLPorts       LPortSet,
+                rcIgmpInterfaceExtnSnoopActiveMRouterLPorts LPortSet 
         }
 
 rcIgmpInterfaceExtnIfIndex OBJECT-TYPE
@@ -46851,6 +48024,30 @@ rcIgmpInterfaceExtnOperVersion OBJECT-TYPE
             "The operational version of IGMP which is running on
              this interface."
     ::= { rcIgmpInterfaceExtnEntry 32 }
+
+rcIgmpInterfaceExtnMcastMode OBJECT-TYPE
+    SYNTAX     INTEGER { snoop(1), pim(2), snoopSpb(3), routedSpb(4), dvmrp(5), none(6) }
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION "IGMP interface mode"
+    DEFVAL    { none }
+    ::= { rcIgmpInterfaceExtnEntry 34 }
+
+rcIgmpInterfaceExtnSnoopMRouterLPorts OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The set of logical ports (for example, WLAN tunnels)
+                      in this interface that provide connectivity to an IP 
+                      Multicast router."
+        ::= { rcIgmpInterfaceExtnEntry 35 }
+
+rcIgmpInterfaceExtnSnoopActiveMRouterLPorts OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Active logical ports (for example, WLAN tunnels)."
+        ::= { rcIgmpInterfaceExtnEntry 36 }
 
 -- IGMP Static
 
@@ -47542,7 +48739,9 @@ RcIgmpSnoopTraceEntry ::=
                 rcIgmpSnoopOutVlan         InterfaceIndex,
                 rcIgmpSnoopInPort          InterfaceIndex,
                 rcIgmpSnoopInVlan          InterfaceIndex,
-                rcIgmpSnoopOutPort         PortSet
+                rcIgmpSnoopOutPort         PortSet,
+                rcIgmpSnoopType        INTEGER,
+                rcIgmpSnoopOutLPort        LPortSet
         }
 
 rcIgmpSnoopGrpAddr  OBJECT-TYPE
@@ -47586,6 +48785,21 @@ rcIgmpSnoopOutPort OBJECT-TYPE
         STATUS        current
         DESCRIPTION   "Egress port of the mcast grp"
         ::= { rcIgmpSnoopTraceEntry 6 }
+
+rcIgmpSnoopType OBJECT-TYPE
+        SYNTAX        INTEGER{ network(1), access(2)}
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The port type on which the snoop entry is learnt"
+        ::= { rcIgmpSnoopTraceEntry 7}
+
+rcIgmpSnoopOutLPort OBJECT-TYPE
+        SYNTAX        LPortSet
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Egress logical port (for example, WLAN tunnel) 
+                      list of the mcast grp"
+        ::= { rcIgmpSnoopTraceEntry 8 }
 
 --New IGMP Group Table.
 
@@ -49531,7 +50745,8 @@ RcNtpServerEntry ::=
              rcNtpServerRootDelay DisplayString,
              rcNtpServerPrecision DisplayString,
              rcNtpServerReachable DisplayString,
-             rcNtpServerSynchronized DisplayString
+             rcNtpServerSynchronized DisplayString,
+             rcNtpServerSourceIpAddr IpAddress
      }
 
 rcNtpServerAddress OBJECT-TYPE
@@ -49640,6 +50855,13 @@ rcNtpServerSynchronized OBJECT-TYPE
      STATUS         current
      DESCRIPTION    "Status of synchronization with this server"
      ::= { rcNtpServerEntry 14 }
+
+rcNtpServerSourceIpAddr OBJECT-TYPE
+     SYNTAX          IpAddress
+     MAX-ACCESS      read-write
+     STATUS          current
+     DESCRIPTION     "source IP address for NTP packets."
+     ::= { rcNtpServerEntry 15 }
 
 -- Ntp Key Table Information
 
@@ -50187,7 +51409,10 @@ Rc2kDeviceGlobalEntry ::= SEQUENCE {
 		rc2kDeviceGlobalPcmciaBytesFree	Integer32,
 		rc2kDeviceGlobalPcmciaNumFiles 	Integer32,
 		rc2kDeviceGlobalAction 		INTEGER,
-		rc2kDeviceGlobalResult 		INTEGER
+		rc2kDeviceGlobalResult 		INTEGER,
+                rc2kDeviceGlobalExtflashBytesUsed       Counter64,
+                rc2kDeviceGlobalExtflashBytesFree       Counter64,
+                rc2kDeviceGlobalExtflashNumFiles        Integer32
 	}
 
 rc2kDeviceGlobalSlot OBJECT-TYPE
@@ -50221,21 +51446,21 @@ rc2kDeviceGlobalFlashNumFiles OBJECT-TYPE
 rc2kDeviceGlobalPcmciaBytesUsed OBJECT-TYPE
         SYNTAX        Integer32
         MAX-ACCESS    read-only
-        STATUS        current
+        STATUS        deprecated 
         DESCRIPTION   "bytes used"
         ::= { rc2kDeviceGlobalEntry 5 }
 
 rc2kDeviceGlobalPcmciaBytesFree OBJECT-TYPE
         SYNTAX        Integer32
         MAX-ACCESS    read-only
-        STATUS        current
+        STATUS        deprecated 
         DESCRIPTION   "bytes free"
         ::= { rc2kDeviceGlobalEntry 6 }
 
 rc2kDeviceGlobalPcmciaNumFiles OBJECT-TYPE
         SYNTAX        Integer32
         MAX-ACCESS    read-only
-        STATUS        current
+        STATUS        deprecated 
         DESCRIPTION   "# files in pcmcia"
         ::= { rc2kDeviceGlobalEntry 7 }
  
@@ -50244,7 +51469,8 @@ rc2kDeviceGlobalAction OBJECT-TYPE
                       {
                             none(1),
                             resetPcmcia(2),
-                            pcmciaStop(3)
+                            pcmciaStop(3),
+                            pcmciaStart(4)
                       }
         MAX-ACCESS    read-write
         STATUS        current
@@ -50263,6 +51489,28 @@ rc2kDeviceGlobalResult OBJECT-TYPE
         DESCRIPTION   "Used to indicate the result of the last action
                       performed on one of the system's device."
         ::= { rc2kDeviceGlobalEntry 9 }
+
+rc2kDeviceGlobalExtflashBytesUsed OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "bytes used in Extflash for 8695 CP CARD and for Pcmcia on 8692 CP CARD"
+        ::= { rc2kDeviceGlobalEntry 16 }
+
+rc2kDeviceGlobalExtflashBytesFree OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "bytes free in Extflash for 8695 CP CARD and for Pcmcia on 8692 CP CARD"
+        ::= { rc2kDeviceGlobalEntry 17 }
+
+rc2kDeviceGlobalExtflashNumFiles OBJECT-TYPE
+        SYNTAX        Integer32
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "# files in Extflash for 8695 CP CARD and for Pcmcia on 8692 CP CARD"
+        ::= { rc2kDeviceGlobalEntry 18 }
+
 
 -- 2k Device Separator1 
  
@@ -50455,8 +51703,7 @@ Rc2kBootConfigEntry ::= SEQUENCE {
                 rc2kBootConfigPrimaryLicenseSource         DisplayString,
                 rc2kBootConfigSecondaryLicenseSource       DisplayString,
                 rc2kBootConfigTertiaryLicenseSource        DisplayString,
-                rc2kBootConfigEnableCfPcCompat             TruthValue
-
+       	        rc2kBootConfigEnableCfPcCompat          TruthValue
         }
 
 rc2kBootConfigSlot OBJECT-TYPE
@@ -50742,7 +51989,8 @@ Rc2kCardEntry ::= SEQUENCE {
 		rc2kCardSlotOriginalPriority     INTEGER,
  		rc2kCardModuleSerialNum    DisplayString,
                 rc2kCardModulePartNumber   DisplayString,
-                rc2kCardModuleAssemblyDate DisplayString
+                rc2kCardModuleAssemblyDate DisplayString,
+		rc2kCardSlotPower        INTEGER
 
         }
 
@@ -51260,6 +52508,18 @@ rc2kCardSlotOriginalPriority OBJECT-TYPE
                        swtich has currently booted with. It will remain the 
 		       same until the next reboot."
         ::= { rc2kCardEntry 30 }
+
+rc2kCardSlotPower  OBJECT-TYPE
+        SYNTAX       INTEGER
+                     {
+                       on(1),
+                       off(2)
+                     }
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Administrately turn on or off power on this slot.
+		       it only applicable on IO Card"
+        ::= { rc2kCardEntry 32 }
 
 rc2kCardModuleSerialNum OBJECT-TYPE
         SYNTAX        DisplayString (SIZE (0..20))
@@ -55328,6 +56588,8 @@ rcLicenseNumber OBJECT-TYPE
         bitPasswordLenCli(1029),
         bitBcliCheckSrcRouteCli(1030),
         bitBcliLicensefileCli(1129),
+        bitlldpGlobalConfigTbl(1041),
+        bitlldpPortConfigTbl(1042),
 
 -- OE from here
 -- /* These bits are from xxxConsistencyCheck */
@@ -55418,6 +56680,7 @@ rcLicenseNumber OBJECT-TYPE
 	bitrc2kAlteonASFM(1584),
 	bitrc2k61AlteonSAM(1585),
 	bitrc2k62AlteonSAM(1586),
+        bitrcLldpTbl(1599),
         bitrcMplsGlobalGrp(1603),
         bitrcIpMplsInterfaceTbl(1604),
         bitrcVrfConfigTbl(1605),
@@ -55502,6 +56765,7 @@ rcLicenseNumber OBJECT-TYPE
         bitbasicrcIpBgpPeerGroupTbl(1719),
         bitbasicrcIpBgpNetworkTbl(1720),
         bitrcIpRedistributeTblIsis(1721),
+        bitSlamonGlobalGrp(1732),
 	bitlastbitnum(2047)
 	}
 	MAX-ACCESS  read-only
@@ -55670,6 +56934,24 @@ rcLacpGlobalVlacpHoldTime OBJECT-TYPE
          STATUS       current
          DESCRIPTION   "The number of seconds to hold down all vlacp enabled links"
          ::= { rcLacpGlobal 15 }
+
+-- LacpMismatch Information.
+
+rcLacpNotificationObjects   OBJECT IDENTIFIER ::=  { rcLacp 5 }
+
+rcLacpMisconfigType  OBJECT-TYPE
+        SYNTAX  INTEGER {
+                         globalLacpDisable(1),
+                         portLevelLacpDisable(2),
+                         globalAndPortLacpDisable(3)
+                        }
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION  "This indicates the reason for Lacp Misconfig trap.
+                       Used by rcnLacpMisconfigTrap trap."
+        ::= { rcLacpNotificationObjects 1 }
+
+-- End of LacpMismatch Information.
 
 -- GlobalMacFilter Changes
 
@@ -60305,6 +61587,31 @@ rcPrFilterAceIpv6ShowNxtHdrOper OBJECT-TYPE
      DESCRIPTION                "Operator for Ace v6 next hdr."
      ::= { rcPrFilterAceIpv6ShowEntry 8 }
 
+-- Notification
+
+rcLoginUserName OBJECT-TYPE
+        SYNTAX        DisplayString (SIZE (1..20))
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION   "Used to inidcation the login user name for notification"
+        ::= { rcPowerRangerNotifications 1 }        
+
+rcLoginHostAddressType  OBJECT-TYPE
+        SYNTAX        InetAddressType
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION   "Used to inidcation the login host address type for
+		      notification"
+        ::= {rcPowerRangerNotifications 2 } 
+  
+rcLoginHostInetAddress  OBJECT-TYPE
+        SYNTAX        InetAddress
+        MAX-ACCESS    accessible-for-notify
+        STATUS        current
+        DESCRIPTION   "Used to inidcation the login host inet address for
+		      notification"
+        ::= {rcPowerRangerNotifications 3 } 
+
 --
 -- The MIB module is the definition of the managed objects for the Virtual Router.
 -- These are virtual router mibs extracted from draft-ietf-l3vpn-vr-mib-04.txt
@@ -61490,6 +62797,94 @@ rcVrfIpVpnIsidNumber OBJECT-TYPE
 	DEFVAL { 0 }
         ::= { rcVrfIpVpnTableEntry 7 }
 
+rcVrfNameTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF RcVrfNameEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "This table is for EDM and SNMP agent to get source vrf name
+             for inter-vrf route redistribute."
+        ::= { rcVrfObjects 5 }
+
+rcVrfNameEntry OBJECT-TYPE
+        SYNTAX RcVrfNameEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "Each entry has the vrfid and name for source vrf needed by
+            inter-vrf route redistribute."
+        INDEX { rcVrfNameVrfId }
+        ::= { rcVrfNameTable 1 }
+
+RcVrfNameEntry ::=
+        SEQUENCE {
+            rcVrfNameVrfId
+                VrfIdentifier,            
+            rcVrfNameVrfName
+                DisplayString
+        }
+
+rcVrfNameVrfId OBJECT-TYPE
+        SYNTAX VrfIdentifier
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The unique id of this virtual router instance."
+    ::= { rcVrfNameEntry 1 }   
+
+rcVrfNameVrfName OBJECT-TYPE
+        SYNTAX DisplayString (SIZE (0..32))
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The Name of the Virtual Router."
+    ::= { rcVrfNameEntry 2 }    
+
+rcIpMvpnTable   OBJECT-TYPE
+    SYNTAX        SEQUENCE OF RcIpMvpnTableEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION   "Table required to configure mvpn"
+    ::= { rcIp 31 }
+
+rcIpMvpnTableEntry  OBJECT-TYPE
+    SYNTAX         RcIpMvpnTableEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION    "Entries in this table are per rcVrfId."
+    INDEX          { rcIpMvpnVrfId }
+    ::= { rcIpMvpnTable 1 }
+
+RcIpMvpnTableEntry ::=
+    SEQUENCE {
+              rcIpMvpnVrfId  VrfIdentifier,
+              rcIpMvpnEnable EnableValue,
+              rcIpMvpnFwdCacheTimeout Integer32
+             }
+
+rcIpMvpnVrfId OBJECT-TYPE
+    SYNTAX        VrfIdentifier
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION   "The VrfId serves as the Index for rcVrfIpMvpnTableEntry"
+    ::= { rcIpMvpnTableEntry 1 }
+
+rcIpMvpnEnable  OBJECT-TYPE
+    SYNTAX        EnableValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION   "The status of mvpn on a vrf."
+    DEFVAL        { disable }
+    ::= { rcIpMvpnTableEntry 2 }
+
+  rcIpMvpnFwdCacheTimeout OBJECT-TYPE
+     SYNTAX        Integer32 (10..86400)
+     MAX-ACCESS    read-write
+     STATUS        current
+     DESCRIPTION   "Mvpn Fwd Cache Timeout in seconds"
+     DEFVAL         { 210 }
+     ::= {  rcIpMvpnTableEntry 3 }
+
 rcSlppMib OBJECT IDENTIFIER ::= { rcSlpp 1 }
 
 rcSlppNotifications OBJECT IDENTIFIER ::= { rcSlppMib 0 }
@@ -61585,7 +62980,12 @@ RcSlppPortEntry ::= SEQUENCE {
     rcSlppPortPktRxThreshold      Integer32,
     rcSlppPortSlppEnable          TruthValue,
     rcSlppPortIncomingVlanId      Integer32,
-    rcSlppPortSrcNodeType         INTEGER
+    rcSlppPortSrcNodeType         INTEGER,
+    rcSlppPortPktRxCount          Integer32,
+    rcSlppPortTimeToClrPktRxCount Unsigned32,
+    rcSlppPortRemainingTimeToClrPktRxCount Unsigned32,
+    rcSlppPortClearPktRxCount	TruthValue
+
 }
 
 rcSlppPortIfIndex OBJECT-TYPE
@@ -61628,6 +63028,42 @@ rcSlppPortSrcNodeType OBJECT-TYPE
     STATUS        current
     DESCRIPTION  "The src node type of the received slpp Pkt." 
     ::= { rcSlppPortEntry 6 }
+
+rcSlppPortPktRxCount OBJECT-TYPE
+    SYNTAX            Integer32  (1..500)
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION  "Total number of SLPP packets received on the port."
+    ::= { rcSlppPortEntry 7}
+
+rcSlppPortTimeToClrPktRxCount OBJECT-TYPE
+    SYNTAX       Unsigned32 (1..86400)
+    UNITS        "seconds"
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION "Time to clear the SLPP Rx PDU counter. This has a default
+                 value of 86400 seconds. Once SLPP is enabled and port
+                 starts receiving SLPP PDUs, a timer is started and once
+                 the timer exceeds this configured value, rcSlppPortPktRxCount
+                 is reset to zero."
+    ::= {rcSlppPortEntry 12}
+
+rcSlppPortRemainingTimeToClrPktRxCount OBJECT-TYPE
+    SYNTAX       Unsigned32 (1..86400)
+    UNITS        "seconds"
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION  "Remaining time to clear the SLPP Rx PDU counter. It is
+                  calculated using rcSlppPortTimeToClrPktRxCount and has
+                  a granularity of 5 seconds."
+    ::= { rcSlppPortEntry 13}
+
+rcSlppPortClearPktRxCount 	OBJECT-TYPE
+    SYNTAX       TruthValue
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION  "Clear the SLPP Rx PDU counter."
+    ::= { rcSlppPortEntry 14}
 
 rcSlppIncomingVlanId OBJECT-TYPE
     SYNTAX        INTEGER (1..4094)
@@ -64797,16 +66233,18 @@ rcVrrpTmpOperationsPrimaryIpAddr OBJECT-TYPE
    ::= { rcVrrpTmpOperationsEntry 9 }
 
 rcVrrpTmpOperationsAdvInterval OBJECT-TYPE
-   SYNTAX       TimeInterval (1..4096)
-   UNITS        "centiseconds"
+   SYNTAX       TimeInterval (1..40)
+   UNITS        "seconds"
    MAX-ACCESS   read-create
    STATUS       current
    DESCRIPTION
-       "The time interval, in centiseconds, between sending
+       "The time interval, in seconds, between sending
        advertisement messages. Only the master router sends
-       VRRP advertisements."
+       VRRP advertisements. It is configured in seconds, 
+       but it is converted into centiseconds when used 
+       in the VRRP packets."
    REFERENCE " RFC 3768 section 5.3.7"
-   DEFVAL       { 100}
+   DEFVAL       { 1}
    ::= { rcVrrpTmpOperationsEntry 10 }
 
 rcVrrpTmpOperationsPreemptMode OBJECT-TYPE
@@ -65589,7 +67027,7 @@ rcVrrpExtOperationsLinkLocalAddr OBJECT-TYPE
 rcVrrpExtOperationsGlobalIpAddr OBJECT-TYPE  
 	SYNTAX       InetAddress
 	MAX-ACCESS   read-create
-	STATUS       current
+	STATUS       obsolete
 	DESCRIPTION
 	  "The assigned Global addresses to the  virtual router 
 	   interface. This mib object support only IPv6 address
@@ -65916,7 +67354,9 @@ RcIsisPlsbEntry   ::=
 	rcIsisPlsbPrimaryVlan	  Integer32, 
 	rcIsisPlsbSmltSplitBEB	  INTEGER,
 	rcIsisPlsbSmltBmac	  MacAddress,
-	rcIsisPlsbSmltPeerSysId   IsisSystemID  
+	rcIsisPlsbSmltPeerSysId   IsisSystemID,  
+	rcIsisPlsbMcast           EnableValue,
+        rcIsisPlsbMcastFwdCacheTimeout Integer32
         }
 
 rcIsisPlsbId OBJECT-TYPE
@@ -66006,6 +67446,23 @@ rcIsisPlsbSmltPeerSysId OBJECT-TYPE
         STATUS        current
         DESCRIPTION   "ISIS PLSB SMLT Peer's system-id for this plsb instance."
         ::= { rcIsisPlsbEntry 11 }
+
+rcIsisPlsbMcast OBJECT-TYPE
+        SYNTAX        EnableValue
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "ISIS PLSB Multicast enable"
+        DEFVAL        { disable }
+        ::= { rcIsisPlsbEntry 12 }
+
+rcIsisPlsbMcastFwdCacheTimeout OBJECT-TYPE
+        SYNTAX        Integer32 (10..86400)
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION   "Multicast Fwd Cache Timeout in seconds"
+        DEFVAL        { 210 }
+        ::= { rcIsisPlsbEntry 13 }
+
 
 -- BEGIN rcIsisCircuitPlsbTable --
 
@@ -67229,6 +68686,220 @@ rcIsisSpbmPortDropStatsLastDropMacHostName OBJECT-TYPE
                        SA or DA on SPBM bvlan belongs"
         ::= { rcIsisSpbmPortDropStatsEntry 11}
 
+-- If the following table is modified, you MUST make sure
+-- that table rcIsisSpbmIpMcastRouteUniRcvrsTable is also
+-- modified, as it must have the same indices as the following
+-- table (plus egressVlan)!!
+rcIsisSpbmIpMcastRouteTable      OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcIsisSpbmIpMcastRouteEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "SPBM IP Multicast Route Table"
+        ::= { rcIsis 19 }
+
+rcIsisSpbmIpMcastRouteEntry OBJECT-TYPE
+        SYNTAX          RcIsisSpbmIpMcastRouteEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "SPBM IP Multicast Route Entry"
+        INDEX           { rcIsisSpbmIpMcastGroup,
+                          rcIsisSpbmIpMcastSource,
+                          rcIsisSpbmIpMcastVsnIsid,
+                          rcIsisSpbmIpMcastNickName }
+        ::= { rcIsisSpbmIpMcastRouteTable 1 }
+
+RcIsisSpbmIpMcastRouteEntry ::= SEQUENCE {
+        rcIsisSpbmIpMcastGroup          IpAddress,
+        rcIsisSpbmIpMcastSource         IpAddress,
+        rcIsisSpbmIpMcastVsnIsid        Integer32,
+        rcIsisSpbmIpMcastNickName       Integer32,
+        rcIsisSpbmIpMcastSourceBeb      OCTET STRING,
+        rcIsisSpbmIpMcastVlanId         Integer32,
+        rcIsisSpbmIpMcastVrfName        DisplayString,
+        rcIsisSpbmIpMcastDataIsid       Integer32,
+        rcIsisSpbmIpMcastNniPorts       DisplayString,
+        rcIsisSpbmIpMcastType           INTEGER,
+	rcIsisSpbmIpMcastBvlan          Integer32
+        }
+
+rcIsisSpbmIpMcastGroup OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "The IP multicast group address for which this entry
+            contains multicast routing information."
+    ::= { rcIsisSpbmIpMcastRouteEntry  1 }
+
+rcIsisSpbmIpMcastSource OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "The IP address  of the multicast source for which this entry
+            contains multicast routing information."
+    ::= { rcIsisSpbmIpMcastRouteEntry  2 }
+
+rcIsisSpbmIpMcastVsnIsid OBJECT-TYPE
+    SYNTAX     Integer32 (0..16777215)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "Virtual Services Network ISID"
+    ::= { rcIsisSpbmIpMcastRouteEntry  3 }
+
+rcIsisSpbmIpMcastNickName OBJECT-TYPE
+    SYNTAX     Integer32 (0..16777215)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "Multicast nick name"
+    ::= { rcIsisSpbmIpMcastRouteEntry  4 }
+
+rcIsisSpbmIpMcastSourceBeb OBJECT-TYPE
+    SYNTAX     OCTET STRING (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "Source Backbone Edge Bridge name"
+    ::= { rcIsisSpbmIpMcastRouteEntry  5 }
+
+rcIsisSpbmIpMcastVlanId OBJECT-TYPE
+    SYNTAX     Integer32
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "VLAN ID of the interface"
+    ::= { rcIsisSpbmIpMcastRouteEntry  6 }
+
+rcIsisSpbmIpMcastVrfName OBJECT-TYPE
+    SYNTAX     DisplayString (SIZE (0..64))
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "VRF name of the interface"
+    ::= { rcIsisSpbmIpMcastRouteEntry  7 }
+
+
+rcIsisSpbmIpMcastDataIsid OBJECT-TYPE
+    SYNTAX     Integer32 (1..16777215)
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "Data ISID"
+    ::= { rcIsisSpbmIpMcastRouteEntry  8 }
+
+
+rcIsisSpbmIpMcastNniPorts OBJECT-TYPE
+    SYNTAX     DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "List of NNI ports"
+    ::= { rcIsisSpbmIpMcastRouteEntry  9 }
+
+rcIsisSpbmIpMcastType OBJECT-TYPE
+        SYNTAX          INTEGER { 
+                                  routed(1),
+                                  snoop(2)
+                        } 
+        MAX-ACCESS      read-only 
+        STATUS          current
+        DESCRIPTION     "Indicates the type of the interface"
+        ::= { rcIsisSpbmIpMcastRouteEntry  10}
+
+rcIsisSpbmIpMcastBvlan OBJECT-TYPE
+    SYNTAX     Integer32 
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "Backbone VLAN on which SPB traffic is carried"
+    ::= { rcIsisSpbmIpMcastRouteEntry  11 }
+
+
+-- Spbm ip multicast route UNI receivers table (vlan/port pairs).
+-- MUST have same indices as the rcIsisSpbmIpMcastRouteTable 
+-- with the addition of egressVlan!!
+-- This table is used in conjunction with rcIsisSpbmIpMcastRouteTable
+-- in order to gather up all the UNI receivers.
+rcIsisSpbmIpMcastRouteUniRcvrsTable      OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcIsisSpbmIpMcastRouteUniRcvrsEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "SPBM IP Multicast Route UNI Receivers Table"
+        ::= { rcIsis 20 }
+
+rcIsisSpbmIpMcastRouteUniRcvrsEntry OBJECT-TYPE
+        SYNTAX          RcIsisSpbmIpMcastRouteUniRcvrsEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "SPBM IP Multicast Route UNI Receivers Entry"
+        INDEX           { rcIsisSpbmIpMcastUniRcvrsGroup,
+                          rcIsisSpbmIpMcastUniRcvrsSource,
+                          rcIsisSpbmIpMcastUniRcvrsVsnIsid,
+                          rcIsisSpbmIpMcastUniRcvrsNickName,
+ 			  rcIsisSpbmIpMcastUniRcvrsEgressVlan }
+        ::= { rcIsisSpbmIpMcastRouteUniRcvrsTable 1 }
+
+RcIsisSpbmIpMcastRouteUniRcvrsEntry ::= SEQUENCE {
+        rcIsisSpbmIpMcastUniRcvrsGroup          IpAddress,
+        rcIsisSpbmIpMcastUniRcvrsSource         IpAddress,
+        rcIsisSpbmIpMcastUniRcvrsVsnIsid        Integer32,
+        rcIsisSpbmIpMcastUniRcvrsNickName       Integer32,
+ 	rcIsisSpbmIpMcastUniRcvrsEgressVlan     Integer32,
+        rcIsisSpbmIpMcastUniRcvrsEgressActivePorts  PortSet
+        }
+
+rcIsisSpbmIpMcastUniRcvrsGroup OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "The IP multicast group address for which this entry
+            contains multicast routing information."
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  1 }
+
+rcIsisSpbmIpMcastUniRcvrsSource OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "The IP address  of the multicast source for which this entry
+            contains multicast routing information."
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  2 }
+
+rcIsisSpbmIpMcastUniRcvrsVsnIsid OBJECT-TYPE
+    SYNTAX     Integer32 (0..16777215)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "Virtual Services Network ISID"
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  3 }
+
+rcIsisSpbmIpMcastUniRcvrsNickName OBJECT-TYPE
+    SYNTAX     Integer32 (0..16777215)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "Multicast nick name"
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  4 }
+
+rcIsisSpbmIpMcastUniRcvrsEgressVlan OBJECT-TYPE
+    SYNTAX     Integer32 (0..4094)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "The Vlan associated with this egress entry. "
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  5 }
+
+rcIsisSpbmIpMcastUniRcvrsEgressActivePorts OBJECT-TYPE
+    SYNTAX     PortSet
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+            "The set of ports in the vlan that have UNI receivers for this multicast route. "
+    ::= { rcIsisSpbmIpMcastRouteUniRcvrsEntry  6 }
+
 rcPlsbGlobal  OBJECT IDENTIFIER ::= {rcPlsb 1}
 
 rcPlsbGlobalVlans OBJECT-TYPE
@@ -67560,7 +69231,7 @@ rcCfmGlobals OBJECT IDENTIFIER ::= { rcCfm 10 }
 rcCfmGlobalsEtherType OBJECT-TYPE
         SYNTAX        Integer32 (1..'FFFF'h)
         MAX-ACCESS    read-write
-        STATUS        current
+        STATUS        deprecated
         DESCRIPTION   "CFM Ether Type"
         DEFVAL        { '8902'h }
         ::= { rcCfmGlobals 1 }
@@ -69647,6 +71318,889 @@ rcCfmL2IpTraceReplyFlag    OBJECT-TYPE
                          7 - L2Trace completed
 			 8 - Lookup failure for L2Trace"
 
-	::= { rcCfmL2IpTraceReplyEntry 16}	 
+	::= { rcCfmL2IpTraceReplyEntry 16}
 
+-- wlan scalars and traps and tables
+
+rcWlan OBJECT IDENTIFIER ::= { rcMgmt 207}
+
+rcWlanScalars OBJECT IDENTIFIER ::= { rcWlan 1}
+
+rcWlanVlanReserveVlanList       OBJECT-TYPE
+	SYNTAX		OCTET STRING(SIZE(0..512))
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION	"The object is used as bitfield to indicate all the VLANs  that are reserved. 
+                      	Each VLAN is stored as a bit. The most-significant (left-most) bit 
+                      	represents Vlan Id  1."
+	::= { rcWlanScalars  1 }
+	
+rcWlanVlanReserveNumberVlans	OBJECT-TYPE
+	SYNTAX        Integer32
+	MAX-ACCESS    read-only
+	STATUS        current
+	DESCRIPTION   "The object contains the number of reserved VLANs."
+	DEFVAL        { 0 }
+	::= { rcWlanScalars  2 }
+
+rcWlanVlanReserveVlanInUse	OBJECT-TYPE
+        SYNTAX        OCTET STRING (SIZE (0..512))  
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The object indicates if a Vlan Id from the reserved pool is in use."
+	::= { rcWlanScalars  3 }
+
+rcWlanVlanReserveVlanInUseBySmlt	OBJECT-TYPE
+        SYNTAX        OCTET STRING(SIZE(0..512))
+	MAX-ACCESS    read-only
+	STATUS        current
+        DESCRIPTION   "The object indicates if a Vlan Id from the reserved pool is in use by
+			SMLT."
+	::= { rcWlanScalars  4 }
+
+rcWlanVlanReserveSmltConfigMatch	OBJECT-TYPE
+        SYNTAX        OCTET STRING(SIZE(0..512))   
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The object indicates if a Vlan Id from the reserved pool is the same for
+			SMLT peers."
+	::= { rcWlanScalars  5 }
+
+rcWlanConfigSystemSmltDataIPAddressType	OBJECT-TYPE
+   	SYNTAX       InetAddressType
+      	MAX-ACCESS   read-write
+      	STATUS       current
+      	DESCRIPTION  "This object indicates the type of internet address in the
+        	     corresponding instance of rcWlanConfigSystemSmltDataIPAddress. 
+	             Currently,only the values ipv4(1) and ipv6(2) are allowed."
+     	::= { rcWlanScalars  6 }
+
+rcWlanConfigSystemSmltDataIPAddress OBJECT-TYPE
+      	SYNTAX       InetAddress (SIZE(4|16))
+      	MAX-ACCESS   read-write
+      	STATUS       current
+      	DESCRIPTION    "This object contains the IP address that will be used for    
+         		Wireless LAN switch SMLT data tunnel."       
+      	::= { rcWlanScalars  7}
+
+rcWlanConfigSmltHoldDownTimer OBJECT-TYPE
+        SYNTAX        Integer32 (0..3600)
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Timer value, the range of value is from 0 to 3600. Do not start                 
+                      forwarding data until local syncronization is done."
+        DEFVAL        { 0 }
+        ::= { rcWlanScalars  8 }
+
+rcWlanConfigSmltEnabled OBJECT-TYPE
+    	SYNTAX        TruthValue
+    	MAX-ACCESS    read-write
+    	STATUS        current
+    	DESCRIPTION   "This is used to enable SMLT wireless feature.
+			A value of true(1) means enabled."
+    	DEFVAL       { false }
+    	::= { rcWlanScalars  9 }
+
+rcWlanConfigSmltTcpUdpBasePort OBJECT-TYPE
+	SYNTAX       InetPortNumber (49152..64983)
+	MAX-ACCESS   read-write
+	STATUS       current
+	DESCRIPTION  "TCP/UDP port to be used in SMLT."
+	DEFVAL       { 61000 }
+	::= { rcWlanScalars  10 }
+
+rcWlanConfigRemoteVlanStg OBJECT-TYPE
+	SYNTAX       Integer32 (0..64|255)
+	MAX-ACCESS   read-write
+	STATUS       current
+	DESCRIPTION  "The stg id for the remote vlan in the STP/MSTP mode.
+		     In STP mode, the stg range is 1 to 64.
+		     IN MSTP mode, the msti range is 0 to 63.
+		     Setting to 255 is used to remove the valid stg/mstp from wlan."
+	::= { rcWlanScalars  11 }
+
+rcWlanConfigManagementAddressType OBJECT-TYPE
+   	SYNTAX       InetAddressType
+    	MAX-ACCESS   read-write
+    	STATUS       current
+    	DESCRIPTION
+        	"This object indicates the type of address contained in the object
+        	rcWlanConfigManagementAddress."
+    	::= { rcWlanScalars  12 }
+
+rcWlanConfigManagementAddress OBJECT-TYPE
+    	SYNTAX       InetAddress
+    	MAX-ACCESS   read-write
+    	STATUS       current
+    	DESCRIPTION
+        	"This address is used as the management interface of the wireless switch."
+    	::= { rcWlanScalars  13 }
+
+rcWlanMobSwTunnelTable	OBJECT-TYPE
+	SYNTAX	SEQUENCE OF RcWlanMobSwTunnelEntry
+	MAX-ACCESS	not-accessible
+	STATUS	current
+	DESCRIPTION  "this table contains entries of the Access and Mobility tunnels
+		that are established at the local switch."
+	::= { rcWlan 2}
+
+rcWlanMobSwTunnelEntry	OBJECT-TYPE
+	SYNTAX	RcWlanMobSwTunnelEntry
+	MAX-ACCESS	not-accessible
+	STATUS	current
+	DESCRIPTION
+		"A peer mobility switch or an access point.With one rcWlanMobSwTunnelIntfId 
+		there ccould be two endpoints with different rcWlanMobSwTunnelPeerDeviceId 
+		in the case of mobility tunnel established with SMLT pair"
+	INDEX	{ rcWlanMobSwTunnelIntfId,
+		  rcWlanMobSwTunnelPeerDeviceId }
+	::= { rcWlanMobSwTunnelTable 1 }
+
+RcWlanMobSwTunnelEntry ::=
+	SEQUENCE {
+	rcWlanMobSwTunnelIntfId	    		Integer32,
+	rcWlanMobSwTunnelPeerDeviceId		MacAddress,
+	rcWlanMobSwTunnelPeerAddrType		InetAddressType,
+	rcWlanMobSwTunnelPeerAddr		InetAddress,
+	rcWlanMobSwTunnelPeerUdpPort		InetPortNumber,
+	rcWlanMobSwTunnelStatus			INTEGER,
+	rcWlanMobSwTunnelType			INTEGER
+	}
+
+rcWlanMobSwTunnelIntfId	OBJECT-TYPE
+	SYNTAX		Integer32(0..65535)
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION	"Used to display Logical Port (for example, WLAN tunnel)
+                        for the tunnel."
+	::={rcWlanMobSwTunnelEntry 1}
+
+rcWlanMobSwTunnelPeerDeviceId	OBJECT-TYPE
+	SYNTAX	MacAddress
+	MAX-ACCESS	not-accessible
+	STATUS	current
+	DESCRIPTION
+		"The MAC address that uniquely identifies the peer mobility switch
+		or access point on the other side of the tunnel."
+	::= { rcWlanMobSwTunnelEntry 2 }
+
+rcWlanMobSwTunnelPeerAddrType OBJECT-TYPE
+	SYNTAX	InetAddressType
+	MAX-ACCESS	read-only
+	STATUS	current
+	DESCRIPTION
+		"This object indicates the type of internet address in the
+		corresponding instance of rcWlanMobSwTunnelPeerAddr.
+		Currently, only the values ipv4(1) and ipv6(2) are allowed."
+	::= { rcWlanMobSwTunnelEntry 3 }
+
+rcWlanMobSwTunnelPeerAddr OBJECT-TYPE
+	SYNTAX	InetAddress (SIZE(4|16))
+	MAX-ACCESS	read-only
+	STATUS	current
+	DESCRIPTION
+		"The address of the peer mobility switch or access point.
+		The type of address is indicated by the corresponding
+		instance of rcWlanMobSwTunnelPeerAddrType."
+	::= { rcWlanMobSwTunnelEntry 4 }
+
+rcWlanMobSwTunnelPeerUdpPort OBJECT-TYPE
+	SYNTAX	InetPortNumber
+	MAX-ACCESS	read-only
+	STATUS	current
+	DESCRIPTION
+		"Indicates the UDP port which the peer mobility switch or access
+		point will use for control protocol communication with the local
+		switch."
+	::= { rcWlanMobSwTunnelEntry 5 }
+
+rcWlanMobSwTunnelStatus	OBJECT-TYPE
+	SYNTAX	INTEGER {
+			up(1),
+			down(2)
+		}
+	MAX-ACCESS	read-only
+	STATUS	current
+	DESCRIPTION
+		"Indicates the status of the mobility tunnel connection to this
+		peer mobility switch, or the access tunnel to this access point."
+	::= { rcWlanMobSwTunnelEntry 6 }
+
+rcWlanMobSwTunnelType OBJECT-TYPE
+	SYNTAX	INTEGER {
+			mobTunnel(1),
+			accessTunnel(2),
+			resPeerAccessTunnel(3)
+		}
+	MAX-ACCESS	read-only
+	STATUS	current
+	DESCRIPTION
+		"The tunnel type."
+	::= { rcWlanMobSwTunnelEntry 7 }
+
+
+
+rcWlanNotifications	OBJECT IDENTIFIER ::= { rcWlan 3 }
+
+rcWlanNotificationErrorType	OBJECT-TYPE
+	SYNTAX	INTEGER{
+                        none(1),
+                        holdDownTimerConfigMismatch(2),
+                        smltDataIpConfigMismatch(3),
+                        smltDatUdpPortConfigMismatch(4),
+                        lvlanCollision(5),
+                        rvlanCollision(6),
+                        mvlanMappingMismatch(7)
+			}
+	MAX-ACCESS	accessible-for-notify
+	STATUS		current
+	DESCRIPTION	"Indicates the type of the error occurred."
+	::= { rcWlanNotifications 1}
+
+rcWlanNotificationTrapInfo	OBJECT-TYPE
+	SYNTAX		OCTET STRING (SIZE (0..255))
+  	MAX-ACCESS	accessible-for-notify
+  	STATUS		current
+  	DESCRIPTION	"String that contains error details."
+  	::= { rcWlanNotifications 2 }
+
+rcWlanNotificationMobilityTunnelPeerId OBJECT-TYPE
+    	SYNTAX         MacAddress
+    	MAX-ACCESS     accessible-for-notify
+    	STATUS         current
+    	DESCRIPTION	"This object contains the MAC address that uniquely identifies the
+         		Tunnel peer id.  This value is what is used to identify
+         		this switch in peer switches, and is used as an in traps."
+    	::= { rcWlanNotifications 3 }
+
+rcWlanNotificationMobTunnelAddressType OBJECT-TYPE
+      	SYNTAX         InetAddressType
+      	MAX-ACCESS     accessible-for-notify
+      	STATUS         current
+      	DESCRIPTION	"This object indicates the type of internet address in the
+        		corresponding instance of rcWlanAuxMobTunnelAddress. Currently,
+        		only the values ipv4(1) and ipv6(2) are allowed."
+      	::= { rcWlanNotifications 4 }
+
+rcWlanNotificationMobTunnelAddress OBJECT-TYPE
+      	SYNTAX         InetAddress (SIZE(4|16))
+      	MAX-ACCESS     accessible-for-notify
+      	STATUS         current
+      	DESCRIPTION	"This object contains the tunnel IP address that will be used in    
+         		errors notification traps."       
+      	::= { rcWlanNotifications 5}
+
+rcWlanNotificationMobTunnelMVlanName OBJECT-TYPE
+    	SYNTAX       SnmpAdminString (SIZE(1..32))
+    	MAX-ACCESS   accessible-for-notify
+    	STATUS       current
+    	DESCRIPTION	"This object contains mobility VLAN name to be used in errors notification traps."
+    	::= { rcWlanNotifications 6 }
+
+rcnWlanTrap	NOTIFICATION-TYPE
+	OBJECTS {rcWlanNotificationErrorType, 
+		 rcWlanNotificationTrapInfo, 
+                 rcWlanNotificationMobilityTunnelPeerId, 
+                 rcWlanNotificationMobTunnelAddressType, 
+                 rcWlanNotificationMobTunnelAddress,
+                 rcWlanNotificationMobTunnelMVlanName } 
+	STATUS	current
+	DESCRIPTION	"A trap for WLAN to report errors"
+	::= { rcTrapsMib 290}
+
+rcWlanTunnelStatTable OBJECT-TYPE	
+        SYNTAX        SEQUENCE OF RcWlanTunnelStatEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "A table used to store wireless LAN tunnel statistics."
+        ::= { rcWlan 4 }
+ 
+rcWlanTunnelStatEntry OBJECT-TYPE
+        SYNTAX        RcWlanTunnelStatEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "interface counters"
+        INDEX         { rcWlanTunnelStatInterfaceId,
+                        rcWlanTunnelStatPeerDeviceId}
+        ::= { rcWlanTunnelStatTable 1 }
+ 
+RcWlanTunnelStatEntry ::= SEQUENCE {
+	      	rcWlanTunnelStatInterfaceId                    Integer32,
+              	rcWlanTunnelStatPeerDeviceId                   MacAddress,
+                rcWlanTunnelStatBridgeInUnicastFrames          Counter64,
+                rcWlanTunnelStatBridgeInMulticastFrames        Counter64,
+                rcWlanTunnelStatBridgeInBroadcastFrames        Counter64,
+                rcWlanTunnelStatBridgeInDiscards               Counter64,
+                rcWlanTunnelStatBridgeOutFrames                Counter64,
+                rcWlanTunnelStatRouteInUnicastFrames           Counter64,
+                rcWlanTunnelStatRouteInMulticastFrames         Counter64,
+                rcWlanTunnelStatRouteInDiscards                Counter64,
+                rcWlanTunnelStatRouteOutUnicastFrames          Counter64,
+                rcWlanTunnelStatRouteOutMulticastFrames        Counter64,
+            	rcWlanTunnelStatKeepaliveInFrames              Counter64,
+            	rcWlanTunnelStatKeepaliveOutFrames             Counter64,
+            	rcWlanTunnelStatAllInFrames                    Counter64,
+            	rcWlanTunnelStatAllOutFrames                   Counter64,
+            	rcWlanTunnelStatAllInDiscardFrames             Counter64,
+            	rcWlanTunnelStatAllOutDiscardFrames            Counter64,
+		rcWlanTunnelStatReset			       INTEGER
+        }
+
+rcWlanTunnelStatInterfaceId     OBJECT-TYPE
+        SYNTAX        Integer32(0..65535)
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "Used to display Logical Port (for example, WLAN tunnel)
+                      for the tunnel."
+        ::= { rcWlanTunnelStatEntry 1 }
+
+rcWlanTunnelStatPeerDeviceId   OBJECT-TYPE
+        SYNTAX        MacAddress
+        MAX-ACCESS    not-accessible
+        STATUS        current
+        DESCRIPTION   "The MAC address that uniquely identifies the 
+		       peer mobility switch or access point on the 
+		       other side of the tunnel."
+        ::= { rcWlanTunnelStatEntry 2 }
+	 
+rcWlanTunnelStatBridgeInUnicastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming unicast frames that 
+		      were bridged."
+   	::= { rcWlanTunnelStatEntry 3 }
+
+rcWlanTunnelStatBridgeInMulticastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming multicast frames that 
+		      were bridged."
+   	::= { rcWlanTunnelStatEntry 4 }
+
+rcWlanTunnelStatBridgeInBroadcastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming broadcast frames that 
+		      were bridged."
+   	::= { rcWlanTunnelStatEntry 5 }
+
+rcWlanTunnelStatBridgeInDiscards OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of frames that were discarded by
+		      the bridging entity."
+   	::= { rcWlanTunnelStatEntry 6 }
+       
+rcWlanTunnelStatBridgeOutFrames  OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing frames that 
+		      were bridged."
+   	::= { rcWlanTunnelStatEntry 7 }
+       
+rcWlanTunnelStatRouteInUnicastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming unicast frames that 
+		      were routed."
+   	::= { rcWlanTunnelStatEntry 8 }
+    
+rcWlanTunnelStatRouteInMulticastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming multicast frames that 
+		      were routed."
+   	::= { rcWlanTunnelStatEntry 9 } 
+
+rcWlanTunnelStatRouteInDiscards OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming frames that were discarded by
+		      the routing entity."
+   	::= { rcWlanTunnelStatEntry 10 }        
+
+rcWlanTunnelStatRouteOutUnicastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing unicast frames that 
+		      were routed."
+   	::= { rcWlanTunnelStatEntry 11 }   
+
+rcWlanTunnelStatRouteOutMulticastFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing multicast frames that 
+		      were routed."
+   	::= { rcWlanTunnelStatEntry 12 } 
+
+rcWlanTunnelStatKeepaliveInFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming keepalive frames."
+   	::= { rcWlanTunnelStatEntry 13 }       
+
+rcWlanTunnelStatKeepaliveOutFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing keepalive frames."
+   	::= { rcWlanTunnelStatEntry 14 }      
+
+rcWlanTunnelStatAllInFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming frames that 
+		      were bridged, routed and incoming keepalive frames."
+   	::= { rcWlanTunnelStatEntry 15 }             
+
+rcWlanTunnelStatAllOutFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing frames that 
+		      were bridged, routed and outgoing keepalive frames."
+   	::= { rcWlanTunnelStatEntry 16 }            
+
+rcWlanTunnelStatAllInDiscardFrames OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of incoming frames that were discarded."
+   	::= { rcWlanTunnelStatEntry 17 }      
+
+rcWlanTunnelStatAllOutDiscardFrames  OBJECT-TYPE
+        SYNTAX        Counter64
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of outgoing frames that were discarded."
+   	::= { rcWlanTunnelStatEntry 18 }    
+
+rcWlanTunnelStatReset OBJECT-TYPE
+   	SYNTAX        INTEGER {
+        	             none(1),
+                	     reset(2)
+                 	}	
+    	MAX-ACCESS    read-write
+    	STATUS        current
+    	DESCRIPTION   "This is an action object. When this object is set to reset(2), 
+         	       statistics for the tunnel will be cleared. 
+         	       Read on this object always returns none(1)."
+    	::= { rcWlanTunnelStatEntry 19 }
+
+
+-- The Transmit L2 Multicast Trace Table
+
+rcCfmTransmitL2McastTraceTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcCfmTransmitL2McastTraceEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current 
+        DESCRIPTION     
+                "This table contains a list of l2 multicast route trace
+                requests."
+        ::= { rcCfm 41}
+
+rcCfmTransmitL2McastTraceEntry OBJECT-TYPE
+        SYNTAX          RcCfmTransmitL2McastTraceEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current 
+        DESCRIPTION     "CFM Transmit L2 Multicast Trace Entry."
+        INDEX           { rcCfmTransmitL2McastTraceSrcIpAddrType,
+                          rcCfmTransmitL2McastTraceSrcIpAddr,
+                          rcCfmTransmitL2McastTraceGroupIpAddrType,
+                          rcCfmTransmitL2McastTraceGroupIpAddr,
+                          rcCfmTransmitL2McastTraceServiceType,
+                          rcCfmTransmitL2McastTraceServiceId
+                        }
+        ::= { rcCfmTransmitL2McastTraceTable 1 }
+
+
+RcCfmTransmitL2McastTraceEntry ::= SEQUENCE {
+
+        rcCfmTransmitL2McastTraceSrcIpAddrType          InetAddressType,
+        rcCfmTransmitL2McastTraceSrcIpAddr              InetAddress,
+        rcCfmTransmitL2McastTraceGroupIpAddrType        InetAddressType,
+        rcCfmTransmitL2McastTraceGroupIpAddr            InetAddress,
+        rcCfmTransmitL2McastTraceServiceType            INTEGER,
+        rcCfmTransmitL2McastTraceServiceId              Integer32,
+        rcCfmTransmitL2McastTraceVrfName                DisplayString,
+        rcCfmTransmitL2McastTraceRowStatus              RowStatus,
+        rcCfmTransmitL2McastTracePriority               Integer32,
+        rcCfmTransmitL2McastTraceTtl                    Integer32,
+        rcCfmTransmitL2McastTraceSeqNumber              Integer32,
+        rcCfmTransmitL2McastTraceStatus                 INTEGER,
+        rcCfmTransmitL2McastTraceResultOk               TruthValue,
+        rcCfmTransmitL2McastTraceFlag                   INTEGER
+        }
+
+rcCfmTransmitL2McastTraceSrcIpAddrType OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "The address type of Source IP Address"
+	::= { rcCfmTransmitL2McastTraceEntry 1 }
+
+rcCfmTransmitL2McastTraceSrcIpAddr OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Source IP Address. Support ipv4 at this time"
+	::= { rcCfmTransmitL2McastTraceEntry 2 }
+
+rcCfmTransmitL2McastTraceGroupIpAddrType OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "The address type of Multicast Group IP Address"
+	::= { rcCfmTransmitL2McastTraceEntry 3 }
+
+rcCfmTransmitL2McastTraceGroupIpAddr OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Multicast Group IP Address. Support ipv4 at this time"
+	::= { rcCfmTransmitL2McastTraceEntry 4 }
+
+rcCfmTransmitL2McastTraceServiceType OBJECT-TYPE
+	SYNTAX          INTEGER {
+                        vlan(1),
+                        vrfid(2)
+                        }
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Service type indicates what value of service id means.
+                 vlan - indicates value maps to VLAN
+                 vrfid - indicates value maps to a VRF Id"
+	::= { rcCfmTransmitL2McastTraceEntry 5 }
+
+rcCfmTransmitL2McastTraceServiceId OBJECT-TYPE
+	SYNTAX          Integer32
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Value of VLAN or VRF-Id.  Meaning controlled by
+                rcCfmTransmitL2McastTraceServiceType.  Value must be
+                valid for type (e.g. VLAN range 1..4094)"
+	::= { rcCfmTransmitL2McastTraceEntry 6 }
+
+rcCfmTransmitL2McastTraceVrfName OBJECT-TYPE
+	SYNTAX          DisplayString (SIZE (0..64))
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The name of the Virtual Router of the originator"
+	::= { rcCfmTransmitL2McastTraceEntry 7 }
+
+rcCfmTransmitL2McastTraceRowStatus OBJECT-TYPE
+	SYNTAX          RowStatus
+	MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION     "Used to create/delete entries in the 
+                        rcCfmTransmitL2McastTraceTable.  Deletion
+                        of an entry in this table results in a corresponding
+                        rcCfmL2McastTraceReplyTable entries being deleted"
+	::= { rcCfmTransmitL2McastTraceEntry 8 }
+
+rcCfmTransmitL2McastTracePriority OBJECT-TYPE
+	SYNTAX          Integer32(0..7)
+	MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION     "Priority. 3 bit value to be used in the VLAN hdr, 
+                        if present in the transmitted frame."
+	DEFVAL {7}
+	::= { rcCfmTransmitL2McastTraceEntry 9 }
+
+rcCfmTransmitL2McastTraceTtl OBJECT-TYPE
+	SYNTAX          Integer32(0..255)
+	MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION     "The number of hops remaining to this trace.
+                        Decremented by 1 by each Bridge that handles trace.
+                        If 0 on output, the trace is not transmitted to
+                        the next hop.  The value of the TTL Field in the 
+                        trace trasnmitted by originating MEP is controlled
+                        by a Managed Object; the default value if none is 
+                        specified is 64."
+	DEFVAL {64}
+	::= { rcCfmTransmitL2McastTraceEntry 10 }
+
+rcCfmTransmitL2McastTraceSeqNumber OBJECT-TYPE
+	SYNTAX 		Integer32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION	"The transaction identifier/sequence number of the 
+                        first message (to be) sent."
+	::= { rcCfmTransmitL2McastTraceEntry 11}	
+	
+rcCfmTransmitL2McastTraceStatus OBJECT-TYPE
+	SYNTAX 		INTEGER {
+				ready(1),
+				transmit(2),
+                                abort(3)
+			}
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION	"Status of the transmit loopback service:
+			-ready.      The service is available.
+			-transmit.   The service is transmitting, or about to 
+                                     transmit the trace messages.
+                        -abort       The service is aborted or about to abort
+                                     the trace messages.
+
+			This column will also be used to avoid concurrency or 
+                        race condition problems that could occur if two or 
+                        more management entities try to 
+			use the service at the same time. "
+	DEFVAL {ready}
+	::= { rcCfmTransmitL2McastTraceEntry 12}	
+
+rcCfmTransmitL2McastTraceResultOk OBJECT-TYPE
+	SYNTAX 		TruthValue
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION	"Indicates the result of the operation:
+			-true.    The Trace Message(s) will/have been sent.
+			-false.   The Trace Message(s) will not be sent."
+	DEFVAL {true}
+	::= { rcCfmTransmitL2McastTraceEntry 13 }
+
+rcCfmTransmitL2McastTraceFlag    OBJECT-TYPE
+	SYNTAX 		INTEGER {
+				none(1),
+				internalError(2),
+                                mepDisabled(3), 
+                                noResponse(4),
+                                traceComplete(5),
+				leafNode(6),
+				noDataIsidFound(7)
+			}
+	MAX-ACCESS	read-only
+	STATUS	        current 	
+	DESCRIPTION	"Result flag indicating L2Trace status or error code. 
+                         Each enum value represents a status or error case.  
+                         1 - No error  
+                         2 - Internal Error
+                         3 - Mep must be enabled in order to perform trace
+                         4 - No response received
+                         5 - Trace completed
+			 6 - On a leaf node in the i-sid tree
+			 7 - No Data Isid was found for S,G"
+	::= {  rcCfmTransmitL2McastTraceEntry 14}
+
+
+-- The L2 Multicast Trace Reply Table
+
+rcCfmL2McastTraceReplyTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF RcCfmL2McastTraceReplyEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current 
+        DESCRIPTION     
+                "This table contains a list of multicast route trace
+                replies received by a specific MEP in response to a
+                trace message."
+        ::= { rcCfm 42}
+
+rcCfmL2McastTraceReplyEntry OBJECT-TYPE
+        SYNTAX          RcCfmL2McastTraceReplyEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current 
+        DESCRIPTION     "The L2 Multicast Trace Reply Table Entry"
+        INDEX           { rcCfmL2McastTraceReplySrcIpAddrType,
+                          rcCfmL2McastTraceReplySrcIpAddr,
+                          rcCfmL2McastTraceReplyGroupIpAddrType,
+                          rcCfmL2McastTraceReplyGroupIpAddr,
+                          rcCfmL2McastTraceReplyServiceType,
+                          rcCfmL2McastTraceReplyServiceId,
+                          rcCfmL2McastTraceReplyHop,
+                          rcCfmL2McastTraceReplyReceiveOrder
+                        }
+        ::= { rcCfmL2McastTraceReplyTable 1 }
+
+
+RcCfmL2McastTraceReplyEntry ::= SEQUENCE {
+
+        rcCfmL2McastTraceReplySrcIpAddrType          InetAddressType,
+        rcCfmL2McastTraceReplySrcIpAddr              InetAddress,
+        rcCfmL2McastTraceReplyGroupIpAddrType        InetAddressType,
+        rcCfmL2McastTraceReplyGroupIpAddr            InetAddress,
+        rcCfmL2McastTraceReplyServiceType            INTEGER,
+        rcCfmL2McastTraceReplyServiceId              Integer32,
+        rcCfmL2McastTraceReplyHop                    Integer32,
+        rcCfmL2McastTraceReplyReceiveOrder           Integer32,
+        rcCfmL2McastTraceReplyTtl                    Integer32,
+        rcCfmL2McastTraceReplyVrfName                DisplayString,  
+        rcCfmL2McastTraceReplySrcMac                 MacAddress,
+        rcCfmL2McastTraceReplyHostName               OCTET STRING,
+        rcCfmL2McastTraceReplyLastSrcMac             MacAddress,
+        rcCfmL2McastTraceReplyLastHostName           OCTET STRING,
+        rcCfmL2McastTraceReplySpbmVlanId             Integer32,
+	rcCfmL2McastTraceReplyBMac                   MacAddress,
+	rcCfmL2McastTraceReplyIsid                   Integer32
+        }
+
+rcCfmL2McastTraceReplySrcIpAddrType OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "The address type of Source IP Address"
+	::= { rcCfmL2McastTraceReplyEntry 1 }
+
+rcCfmL2McastTraceReplySrcIpAddr OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Source IP Address. Support ipv4 at this time"
+	::= { rcCfmL2McastTraceReplyEntry 2 }
+
+rcCfmL2McastTraceReplyGroupIpAddrType OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "The address type of Multicast Group IP Address"
+	::= { rcCfmL2McastTraceReplyEntry 3 }
+
+rcCfmL2McastTraceReplyGroupIpAddr OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Multicast Group IP Address. Support ipv4 at this time"
+	::= { rcCfmL2McastTraceReplyEntry 4 }
+
+rcCfmL2McastTraceReplyServiceType OBJECT-TYPE
+	SYNTAX          INTEGER {
+                        vlan(1),
+                        vrfid(2)
+                        }
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Service type indicates what value of service id means.
+                 vlan - indicates value maps to VLAN
+                 vrfid - indicates value maps to a VRF Id"
+	::= { rcCfmL2McastTraceReplyEntry 5 }
+
+rcCfmL2McastTraceReplyServiceId OBJECT-TYPE
+	SYNTAX          Integer32
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "Value of VLAN or VRF-Id.  Meaning controlled by
+                rcCfmL2McastTraceReplyServiceType.  Value must be
+                valid for type (e.g. VLAN range 1..4094)"
+	::= { rcCfmL2McastTraceReplyEntry 6 }
+
+rcCfmL2McastTraceReplyHop OBJECT-TYPE
+	SYNTAX          Integer32 (0..255)
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "The number of hops away from trace initiator"
+	::= { rcCfmL2McastTraceReplyEntry 7 }
+
+rcCfmL2McastTraceReplyReceiveOrder OBJECT-TYPE
+	SYNTAX          Integer32 (1..2147483647)
+	MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "An index to distinguish among multiple responses
+                 with the same Transaction Identifier field  value. This value
+                 is assigned sequentially from 1, in the order that the 
+                Linktrace Initiator received the responses."
+        ::= { rcCfmL2McastTraceReplyEntry 8 }
+
+rcCfmL2McastTraceReplyTtl OBJECT-TYPE
+	SYNTAX          Integer32(0..255)
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Ttl field value for a returned trace response."
+	::= { rcCfmL2McastTraceReplyEntry 9 }
+
+rcCfmL2McastTraceReplyVrfName OBJECT-TYPE
+	SYNTAX          DisplayString (SIZE (0..64))
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The name of the Virtual Router of the originator"
+        ::= { rcCfmL2McastTraceReplyEntry 10}
+
+rcCfmL2McastTraceReplySrcMac OBJECT-TYPE
+	SYNTAX          MacAddress
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "Mac address of the MP that respond to the trace
+                        request"
+	::= { rcCfmL2McastTraceReplyEntry 11 }
+
+rcCfmL2McastTraceReplyHostName OBJECT-TYPE
+	SYNTAX          OCTET STRING (SIZE (0..255))
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The host name of the replying node"
+	::= { rcCfmL2McastTraceReplyEntry 12 }
+
+rcCfmL2McastTraceReplyLastSrcMac OBJECT-TYPE
+	SYNTAX          MacAddress
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The MAC address of the node that forwarded the trace
+                        to the responding node"
+	::= { rcCfmL2McastTraceReplyEntry 13 }
+
+rcCfmL2McastTraceReplyLastHostName OBJECT-TYPE
+	SYNTAX          OCTET STRING (SIZE (0..255))
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The host name of the node that forwarded the trace
+                        to the responding node"
+	::= { rcCfmL2McastTraceReplyEntry 14 }
+
+rcCfmL2McastTraceReplySpbmVlanId OBJECT-TYPE
+	SYNTAX          Integer32
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The SPBM VLAN id used for the trace"
+	::= { rcCfmL2McastTraceReplyEntry 15 }
+
+rcCfmL2McastTraceReplyBMac OBJECT-TYPE
+	SYNTAX          MacAddress
+	MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "The multicast MAC address for the group"
+	::= { rcCfmL2McastTraceReplyEntry 16 }
+
+rcCfmL2McastTraceReplyIsid OBJECT-TYPE
+        SYNTAX        Integer32 (1..16777215)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Isid id for the group"
+	::= { rcCfmL2McastTraceReplyEntry 17 }
 END
+
+
+
+
+
+
+
+
+
+
+
+
