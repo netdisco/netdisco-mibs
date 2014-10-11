@@ -12,13 +12,31 @@ IMPORTS
         FROM INET-ADDRESS-MIB;
 
 bnLogMsgMIB       MODULE-IDENTITY
-    LAST-UPDATED "201006290000Z"
+    LAST-UPDATED "201310100000Z"
     ORGANIZATION "Nortel Networks"
     CONTACT-INFO "Global Optical Customer Service
                         Tel:   1-800 (ASK-TRAN) or
                                1-800 (ASK-ETAS)"
     DESCRIPTION  "The management information definitions for the
                   Bay Networks log message facility."
+
+    REVISION "201310100000Z" -- 10 October 2013
+    DESCRIPTION "v14:  Corrected the syntax of bnLogMsgClearMessageBuffers."
+    
+    REVISION "201204100000Z" -- 10 April 2012
+    DESCRIPTION "v13:  Changed connectionTypeNone to connectionTypeTCPSecure 
+                       for   bnLogMsgRemoteSyslogPrimaryConnectionType,
+                             bnLogMsgRemoteSyslogSecondaryConnectionType."
+                             
+    
+    REVISION "201203260000Z" -- 26 March 2012
+    DESCRIPTION "v12:  Added bnLogMsgRemoteSyslogPrimaryTcpPort,
+                             bnLogMsgRemoteSyslogSecondaryTcpPort,
+                             bnLogMsgRemoteSyslogPrimaryConnectionType,
+                             bnLogMsgRemoteSyslogSecondaryConnectionType."
+
+    REVISION "201104200000Z" -- 20 April 2011
+    DESCRIPTION "v11:  Added bnLogMsgRemoteServerStandardSaveTargets."
 
     REVISION "201006290000Z" -- 29 June 2010
     DESCRIPTION "v10:  Added bnLogMsgBufferMsgType."
@@ -475,6 +493,7 @@ bnLogMsgRemoteSyslogSaveTargets OBJECT-TYPE
 
 bnLogMsgClearMessageBuffers OBJECT-TYPE
     SYNTAX       BITS {
+                     none(0),
                      volCritical(1),
                      volSerious(2),
                      volInformational(3),
@@ -490,7 +509,9 @@ bnLogMsgClearMessageBuffers OBJECT-TYPE
                  deleted.  For example, a Set on this object containing bits
                  volSerious(2) and nonVolCritical(4) will delete all
                  'serious' messages from volatile storage, and all 'critical'
-                 messages from non-volatile storage."
+                 messages from non-volatile storage.
+                 The none(0) value doesn't have any effect at read and write operations.
+                 It have been introduced to correct the BITS syntax declaration."
     ::= { bnLogMsgMIBObjects 14 }
 
 bnLogMsgRemoteSyslogInetAddressType OBJECT-TYPE
@@ -538,6 +559,7 @@ bnLogMsgRemoteSyslogSecondaryInetAddress OBJECT-TYPE
     ::= { bnLogMsgMIBObjects 18 }
 
 
+
 -- ===========================================================================
 -- bnLogMsgRemoteServerTable
 -- ===========================================================================
@@ -561,11 +583,12 @@ bnLogMsgRemoteServerEntry OBJECT-TYPE
 
 BnLogMsgRemoteServerEntry ::= SEQUENCE
     {
-        bnLogMsgRemoteServerAddressType InetAddressType,
-        bnLogMsgRemoteServerAddress     InetAddress,
-        bnLogMsgRemoteServerEnabled     TruthValue,
-        bnLogMsgRemoteServerSaveTargets INTEGER,
-        bnLogMsgRemoteServerRowStatus   RowStatus
+        bnLogMsgRemoteServerAddressType         InetAddressType,
+        bnLogMsgRemoteServerAddress             InetAddress,
+        bnLogMsgRemoteServerEnabled             TruthValue,
+        bnLogMsgRemoteServerSaveTargets         INTEGER,
+        bnLogMsgRemoteServerRowStatus           RowStatus,
+        bnLogMsgRemoteServerStandardSaveTargets INTEGER
     }
 
 bnLogMsgRemoteServerAddressType OBJECT-TYPE
@@ -629,6 +652,30 @@ bnLogMsgRemoteServerRowStatus OBJECT-TYPE
         "This object is used to create/delete entries in this table."
     ::= { bnLogMsgRemoteServerEntry 5 }
 
+bnLogMsgRemoteServerStandardSaveTargets OBJECT-TYPE
+    SYNTAX       INTEGER {
+                     msgTypeEmergency(0),
+                     msgTypeAlert(1),
+                     msgTypeCritical(2),
+                     msgTypeError(3),
+                     msgTypeSerious(4),
+                     msgTypeNotice(5),
+                     msgTypeInformational(6),
+                     msgTypeDebug(7),
+                     msgTypeNone(8)
+                 }
+    MAX-ACCESS   read-create
+    STATUS       current
+    DESCRIPTION "This object determines the type of log messages that
+                  will be sent to a remote syslog server when they occur.
+                  Messages are classified based on their type. Selecting
+                  a type value causes all log messages that have an
+                  associated value less than or equal to the type
+                  value specified to be sent when the log message is
+                  entered into the system. "
+    DEFVAL       { msgTypeNone }
+    ::= { bnLogMsgRemoteServerEntry 6 }
+
 bnLogMsgRemoteSyslogFacility OBJECT-TYPE
     SYNTAX      INTEGER {
 		    fltKernel(1),
@@ -663,6 +710,74 @@ bnLogMsgRemoteSyslogFacility OBJECT-TYPE
     DEFVAL { fltDaemon }
     ::= { bnLogMsgMIBObjects 20 }
 
+bnLogMsgRemoteSyslogStandardSaveTargets OBJECT-TYPE
+    SYNTAX       INTEGER {
+                     msgTypeEmergency(0),
+                     msgTypeAlert(1),
+                     msgTypeCritical(2),
+                     msgTypeError(3),
+                     msgTypeSerious(4),
+                     msgTypeNotice(5),
+                     msgTypeInformational(6),
+                     msgTypeDebug(7),
+                     msgTypeNone(8)
+                 }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION "This object determines the type of log messages that
+                 will be sent to a remote syslog server when they occur.
+                 Messages are classified based on their type. Selecting
+                 a type value causes all log messages that have an
+                 associated value less than or equal to the type
+                 value specified to be sent when the log message is
+                 entered into the system."
+    DEFVAL       { msgTypeNone }
+    ::= { bnLogMsgMIBObjects 21 }
+    
+bnLogMsgRemoteSyslogPrimaryTcpPort OBJECT-TYPE
+    SYNTAX      Integer32 (601|1024..65535)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "Specifies the TCP port to use with the primary address
+    			for sending syslog messages to the host."
+    DEFVAL { 601 }
+    ::= { bnLogMsgMIBObjects 22 }
+    
+bnLogMsgRemoteSyslogSecondaryTcpPort OBJECT-TYPE
+    SYNTAX      Integer32 (601|1024..65535)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "Specifies the TCP port to use with the secondary address
+    			for sending syslog messages to the host."
+    DEFVAL { 601 }
+    ::= { bnLogMsgMIBObjects 23 }
+    
+bnLogMsgRemoteSyslogPrimaryConnectionType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                     connectionTypeUDP(1),
+                     connectionTypeTCP(2),
+                     connectionTypeTCPSecure(3)
+                 }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "Specifies the primary connection type (TCP/UDP) to be used
+    			to send syslog messages to the host."
+    DEFVAL { connectionTypeTCP }
+    ::= { bnLogMsgMIBObjects 24 }
+    
+bnLogMsgRemoteSyslogSecondaryConnectionType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                     connectionTypeUDP(1),
+                     connectionTypeTCP(2),
+                     connectionTypeTCPSecure(3)
+                 }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "Specifies the secondary connection type (TCP/UDP) to be used
+    			to send syslog messages to the host."
+    DEFVAL { connectionTypeTCP }
+    ::= { bnLogMsgMIBObjects 25 }
+
 
 
 -- System Log Message MIB Trap Definitions
@@ -691,3 +806,4 @@ bnLogMsgBufferFull NOTIFICATION-TYPE
    ::= { bnLogMsgMIBTrapPrefix 1 }
 
 END
+

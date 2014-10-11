@@ -5,7 +5,7 @@ IMPORTS
     Unsigned32, MODULE-IDENTITY, OBJECT-TYPE, Integer32,
     Counter64, OBJECT-IDENTITY, zeroDotZero, NOTIFICATION-TYPE
             FROM SNMPv2-SMI
-    MODULE-COMPLIANCE, OBJECT-GROUP
+    MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
             FROM SNMPv2-CONF
     RowStatus, StorageType, TEXTUAL-CONVENTION, RowPointer,
     TruthValue, MacAddress, AutonomousType
@@ -33,19 +33,49 @@ IMPORTS
             FROM BN-IF-EXTENSIONS-MIB;
 
 ntnQosPolicyEvolPib  MODULE-IDENTITY
-    LAST-UPDATED "201107260000Z"     -- July 26, 2011
-    ORGANIZATION "Nortel Networks, Inc."
+    LAST-UPDATED "201404030000Z"     -- 3 April 2014
+    ORGANIZATION "Avaya Networks, Inc."
     CONTACT-INFO "
                   John Seligson
-                  Nortel Networks, Inc.
+                  Avaya Networks, Inc.
                   4655 Great America Parkway
                   Santa Clara, CA 95054 USA
-                  Phone: +1 916 933 4634
-                  Email: jseligso@nortelnetworks.com"
+                  Phone: +1 408 496 3424
+                  Email: jseligso@avaya.com"
     DESCRIPTION
-            "A Nortel Network's management module containing 
+            "An Avaya Network's management module containing 
              data definitions related to QoS components and
              services supported by network devices." 
+
+    REVISION "201404030000Z"
+    DESCRIPTION "Version 34: Added description for martian packets in ntnDsMultiFieldClfrAddrType"
+
+    REVISION "201402140000Z" -- 14 February 2014
+    DESCRIPTION "Version 33: Added spb-scaled(6) value for ntnQosConfigDefaultBufferingCaps object."
+
+    REVISION "201206140000Z" -- 14 June 2012
+    DESCRIPTION "Version 32: Added untrustedv4v6 and untrustedBasic
+                 values for ntnQosInterfaceRoleIfClass object."
+
+    REVISION "201205160000Z" -- 16 May 2012
+    DESCRIPTION "Version 31: updated compliance data. Compliance data was not
+                 provided for a number of objects that were previously defined.
+                 This causes issues for certain levels of MIB compilation.
+                 Updated QoS buffer allocation options."
+
+    REVISION "201203160000Z" -- 16 March 2012
+    DESCRIPTION "Version 30: Added FCoE application objects, including
+                 the avFcoeRedirTable and scalars ntnQosConfigFcoeRedirOperMode,
+                 ntnQosConfigFcoeControllerMacAddr, ntnQosConfigFcoeRedirAvail,
+                 ntnQosConfigFcoeControllerIfIndex, ntnQosConfigFcoeControllerVlan
+                 and avFcoeRedirNextFree. FCoE-related notification defined."
+
+    REVISION "201201130000Z" -- 13 January 2012
+    DESCRIPTION "Version 29: Augmented enumerations for the following
+                 attributes: ntnQosDsL2AccessElemActionRemarkCos, 
+                 ntnQosDsL2AccessElemOutActionRemarkCos,
+                 ntnQosDsL2AccessElemYelActionRemarkCos and
+                 ntnQosAccessAsgnOutActionRemarkCos."
 
     REVISION "201107260000Z" -- 26 July 2011
     DESCRIPTION "Version 28: Added ntnQosPolicyMeteringMode."
@@ -254,6 +284,26 @@ VersionIndicator ::= TEXTUAL-CONVENTION
         applicable." 
         
     SYNTAX   INTEGER { version1(1), version2(2) }
+
+FcId ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "1x.1x.1x"
+    STATUS       current
+    DESCRIPTION
+        "Represents a Fibre Channel address"
+
+    SYNTAX   OCTET STRING (SIZE (3))
+
+InterfaceList ::= TEXTUAL-CONVENTION
+    STATUS       current
+    DESCRIPTION
+        "Each bit of this bit mask corresponds to an
+        ifIndex value, with the most significant bit
+        of the i-th octet of this octet string
+        corresponding to the ((8*i) - 7)-th ifIndex,
+        and the least significant bit of the i-th
+        octet corresponding to the (8*i)-th ifIndex."
+
+    SYNTAX   OCTET STRING (SIZE (0..128))
 
 ntnQosPolicyEvolPibClasses 
             OBJECT IDENTIFIER ::= { ntnQosPolicyEvolPib 1 }
@@ -875,7 +925,10 @@ ntnDsMultiFieldClfrAddrType OBJECT-TYPE
         defined in the InetAddressType textual convention, 
         and DNS names, a classifier can only look at 
         packets on the wire. Therefore, this object is 
-        limited to IPv4 and IPv6 addresses.
+        limited to IPv4 and IPv6 addresses, with the exception
+        of releases that support the logging of martian packets.
+        Instead of IPv4z and IPv6z, the martian variants of IPv4
+        and IPv6 are used.
 
         Version 1/2 attribute."
 
@@ -5691,7 +5744,9 @@ ntnQosInterfaceRoleIfClass OBJECT-TYPE
     SYNTAX         INTEGER {
                        trusted(1),  
                        nonTrusted(2),
-                       unrestricted(3)
+                       unrestricted(3),
+                       untrustedv4v6(4),
+                       untrustedBasic(5)
                    }
     MAX-ACCESS     read-create
     STATUS         current
@@ -7925,7 +7980,9 @@ ntnQosAccessAsgnOutActionRemarkCos OBJECT-TYPE
                        markAsPriority5(6),
                        markAsPriority6(7),
                        markAsPriority7(8),
-                       ignore(9)
+                       ignore(9),
+                       deriveFromEgressDscp(10),
+                       deriveFromIngressTosPrec(11)
     }
     MAX-ACCESS     read-create
     STATUS         current
@@ -7938,7 +7995,24 @@ ntnQosAccessAsgnOutActionRemarkCos OBJECT-TYPE
 
         Specifying a value equal to 'ignore(9)' means
         that no action will be taken related to this
-        attribute."
+        attribute.
+
+        Specifying a value equal to 'deriveFromEgressDscp(10)'
+        means that the value for this attribute will be 
+        assigned based on DSCP-to-user priority map 
+        information maintained in the system. The DSCP 
+        value specified for remarking in the 
+        ntnQosAccessAsgnOutActionRemarkDscp attribute 
+        will be used to determine the user priority.
+
+        Specifying a value equal to 'deriveFromIngressTosPrec(11)'
+        means that the value for this attribute will be 
+        assigned based on the value of the precedence bits
+        in the IP Type-Of-Service (TOS) field, as defined
+        in RFC 791. The eight precedence values, also 
+        referred to as Class Selector (CS) values, have a 
+        one-to-one correspondence with the eight 802.1p user 
+        priority values."
 
     DEFVAL { ignore }
     ::= { ntnQosAccessAsgnEntry 9 }
@@ -9257,7 +9331,9 @@ ntnQosDsL2AccessElemActionRemarkCos OBJECT-TYPE
                        markAsPriority5(6),
                        markAsPriority6(7),
                        markAsPriority7(8),
-                       ignore(9)
+                       ignore(9),
+                       deriveFromEgressDscp(10),
+                       deriveFromIngressTosPrec(11)
     }
     MAX-ACCESS     read-create
     STATUS         current
@@ -9270,6 +9346,23 @@ ntnQosDsL2AccessElemActionRemarkCos OBJECT-TYPE
         Specifying a value equal to 'ignore(9)' means
         that no action will be taken related to this
         attribute.
+
+        Specifying a value equal to 'deriveFromEgressDscp(10)'
+        means that the value for this attribute will be 
+        assigned based on DSCP-to-user priority map 
+        information maintained in the system. The DSCP 
+        value specified for remarking in the 
+        ntnQosDsL2AccessElemActionRemarkDscp attribute 
+        will be used to determine the user priority.
+
+        Specifying a value equal to 'deriveFromIngressTosPrec(11)'
+        means that the value for this attribute will be 
+        assigned based on the value of the precedence bits
+        in the IP Type-Of-Service (TOS) field, as defined
+        in RFC 791. The eight precedence values, also 
+        referred to as Class Selector (CS) values, have a 
+        one-to-one correspondence with the eight 802.1p user 
+        priority values.
 
         Version 1/2 attribute."
 
@@ -9885,7 +9978,9 @@ ntnQosDsL2AccessElemOutActionRemarkCos OBJECT-TYPE
                        markAsPriority5(6),
                        markAsPriority6(7),
                        markAsPriority7(8),
-                       ignore(9)
+                       ignore(9),
+                       deriveFromEgressDscp(10),
+                       deriveFromIngressTosPrec(11)
     }
     MAX-ACCESS     read-create
     STATUS         current
@@ -9899,6 +9994,23 @@ ntnQosDsL2AccessElemOutActionRemarkCos OBJECT-TYPE
         Specifying a value equal to 'ignore(9)' means
         that no action will be taken related to this
         attribute.
+
+        Specifying a value equal to 'deriveFromEgressDscp(10)'
+        means that the value for this attribute will be 
+        assigned based on DSCP-to-user priority map 
+        information maintained in the system. The DSCP 
+        value specified for remarking in the 
+        ntnQosDsL2AccessElemOutActionRemarkDscp attribute 
+        will be used to determine the user priority.
+
+        Specifying a value equal to 'deriveFromIngressTosPrec(11)'
+        means that the value for this attribute will be 
+        assigned based on the value of the precedence bits
+        in the IP Type-Of-Service (TOS) field, as defined
+        in RFC 791. The eight precedence values, also 
+        referred to as Class Selector (CS) values, have a 
+        one-to-one correspondence with the eight 802.1p user 
+        priority values.
 
         Version 1/2 attribute."
 
@@ -10029,7 +10141,9 @@ ntnQosDsL2AccessElemYelActionRemarkCos OBJECT-TYPE
                        markAsPriority5(6),
                        markAsPriority6(7),
                        markAsPriority7(8),
-                       ignore(9)
+                       ignore(9),
+                       deriveFromEgressDscp(10),
+                       deriveFromIngressTosPrec(11)
     }
     MAX-ACCESS     read-create
     STATUS         current
@@ -10043,6 +10157,23 @@ ntnQosDsL2AccessElemYelActionRemarkCos OBJECT-TYPE
         Specifying a value equal to 'ignore(9)' means
         that no action will be taken related to this
         attribute.
+
+        Specifying a value equal to 'deriveFromEgressDscp(10)'
+        means that the value for this attribute will be 
+        assigned based on DSCP-to-user priority map 
+        information maintained in the system. The DSCP 
+        value specified for remarking in the 
+        ntnQosDsL2AccessElemYelActionRemarkDscp attribute 
+        will be used to determine the user priority.
+
+        Specifying a value equal to 'deriveFromIngressTosPrec(11)'
+        means that the value for this attribute will be 
+        assigned based on the value of the precedence bits
+        in the IP Type-Of-Service (TOS) field, as defined
+        in RFC 791. The eight precedence values, also 
+        referred to as Class Selector (CS) values, have a 
+        one-to-one correspondence with the eight 802.1p user 
+        priority values.
 
         Applies to yellow actions.
 
@@ -10246,6 +10377,298 @@ ntnQosFilterSetStatsStatus OBJECT-TYPE
 
     ::= { ntnQosFilterSetStatsEntry 10 }
 
+--
+-- Avaya FCoE Stream Redirection Objects
+--
+
+avFcoeRedirNextFree OBJECT-TYPE
+    SYNTAX         IndexIntegerNextFree
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "This object contains an unused value for avFcoeRedirId,
+        or a zero to indicate that none exist."
+
+    ::= { ntnQosApplicationClasses 13 }
+
+avFcoeRedirTable OBJECT-TYPE
+    SYNTAX         SEQUENCE OF AvFcoeRedirEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "A table of FCoE streams that are being redirected
+        through an external FCoE Network Controller (FNC)."
+
+    ::= { ntnQosApplicationClasses 14 }
+
+avFcoeRedirEntry OBJECT-TYPE
+    SYNTAX         AvFcoeRedirEntry
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "An FCoE redirection entry contains the data necessary
+        to redirect a specific FCoE stream through an external
+        network controller."
+
+    INDEX { avFcoeRedirId }
+    ::= { avFcoeRedirTable 1 }
+
+AvFcoeRedirEntry ::= SEQUENCE {
+        avFcoeRedirId                     IndexInteger,
+        avFcoeRedirDstId                  FcId,
+        avFcoeRedirIngressInterfaceList   InterfaceList,
+        avFcoeRedirVlanIdMin              Integer32,
+        avFcoeRedirVlanIdMax              Integer32,
+        avFcoeRedirUserPriority           INTEGER,
+        avFcoeRedirEtherType              Integer32,
+        avFcoeRedirSrcId                  FcId,
+        avFcoeRedirActionUpdateDstMac     MacAddress,
+        avFcoeRedirActionUpdateSrcMac     MacAddress,
+        avFcoeRedirActionEgressInterface  InterfaceIndexOrZero,
+        avFcoeRedirName                   SnmpAdminString,
+        avFcoeRedirStorage                StorageType,
+        avFcoeRedirStatus                 RowStatus,
+        avFcoeRedirProcessedFrames        Counter64,
+        avFcoeRedirActionEgressTrunkId    Integer32
+}
+
+avFcoeRedirId OBJECT-TYPE
+    SYNTAX         IndexInteger
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "An index that enumerates the FCoE redirect
+        entries.  Managers can obtain new values
+        for row creation in this table by reading
+        avFcoeRedirNextFree."
+
+    ::= { avFcoeRedirEntry 1 }
+
+avFcoeRedirDstId OBJECT-TYPE
+    SYNTAX         FcId
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "This object specifies the Fibre Channel (FC)
+        destination ID (D_ID) that should be used
+        when performing stream identification."
+
+    ::= { avFcoeRedirEntry 2 }
+
+avFcoeRedirIngressInterfaceList OBJECT-TYPE
+    SYNTAX         InterfaceList
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "This object identifies ingress interfaces,
+        using an interface's ifIndex representation,
+        to which the filter and action criteria
+        specified in this entry should be applied."
+
+    ::= { avFcoeRedirEntry 3 }
+
+avFcoeRedirVlanIdMin OBJECT-TYPE
+    SYNTAX         Integer32 (1..4094)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The minimum value that the VLAN ID (VID) in
+        a tagged packet must have in order to match
+        this entry.
+
+        The avFcoeRedirVlanIdMin value must be less
+        than or equal to the avFcoeRedirVlanIdMax value.
+
+        Setting the avFcoeRedirVlanIdMin object
+        to 1 and the avFcoeRedirVlanIdMax to
+        4094 indicates that VLAN data should not be
+        considered during traffic identification."
+
+    DEFVAL { 1 }
+    ::= { avFcoeRedirEntry 4 }
+
+avFcoeRedirVlanIdMax OBJECT-TYPE
+    SYNTAX         Integer32 (1..4094)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The maximum value that the VLAN ID (VID) in
+        a tagged packet must have in order to match
+        this entry.
+
+        The avFcoeRedirVlanIdMax value must be greater
+        than or equal to the avFcoeRedirVlanIdMin value.
+
+        Setting the avFcoeRedirVlanIdMin object to 1
+        and the avFcoeRedirVlanIdMax to 4094 indicates
+        that VLAN data should not be considered during
+        traffic identification."
+
+    DEFVAL { 4094 }
+    ::= { avFcoeRedirEntry 5 }
+
+avFcoeRedirUserPriority OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       matchPriority0(1),
+                       matchPriority1(2),
+                       matchPriority2(3),
+                       matchPriority3(4),
+                       matchPriority4(5),
+                       matchPriority5(6),
+                       matchPriority6(7),
+                       matchPriority7(8),
+                       matchAllPriorities(9)
+                   }
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The 802.1p user priority value against which
+        the value contained in the user priority
+        field of a tagged 802.1 frame is compared. A
+        test for equality is performed when determining
+        if a match exists between the data in a data link
+        layer frame and the value of this entry.
+
+        A value of 'matchAllPriorities(9)' causes all
+        user priority values to match this attribute.
+        This essentially makes any comparisons with
+        regard to user priority values unnecessary."
+
+    DEFVAL { matchAllPriorities }
+    ::= { avFcoeRedirEntry 6 }
+
+avFcoeRedirEtherType OBJECT-TYPE
+    SYNTAX         Integer32 (0..'ffff'h)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "This object specifies the value that will be
+        compared against the value contained in the
+        EtherType field of an IEEE 802 frame. Example
+        settings would include 'IP' (0x0800), 'FCoE'
+        (0x8906) and 'FIP' (0x8914).
+
+        Setting the avFcoeRedirEtherType object to 0xFFFF
+        indicates that EtherType data should not be
+        considered during traffic classification.  Note
+        the EtherType value of 0xFFFF is reserved by IANA."
+
+    DEFVAL { '8906'h }
+    ::= { avFcoeRedirEntry 7 }
+
+avFcoeRedirSrcId OBJECT-TYPE
+    SYNTAX         FcId
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "This object specifies the Fibre Channel (FC)
+        source ID (D_ID) that should be used when
+        performing stream identification. Setting this
+        attribute to it's default value indicates that
+        S_ID data should not be used for traffic
+        identification."
+
+    DEFVAL { '000000'h }
+    ::= { avFcoeRedirEntry 8 }
+
+avFcoeRedirActionUpdateDstMac OBJECT-TYPE
+    SYNTAX         MacAddress
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The 802 MAC address that will be used to update the
+        destination MAC address in frames that are identified
+        based on filter data specified in this entry."
+
+    ::= { avFcoeRedirEntry 9 }
+
+avFcoeRedirActionUpdateSrcMac OBJECT-TYPE
+    SYNTAX         MacAddress
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The 802 MAC address that will be used to update the
+        source MAC address in frames that are identified
+        based on filter data specified in this entry."
+
+    ::= { avFcoeRedirEntry 10 }
+
+avFcoeRedirActionEgressInterface OBJECT-TYPE
+    SYNTAX         InterfaceIndexOrZero
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The interface through which frames identified based
+        on filter data specified in this entry will egress
+        the device. An egress interface or an egress trunk
+        must be specified. A value of 0 indicates that an
+        egress interface has not been specified."
+
+    ::= { avFcoeRedirEntry 11 }
+
+avFcoeRedirName OBJECT-TYPE
+    SYNTAX         SnmpAdminString (SIZE(1..32))
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "A label used to reference the FCoE redirect entry
+        in a textual manner."
+
+    ::= { avFcoeRedirEntry 12 }
+
+avFcoeRedirStorage OBJECT-TYPE
+    SYNTAX         StorageType
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The storage type for this conceptual row.
+
+        Conceptual rows having the value 'permanent'
+        need not allow write-access to any columnar
+        objects in the row.
+
+        This object may not be modified if the
+        associated status object is equal to 'active'."
+
+    DEFVAL { nonVolatile }
+    ::= { avFcoeRedirEntry 13 }
+
+avFcoeRedirStatus OBJECT-TYPE
+    SYNTAX         RowStatus
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The status of this conceptual row.
+
+        An entry may not exist in the active state
+        unless all objects in the entry have an
+        appropriate value."
+
+    ::= { avFcoeRedirEntry 14 }
+
+avFcoeRedirProcessedFrames OBJECT-TYPE
+    SYNTAX         Counter64
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Counts the frames that have matched the criteria
+        specified in this entry."
+
+    ::= { avFcoeRedirEntry 15 }
+
+avFcoeRedirActionEgressTrunkId OBJECT-TYPE
+    SYNTAX         Integer32 (0..512)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "The trunk through which frames identified based
+        on filter data specified in this entry will egress
+        the device. An egress interface or an egress trunk
+        must be specified. A value of 0 indicates that an
+        egress trunk has not been specified."
+
+    ::= { avFcoeRedirEntry 16 }
+
 ---
 --- Nortel Networks QoS DEI (Discard Eligible Indicator) Support
 ---
@@ -10411,7 +10834,9 @@ ntnQosConfigDefaultBufferingCaps OBJECT-TYPE
                         minimumOverAllocation(1),
                         mediumOverAllocation(2),
                         maximumOverAllocation(3),
-                        lossless(4)
+                        lossless(4),
+                        losslessPfc(5),
+                        spb-scaled(6)
                    }
     MAX-ACCESS     read-write
     STATUS         current
@@ -10449,6 +10874,14 @@ ntnQosConfigDefaultBufferingCaps OBJECT-TYPE
             prior to frames being discarded due to lack of available
             buffers, allowing the end stattions to back off. This
             mode allows for lossless behavior at the expense of throughput.
+
+            Lossless PFC mode operates in a similar fashion to 
+            lossless but provides the service on a per-priority
+            (802.1p) basis.
+
+            'spb-scaled(6)' is a mode similar to 'mediumOverAllocation(2)',
+            but optimized for scaled SPB setups.
+
             The value of this attribute is consulted when
             the system is initialized. Changing the value of
             this attribute will therefore not take effect
@@ -10689,6 +11122,87 @@ ntnQosConfigClearStats OBJECT-TYPE
             returned when querying this object."
 
     ::= { ntnQosPolicyAgtClasses 18 }
+
+ntnQosConfigFcoeRedirOperMode OBJECT-TYPE
+    SYNTAX         INTEGER {
+                        enable(1),
+                        disable(2)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Controls the FCoE redirection service for the system.
+        Enabling the service will initiate validation and
+        possible reservation of the resources that are required
+        for service activation. If resources are not available,
+        the enable request will be rejected.
+
+        Note that re-enabling the FCoE redirection service may
+        result in errors if changes have been made affecting
+        available resources while FCoE redirection was
+        temporarily disabled. Mode changes (updates to the
+        value of this attribute) will take effect immediately."
+
+    ::= { ntnQosPolicyAgtClasses 19 }
+
+ntnQosConfigFcoeControllerMacAddr OBJECT-TYPE
+    SYNTAX         MacAddress
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "The 802 MAC address of the FCoE Network Controller
+        (FNC) that is used in conjunction with the FCoE
+        redirection service. Must be defined prior to
+        enabling the FCoE redirection service. Changes
+        made while the FCoE service is enabled will go
+        into effect the next time the service is enabled."
+
+    ::= { ntnQosPolicyAgtClasses 20 }
+
+ntnQosConfigFcoeRedirAvail OBJECT-TYPE
+    SYNTAX         INTEGER {
+                        accessible(1),
+                        notAccessible(2)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Controls access to the FCoE Redirect functionality.
+        A value of 'accessible(1)' indicates that the FCoE
+        support can be accessed by an external FCoE Network
+        Controller (FNC). A value of 'notAccessible(2)' indicates
+        that FCoE Redirect functionality can not be accessed
+        by an FNC using SNMP."
+
+    ::= { ntnQosPolicyAgtClasses 21 }
+
+ntnQosConfigFcoeControllerIfIndex OBJECT-TYPE
+    SYNTAX         InterfaceIndexOrZero
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "The interface index of the FCoE Network Controller
+        (FNC) that is used in conjunction with the FCoE
+        redirection service. Must be defined prior to
+        enabling the FCoE redirection service. Changes
+        made while the FCoE service is enabled will go
+        into effect the next time the service is enabled."
+
+    ::= { ntnQosPolicyAgtClasses 22 }
+
+ntnQosConfigFcoeControllerVlan OBJECT-TYPE
+    SYNTAX         Integer32 (1..4094)
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "The VLAN associated with the FCoE Network Controller
+        (FNC) that is used in conjunction with the FCoE
+        redirection service. Must be defined prior to
+        enabling the FCoE redirection service. Changes
+        made while the FCoE service is enabled will go
+        into effect the next time the service is enabled."
+
+    ::= { ntnQosPolicyAgtClasses 23 }
 
 --
 -- Quick Policies
@@ -10944,6 +11458,19 @@ ntnQosPolicyEvolDosAttackDetected NOTIFICATION-TYPE
 
     ::= { ntnQosPolicyEvolPibNotifications 2 }
 
+avFcoeRedirEgressIssueDetected NOTIFICATION-TYPE
+    OBJECTS        {
+                        avFcoeRedirActionEgressInterface,
+                        avFcoeRedirActionEgressTrunkId
+                   }
+    STATUS         current
+    DESCRIPTION
+            "Indicates that an event that impacts egress
+            data that is associated with one or more FCoE
+            Redirect entries has been detected."
+
+    ::= { ntnQosPolicyEvolPibNotifications 3 }
+
 --
 -- Conformance Section
 --
@@ -11035,6 +11562,10 @@ ntnQosPolicyEvolPibCompliance MODULE-COMPLIANCE
         DESCRIPTION  "Write access is not required."
 
         OBJECT        ntnClfrComponentSessionId  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnClfrComponentVersion  
         MIN-ACCESS    read-only
         DESCRIPTION  "Write access is not required."
 
@@ -11377,6 +11908,26 @@ ntnQosPolicyEvolPibCompliance MODULE-COMPLIANCE
         MIN-ACCESS    read-only
         DESCRIPTION  "Write access is not required."
 
+        OBJECT        ntnL2MultiFieldClfrTPID  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnL2MultiFieldClfrCFI  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnL2MultiFieldClfrITPID  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnL2MultiFieldClfrICFI  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnL2MultiFieldClfrIUserPriority  
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
         GROUP   ntnSystemClfrGroup
         DESCRIPTION
             "The ntnSystemClfrGroup is optional."
@@ -11573,6 +12124,30 @@ ntnQosPolicyEvolPibCompliance MODULE-COMPLIANCE
         MIN-ACCESS    read-only
         DESCRIPTION  "Write access is not required."
 
+        OBJECT        ntnQosConfigClearStats
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnQosConfigFcoeRedirOperMode
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnQosConfigFcoeControllerMacAddr
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnQosConfigFcoeRedirAvail
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnQosConfigFcoeControllerIfIndex
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
+        OBJECT        ntnQosConfigFcoeControllerVlan
+        MIN-ACCESS    read-only
+        DESCRIPTION  "Write access is not required."
+
         GROUP   ntnQosUserRoleGroup
         DESCRIPTION
             "The ntnQosUserRoleGroup is optional."
@@ -11612,6 +12187,10 @@ ntnQosPolicyEvolPibCompliance MODULE-COMPLIANCE
         GROUP   ntnQosDsL2AccessElemGroup
         DESCRIPTION
             "The ntnQosDsL2AccessElemGroup is optional."
+
+        GROUP   avFcoeRedirGroup
+        DESCRIPTION
+            "The avFcoeRedirGroup is optional."
 
     ::= { ntnQosPolicyEvolPibCompliances 2 }
 
@@ -11723,7 +12302,12 @@ ntnL2MultiFieldClfrGroup OBJECT-GROUP
              ntnL2MultiFieldClfrVersion,
              ntnL2MultiFieldClfrPktType,
              ntnL2MultiFieldClfrIvidMin,
-             ntnL2MultiFieldClfrIvidMax
+             ntnL2MultiFieldClfrIvidMax,
+             ntnL2MultiFieldClfrTPID,
+             ntnL2MultiFieldClfrCFI,
+             ntnL2MultiFieldClfrITPID,
+             ntnL2MultiFieldClfrICFI,
+             ntnL2MultiFieldClfrIUserPriority
     }
     STATUS  current
     DESCRIPTION
@@ -11772,6 +12356,7 @@ ntnClfrComponentGroup OBJECT-GROUP
              ntnClfrComponentStorage,
              ntnClfrComponentStatus, 
              ntnClfrComponentSessionId, 
+             ntnClfrComponentVersion, 
              ntnClfrComponentSetNextFree
     }
     STATUS  current
@@ -12067,7 +12652,13 @@ ntnQosAgentConfigGroup OBJECT-GROUP
              ntnQosConfigNtApplicationMode,
              ntnQosConfigQosOperMode,
              ntnQosConfigTrustedProcessingMode,
-             ntnQosConfigResetToPartialDefaults
+             ntnQosConfigResetToPartialDefaults,
+             ntnQosConfigClearStats,
+             ntnQosConfigFcoeRedirOperMode,
+             ntnQosConfigFcoeControllerMacAddr,
+             ntnQosConfigFcoeRedirAvail,
+             ntnQosConfigFcoeControllerIfIndex,
+             ntnQosConfigFcoeControllerVlan
     }
     STATUS  current
     DESCRIPTION
@@ -12392,6 +12983,105 @@ ntnQosFilterSetStatsGroup OBJECT-GROUP
             "Objects from the ntnQosFilterSetStatsTable."
 
     ::= { ntnQosPolicyEvolPibGroups 37 }
+
+avFcoeRedirGroup OBJECT-GROUP
+    OBJECTS {
+             avFcoeRedirNextFree,
+             avFcoeRedirDstId,
+             avFcoeRedirIngressInterfaceList,
+             avFcoeRedirVlanIdMin,
+             avFcoeRedirVlanIdMax,
+             avFcoeRedirUserPriority,
+             avFcoeRedirEtherType,
+             avFcoeRedirSrcId,
+             avFcoeRedirActionUpdateDstMac,
+             avFcoeRedirActionUpdateSrcMac,
+             avFcoeRedirActionEgressInterface,
+             avFcoeRedirName,
+             avFcoeRedirStorage,
+             avFcoeRedirStatus,
+             avFcoeRedirProcessedFrames,
+             avFcoeRedirActionEgressTrunkId
+    }
+    STATUS  current
+    DESCRIPTION
+            "Objects from the avFcoeRedirTable."
+
+    ::= { ntnQosPolicyEvolPibGroups 38 }
+
+ntnQosQuickPolicyGroup OBJECT-GROUP
+    OBJECTS {
+             ntnQosQuickPolicyControl,
+             ntnQosQuickPolicyPortList,
+             ntnQosQuickPolicyAction,
+             ntnQosQuickPolicyId,
+             ntnQosQuickPolicyPbitsValue,
+             ntnQosQuickPolicyRate,
+             ntnQosQuickPolicyTrTCMType,
+             ntnQosQuickPolicyCIRRate,
+             ntnQosQuickPolicyPIRRate,
+             ntnQosQuickPolicyTrackQiQType,
+             ntnQosQuickPolicyDscp,
+             ntnQosQuickPolicyPriority,
+             ntnQosQuickPolicyVid,
+             ntnQosQuickPolicyTPID,
+             ntnQosQuickPolicyIVid,
+             ntnQosQuickPolicyITPID,
+             ntnQosQuickPolicyIPriority,
+             ntnQosQuickPolicyPrecedence,
+             ntnQosQuickPolicyTrackStatistics
+    }
+    STATUS  current
+    DESCRIPTION
+            "Objects from the ntnQosQuickPolicy support."
+
+    ::= { ntnQosPolicyEvolPibGroups 39 }
+
+ntnQosFilterLimitingGroup OBJECT-GROUP
+    OBJECTS {
+             ntnQosFilterLimitingAdminEnabled,
+             ntnQosFilterLimitingOperEnabled
+    }
+    STATUS  current
+    DESCRIPTION
+            "Objects from the ntnQosFilterLimiting support."
+
+    ::= { ntnQosPolicyEvolPibGroups 40 }
+
+ntnQosDEIGroup OBJECT-GROUP
+    OBJECTS {
+             ntnQosDEIIngressColorFromDEI,
+             ntnQosDEIEgressMarkDEI
+    }
+    STATUS  current
+    DESCRIPTION
+            "Objects from the ntnQosDEI support."
+
+    ::= { ntnQosPolicyEvolPibGroups 41 }
+
+ntnQosMappingScalarsGroup OBJECT-GROUP
+    OBJECTS {
+             ntnQosMappingRestoreDefault,
+             ntnQosMappingDscpToCosEnabled,
+             ntnQosMappingCosToDscpEnabled
+    }
+    STATUS  current
+    DESCRIPTION
+            "Objects from the ntnQosMapping support."
+
+    ::= { ntnQosPolicyEvolPibGroups 42 }
+
+ntnQosNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+             ntnQosPolicyEvolLocalUbpSessionFailure,
+             ntnQosPolicyEvolDosAttackDetected,
+             avFcoeRedirEgressIssueDetected
+    }
+    STATUS  current
+    DESCRIPTION
+            "QoS-related notifications."
+
+    ::= { ntnQosPolicyEvolPibGroups 43 }
 
 END
 

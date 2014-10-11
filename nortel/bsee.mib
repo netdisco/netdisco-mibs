@@ -16,7 +16,7 @@ IMPORTS
         FROM SNMP-FRAMEWORK-MIB;
 
 bayStackEapExtMib MODULE-IDENTITY
-    LAST-UPDATED    "201009070000Z"
+    LAST-UPDATED    "201303040000Z"
     ORGANIZATION    "Avaya"
     CONTACT-INFO    "Avaya"
     DESCRIPTION
@@ -34,6 +34,31 @@ bayStackEapExtMib MODULE-IDENTITY
          no warranty, either express or implied, as to the use,
          operation, condition, or performance of the Specification."
 
+    REVISION "201303040000Z" -- 4 March 2013
+    DESCRIPTION "v030:  Added bseePortConfigMultiHostMaxMacs"
+
+    REVISION "201302080000Z" -- 8 February 2013
+    DESCRIPTION "v029:  Added bseeDefaultEapAll & bseePortConfigDefaultEapAll"
+
+    REVISION "201301170000Z" -- 17 January 2013
+    DESCRIPTION "v028:  Added bseeMultiHostFailOpenVlanDisableEapMode & bseePaeSystemOperState"
+
+    REVISION "201211270000Z" --27 November 2012
+    DESCRIPTION "v027:  Added the padding bit in bseeMultihostNonEapRadiusPasswordAttributeFormat"
+
+    REVISION "201211050000Z" -- 5 November 2012
+    DESCRIPTION "v026:  Added support for NEAP freeform password"
+
+    REVISION "201208010000Z" -- 1 August 2012
+    DESCRIPTION "v025:  Added bseeMultiHostFailOpenVlanContinuityModeEnabled"
+
+    REVISION "201205230000Z" -- 23 May 2012
+    DESCRIPTION "v024:  Added bseeMultiHostAdacNonEapEnabled, 
+                              bseePortConfigMultiHostAdacNonEapEnabled."
+
+    REVISION "201203010000Z" -- 1st of March 2012
+    DESCRIPTION "v023:  Added bseeMultiHostDhcpAuthPhoneTable."         
+         
     REVISION "201110060000Z" -- 06 October 2011
     DESCRIPTION "v022:  Added bseeAllowPortMirroringOnEap."
 
@@ -277,7 +302,9 @@ bseeMultihostNonEapRadiusPasswordAttributeFormat OBJECT-TYPE
     SYNTAX      BITS {
                     ipAddr(0),
                     macAddr(1),
-                    portNumber(2)
+                    portNumber(2),
+                    key(3),
+                    padding(4)
                 }
     MAX-ACCESS  read-write
     STATUS      current
@@ -304,15 +331,24 @@ bseeMultihostNonEapRadiusPasswordAttributeFormat OBJECT-TYPE
          example, the encoding for unit/port 1/23 would be '0123', and the
          encoding for port 7 on a standalone stackable unit would be '0007'.
 
+         If the key(3) bit is set, the password attribute will contain a custom
+         configured string of up to 32 characters in length.
+
+         If padding(4) bit is set, the password will contain dots even if fields
+         in the password are blank. For instance, IP and Key will be represented
+         as IP...Key. If the bit is not set, there will be dots only to separate
+         fields. IP and Key will be IP.Key, while IP, Mac, Port or Key alone will
+         be as they are, with no dots.
+
          The fields in the password attribute will appear in the order of the
          bits defined in this object, i.e., IP addr, followed by MAC addr,
-         followed by port number.  Fields are separated by a '.' character.
-         The separators are present regardless of whether a field is present.
-         So, for example, if all three fields are present, the password
-         attribute might contain:
-             047080225001.0008010a3334.0123
+         followed by port number, and finally by the key.  Fields are separated
+         by a '.' character. The separators are present regardless of whether a
+         field is present if padding is used. So, for example, if all four fields
+         are present, the password attribute might contain:
+             047080225001.0008010a3334.0123.ERS4000isGreat
          If none of the three fields are present, the password attribute will
-         be '..'."
+         be '...' with padding used, or '' with no padding."
     ::= { bseeObjects 14 }
 
 bseeMultiHostAllowNonEapPhones OBJECT-TYPE
@@ -454,6 +490,63 @@ bseeAllowPortMirroringOnEap OBJECT-TYPE
          port mirroring"
     ::= { bseeObjects 28 }
 
+bseeMultiHostAdacNonEapEnabled OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether the authentication of Non-EAP phones 
+         using ADAC is allowed."
+    ::= { bseeObjects 29 }
+
+bseeMultiHostFailOpenVlanContinuityModeEnabled OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether to use the fail-over Vlan continuity mode."
+    DEFVAL      { false }
+    ::= { bseeObjects 30 }
+
+bseeMultiHostNonEapRadiusPasswordFreeformKey OBJECT-TYPE
+    SYNTAX       OCTET STRING (SIZE(0..32))
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This command specifies a custom string to be put in the password used to
+         authenticate Non-EAP clients via RADIUS server."
+    ::= { bseeObjects 31 }
+
+bseeMultiHostFailOpenVlanDisableEapMode OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether to use the Fail Open VLAN Disable EAP Mode."
+    DEFVAL      { false }
+    ::= { bseeObjects 32 }
+
+bseePaeSystemOperState OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    enabled(1),
+                    disabled(2)
+                }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "The oper state of EAP when ports are in Fail Open VLAN Disable EAP Mode."
+    DEFVAL      { disabled }
+    ::= { bseeObjects 33 }
+
+bseeDefaultEapAll OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether to default all global EAP settings."
+    DEFVAL      { false }
+    ::= { bseeObjects 34 }
+
 -- ===========================================================================
 -- EAP Multi-Host Configuration Table
 -- ===========================================================================
@@ -497,7 +590,10 @@ BseePortConfigEntry ::=
         bseePortConfigEapProtocolEnabled                        TruthValue,
         bseePortConfigMultiHostUseMostRecentRadiusAssignedVlan  TruthValue,
         bseePortConfigMultiHostClearNeap                        MacAddress,
-        bseePortConfigMultiHostBlockDifferentVlanAuth           TruthValue
+        bseePortConfigMultiHostBlockDifferentVlanAuth           TruthValue,
+        bseePortConfigMultiHostAdacNonEapEnabled                TruthValue,
+        bseePortConfigDefaultEapAll                             TruthValue,
+        bseePortConfigMultiHostMaxMacs                          Integer32
     }
 
 bseePortConfigPortNumber OBJECT-TYPE
@@ -719,6 +815,35 @@ bseePortConfigMultiHostBlockDifferentVlanAuth OBJECT-TYPE
 	from first client authenticated on the same port."
     DEFVAL      { false }
     ::= { bseePortConfigEntry 20 }
+
+bseePortConfigMultiHostAdacNonEapEnabled  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether the authentication of Non-EAP phones 
+         using ADAC is allowed on this port."
+    DEFVAL      { false }         
+    ::= { bseePortConfigEntry 21 }
+
+bseePortConfigDefaultEapAll  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies whether to default all EAP settings on this port."
+    DEFVAL      { false }         
+    ::= { bseePortConfigEntry 22 }
+
+bseePortConfigMultiHostMaxMacs OBJECT-TYPE
+    SYNTAX      Integer32 (0..100)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the maximum number of EAP and NEAP clients allowed on this port."
+    DEFVAL      { 1 }
+    ::= { bseePortConfigEntry 23 }
+
 
 -- ===========================================================================
 -- EAP Multi-Host Status Table
@@ -1263,5 +1388,59 @@ bseeMultiHostVoipVlanEnabled OBJECT-TYPE
     DESCRIPTION
         "This object specifies whether to use this VoIP Vlan."
     ::= { bseeMultiHostVoipVlanEntry 3 }
+    
+-- ===========================================================================
+-- EAP Multi-Host for DHCP authenticated IP phones Table
+-- ===========================================================================
+
+bseeMultiHostDhcpAuthPhoneTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF BseeMultiHostDhcpAuthPhoneEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table provides the list of DHCP authenticated IP phones 
+         per-MAC address per-port."
+    ::= { bayStackEapExtMib 11 }
+
+bseeMultiHostDhcpAuthPhoneEntry OBJECT-TYPE
+    SYNTAX BseeMultiHostDhcpAuthPhoneEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The DHCP authenticated IP phone for a port."
+    INDEX { bseeMultiHostDhcpAuthPhonePortNumber,
+            bseeMultiHostDhcpAuthPhoneClientMACAddr }
+    ::= { bseeMultiHostDhcpAuthPhoneTable 1 }
+
+BseeMultiHostDhcpAuthPhoneEntry ::=
+    SEQUENCE {
+        bseeMultiHostDhcpAuthPhonePortNumber InterfaceIndex,
+        bseeMultiHostDhcpAuthPhoneClientMACAddr MacAddress,
+        bseeMultiHostDhcpAuthPhoneUserName SnmpAdminString
+    }
+
+bseeMultiHostDhcpAuthPhonePortNumber OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The port number associated with the DHCP authenticated IP phone."
+    ::= { bseeMultiHostDhcpAuthPhoneEntry 1 }
+
+bseeMultiHostDhcpAuthPhoneClientMACAddr OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The MAC address of the DHCP authenticated IP phone."
+    ::= { bseeMultiHostDhcpAuthPhoneEntry 2 }
+
+bseeMultiHostDhcpAuthPhoneUserName OBJECT-TYPE
+    SYNTAX SnmpAdminString (SIZE (0..32))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The user name currently in use by the DHCP authenticated IP phone."
+    ::= { bseeMultiHostDhcpAuthPhoneEntry 3 }    
 
 END
