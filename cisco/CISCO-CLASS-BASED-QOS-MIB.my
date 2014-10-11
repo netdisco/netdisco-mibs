@@ -1,7 +1,7 @@
 -- *****************************************************************
 -- Cisco Class-Based QoS Configuration and Statistics MIB
 --   
--- Copyright (c) 2000-2004, 2007-2009, 2012 by Cisco Systems Inc.
+-- Copyright (c) 2000-2004, 2007-2009-2014 by Cisco Systems Inc.
 --   
 -- All rights reserved.
 --   
@@ -16,7 +16,8 @@ IMPORTS
     Counter32,
     Gauge32,
     Unsigned32,
-    Counter64
+    Counter64,
+    dod
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     OBJECT-GROUP
@@ -43,7 +44,7 @@ IMPORTS
 
 
 ciscoCBQosMIB MODULE-IDENTITY
-    LAST-UPDATED    "201207240000Z"
+    LAST-UPDATED    "201401240000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -420,6 +421,27 @@ ciscoCBQosMIB MODULE-IDENTITY
         Users can uniquely identify each QoS object defined on the 
         router and query the entries in each stats table on a per 
         QoS object basis."
+    REVISION        "201401240000Z"
+    DESCRIPTION
+        "Added new object cbQosParentPolicyIndex in
+        cbQosServicePolicyTable"
+    REVISION        "201310100000Z"
+    DESCRIPTION
+        "Added cbQosQueueingStatsGroupRev1
+        Added ciscocbQosMIBComplianceRev13"
+    REVISION        "201306200000Z"
+    DESCRIPTION
+        "Added the following 64-bit Objects
+
+        cbQosCMPrePolicyBitRate64
+        cbQosCMPostPolicyBitRate64
+        cbQosCMDropBitRate64
+        cbQosPoliceConformedBitRate64
+        cbQosPoliceExceededBitRate64
+        cbQosPoliceViolatedBitRate64"
+    REVISION        "201302150000Z"
+    DESCRIPTION
+        "Added Percentage as a unit for cbQoSQueueUnitType"
     REVISION        "201207240000Z"
     DESCRIPTION
         "The following 2 objects are expanded to include perThousand and
@@ -799,7 +821,7 @@ QueueingBandwidthUnits ::= TEXTUAL-CONVENTION
         perThousand         Allocated bandwidth in Parts Per Thousand
 
         perMillion          Allocated bandwidth in Parts Per Million."
-    SYNTAX          INTEGER {
+    SYNTAX          INTEGER  {
                         kbps(1),
                         percentage(2),
                         percentageRemaining(3),
@@ -963,20 +985,23 @@ CbQosQueueUnitType ::= TEXTUAL-CONVENTION
         "A value that represents an unit type of queue
         size.
 
-        packets(1)   Represents the UNITS of 'packets' for
-                     queue size.
+        packets(1)    Represents the UNITS of 'packets' for
+                      queue size.
 
-        cells(2)     Represents the UNITS of 'cells' for 
-                     queue size.
+        cells(2)      Represents the UNITS of 'cells' for 
+                      queue size.
 
-        bytes(3)     Represents the UNITS of 'bytes' for 
-                     queue size.
+        bytes(3)      Represents the UNITS of 'bytes' for 
+                      queue size.
 
-        ms(4)        Represents the UNITS of 'milli-seconds' for
-                     queue size
+        ms(4)         Represents the UNITS of 'milli-seconds' for
+                      queue size
 
-        us(5)        Represents the UNITS of 'micro-seconds' for
-                     queue size
+        us(5)         Represents the UNITS of 'micro-seconds' for
+                      queue size
+
+        percentage(6) Represents the UNITS of 'percentage' for
+                      queue size
 
         To support future extensions, the CbQosQueueUnitType 
         textual convention SHOULD NOT be sub-typed in object
@@ -999,7 +1024,8 @@ CbQosQueueUnitType ::= TEXTUAL-CONVENTION
                         cells(2),
                         bytes(3),
                         ms(4),
-                        us(5)
+                        us(5),
+                        percentage(6)
                     }
 
 CbQosQueueDepth ::= TEXTUAL-CONVENTION
@@ -1036,7 +1062,7 @@ CbQosRateType ::= TEXTUAL-CONVENTION
         cps             Cells Per Second
         perThousand     Parts Per Thousand
         perMillion      Parts Per Million"
-    SYNTAX          INTEGER {
+    SYNTAX          INTEGER  {
                         bps(1),
                         percentage(2),
                         cps(3),
@@ -1419,7 +1445,8 @@ CbQosServicePolicyEntry ::= SEQUENCE {
         cbQosEntityIndex             EntPhysicalIndexOrZero,
         cbQosVlanIndex               VlanIndex,
         cbQosEVC                     Unsigned32,
-        cbQosPolicyDiscontinuityTime TimeStamp
+        cbQosPolicyDiscontinuityTime TimeStamp,
+        cbQosParentPolicyIndex       Unsigned32
 }
 
 cbQosPolicyIndex OBJECT-TYPE
@@ -1539,6 +1566,18 @@ cbQosPolicyDiscontinuityTime OBJECT-TYPE
         of the local management subsystem, this object contains a zero
         value." 
     ::= { cbQosServicePolicyEntry 11 }
+
+cbQosParentPolicyIndex OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The value refering to service-policy index of a virtual
+        interface on which PolicyMap applied directly. Value set would
+        imply the entry is for a physical interface which is a member
+        of a virtual interface. Value zero implies the entry is for a 
+        interface on which PolicyMap applied directly." 
+    ::= { cbQosServicePolicyEntry 12 }
  
 
 -- End of the cbQosServicePolicy group
@@ -2057,10 +2096,9 @@ cbQosQueueingCfgAggregateQSize OBJECT-TYPE
     DESCRIPTION
         "Maximum number of packets that can be held in all the
         individual queues associated with this class
-        before packets are dropped. This object is deprecated by
-        cbQosQueueingCfgAggregateQLimit.
-        cbQosQueueingCfgAggregateQSize object is superseded by cbQosQueueingCfgAggregateQLimit.
-        cbQosQueueingCfgAggregateQSize object is superseded by cbQosQueueingCfgAggregateQLimit." 
+        before packets are dropped. 
+        cbQosQueueingCfgAggregateQSize object is superseded by 
+        cbQosQueueingCfgAggregateQLimit." 
     ::= { cbQosQueueingCfgEntry 5 }
 
 cbQosQueueingCfgIndividualQSize OBJECT-TYPE
@@ -2248,9 +2286,9 @@ cbQosREDCfgMeanQsize OBJECT-TYPE
     STATUS          deprecated
     DESCRIPTION
         "The average queue size, computed and used by the WRED
-        algorithm.This is deprecated by cbQosREDMeanQsize.
-        cbQosREDCfgMeanQsize object is superseded by cbQosREDMeanQsize.
-        cbQosREDCfgMeanQsize object is superseded by cbQosREDMeanQsize." 
+        algorithm.
+        cbQosREDCfgMeanQsize object is superseded by 
+        cbQosREDMeanQsize." 
     ::= { cbQosREDCfgEntry 2 }
 
 cbQosREDCfgDscpPrec OBJECT-TYPE
@@ -2337,9 +2375,8 @@ cbQosREDCfgMinThreshold OBJECT-TYPE
         "Minimum threshold in number of packets. When the
         average queue length reaches this number, WRED begins 
         to drop packets with the specified IP precedence.
-        This is deprecated by cbQosREDClassCfgMinThreshold.
-        cbQosREDCfgMinThreshold object is superseded by cbQosREDClassCfgMinThreshold.
-        cbQosREDCfgMinThreshold object is superseded by cbQosREDClassCfgMinThreshold." 
+        cbQosREDCfgMinThreshold object is superseded by 
+        cbQosREDClassCfgMinThreshold." 
     ::= { cbQosREDClassCfgEntry 2 }
 
 cbQosREDCfgMaxThreshold OBJECT-TYPE
@@ -2351,9 +2388,8 @@ cbQosREDCfgMaxThreshold OBJECT-TYPE
         "Maximum threshold in number of packets. When the
         average queue length exceeds this number, WRED drops 
         all packets with the specified IP precedence.
-        This is deprecated by cbQosREDClassCfgMaxThreshold.
-        cbQosREDCfgMaxThreshold object is superseded by cbQosREDClassCfgMaxThreshold.
-        cbQosREDCfgMaxThreshold object is superseded by cbQosREDClassCfgMaxThreshold." 
+        cbQosREDCfgMaxThreshold object is superseded by 
+        cbQosREDClassCfgMaxThreshold." 
     ::= { cbQosREDClassCfgEntry 3 }
 
 cbQosREDCfgPktDropProb OBJECT-TYPE
@@ -2376,7 +2412,8 @@ cbQosREDClassCfgThresholdUnit OBJECT-TYPE
         "Represents the unit type to measure the RED thresholds.
         The objects covered are cbQosREDClassCfgMinThreshold
         and cbQosREDClassCfgMaxThreshold
-        cbQosREDClassCfgThresholdUnit object is superseded by cbQosREDClassCfgMinThreshold, cbQosREDClassCfgMaxThreshold." 
+        cbQosREDClassCfgThresholdUnit object is superseded by 
+        cbQosREDClassCfgMinThreshold, cbQosREDClassCfgMaxThreshold." 
     ::= { cbQosREDClassCfgEntry 5 }
 
 cbQosREDClassCfgMinThreshold OBJECT-TYPE
@@ -3443,7 +3480,10 @@ CbQosCMStatsEntry ::= SEQUENCE {
         cbQosCMFragmentPkt64          Counter64,
         cbQosCMFragmentByteOverflow   Counter32,
         cbQosCMFragmentByte           Counter32,
-        cbQosCMFragmentByte64         Counter64
+        cbQosCMFragmentByte64         Counter64,
+        cbQosCMPrePolicyBitRate64     CounterBasedGauge64,
+        cbQosCMPostPolicyBitRate64    CounterBasedGauge64,
+        cbQosCMDropBitRate64          CounterBasedGauge64
 }
 
 cbQosCMPrePolicyPktOverflow OBJECT-TYPE
@@ -3695,6 +3735,40 @@ cbQosCMFragmentByte64 OBJECT-TYPE
     DESCRIPTION
         "The 64 bits counter for aggregate fragment bytes" 
     ::= { cbQosCMStatsEntry 27 }
+
+cbQosCMPrePolicyBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of the traffic prior to executing any QoS
+        policies.This object is a 64-bit version of
+        cbQosCMPrePolicyBitRate." 
+    ::= { cbQosCMStatsEntry 28 }
+
+cbQosCMPostPolicyBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of the traffic after executing QoS
+        policies. This object is a 64-bit version of
+        cbQosCMPostPolicyBitRate." 
+    ::= { cbQosCMStatsEntry 29 }
+
+cbQosCMDropBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of the drops per class as the result of
+        all features that can produce drops 
+        (e.g., police, random detect, etc.). This object is a
+        64-bit version of cbQosCMDropBitRate." 
+    ::= { cbQosCMStatsEntry 30 }
  
 
 -- End of cbQosCMStats group
@@ -3861,7 +3935,10 @@ CbQosPoliceStatsEntry ::= SEQUENCE {
         cbQosPoliceViolatedByteOverflow  Counter32,
         cbQosPoliceViolatedByte          Counter32,
         cbQosPoliceViolatedByte64        Counter64,
-        cbQosPoliceViolatedBitRate       Gauge32
+        cbQosPoliceViolatedBitRate       Gauge32,
+        cbQosPoliceConformedBitRate64    CounterBasedGauge64,
+        cbQosPoliceExceededBitRate64     CounterBasedGauge64,
+        cbQosPoliceViolatedBitRate64     CounterBasedGauge64
 }
 
 cbQosPoliceConformedPktOverflow OBJECT-TYPE
@@ -4070,6 +4147,39 @@ cbQosPoliceViolatedBitRate OBJECT-TYPE
     DESCRIPTION
         "The bit rate of the violating traffic." 
     ::= { cbQosPoliceStatsEntry 21 }
+
+cbQosPoliceConformedBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of conforming traffic.
+        This object is a 64-bit version of
+        cbQosPoliceConformedBitRate." 
+    ::= { cbQosPoliceStatsEntry 22 }
+
+cbQosPoliceExceededBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of non-conforming traffic.
+        This object is a 64-bit version of
+        cbQosPoliceExceededBitRate." 
+    ::= { cbQosPoliceStatsEntry 23 }
+
+cbQosPoliceViolatedBitRate64 OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The bit rate of the violating traffic.
+        This object is a 64-bit version of
+        cbQosPoliceViolatedBitRate." 
+    ::= { cbQosPoliceStatsEntry 24 }
  
 
 -- end of cbQosPoliceStatsTable
@@ -4115,7 +4225,11 @@ CbQosQueueingStatsEntry ::= SEQUENCE {
         cbQosQueueingDiscardByte64       Counter64,
         cbQosQueueingDiscardPktOverflow  Counter32,
         cbQosQueueingDiscardPkt          Counter32,
-        cbQosQueueingDiscardPkt64        Counter64
+        cbQosQueueingDiscardPkt64        Counter64,
+        cbQosQueueingCurrentQDepthPkt    Gauge32,
+        cbQosQueueingMaxQDepthPkt        Gauge32,
+        cbQosQueueingTransmitByte64      Counter64,
+        cbQosQueueingTransmitPkt64       Counter64
 }
 
 cbQosQueueingCurrentQDepth OBJECT-TYPE
@@ -4195,6 +4309,45 @@ cbQosQueueingDiscardPkt64 OBJECT-TYPE
         "The number of packets, associated with this class,
         that were dropped by queueing." 
     ::= { cbQosQueueingStatsEntry 8 }
+
+cbQosQueueingCurrentQDepthPkt OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Packets"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The current number of packets
+        sitting in the queue" 
+    ::= { cbQosQueueingStatsEntry 9 }
+
+cbQosQueueingMaxQDepthPkt OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "Packets"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The maximum depth of the queue in packets." 
+    ::= { cbQosQueueingStatsEntry 10 }
+
+cbQosQueueingTransmitByte64 OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "Octets"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The count of octets, associated with this class,
+        that were transmitted by queueing." 
+    ::= { cbQosQueueingStatsEntry 11 }
+
+cbQosQueueingTransmitPkt64 OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "Packets"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of packets, associated with this class,
+        that were transmitted by queueing." 
+    ::= { cbQosQueueingStatsEntry 12 }
  
 
 -- end of cbQosQueueingStats Group
@@ -8369,7 +8522,7 @@ ciscocbQosMIBComplianceRev10 MODULE-COMPLIANCE
     ::= { ciscocbQosMIBCompliances 11 }
 
 ciscocbQosMIBComplianceRev11 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities that implement
         class-based QoS on a Cisco router. This compliance module
@@ -8630,6 +8783,539 @@ ciscocbQosMIBComplianceRev11 MODULE-COMPLIANCE
     DESCRIPTION
         "This group is only available on platforms supporting IPHC."
     ::= { ciscocbQosMIBCompliances 12 }
+
+ciscocbQosMIBComplianceRev12 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities that implement
+        class-based QoS on a Cisco router. This compliance module
+        deprecates ciscocbQosMIBComplianceRev11."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cbQosServicePolicyGroupRev1,
+                        cbQosObjectsGroup,
+                        cbQosPolicyMapCfgGroup,
+                        cbQosClassMapCfgGroup,
+                        cbQosMatchStmtCfgGroup,
+                        cbQosQueueingCfgGroupRev2,
+                        cbQosREDDscpCfgGroup,
+                        cbQosREDCfgGroupRev1,
+                        cbQosREDClassCfgGroupRev2,
+                        cbQosPoliceCfgGroupRev3,
+                        cbQosTSCfgGroup,
+                        cbQosSetCfgGroupRev1,
+                        cbQosClassMapStatsGroup,
+                        cbQosMatchStmtStatsGroup,
+                        cbQosPoliceStatsGroup,
+                        cbQosQueueingStatsGroup,
+                        cbQosTSStatsGroup,
+                        cbQosREDClassStatsGroup,
+                        cbQosQueueingClassCfgGroup,
+                        cbQos421XRCfgExt,
+                        cbQosBitRateExt
+                    }
+
+    GROUP           cbQosInterfacePolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosFrameRelayVCPolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosATMPVCPolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosNoBufferDropGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7500 platform."
+
+    GROUP           cbQosQueueingDynamicQNumberGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7200 and/or lower platforms."
+
+    GROUP           cbQosREDClassXmitCountersGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED transmit stats."
+
+    GROUP           cbQosREDECNCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED ECN configuration."
+
+    GROUP           cbQosREDClassECNMarkCountersGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED ECN stats."
+
+    GROUP           cbQosAFPoliceStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting POLICE violate action stats."
+
+    GROUP           cbQosPoliceCfgPirGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting police PIR configuration."
+
+    GROUP           cbQosPoliceCfgExtGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        Catalyst 4000 platform."
+
+    GROUP           cbQosPoliceActionCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting multiple POLICE conform/exceed actions."
+
+    GROUP           cbQosAFPoliceViolateCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting multiple POLICE violate actions."
+
+    GROUP           cbQosPoliceCfgPercentGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting police CIR/PIR in percentage."
+
+    GROUP           cbQosTrafficShapingDelayCountersGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7200 and/or lower platforms."
+
+    GROUP           cbQosTSCfgPercentGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting committed shaping rate in percentage."
+
+    GROUP           cbQosSetCfgMplsImpositionGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET MPLS Experimental Imposition config."
+
+    GROUP           cbQosSetCfgDiscardClassGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET Discard Class config."
+
+    GROUP           cbQosSetCfgMPLSTopMostGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET MPLS Experimental Top Most config."
+
+    GROUP           cbQosIPHCCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting IPHC configuration."
+
+    GROUP           cbQosIPHCStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting IPHC stats."
+
+    GROUP           cbQosQueueingCfgQLimitTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Queue limit configuration."
+
+    GROUP           cbQosREDCfgThresholdTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based RED threshold configuration."
+
+    GROUP           cbQosPoliceCfgCellGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting cell-based Policing Rate and Burst
+        configuration."
+
+    GROUP           cbQosPoliceCfgTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Policing Burst configuration."
+
+    GROUP           cbQosPoliceCfgCdvtGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing ATM CDVT configuration."
+
+    GROUP           cbQosPoliceCfgColorGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing Color Aware configuration."
+
+    GROUP           cbQosTSCfgTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Shaping Burst configuration."
+
+    GROUP           cbQosSetCfgSrpPriorityGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SRP Priority SET configuration."
+
+    GROUP           cbQosSetCfgFrFecnBecnGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Frame Relay FECN BECN SET configuration."
+
+    GROUP           cbQosSetStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET stats."
+
+    GROUP           cbQosPoliceColorStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing Color Aware stats."
+
+    GROUP           cbQosTableMapCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Enhanced Packet Marking."
+
+    GROUP           cbQosEBCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting Estimate Bandwidth."
+
+    GROUP           cbQosEBStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting Estimate Bandwidth stats."
+
+    GROUP           cbQosMeasureIPSLACfgGroup
+    DESCRIPTION
+        "Optional objects to configure IPSLA measure action."
+
+    GROUP           cbQosTSCfgExtGroup
+    DESCRIPTION
+        "This group is applicable for those platforms that
+        support shape rate greater than maximum value
+        reportable by cbQosTSCfgRate."
+
+    GROUP           cbQosSetCfgL2Group
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET L2 Cos or SET L2 Cos Inner config."
+
+    GROUP           cbQosServicePolicyExtGroup
+    DESCRIPTION
+        "Optional objects to provide more information about a
+        particular service policy instance."
+
+    GROUP           cbQosC3plAccountCfgGroup
+    DESCRIPTION
+        "This group is only available on platform that supporting
+        c3pl account action configuration information."
+
+    GROUP           cbQosC3plAccountStatsGroup
+    DESCRIPTION
+        "This group is only available on platform that supporting
+        c3pl account action configuration information."
+
+    GROUP           cbQosEVCGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting EVC."
+
+    GROUP           cbQosFragmentGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting service fragment."
+
+    GROUP           cbQosSetCfgExt
+    DESCRIPTION
+        "This group is only available on platforms supporting marking on
+        dei and tunnel."
+
+    GROUP           cbQosPoliceColorStatsExt
+    DESCRIPTION
+        "This group is only available on platforms supporting police
+        color aware feature."
+
+    GROUP           cbQosIPHCCfgExt
+    DESCRIPTION
+        "This group is only available on platforms supporting
+        policy action IPHC."
+
+    GROUP           cbQosIPHCStatsExt
+    DESCRIPTION
+        "This group is only available on platforms supporting IPHC."
+    ::= { ciscocbQosMIBCompliances 13 }
+
+ciscocbQosMIBComplianceRev13 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities that implement
+        class-based QoS on a Cisco router. This compliance module
+        deprecates ciscocbQosMIBComplianceRev12."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cbQosServicePolicyGroupRev1,
+                        cbQosObjectsGroup,
+                        cbQosPolicyMapCfgGroup,
+                        cbQosClassMapCfgGroup,
+                        cbQosMatchStmtCfgGroup,
+                        cbQosQueueingCfgGroupRev2,
+                        cbQosREDDscpCfgGroup,
+                        cbQosREDCfgGroupRev1,
+                        cbQosREDClassCfgGroupRev2,
+                        cbQosPoliceCfgGroupRev3,
+                        cbQosTSCfgGroup,
+                        cbQosSetCfgGroupRev1,
+                        cbQosClassMapStatsGroup,
+                        cbQosMatchStmtStatsGroup,
+                        cbQosPoliceStatsGroup,
+                        cbQosQueueingStatsGroup,
+                        cbQosTSStatsGroup,
+                        cbQosREDClassStatsGroup,
+                        cbQosQueueingClassCfgGroup,
+                        cbQos421XRCfgExt,
+                        cbQosBitRateExt
+                    }
+
+    GROUP           cbQosInterfacePolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosFrameRelayVCPolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosATMPVCPolicyGroup
+    DESCRIPTION
+        "This is a optional group of information"
+
+    GROUP           cbQosNoBufferDropGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7500 platform."
+
+    GROUP           cbQosQueueingDynamicQNumberGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7200 and/or lower platforms."
+
+    GROUP           cbQosREDClassXmitCountersGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED transmit stats."
+
+    GROUP           cbQosREDECNCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED ECN configuration."
+
+    GROUP           cbQosREDClassECNMarkCountersGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting WRED ECN stats."
+
+    GROUP           cbQosAFPoliceStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting POLICE violate action stats."
+
+    GROUP           cbQosPoliceCfgPirGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting police PIR configuration."
+
+    GROUP           cbQosPoliceCfgExtGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        Catalyst 4000 platform."
+
+    GROUP           cbQosPoliceActionCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting multiple POLICE conform/exceed actions."
+
+    GROUP           cbQosAFPoliceViolateCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting multiple POLICE violate actions."
+
+    GROUP           cbQosPoliceCfgPercentGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting police CIR/PIR in percentage."
+
+    GROUP           cbQosTrafficShapingDelayCountersGroup
+    DESCRIPTION
+        "This group is only available for code running on the
+        7200 and/or lower platforms."
+
+    GROUP           cbQosTSCfgPercentGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting committed shaping rate in percentage."
+
+    GROUP           cbQosSetCfgMplsImpositionGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET MPLS Experimental Imposition config."
+
+    GROUP           cbQosSetCfgDiscardClassGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET Discard Class config."
+
+    GROUP           cbQosSetCfgMPLSTopMostGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET MPLS Experimental Top Most config."
+
+    GROUP           cbQosIPHCCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting IPHC configuration."
+
+    GROUP           cbQosIPHCStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting IPHC stats."
+
+    GROUP           cbQosQueueingCfgQLimitTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Queue limit configuration."
+
+    GROUP           cbQosREDCfgThresholdTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based RED threshold configuration."
+
+    GROUP           cbQosPoliceCfgCellGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting cell-based Policing Rate and Burst
+        configuration."
+
+    GROUP           cbQosPoliceCfgTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Policing Burst configuration."
+
+    GROUP           cbQosPoliceCfgCdvtGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing ATM CDVT configuration."
+
+    GROUP           cbQosPoliceCfgColorGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing Color Aware configuration."
+
+    GROUP           cbQosTSCfgTimeGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting time-based Shaping Burst configuration."
+
+    GROUP           cbQosSetCfgSrpPriorityGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SRP Priority SET configuration."
+
+    GROUP           cbQosSetCfgFrFecnBecnGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Frame Relay FECN BECN SET configuration."
+
+    GROUP           cbQosSetStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET stats."
+
+    GROUP           cbQosPoliceColorStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Policing Color Aware stats."
+
+    GROUP           cbQosTableMapCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting Enhanced Packet Marking."
+
+    GROUP           cbQosEBCfgGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting Estimate Bandwidth."
+
+    GROUP           cbQosEBStatsGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting Estimate Bandwidth stats."
+
+    GROUP           cbQosMeasureIPSLACfgGroup
+    DESCRIPTION
+        "Optional objects to configure IPSLA measure action."
+
+    GROUP           cbQosTSCfgExtGroup
+    DESCRIPTION
+        "This group is applicable for those platforms that
+        support shape rate greater than maximum value
+        reportable by cbQosTSCfgRate."
+
+    GROUP           cbQosSetCfgL2Group
+    DESCRIPTION
+        "This group is only available on platforms that
+        supporting SET L2 Cos or SET L2 Cos Inner config."
+
+    GROUP           cbQosServicePolicyExtGroup
+    DESCRIPTION
+        "Optional objects to provide more information about a
+        particular service policy instance."
+
+    GROUP           cbQosC3plAccountCfgGroup
+    DESCRIPTION
+        "This group is only available on platform that supporting
+        c3pl account action configuration information."
+
+    GROUP           cbQosC3plAccountStatsGroup
+    DESCRIPTION
+        "This group is only available on platform that supporting
+        c3pl account action configuration information."
+
+    GROUP           cbQosEVCGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting EVC."
+
+    GROUP           cbQosFragmentGroup
+    DESCRIPTION
+        "This group is only available on platforms
+        supporting service fragment."
+
+    GROUP           cbQosSetCfgExt
+    DESCRIPTION
+        "This group is only available on platforms supporting marking on
+        dei and tunnel."
+
+    GROUP           cbQosPoliceColorStatsExt
+    DESCRIPTION
+        "This group is only available on platforms supporting police
+        color aware feature."
+
+    GROUP           cbQosIPHCCfgExt
+    DESCRIPTION
+        "This group is only available on platforms supporting
+        policy action IPHC."
+
+    GROUP           cbQosIPHCStatsExt
+    DESCRIPTION
+        "This group is only available on platforms supporting IPHC."
+
+    GROUP           cbQosQueueingStatsGroupRev1
+    DESCRIPTION
+        "This group is only available on platforms supporting these
+        additional queueing related information."
+    ::= { ciscocbQosMIBCompliances 14 }
 
 cbQosServicePolicyGroup OBJECT-GROUP
     OBJECTS         {
@@ -9712,7 +10398,53 @@ cbQos421XRCfgExt OBJECT-GROUP
         PoliceAction"
     ::= { ciscocbQosMIBGroups 80 }
 
+cbQosBitRateExt OBJECT-GROUP
+    OBJECTS         {
+                        cbQosCMPrePolicyBitRate64,
+                        cbQosCMPostPolicyBitRate64,
+                        cbQosCMDropBitRate64,
+                        cbQosPoliceConformedBitRate64,
+                        cbQosPoliceExceededBitRate64,
+                        cbQosPoliceViolatedBitRate64
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Added the following 64-bit Bit Rate Objects
+
+        cbQosCMPrePolicyBitRate64
+        cbQosCMPostPolicyBitRate64
+        cbQosCMDropBitRate64
+        cbQosPoliceConformedBitRate64
+        cbQosPoliceExceededBitRate64
+        cbQosPoliceViolatedBitRate64"
+    ::= { ciscocbQosMIBGroups 81 }
+
+cbQosQueueingStatsGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cbQosQueueingCurrentQDepthPkt,
+                        cbQosQueueingMaxQDepthPkt,
+                        cbQosQueueingTransmitByte64,
+                        cbQosQueueingTransmitPkt64
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Optional objects to provide CB QoS objects configuration
+        information."
+    ::= { ciscocbQosMIBGroups 82 }
+
+cbQosServicePolicyExtGroupRev2 OBJECT-GROUP
+    OBJECTS         { cbQosParentPolicyIndex }
+    STATUS          current
+    DESCRIPTION
+        "Added cbQosParentPolicyIndex to cbQosServicePolicyTable."
+    ::= { ciscocbQosMIBGroups 83 }
+
 END
+
+
+
+
+
 
 
 
