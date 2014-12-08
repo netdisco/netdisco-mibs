@@ -1,9 +1,10 @@
--- ArubaOS 7.2.0.0_36526
+-- ArubaOS 6.4.2.2_46307
 -- vim:set ts=4 sw=4: 
 WLSX-RS-MIB DEFINITIONS ::= BEGIN
 
    IMPORTS
-       TEXTUAL-CONVENTION,
+       TEXTUAL-CONVENTION FROM SNMPv2-TC 
+       
        MODULE-IDENTITY,
        OBJECT-TYPE,
        snmpModules,
@@ -33,21 +34,38 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
 	   ArubaEnableValue,
 	   ArubaActiveState,
 	   ArubaEnet1Mode,
-	   ArubaUSBStatus,
 	   ArubaPortType,
 	   ArubaPortSpeed,
 	   ArubaPortDuplex,
 	   ArubaEnableValue,
-	   ArubaOperStateValue
+	   ArubaOperStateValue,
+       ArubaDot3azStatus,
+	   ArubaPoeState,
+	   ArubaAPDot1dState
 	   		FROM ARUBA-TC
+
+       LldpChassisIdSubtype,
+	   LldpChassisId,
+	   LldpPortIdSubtype,
+	   LldpPortId,
+	   LldpSystemCapabilitiesMap,
+	   LldpManAddress
+	        FROM LLDP-MIB
+
+       SnmpAdminString
+	       FROM SNMP-FRAMEWORK-MIB
+
+       AddressFamilyNumbers
+            FROM IANA-ADDRESS-FAMILY-NUMBERS-MIB
 
        OBJECT-GROUP
            FROM SNMPv2-CONF
+
 		wlsxEnterpriseMibModules
 			FROM ARUBA-MIB;
 
    wlsxRSMIB MODULE-IDENTITY 
-       LAST-UPDATED "0809050700Z"
+       LAST-UPDATED "1106012012Z"
        ORGANIZATION "Aruba Wireless Networks"
        CONTACT-INFO
             "Postal:    1322 Crossman Avenue
@@ -57,7 +75,7 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
        DESCRIPTION
            "This MIB module defines MIB objects which provide
             information about remote user and node state."
-       REVISION        "0809050700Z"
+       REVISION        "1106012012Z"
        DESCRIPTION
            "The initial revision."
        ::= { wlsxEnterpriseMibModules 16 }
@@ -104,7 +122,11 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
 		 remotePortTxPackets		Counter64,
 		 remotePortTxBytes			Counter64,
 		 remotePortRxPackets		Counter64,
-		 remotePortRxBytes			Counter64
+		 remotePortRxBytes			Counter64,
+		 remotePortDot3azStatus     ArubaDot3azStatus,
+		 remotePortName             DisplayString,
+		 remotePortPoEState         ArubaPoeState,
+		 remotePortSTPState         ArubaAPDot1dState
    }
 
    	remotePortNumber OBJECT-TYPE
@@ -247,6 +269,46 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
             "
         ::= { wlsxRemotePortEntry 14 }
 
+   	remotePortDot3azStatus OBJECT-TYPE
+         SYNTAX       ArubaDot3azStatus
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			802.3az status
+            "
+        ::= { wlsxRemotePortEntry 15 }
+
+   	remotePortName OBJECT-TYPE
+         SYNTAX       DisplayString
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The name of the port
+            "
+        ::= { wlsxRemotePortEntry 16 }
+
+   	remotePortPoEState OBJECT-TYPE
+         SYNTAX       ArubaPoeState
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			PSE status
+            "
+        ::= { wlsxRemotePortEntry 17 }
+
+   	remotePortSTPState OBJECT-TYPE
+         SYNTAX       ArubaAPDot1dState
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			STP status
+            "
+        ::= { wlsxRemotePortEntry 18 }
+
 -- USB
 
    wlsxRemoteUSBTable  OBJECT-TYPE 
@@ -271,13 +333,25 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
    USBEntry ::=
      SEQUENCE {
          usbDevNumber				Unsigned32,
-		 usbStatus					ArubaUSBStatus,
+		 usbStatus					DisplayString,
 		 usbManufacturer			DisplayString,
 		 usbProduct					DisplayString,
 		 usbSerialNumber			DisplayString,
 		 usbVendor					DisplayString,
 		 usbProductID				DisplayString,
-		 usbDriver					DisplayString
+		 usbDriver					DisplayString,
+                 usbRSSI                        DisplayString,
+                 usbNetworkServiceLevel         DisplayString,
+                 usbFirmwareVersion             DisplayString,
+                 usbEsnNumber                   DisplayString,
+                 usbifOperStatus                ArubaOperStateValue,
+                 usbifInUcastPkts               Counter64,
+                 usbifInUcastOctets             Counter64,
+                 usbifOutUcastPkts              Counter64,
+                 usbifOutUcastOctets            Counter64,
+                 usbifInErrors                  Counter64,
+                 usbifOutErrors                 Counter64
+
    }
 
    	usbDevNumber OBJECT-TYPE
@@ -291,7 +365,7 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
         ::= { wlsxUSBEntry 1 }
 
    	usbStatus OBJECT-TYPE
-         SYNTAX       ArubaUSBStatus
+         SYNTAX       DisplayString
          MAX-ACCESS   read-only
          STATUS       current
          DESCRIPTION
@@ -359,6 +433,117 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
 			Driver module
             "
         ::= { wlsxUSBEntry 8 }
+
+        usbRSSI OBJECT-TYPE
+           SYNTAX       DisplayString
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                        RSSI
+              "
+          ::= { wlsxUSBEntry 9 }
+  
+        usbNetworkServiceLevel OBJECT-TYPE
+           SYNTAX       DisplayString
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                      Network Service Level
+              "
+          ::= { wlsxUSBEntry 10 }
+  
+        usbFirmwareVersion OBJECT-TYPE
+           SYNTAX       DisplayString
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                        Firmware Version
+              "
+          ::= { wlsxUSBEntry 11 }
+  
+        usbEsnNumber OBJECT-TYPE
+           SYNTAX       DisplayString
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                        ESN Number
+              "
+          ::= { wlsxUSBEntry 12 }
+  
+        usbifOperStatus OBJECT-TYPE
+           SYNTAX       ArubaOperStateValue
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                        Operational Status of the USB Interface
+              "
+          ::= { wlsxUSBEntry 13 }
+
+        usbifInUcastPkts OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                Received Unicast Packets        
+              "
+          ::= { wlsxUSBEntry 14 }
+  
+        usbifInUcastOctets OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                  Received Bytes                      
+              "
+          ::= { wlsxUSBEntry 15 }
+  
+        usbifOutUcastPkts OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                Transmitted Unicast Packets     
+              "
+          ::= { wlsxUSBEntry 16 }
+ 
+        usbifOutUcastOctets OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                Transmitted Bytes       
+              "
+          ::= { wlsxUSBEntry 17 }
+  
+        usbifInErrors OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                Errors in Incoming Interface
+              "
+          ::= { wlsxUSBEntry 18 }
+
+        usbifOutErrors OBJECT-TYPE
+           SYNTAX       Counter64
+           MAX-ACCESS   read-only
+           STATUS       current
+           DESCRIPTION
+              "
+                Errors in Outgoing Interface
+              "
+          ::= { wlsxUSBEntry 19 }
+
 
 -- Wired User Statistics
 
@@ -516,5 +701,199 @@ WLSX-RS-MIB DEFINITIONS ::= BEGIN
                 The number of multicast bytes transmitted by this user.
             "
             ::= { wlsxRemoteWiredUserStatsEntry 12 }
+
+   wlsxLldpNeighborTable  OBJECT-TYPE 
+	  SYNTAX       SEQUENCE OF LldpNeighborEntry
+	  MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION 
+	  	"
+			This table enumerates the LLDP neighbors discovered by the
+			access point.
+		"
+      ::= { wlsxRemoteAccessPointPortGroup 3 } 
+
+   wlsxLldpNeighborEntry OBJECT-TYPE 
+	  SYNTAX       LldpNeighborEntry
+	  MAX-ACCESS   not-accessible		
+      STATUS       current 
+      DESCRIPTION 
+             "LLDP Neighbor Entry"
+	  INDEX { wlanAPMacAddress, remotePortNumber, lldpNeighborIndex }
+      ::= { wlsxLldpNeighborTable 1 } 
+
+   LldpNeighborEntry ::=
+     SEQUENCE {
+		 lldpNeighborIndex                  Unsigned32,
+		 lldpNeighborChassisIdSubtype       LldpChassisIdSubtype,
+		 lldpNeighborChassisId              LldpChassisId,
+		 lldpNeighborPortIdSubtype          LldpPortIdSubtype,
+		 lldpNeighborPortId                 LldpPortId,
+		 lldpNeighborPortDesc               SnmpAdminString,
+		 lldpNeighborSysName                SnmpAdminString,
+		 lldpNeighborSysDesc                SnmpAdminString,
+		 lldpNeighborSysCapSupported        LldpSystemCapabilitiesMap,
+		 lldpNeighborSysCapEnabled          LldpSystemCapabilitiesMap
+   }
+
+   lldpNeighborIndex OBJECT-TYPE
+         SYNTAX       Unsigned32
+         MAX-ACCESS   not-accessible
+         STATUS       current
+         DESCRIPTION
+            "
+			Neighbor Index
+            "
+       ::= { wlsxLldpNeighborEntry 1 }
+
+   lldpNeighborChassisIdSubtype OBJECT-TYPE
+         SYNTAX       LldpChassisIdSubtype
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The subtype of the neighbor's chassis ID
+            "
+       ::= { wlsxLldpNeighborEntry 2 }
+
+   lldpNeighborChassisId OBJECT-TYPE
+         SYNTAX       LldpChassisId
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The neighbor's chassis ID
+            "
+       ::= { wlsxLldpNeighborEntry 3 }
+
+   lldpNeighborPortIdSubtype OBJECT-TYPE
+         SYNTAX       LldpPortIdSubtype
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The subtype of the neighbor's port ID
+            "
+       ::= { wlsxLldpNeighborEntry 4 }
+
+   lldpNeighborPortId OBJECT-TYPE
+         SYNTAX       LldpPortId
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The neighbor's port ID
+            "
+       ::= { wlsxLldpNeighborEntry 5 }
+
+   lldpNeighborPortDesc OBJECT-TYPE
+         SYNTAX       SnmpAdminString
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The name of the neighbor's port
+            "
+       ::= { wlsxLldpNeighborEntry 6 }
+
+   lldpNeighborSysName OBJECT-TYPE
+         SYNTAX       SnmpAdminString
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The name of the neighbor
+            "
+       ::= { wlsxLldpNeighborEntry 7 }
+
+   lldpNeighborSysDesc OBJECT-TYPE
+         SYNTAX       SnmpAdminString
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The description of the neighbor
+            "
+       ::= { wlsxLldpNeighborEntry 8 }
+
+   lldpNeighborSysCapSupported OBJECT-TYPE
+         SYNTAX       LldpSystemCapabilitiesMap
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The supported set of capabilities
+            "
+       ::= { wlsxLldpNeighborEntry 9 }
+
+   lldpNeighborSysCapEnabled OBJECT-TYPE
+         SYNTAX       LldpSystemCapabilitiesMap
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The enabled set of capabilities
+            "
+       ::= { wlsxLldpNeighborEntry 10 }
+
+   wlsxLldpNeighborManAddrTable  OBJECT-TYPE 
+	  SYNTAX       SEQUENCE OF LldpNeighborManAddrEntry
+	  MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION 
+	  	"
+			This table enumerates the LLDP neighbor management address 
+			discovered by the access point.
+		"
+      ::= { wlsxRemoteAccessPointPortGroup 4 } 
+
+   wlsxLldpNeighborManAddrEntry OBJECT-TYPE 
+	  SYNTAX       LldpNeighborManAddrEntry
+	  MAX-ACCESS   not-accessible		
+      STATUS       current 
+      DESCRIPTION 
+             "LLDP Neighbor Entry"
+	  INDEX { wlanAPMacAddress, remotePortNumber, lldpNeighborIndex, 
+	         lldpNeighborManAddrIndex
+			}
+      ::= { wlsxLldpNeighborManAddrTable 1 } 
+
+   LldpNeighborManAddrEntry ::=
+     SEQUENCE {
+		 lldpNeighborManAddrIndex   Unsigned32,
+		 lldpNeighborManAddrSubtype AddressFamilyNumbers,
+		 lldpNeighborManAddr        LldpManAddress
+	 }
+
+   lldpNeighborManAddrIndex OBJECT-TYPE
+         SYNTAX       Unsigned32
+         MAX-ACCESS   not-accessible
+         STATUS       current
+         DESCRIPTION
+            "
+			Indexes the neighbor's management addresses
+            "
+       ::= { wlsxLldpNeighborManAddrEntry 1 }
+
+   lldpNeighborManAddrSubtype OBJECT-TYPE
+         SYNTAX       AddressFamilyNumbers
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			The subtype of the management address
+            "
+       ::= { wlsxLldpNeighborManAddrEntry 2 }
+
+   lldpNeighborManAddr OBJECT-TYPE
+         SYNTAX       LldpManAddress
+         MAX-ACCESS   read-only
+         STATUS       current
+         DESCRIPTION
+            "
+			A neighbors management address
+            "
+       ::= { wlsxLldpNeighborManAddrEntry 3 }
+
 
 END
