@@ -7,7 +7,7 @@ IMPORTS
     OBJECT-TYPE,
     Integer32
         FROM SNMPv2-SMI
-    MacAddress
+    MacAddress, DisplayString
         FROM SNMPv2-TC
     bayStackMibs
         FROM SYNOPTICS-ROOT-MIB
@@ -20,19 +20,72 @@ IMPORTS
         FROM INET-ADDRESS-MIB
     SnmpAdminString
         FROM SNMP-FRAMEWORK-MIB
-    bayStackConfigExpectedStackSize
+    bayStackConfigExpectedStackSize,
+    bayStackUnitConfigIndex
         FROM BAY-STACK-MIB
     s5ChasComType
         FROM S5-CHASSIS-MIB
     InterfaceIndex
-        FROM IF-MIB;
+        FROM IF-MIB
+    s5AgSysUsbTargetUnit,
+    s5AgentScriptStatus
+        FROM S5-AGENT-MIB;
 
 bayStackNotificationsMib    MODULE-IDENTITY
-   LAST-UPDATED "200909280000Z"
-   ORGANIZATION "Nortel Networks"
-   CONTACT-INFO "Nortel Networks"
+   LAST-UPDATED "201401270000Z"
+   ORGANIZATION "Avaya"
+   CONTACT-INFO "Avaya"
    DESCRIPTION
        "Miscellaneous NOTIFICATION definitions for BayStack products."
+
+   REVISION "201401270000Z" -- 27 January 2014
+   DESCRIPTION
+       "Version 27:  Added bsnAAAUserName,
+                           bsnAaaUserAccountNotUsed, bsnAaaAlreadyConnected,
+                           bsnAaaIncorrectLogOnThresholdExceeded, bsnAaaMaxNoOfSessionsExceeded,
+                           bsnAuditUnsentMessages, bsnAuditRecordEventsFailure, 
+                           bsnAuditStartUpTrap, bsnAuditShutDownTrap"
+
+   REVISION "201310110000Z" -- 11 October 2013
+   DESCRIPTION
+       "Version 26:  Added DisplayString to IMPORTS."
+
+   REVISION "201308220000Z" -- 22 August 2013
+   DESCRIPTION
+       "Version 25:  Added bsnRunScripts"
+
+   REVISION "201303190000Z" -- 19 March 2013
+   DESCRIPTION
+       "Version 24:  Added bsnUSBInfo and bsnSFPInfo objects."
+
+   REVISION "201209040000Z" -- 4 September 2012
+   DESCRIPTION
+       "Version 23:  Added bsnStackProtection."
+
+   REVISION "201208220000Z" -- 22 August 2012
+   DESCRIPTION
+       "Version 22:  Added bsnROPasswordExpired, bsnRWPasswordExpired."
+
+   REVISION "201208160000Z" -- 16 August 2012
+   DESCRIPTION
+       "Version 21:  Modified bsnLacTrunkUnavailable's description."
+
+   REVISION "201206210000Z" -- 21 June 2012
+   DESCRIPTION
+       "Version 20:  Added bsnUSBInsertion, bsnUSBRemoval,
+                           bsnSFPInsertion, bsnSFPRemoval."
+
+   REVISION "201206200000Z" -- 20 June 2012
+   DESCRIPTION
+       "Version 19:  Added bayStackUnitConfigIndex parameter to bsnSystemUp365Days notification type."
+
+   REVISION "201111300000Z" -- 30 November 2011
+   DESCRIPTION
+       "Version 18:  Added IP address related parameters to bsnEnteredForcedStackMode notification type."       
+       
+   REVISION "201012210000Z" -- 21 December 2010
+   DESCRIPTION
+       "Version 17:  Added bsnSystemUp365Days."
 
    REVISION "200909280000Z" -- 28 September 2009
    DESCRIPTION
@@ -224,6 +277,62 @@ bsnEapRAVErrorPort OBJECT-TYPE
         "The ifIndex of the port that could not be moved to the Radius-Assigned
          VLAN."
     ::= { bsnObjects 14 }
+    
+bsnEnteredForcedStackModeAddressType OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The address type contained in the associated value of
+         bsnEnteredForcedStackModeAddress."
+    ::= { bsnObjects 15 } 
+    
+bsnEnteredForcedStackModeAddress OBJECT-TYPE
+    SYNTAX      InetAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The IP address in use on the switch that entered forced stack mode."
+    ::= { bsnObjects 16 }
+
+bsnStackProtectionEvent OBJECT-TYPE
+    SYNTAX      INTEGER {
+                  cannotJoinStack(1),
+                  unitIgnored(2)
+                }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the Stack Protection events which may occur.
+         cannotJoinStack(1) occurs on a BU (base unit) enabled switch
+         which tries to join an existing operational stack.
+         unitIgnored(2) occurs on an operational stack, when a BU enabled switch
+         tries to join the stack."
+    ::= { bsnObjects 17 }
+
+bsnUSBInfo OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The USB module information."
+    ::= { bsnObjects 18 }
+
+bsnSFPInfo OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The SFP module information."
+    ::= { bsnObjects 19 }
+
+bsnAaaUserName OBJECT-TYPE
+    SYNTAX      SnmpAdminString(SIZE (10..16))
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The user name of an AAA user account."
+    ::= { bsnObjects 20 }
 
 --
 -- Notification types
@@ -274,11 +383,10 @@ bsnStackManagerReconfiguration NOTIFICATION-TYPE
 bsnLacTrunkUnavailable NOTIFICATION-TYPE
     STATUS current
     DESCRIPTION
-        "This notification is generated when an attempt is made to form an
-         802.3ad LAG trunk, but there are no available resources to create
-         a new trunk.  The condition usually occurs because a system has
-         some hardware or software limit on the number of trunks that can
-         be created."
+        "This notification is generated when the last trunk is occupied out 
+         of a limited number of trunks that can be created. The condition usually 
+         occurs because a system has some hardware or software limit on the number 
+         of trunks that can be created."
     ::= { bsnNotifications0 5 }
 
 bsnLoginFailure NOTIFICATION-TYPE
@@ -395,7 +503,9 @@ bsnTrialLicenseExpiration NOTIFICATION-TYPE
 
 bsnEnteredForcedStackMode NOTIFICATION-TYPE
     OBJECTS {
-        bsnEnteredForcedStackModeMAC
+        bsnEnteredForcedStackModeMAC,
+        bsnEnteredForcedStackModeAddressType,
+        bsnEnteredForcedStackModeAddress                
     }
     STATUS current
     DESCRIPTION
@@ -438,5 +548,149 @@ bsnEapRateLimitExceeded NOTIFICATION-TYPE
          exceeded the rate limit settings on that port."
     ::= { bsnNotifications0 19 }
 
+bsnSystemUp365Days NOTIFICATION-TYPE
+    OBJECTS {
+        bayStackUnitConfigIndex
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification indicates that the system has been up for 365 days.
+         In stack configuration, bayStackUnitConfigIndex specifies the unit number. 
+         For a standalone unit bayStackUnitConfigIndex is always 1."
+    ::= { bsnNotifications0 20 }
+
+bsnUSBInsertion NOTIFICATION-TYPE
+    OBJECTS {
+        s5AgSysUsbTargetUnit,
+        bsnUSBInfo
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is triggered when an USB device is inserted.
+         In stack configuration, s5AgSysUsbTargetUnit specifies the unit number.
+         For standalone, s5AgSysUsbTargetUnit is always 0."
+    ::= { bsnNotifications0 21 }
+
+bsnUSBRemoval NOTIFICATION-TYPE
+    OBJECTS {
+        s5AgSysUsbTargetUnit
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is triggered when an USB device is removed.
+         In stack configuration, s5AgSysUsbTargetUnit specifies the unit number.
+         For standalone, s5AgSysUsbTargetUnit is always 0."
+    ::= { bsnNotifications0 22 }
+
+bsnSFPInsertion NOTIFICATION-TYPE
+    OBJECTS {
+        ifIndex,
+        bsnSFPInfo
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is triggered when an SFP module is inserted."
+    ::= { bsnNotifications0 23 }
+
+bsnSFPRemoval NOTIFICATION-TYPE
+    OBJECTS {
+        ifIndex
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is triggered when an SFP module is removed."
+    ::= { bsnNotifications0 24 } 
+
+bsnROPasswordExpired NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+        "This notification is sent when RO password expired."
+    ::= { bsnNotifications0 25 } 
+
+bsnRWPasswordExpired NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+        "This notification is sent when RW password expired."
+    ::= { bsnNotifications0 26 }
+
+bsnStackProtection NOTIFICATION-TYPE
+    OBJECTS {
+       bsnStackProtectionEvent
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is sent when a stack protection event occurs.
+         The event type is specified by the bsnStackProtectionEvent object."
+    ::= { bsnNotifications0 27 }
+
+bsnRunScripts NOTIFICATION-TYPE
+    OBJECTS {
+       s5AgentScriptStatus
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is sent when a script has been run.
+         It indicates whether the execution was successful or not."
+    ::= { bsnNotifications0 28 }
+
+bsnAaaUserAccountNotUsed NOTIFICATION-TYPE
+    OBJECTS      { bsnAaaUserName }
+    STATUS current
+    DESCRIPTION 
+        "A bsnAaaUserAccountNotUsed trap signifies that
+         a user account has never been used during a time interval."
+    ::= { bsnNotifications0 29 }
+
+bsnAaaAlreadyConnected NOTIFICATION-TYPE
+    OBJECTS      { bsnAaaUserName }
+    STATUS current
+    DESCRIPTION 
+        "A bsnAaaAlreadyConnected trap signifies that
+         a user is already connected while he attempts to connect again."
+    ::= { bsnNotifications0 30 }
+
+bsnAaaIncorrectLogOnThresholdExceeded NOTIFICATION-TYPE
+    OBJECTS      { bsnAaaUserName }
+    STATUS current
+    DESCRIPTION 
+        "A bsnAaaIncorrectLogOnThresholdExceeded trap signifies that
+         the threshold for incorrect user-entered information is exceeded."
+    ::= { bsnNotifications0 31 }
+
+bsnAaaMaxNoOfSessionsExceeded NOTIFICATION-TYPE
+    OBJECTS      { bsnAaaUserName }
+    STATUS current
+    DESCRIPTION 
+        "A bsnAaaMaxNoOfSessionsExceeded trap signifies that the maxim
+         number of current sessions for an AAA user account is exceeded."
+    ::= { bsnNotifications0 32 }
+
+bsnAuditUnsentMessages NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION 
+        "A bsnAuditUnsentMessages trap signifies that the number 
+         of audit unsent messages has reached 50% from the total capacity."
+    ::= { bsnNotifications0 33 }
+
+bsnAuditRecordEventsFailure NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION 
+        "A bsnAuditRecordEventsFailure trap signifies that security log fails 
+         to record the events that are required to be recorded."
+    ::= { bsnNotifications0 34 }
+
+bsnAuditStartUpTrap NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION 
+        "A bsnAuditStartUpTrap trap signifies that the audit function starts up."
+    ::= { bsnNotifications0 35 }
+
+bsnAuditShutDownTrap NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION 
+        "A bsnAuditStartUpTrap trap signifies that the audit function shuts down."
+    ::= { bsnNotifications0 36 }
+
 END
+
 
