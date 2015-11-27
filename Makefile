@@ -10,7 +10,7 @@ MIBS    = $(shell grep ^Version mibs/README | sed -n -e 's/^Version //;P')
 all:
 	@echo "Options are : mib-dist,mib-snapshot"
 
-mib-dist: mib-ver
+mib-dist:
 	mv mibs netdisco-mibs-${MIBS}
 	find netdisco-mibs-${MIBS} -name .git > excluded_files
 	find netdisco-mibs-${MIBS} -name .index >> excluded_files
