@@ -2,7 +2,7 @@
 AVAYA-FABRIC-ATTACH-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Integer32
+    MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Integer32, Counter32
             FROM SNMPv2-SMI
     MODULE-COMPLIANCE, OBJECT-GROUP
             FROM SNMPv2-CONF
@@ -14,11 +14,73 @@ IMPORTS
             FROM SNMPv2-TC;
 
 avayaFabricAttachMib MODULE-IDENTITY
-    LAST-UPDATED "201404240000Z"     -- April 24, 2014
+    LAST-UPDATED "201509010000Z"     -- September 1, 2015
     ORGANIZATION "Avaya Networks, Inc."
     CONTACT-INFO "avaya.com"
     DESCRIPTION
         "This MIB module contains objects related to the Fabric Attach support."
+
+    REVISION    "201509010000Z" -- September 1, 2015
+    DESCRIPTION "Ver 18: Added avFabricAttachZeroTouchClientTable to support
+                 Zero Touch FA Client configuration."
+
+    REVISION    "201504270000Z" -- April 27, 2015
+    DESCRIPTION "Ver 17: Added avFabricAttachDiscElemsElementTrunkId attribute
+                 to export discovered element trunk associations."
+
+    REVISION    "201504200000Z" -- April 20, 2015
+    DESCRIPTION "Ver 16: Added autoPvidModeFaClient enumeration support
+                 for the avFabricAttachZeroTouchOptionFlags attribute."
+
+    REVISION    "201504080000Z" -- April 08, 2015
+    DESCRIPTION "Ver 15: Added avFabricAttachStatsDiscElemExpired,
+		 avFabricAttachStatsDiscElemDeleted and
+		 avFabricAttachStatsAsgnDeleted under AvFabricAttachStatsEntry.
+		 Also added avFabricAttachGlobalStatsDiscElemExpired,
+		 avFabricAttachGlobalStatsDiscElemDeleted and 
+		 avFabricAttachGlobalStatsAsgnDeleted
+		 Changes requested by Zuyan Wang (VSP) - Prem"
+
+    REVISION    "201503110000Z" -- March 11, 2015
+    DESCRIPTION "Ver 14: Added values faClientOnaSdn(16) and faClientOnaSpbOIp(17) to 
+		 avFabricAttachElementType and avFabricAttachDiscElemsElementType.
+		 Added values provisionModeDisabled(2), provisionModeSpbm(3) and
+		 provisionModeVlan(4) to avFabricAttachDiscElemsElementState.
+		 Changed avFabricAttachTimeout to avFabricAttachAsgnTimeout.
+		 Added mib objects avFabricAttachDiscTimeout, avFabricAttachPortMgmtIsid
+		 and avFabricAttachPortMgmtCvid.
+		 Changes requested by Zuyan Wang (VSP) - Prem"
+
+    REVISION    "201412180000Z" -- December 18, 2014
+    DESCRIPTION "Ver 13: Added avFabricAttachExtendedLogging attribute to
+                 control extended logging capabilities. Added binding source
+                 attribute to the avFabricAttachIsidVlanAsgnsTable."
+
+    REVISION    "201412050000Z" -- December 5, 2014
+    DESCRIPTION "Ver 12: Updated the avFabricAttachPortTable with per-port
+                 authentication attributes (avFabricAttachPortMsgAuthStatus,
+                 avFabricAttachPortMsgAuthKey). Updated discovered element
+                 authentication status enumerations. Updated statistics
+                 table object names by removing 'Sdk' to avoid confusion."
+
+    REVISION    "201411100000Z" -- November 10, 2014
+    DESCRIPTION "Ver 11: Added avFabricAttachTimeout, avFabricAttachSdkStatsTable, 
+                 avFabricAttachGlobalSdkStats mib objects.
+		 Requested by Zuyan Wang for Fabric Attach on VSP8K (prempa)."
+
+    REVISION    "201410280000Z" -- October 28, 2014
+    DESCRIPTION "Ver 10: Added standalone proxy attributes."
+
+    REVISION    "201410060000Z" -- October 6, 2014
+    DESCRIPTION "Ver 9:  Added Zero Touch attribute definitions.
+                         Updated FA Discovered Elements table."
+
+    REVISION    "201409100000Z" -- September 10, 2014
+    DESCRIPTION "Ver 8:  Updated attribute enumerations and naming.
+                         Updated FA Discovered Elements table."
+
+    REVISION    "201407160000Z" -- July 16, 2014
+    DESCRIPTION "Ver 7:  Added Auto Provision support."
 
     REVISION    "201404240000Z" -- April 24, 2014
     DESCRIPTION "Ver 6:  Updated FA element names in enumerations and 
@@ -65,11 +127,23 @@ avFabricAttachService OBJECT-TYPE
 
 avFabricAttachElementType OBJECT-TYPE
     SYNTAX         INTEGER {
-                       notSupported(1),
+                       other(1),
                        faServer(2),
                        faProxy(3),
-                       faClientUntagged(4),
-                       faClientTagged(5)
+                       faServerNoAuth(4),
+                       faProxyNoAuth(5),
+                       faClientWapType1(6),
+                       faClientWapType2(7),
+                       faClientSwitch(8),
+                       faClientRouter(9),
+                       faClientIpPhone(10),
+                       faClientIpCamera(11),
+                       faClientIpVideo(12),
+                       faClientSecurityDev(13),
+                       faClientVirtSwitch(14),
+                       faClientSrvrEndpt(15),
+                       faClientOnaSdn(16),
+                       faClientOnaSpbOIp(17)
                    }
     MAX-ACCESS     read-write
     STATUS         current
@@ -136,7 +210,8 @@ AvFabricAttachIsidVlanAsgnsEntry ::= SEQUENCE {
     avFabricAttachIsidVlanAsgnsIsid       Integer32,
     avFabricAttachIsidVlanAsgnsVlan       Integer32,
     avFabricAttachIsidVlanAsgnsState      INTEGER,
-    avFabricAttachIsidVlanAsgnsRowStatus  RowStatus
+    avFabricAttachIsidVlanAsgnsRowStatus  RowStatus,
+    avFabricAttachIsidVlanAsgnsOrigin     INTEGER
 }
 
 avFabricAttachIsidVlanAsgnsIfIndex OBJECT-TYPE
@@ -194,6 +269,21 @@ avFabricAttachIsidVlanAsgnsRowStatus OBJECT-TYPE
 
     ::= { avFabricAttachIsidVlanAsgnsEntry 5 }
 
+avFabricAttachIsidVlanAsgnsOrigin OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       other(1),
+                       faProxy(2),
+                       faClient(3),
+                       faRadiusClient(4)
+                   }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Origin information for the Fabric Attach
+        I-SID <-> VLAN assignment."
+
+    ::= { avFabricAttachIsidVlanAsgnsEntry 6 }
+
 --
 -- Fabric Attach Port Table support
 --
@@ -221,9 +311,13 @@ avFabricAttachPortEntry OBJECT-TYPE
     ::= { avFabricAttachPortTable 1 }
 
 AvFabricAttachPortEntry ::= SEQUENCE {
-    avFabricAttachPortIfIndex    Integer32,
-    avFabricAttachPortState      INTEGER,
-    avFabricAttachPortRowStatus  RowStatus
+    avFabricAttachPortIfIndex        Integer32,
+    avFabricAttachPortState          INTEGER,
+    avFabricAttachPortRowStatus      RowStatus,
+    avFabricAttachPortMsgAuthStatus  INTEGER,
+    avFabricAttachPortMsgAuthKey     OCTET STRING,
+    avFabricAttachPortMgmtIsid       Integer32,
+    avFabricAttachPortMgmtCvid       Integer32
 }
 
 avFabricAttachPortIfIndex OBJECT-TYPE
@@ -261,7 +355,59 @@ avFabricAttachPortRowStatus OBJECT-TYPE
 
     ::= { avFabricAttachPortEntry 3 }
 
-avFabricAttachAutoAttachService OBJECT-TYPE
+avFabricAttachPortMsgAuthStatus OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       enabled(1),
+                       disabled(2)
+                   }
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "Controls the current Fabric Attach 
+        message authentication status for the
+        associated interface."
+
+    ::= { avFabricAttachPortEntry 4 }
+
+avFabricAttachPortMsgAuthKey OBJECT-TYPE
+    SYNTAX         OCTET STRING (SIZE(0..32))
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "Provides access to the Fabric Attach 
+        message authentication key for the associated
+        interface. Can be used to establish a new
+        key of length 1..32 octets. Always returns 
+        a zero-length string when queried."
+
+    ::= { avFabricAttachPortEntry 5 }
+
+avFabricAttachPortMgmtIsid OBJECT-TYPE
+    SYNTAX         Integer32(0..16777215)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "Fabric Attach management i-sid for the associated
+        interface. Zero means the management i-sid feature is 
+        not enabled"
+    DEFVAL         { 0 }
+
+    ::= { avFabricAttachPortEntry 6 }
+
+avFabricAttachPortMgmtCvid OBJECT-TYPE
+    SYNTAX         Integer32(0..4096)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "Fabric Attach management customer vid for 
+        the associated interface. Zero means the 
+        management i-sid feature is not enabled. 
+        4096 means it is untagged"
+    DEFVAL         { 0 }
+
+    ::= { avFabricAttachPortEntry 7 }
+
+avFabricAttachZeroTouchService OBJECT-TYPE
     SYNTAX         INTEGER {
                        enabled(1),
                        disabled(2)
@@ -270,7 +416,7 @@ avFabricAttachAutoAttachService OBJECT-TYPE
     STATUS         current
     DESCRIPTION
         "Controls the status of the Fabric 
-        Attach Auto Attach service."
+        Attach Zero Touch service."
 
     ::= { avFabricAttachObjects 7 }
 
@@ -300,7 +446,7 @@ avFabricAttachMsgAuthKey OBJECT-TYPE
 
     ::= { avFabricAttachObjects 9 }
 
-avFabricAttachHostProxyStatus OBJECT-TYPE
+avFabricAttachClientProxyStatus OBJECT-TYPE
     SYNTAX         INTEGER {
                        enabled(1),
                        disabled(2)
@@ -343,10 +489,13 @@ avFabricAttachDiscElemsEntry OBJECT-TYPE
     ::= { avFabricAttachDiscElemsTable 1 }
 
 AvFabricAttachDiscElemsEntry ::= SEQUENCE {
-    avFabricAttachDiscElemsIfIndex      Integer32,
-    avFabricAttachDiscElemsElementType  INTEGER,
-    avFabricAttachDiscElemsElementVlan  Integer32,
-    avFabricAttachDiscElemsElementId    OCTET STRING
+    avFabricAttachDiscElemsIfIndex         Integer32,
+    avFabricAttachDiscElemsElementType     INTEGER,
+    avFabricAttachDiscElemsElementVlan     Integer32,
+    avFabricAttachDiscElemsElementId       OCTET STRING,
+    avFabricAttachDiscElemsElementState    BITS,
+    avFabricAttachDiscElemsElementAuth     INTEGER,
+    avFabricAttachDiscElemsElementTrunkId  Integer32
 }
 
 avFabricAttachDiscElemsIfIndex OBJECT-TYPE
@@ -362,11 +511,23 @@ avFabricAttachDiscElemsIfIndex OBJECT-TYPE
 
 avFabricAttachDiscElemsElementType OBJECT-TYPE
     SYNTAX         INTEGER {
-                       notSupported(1),
+                       other(1),
                        faServer(2),
                        faProxy(3),
-                       faClientUntagged(4),
-                       faClientTagged(5)
+                       faServerNoAuth(4),
+                       faProxyNoAuth(5),
+                       faClientWapType1(6),
+                       faClientWapType2(7),
+                       faClientSwitch(8),
+                       faClientRouter(9),
+                       faClientIpPhone(10),
+                       faClientIpCamera(11),
+                       faClientIpVideo(12),
+                       faClientSecurityDev(13),
+                       faClientVirtSwitch(14),
+                       faClientSrvrEndpt(15),
+                       faClientOnaSdn(16),
+                       faClientOnaSpbOIp(17)
                    }
     MAX-ACCESS     read-only
     STATUS         current
@@ -396,6 +557,518 @@ avFabricAttachDiscElemsElementId OBJECT-TYPE
         through LLDP."
 
     ::= { avFabricAttachDiscElemsEntry 4 }
+
+avFabricAttachDiscElemsElementState OBJECT-TYPE
+    SYNTAX         BITS {
+                       trafficTagged(0),
+                       trafficTaggedAndUntagged(1),
+                       provisionModeDisabled(2),
+                       provisionModeSpbm(3),
+                       provisionModeVlan(4)
+                   }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Exports the state flag data associated with the
+        discovered Fabric Attach element as advertised
+        through LLDP."
+
+    ::= { avFabricAttachDiscElemsEntry 5 }
+
+avFabricAttachDiscElemsElementAuth OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       authenticationPass(1),
+                       authenticationFail(2),
+                       notAuthenticated(3)
+                   }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Discovered element authentication status."
+
+    ::= { avFabricAttachDiscElemsEntry 6 }
+
+avFabricAttachDiscElemsElementTrunkId OBJECT-TYPE
+    SYNTAX         Integer32 (0..65535)
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Identifies the trunk ID through which the
+        Fabric Attach element represented by this entry
+        was discovered."
+
+    ::= { avFabricAttachDiscElemsEntry 7 }
+
+avFabricAttachAutoProvision OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       disabled(1),
+                       faServer(2),
+                       faProxy(3)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Exports the Fabric Attach Auto Provision 
+        setting indicating the services supported by 
+        the system. May be read-only on platforms
+        that don't support this functionality."
+
+    ::= { avFabricAttachObjects 12 }
+
+avFabricAttachProvisionMode OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       disabled(1),
+                       spbm(2),
+                       vlan(3)
+                   }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Exports the Fabric Attach provision mode."
+
+    ::= { avFabricAttachObjects 13 }
+
+avFabricAttachZeroTouchOptionFlags OBJECT-TYPE
+    SYNTAX         BITS {
+                       ipAddrDhcp(0),
+                       autoPortModeFaClient(1),
+                       autoPortModeMhmv(2),
+                       radiusServer(3),
+                       nsv(4),
+                       autoTrustedModeFaClient(5),
+                       autoPvidModeFaClient(6)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Exports the Zero Touch option data."
+
+    ::= { avFabricAttachObjects 14 }
+
+--
+-- Fabric Attach Zero Touch NSV Table support        
+--
+
+avFabricAttachZeroTouchNsvTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF AvFabricAttachZeroTouchNsvEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains the Zero Touch NSV specifications
+        for the Fabric Attach application."
+
+    ::= { avFabricAttachObjects 15 }
+
+avFabricAttachZeroTouchNsvEntry OBJECT-TYPE
+    SYNTAX      AvFabricAttachZeroTouchNsvEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Information about the Zero Touch NSV specifications
+        for the Fabric Attach application."
+
+    INDEX { avFabricAttachZeroTouchNsvType }
+
+    ::= { avFabricAttachZeroTouchNsvTable 1 }
+
+AvFabricAttachZeroTouchNsvEntry ::= SEQUENCE {
+    avFabricAttachZeroTouchNsvType          Integer32,
+    avFabricAttachZeroTouchNsvVlan          Integer32,
+    avFabricAttachZeroTouchNsvPortPriority  Integer32,
+    avFabricAttachZeroTouchNsvStateFlags    BITS,
+    avFabricAttachZeroTouchNsvRowStatus     RowStatus
+}
+
+avFabricAttachZeroTouchNsvType OBJECT-TYPE
+    SYNTAX         Integer32 (0..63)
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "Element type identifier component of the NSV
+        specification."
+
+    ::= { avFabricAttachZeroTouchNsvEntry 1 }
+
+avFabricAttachZeroTouchNsvVlan OBJECT-TYPE
+    SYNTAX         Integer32 (1..4094)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "VLAN ID component of the NSV specification."
+
+    ::= { avFabricAttachZeroTouchNsvEntry 2 }
+
+avFabricAttachZeroTouchNsvPortPriority OBJECT-TYPE
+    SYNTAX         Integer32 (0..7)
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "Port priority component of the NSV specification."
+
+    ::= { avFabricAttachZeroTouchNsvEntry 3 }
+
+avFabricAttachZeroTouchNsvStateFlags OBJECT-TYPE
+    SYNTAX         BITS {
+                       addReplaceVlan(0),
+                       updatePvid(1),
+                       updatePortPriority(2)
+                   }
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "State flags associated with the NSV specification."
+
+    ::= { avFabricAttachZeroTouchNsvEntry 4 }
+
+avFabricAttachZeroTouchNsvRowStatus OBJECT-TYPE
+    SYNTAX         RowStatus
+    MAX-ACCESS     read-create
+    STATUS         current
+    DESCRIPTION
+        "This object allows entries to be created and deleted
+        in the avFabricAttachZeroTouchNsvTable."
+
+    ::= { avFabricAttachZeroTouchNsvEntry 5 }
+
+avFabricAttachZeroTouchRadiusPriSrvrIpv4Addr OBJECT-TYPE
+    SYNTAX         OCTET STRING (SIZE (4))
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "This object represents the Zero Touch RADIUS
+        primary server IPv4 address information currently
+        maintained by the FA agent."
+
+    ::= { avFabricAttachObjects 16 }
+
+avFabricAttachZeroTouchRadiusSecSrvrIpv4Addr OBJECT-TYPE
+    SYNTAX         OCTET STRING (SIZE (4))
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "This object represents the Zero Touch RADIUS
+        secondary server IPv4 address information currently
+        maintained by the FA agent."
+
+    ::= { avFabricAttachObjects 17 }
+
+avFabricAttachZeroTouchRadiusTimeout OBJECT-TYPE
+    SYNTAX         Integer32 (1..60)
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "This object represents the Zero Touch RADIUS
+        timeout information currently maintained by 
+        the FA agent."
+
+    ::= { avFabricAttachObjects 18 }
+
+avFabricAttachStandaloneProxy OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       enabled(1),
+                       disabled(2)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Controls the standalone FA Proxy mode."
+
+    ::= { avFabricAttachObjects 19 }
+
+avFabricAttachStaticUplinkIfIndex OBJECT-TYPE
+    SYNTAX         Integer32 (0..65535)
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Static uplink (ifIndex) identifier attribute."
+
+    ::= { avFabricAttachObjects 20 }
+
+avFabricAttachStaticUplinkTrunk OBJECT-TYPE
+    SYNTAX         Integer32 (0..1023)
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Static uplink (trunk ID) identifier attribute."
+
+    ::= { avFabricAttachObjects 21 }
+
+avFabricAttachAsgnTimeout  OBJECT-TYPE
+    SYNTAX        Integer32 (30..480)
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION   "Exports the Fabric Attach assignment timeout."
+    DEFVAL        { 240 }
+    ::= { avFabricAttachObjects 22 }
+
+avFabricAttachStatsTable  OBJECT-TYPE
+    SYNTAX        SEQUENCE OF AvFabricAttachStatsEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION   "This table contains information for 
+                   all the SDK Fabric Attach statistics on a port"
+    ::= { avFabricAttachObjects 23 }
+
+avFabricAttachStatsEntry OBJECT-TYPE
+    SYNTAX        AvFabricAttachStatsEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION   "Entry contains statistics for the SDK of the Fabric Attach feature.  
+                   Statistics are collected  for a particular port."
+    INDEX         { avFabricAttachStatsPortIndex }
+    ::= { avFabricAttachStatsTable 1 }
+
+AvFabricAttachStatsEntry ::= SEQUENCE {
+             avFabricAttachStatsPortIndex        	Integer32,
+             avFabricAttachStatsDiscElemReceived   	Counter32,
+             avFabricAttachStatsAsgnReceived		Counter32,
+             avFabricAttachStatsAsgnAccepted		Counter32,
+             avFabricAttachStatsAsgnRejected		Counter32,
+             avFabricAttachStatsAsgnExpired		Counter32,
+             avFabricAttachStatsAuthFailed		Counter32,
+             avFabricAttachStatsDiscElemExpired         Counter32,
+             avFabricAttachStatsDiscElemDeleted         Counter32, 
+             avFabricAttachStatsAsgnDeleted             Counter32
+    }
+
+avFabricAttachStatsPortIndex OBJECT-TYPE
+    SYNTAX        Integer32 (0..65535)
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION   "An index value that uniquely identifies a port.
+                   This value is similar to ifIndex in MIB2."
+    ::= { avFabricAttachStatsEntry 1 }
+
+avFabricAttachStatsDiscElemReceived  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements received for a given port."
+    ::= { avFabricAttachStatsEntry 2 }
+
+avFabricAttachStatsAsgnReceived   OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments received on a given port."
+    ::= { avFabricAttachStatsEntry 3 }
+
+avFabricAttachStatsAsgnAccepted  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicated the number of remote assignments accepted on a given port."
+    ::= { avFabricAttachStatsEntry 4 }
+
+avFabricAttachStatsAsgnRejected OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments rejected on a given port."
+    ::= { avFabricAttachStatsEntry 5 }
+
+avFabricAttachStatsAsgnExpired OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments that have expired on a given port."
+    ::= { avFabricAttachStatsEntry 6 }
+
+avFabricAttachStatsAuthFailed OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of authentication failed on a given port."
+    ::= { avFabricAttachStatsEntry 7 }
+
+avFabricAttachStatsDiscElemExpired  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements expired for a given port."
+    ::= { avFabricAttachStatsEntry 8 }
+
+avFabricAttachStatsDiscElemDeleted  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements deleted for a given port."
+    ::= { avFabricAttachStatsEntry 9 }
+
+avFabricAttachStatsAsgnDeleted OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments that have been deleted on a given port."
+    ::= { avFabricAttachStatsEntry 10 }
+
+avFabricAttachGlobalStats    OBJECT IDENTIFIER ::= { avFabricAttachObjects 24 }
+
+avFabricAttachGlobalStatsDiscElemReceived  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements received."
+    ::= { avFabricAttachGlobalStats 1 }
+
+avFabricAttachGlobalStatsAsgnReceived   OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments received."
+    ::= { avFabricAttachGlobalStats 2 }
+
+avFabricAttachGlobalStatsAsgnAccepted  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicated the number of remote assignments accepted."
+    ::= { avFabricAttachGlobalStats 3 }
+
+avFabricAttachGlobalStatsAsgnRejected OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments rejected."
+    ::= { avFabricAttachGlobalStats 4 }
+
+avFabricAttachGlobalStatsAsgnExpired OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments that have expired."
+    ::= { avFabricAttachGlobalStats 5 }
+
+avFabricAttachGlobalStatsAuthFailed OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of authentication failed."
+    ::= { avFabricAttachGlobalStats 6 }
+
+avFabricAttachGlobalStatsDiscElemExpired  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements expired."
+    ::= { avFabricAttachGlobalStats 7 }
+
+avFabricAttachGlobalStatsDiscElemDeleted  OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of discovery elements deleted."
+    ::= { avFabricAttachGlobalStats 8 }
+
+avFabricAttachGlobalStatsAsgnDeleted OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "Indicates the number of remote assignments that have been deleted."
+    ::= { avFabricAttachGlobalStats 9 }
+
+avFabricAttachExtendedLogging OBJECT-TYPE
+    SYNTAX         INTEGER {
+                       enabled(1),
+                       disabled(2)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Controls the Fabric Attach extended 
+        logging capabilities."
+
+    ::= { avFabricAttachObjects 25 }
+ 
+avFabricAttachDiscTimeout  OBJECT-TYPE
+    SYNTAX        Integer32 (30..480)
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION   "Exports the Fabric Attach discovery timeout."
+    DEFVAL        { 240 }
+    ::= { avFabricAttachObjects 26 }
+
+--
+-- Fabric Attach Zero Touch Client Table support        
+--
+
+avFabricAttachZeroTouchClientTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF AvFabricAttachZeroTouchClientEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table contains the Zero Touch Client specifications
+        for the Fabric Attach application."
+
+    ::= { avFabricAttachObjects 27 }
+
+avFabricAttachZeroTouchClientEntry OBJECT-TYPE
+    SYNTAX      AvFabricAttachZeroTouchClientEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Information about the Zero Touch Client specifications
+        for the Fabric Attach application."
+
+    INDEX { avFabricAttachZeroTouchClientType }
+
+    ::= { avFabricAttachZeroTouchClientTable 1 }
+
+AvFabricAttachZeroTouchClientEntry ::= SEQUENCE {
+    avFabricAttachZeroTouchClientType          Integer32,
+    avFabricAttachZeroTouchClientDescr         SnmpAdminString,
+    avFabricAttachZeroTouchClientOptionFlags   BITS,
+    avFabricAttachZeroTouchClientRowStatus     RowStatus
+}
+
+avFabricAttachZeroTouchClientType OBJECT-TYPE
+    SYNTAX         Integer32 (0..63)
+    MAX-ACCESS     not-accessible
+    STATUS         current
+    DESCRIPTION
+        "FA Element type identifier component of the Client
+        specification."
+
+    ::= { avFabricAttachZeroTouchClientEntry 1 }
+
+avFabricAttachZeroTouchClientDescr OBJECT-TYPE
+    SYNTAX         SnmpAdminString (SIZE (0..80))
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+        "Client description for the Client specification."
+
+    ::= { avFabricAttachZeroTouchClientEntry 2 }
+
+avFabricAttachZeroTouchClientOptionFlags OBJECT-TYPE
+    SYNTAX         BITS {
+                       ipAddrDhcp(0),
+                       autoPortModeFaClient(1),
+                       autoPortModeMhmv(2),
+                       radiusServer(3),
+                       nsv(4),
+                       autoTrustedModeFaClient(5),
+                       autoPvidModeFaClient(6)
+                   }
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "Zero Touch options associated with the Client 
+        specification. Supported values are synchronized
+        with the Zero Touch options available through the
+        avFabricAttachZeroTouchOptionFlags attribute." 
+
+    ::= { avFabricAttachZeroTouchClientEntry 3 }
+
+avFabricAttachZeroTouchClientRowStatus OBJECT-TYPE
+    SYNTAX         RowStatus
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+        "This object allows entries to be created, deleted
+        and modified in the avFabricAttachZeroTouchClientTable."
+
+    ::= { avFabricAttachZeroTouchClientEntry 4 }
 
 END
 

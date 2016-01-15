@@ -2,22 +2,37 @@
 BAY-STACK-RADIUS-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Unsigned32, NOTIFICATION-TYPE
+    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Unsigned32, NOTIFICATION-TYPE,
+    Counter32
         FROM SNMPv2-SMI
     RowStatus, TruthValue, DisplayString
         FROM SNMPv2-TC
     InetAddressType, InetAddress, InetPortNumber
         FROM INET-ADDRESS-MIB
+    radiusDynAuthClientEntry
+        FROM RADIUS-DYNAUTH-SERVER-MIB
     bayStackMibs
         FROM SYNOPTICS-ROOT-MIB;
 
 bayStackRadiusMib MODULE-IDENTITY
-      LAST-UPDATED "201203150000Z"
+      LAST-UPDATED "201507230000Z"
       ORGANIZATION "Avaya"
       CONTACT-INFO "avaya.com"
       DESCRIPTION
               "This MIB module is used for RADIUS configuration
                settings in Nortel's software and products."
+
+      REVISION     "201507230000Z"  -- July 23, 2015
+      DESCRIPTION
+              "Ver 15:  Added  bsRadiusExtDynAuthClientEntry,
+                               bsRadiusDynAuthClientProcessReAuthRequests ."
+
+      REVISION     "201410200000Z"  -- Oct 20, 2014
+      DESCRIPTION
+              "Ver 14:  Added bsRadiusReachabilityTimeout 
+                              bsRadiusReachabilityRetry 
+                              bsRadiusReachabilityBadTimer 
+                              bsRadiusReachabilityGoodTimer ."
 
       REVISION     "201203150000Z"  -- March 15, 2012
       DESCRIPTION
@@ -207,7 +222,49 @@ bsRadiusEncapsulationProtocol OBJECT-TYPE
     DESCRIPTION
         "This object specifies the type of encapsulation for RADIUS packets."
     DEFVAL { pap }
-    ::= { bsRadiusScalars 12 }                                                                  
+    ::= { bsRadiusScalars 12 }  
+
+bsRadiusReachabilityTimeout OBJECT-TYPE
+    SYNTAX       Integer32 (1..60)
+    UNITS        "seconds"
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object specifies the time interval to wait before re-sending a message to the
+        RADIUS server ."
+    DEFVAL { 2 }
+    ::= { bsRadiusScalars 13 }     
+
+bsRadiusReachabilityRetry OBJECT-TYPE
+    SYNTAX       Integer32 (1..5)
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object specifies the number of retry attempts to reach the RADIUS server."
+    DEFVAL { 3 }
+    ::= { bsRadiusScalars 14 }
+
+bsRadiusReachabilityBadTimer OBJECT-TYPE
+    SYNTAX       Integer32 (30..600)
+    UNITS        "seconds"
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object specifies the interval between checks when the RADIUS server is
+              unreachable." 
+    DEFVAL { 60 }
+    ::= { bsRadiusScalars 15 }
+
+bsRadiusReachabilityGoodTimer OBJECT-TYPE
+    SYNTAX       Integer32 (30..600)
+    UNITS        "seconds"
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object specifies the interval between checks when the RADIUS server is
+              reachable."
+    DEFVAL { 180 }
+    ::= { bsRadiusScalars 16 }                                                           
 
 -- ============================================================================
 -- RADIUS server configuration table
@@ -392,7 +449,8 @@ BsRadiusDynAuthClientEntry ::=
         bsRadiusDynAuthClientProcessDisconnectRequests  TruthValue,
         bsRadiusDynAuthClientProcessCoARequests         TruthValue,
         bsRadiusDynAuthClientRowStatus                  RowStatus,
-        bsRadiusDynAuthClientReplayProtection           TruthValue
+        bsRadiusDynAuthClientReplayProtection           TruthValue,
+        bsRadiusDynAuthClientProcessReAuthRequests      TruthValue
     }
 
 bsRadiusDynAuthClientAddressType OBJECT-TYPE
@@ -460,7 +518,7 @@ bsRadiusDynAuthClientProcessCoARequests OBJECT-TYPE
     MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION
-        "Enable or disable processing or Change-Of-Authorization
+        "Enable or disable processing of Change-Of-Authorization
          requests from the RADIUS Dynamic Authorization Client."
     DEFVAL { false }
     ::= { bsRadiusDynAuthClientEntry 7 }
@@ -480,6 +538,240 @@ bsRadiusDynAuthClientReplayProtection OBJECT-TYPE
     DESCRIPTION
         "Enable or disable RADIUS replay protection."
     ::= { bsRadiusDynAuthClientEntry 9 }
+
+bsRadiusDynAuthClientProcessReAuthRequests OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Enable or disable the processing of Reauthentication
+         requests from the RADIUS Dynamic Authorization Client."
+    DEFVAL { false }
+    ::= { bsRadiusDynAuthClientEntry 10 }
+
+-- ============================================================================
+-- RADIUS Dynamic Authorization Clients - Extended
+-- ============================================================================
+
+bsRadiusExtDynAuthClientTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF BsRadiusExtDynAuthClientEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The (conceptual) table listing the RADIUS Dynamic
+         Authorization Clients with which the server shares a
+         secret. This is an extension of radiusDynAuthClientTable."
+    ::= { bsRadiusObjects 4 }
+
+bsRadiusExtDynAuthClientEntry OBJECT-TYPE
+    SYNTAX     BsRadiusExtDynAuthClientEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "An entry (conceptual row) representing one Dynamic
+         Authorization Client with which the server shares a
+         secret."
+    AUGMENTS   { radiusDynAuthClientEntry }
+    ::= { bsRadiusExtDynAuthClientTable 1 }
+
+BsRadiusExtDynAuthClientEntry ::= SEQUENCE {
+    bsRadiusExtDynAuthServRcRequests                  Counter32,
+    bsRadiusExtDynAuthServRcAuthOnlyRequests          Counter32,
+    bsRadiusExtDynAuthServRcDupRequests               Counter32,
+    bsRadiusExtDynAuthServRcAcks                      Counter32,
+    bsRadiusExtDynAuthServRcNacks                     Counter32,
+    bsRadiusExtDynAuthServRcNacksAuthOnlyRequests     Counter32,
+    bsRadiusExtDynAuthServRcNacksNoSess               Counter32,
+    bsRadiusExtDynAuthServRcSessReauthenticated       Counter32,
+    bsRadiusExtDynAuthServRcMalformed                 Counter32,
+    bsRadiusExtDynAuthServRcDropped                   Counter32,
+    bsRadiusExtDynAuthServRcBadAuths                  Counter32
+}
+
+bsRadiusExtDynAuthServRcRequests OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-requests received 
+         from this Dynamic Authorization Client. This also includes
+         the Reauthentication requests that have a Service-Type 
+         attribute with value 'Authorize Only'.  This counter may
+         experience a discontinuity when the DAS module (re)starts, 
+         as indicated by the value of radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 1 }
+
+bsRadiusExtDynAuthServRcAuthOnlyRequests OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-requests that include a
+         Service-Type attribute with value 'Authorize Only'
+         received from this Dynamic Authorization Client.  This
+         counter may experience a discontinuity when the DAS
+         module (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 2 }
+
+bsRadiusExtDynAuthServRcDupRequests OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of duplicate RADIUS Reauthentication-Request packets
+         received from this Dynamic Authorization Client.  This
+         counter may experience a discontinuity when the DAS
+         module (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 3 }
+
+bsRadiusExtDynAuthServRcAcks OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of incoming Reauthentication packets from this
+         Dynamic Authorization Client silently discarded
+         by the server application for some reason other than
+         malformed, bad authenticators, or unknown types.  This
+         counter may experience a discontinuity when the DAS
+         module (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 4 }
+
+bsRadiusExtDynAuthServRcNacks OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-NAK packets sent to
+         this Dynamic Authorization Client.  This includes
+         the RADIUS Reauthentication-NAK packets sent with a Service-Type
+         attribute with value 'Authorize Only' and the RADIUS
+         Reauthentication-NAK packets sent because no session context was
+         found.  This counter may experience a discontinuity
+         when the DAS module (re)starts, as indicated by the
+         value of radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 5 }
+
+bsRadiusExtDynAuthServRcNacksAuthOnlyRequests OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-NAK packets that include a
+         Service-Type attribute with value 'Authorize Only'
+         sent to this Dynamic Authorization Client.  This counter
+         may experience a discontinuity when the DAS module
+         (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 6 }
+
+bsRadiusExtDynAuthServRcNacksNoSess OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-NAK packets sent to this
+         Dynamic Authorization Client because no session context
+         was found.  This counter may experience a discontinuity
+         when the DAS module (re)starts, as indicated by the
+         value of radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 7 }
+
+bsRadiusExtDynAuthServRcSessReauthenticated OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of user sessions reauthenticated
+         for the Reauthentication-Requests received from this
+         Dynamic Authorization Client.  Depending on site-
+         specific policies, a single Reauthentication request can change
+         multiple user sessions' authorization.  In cases where
+         this Dynamic Authorization Server has no knowledge of
+         the number of user sessions that are affected by a
+         single request, each such CoA-Request will
+         count as a single affected user session only.  This
+         counter may experience a discontinuity when the DAS
+         module (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 8 }
+
+bsRadiusExtDynAuthServRcMalformed OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of malformed RADIUS Reauthentication-Request
+         packets received from this Dynamic Authorization Client.
+         Bad authenticators and unknown types are not included 
+         as malformed Reauthentication-Requests.  This counter
+         may experience a discontinuity when the DAS module 
+         (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 9 }
+
+bsRadiusExtDynAuthServRcDropped OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of incoming Reauthentication packets from this
+         Dynamic Authorization Client silently discarded
+         by the server application for some reason other than
+         malformed, bad authenticators, or unknown types.  This
+         counter may experience a discontinuity when the DAS
+         module (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 10 }
+
+bsRadiusExtDynAuthServRcBadAuths OBJECT-TYPE
+    SYNTAX     Counter32
+    UNITS      "requests"
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "The number of RADIUS Reauthentication-Request packets that
+         contained an invalid Authenticator field received
+         from this Dynamic Authorization Client.  This counter
+         may experience a discontinuity when the DAS module
+         (re)starts, as indicated by the value of
+         radiusDynAuthServerCounterDiscontinuity."
+    REFERENCE
+        "Reauthentication extension for RFC3576 ."
+    ::= { bsRadiusExtDynAuthClientEntry 11 }
 
 -- ============================================================================
 -- Notifications

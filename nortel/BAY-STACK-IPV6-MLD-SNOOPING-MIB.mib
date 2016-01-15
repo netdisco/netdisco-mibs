@@ -3,7 +3,7 @@ BAY-STACK-IPV6-MLD-SNOOPING-MIB DEFINITIONS ::= BEGIN
 IMPORTS
     OBJECT-TYPE, MODULE-IDENTITY, Integer32, Unsigned32, Counter32, Gauge32, TimeTicks
         FROM SNMPv2-SMI
-    RowStatus, TruthValue
+    RowStatus, TruthValue, DisplayString
         FROM SNMPv2-TC
     bayStackMibs
         FROM SYNOPTICS-ROOT-MIB
@@ -17,11 +17,28 @@ IMPORTS
         FROM Q-BRIDGE-MIB;
 
 bayStackIpv6MldSnoopingMib MODULE-IDENTITY
-      LAST-UPDATED "201401160000Z"
+      LAST-UPDATED "201505290000Z"
       ORGANIZATION "Avaya"
       CONTACT-INFO "avaya.com"
       DESCRIPTION
               "This MIB module is used for IPv6 MLD Snooping configuration." 
+
+      REVISION     "201505290000Z" -- 29 May 2015
+      DESCRIPTION
+             "Ver 6:  Corrected MIB compiling errors."
+
+      REVISION     "201501220000Z"  -- January 22, 2015
+      DESCRIPTION
+              "Ver 5:  Inverted the syntaxes for bsIpv6MldSnoopingProxyCacheType and bsIpv6MldSnoopingProxyCacheMode objects"
+
+      REVISION     "201410230000Z"  -- October 23, 2014
+      DESCRIPTION
+              "Ver 4:  Added bsIpv6MldSnoopingInterfaceFlushPorts object, bsIpv6MldSnoopingFlushPorts scalar object"
+
+      REVISION     "201408110000Z"  -- August 11, 2014
+      DESCRIPTION
+              "Ver 3:  Added bsIpv6MldSnoopingProxyCacheTable, bsIpv6MldSnoopingInterfaceFlush object, bsIpv6MldSnoopingFlush scalar object;
+                       Updated bsIpv6MldSnoopingInterfaceOperationalVersion, bsIpv6MldSnoopingInterfaceSendQuery, bsIpv6MldSnoopingInterfaceProxy objects descriptions"
 
       REVISION     "201401160000Z"  -- January 16, 2014
       DESCRIPTION
@@ -36,6 +53,8 @@ bsIpv6MldSnoopingNotifications
     OBJECT IDENTIFIER ::= { bayStackIpv6MldSnoopingMib 0 }
 bsIpv6MldSnoopingObjects
     OBJECT IDENTIFIER ::= { bayStackIpv6MldSnoopingMib 1 }
+bsIpv6MldSnoopingScalars
+    OBJECT IDENTIFIER ::= { bayStackIpv6MldSnoopingMib 2 }
 
 --
 --  The IPv6 MLD Snooping Interface Table
@@ -78,7 +97,9 @@ BsIpv6MldSnoopingInterfaceEntry ::= SEQUENCE {
     bsIpv6MldSnoopingInterfaceIgmpMRouterExpiration           Integer32,
     bsIpv6MldSnoopingInterfaceOperationalVersion              Unsigned32,
     bsIpv6MldSnoopingInterfaceSendQuery                       TruthValue,
-    bsIpv6MldSnoopingInterfaceProxy                           TruthValue
+    bsIpv6MldSnoopingInterfaceProxy                           TruthValue,
+    bsIpv6MldSnoopingInterfaceFlush                           INTEGER,
+    bsIpv6MldSnoopingInterfaceFlushPorts                      PortSet
 }
 
 bsIpv6MldSnoopingInterfaceIfIndex OBJECT-TYPE
@@ -267,7 +288,8 @@ bsIpv6MldSnoopingInterfaceOperationalVersion OBJECT-TYPE
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-        "Multicast querier router aging time out."
+        "The operational version of IPv6 MLD Snooping
+         which is running on this interface at the moment."
     ::= { bsIpv6MldSnoopingInterfaceEntry 18 }
 
 bsIpv6MldSnoopingInterfaceSendQuery OBJECT-TYPE
@@ -275,7 +297,8 @@ bsIpv6MldSnoopingInterfaceSendQuery OBJECT-TYPE
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
-        "MLD send query flag."
+        "This object controls whether IPv6 MLD Send-Query
+         is enabled on this interface."
     ::= { bsIpv6MldSnoopingInterfaceEntry 19 }
 
 bsIpv6MldSnoopingInterfaceProxy OBJECT-TYPE
@@ -283,8 +306,35 @@ bsIpv6MldSnoopingInterfaceProxy OBJECT-TYPE
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
-        "MLD proxy flag."
+        "This object controls whether IPv6 MLD Proxy
+         is enabled on this interface."
     ::= { bsIpv6MldSnoopingInterfaceEntry 20 }
+
+bsIpv6MldSnoopingInterfaceFlush OBJECT-TYPE
+    SYNTAX     INTEGER {
+                   noAction(1),
+                   groups(2),
+                   mrouters(3),
+                   all(4)
+               }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object is used to remove MLD members
+         from this interface.
+         noAction(1) value is returned at read.
+         all(4) value is used to flush groups and mrouters."
+    ::= { bsIpv6MldSnoopingInterfaceEntry 21 }
+
+bsIpv6MldSnoopingInterfaceFlushPorts OBJECT-TYPE
+    SYNTAX      PortSet    
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The set of ports in this interface that are going to be flushed.
+         An empty port set is returned at read."
+    ::= { bsIpv6MldSnoopingInterfaceEntry 22 }
+
 
 --
 --  The IPv6 MLD Snooping Cache Table
@@ -545,5 +595,132 @@ bsIpv6MldSnoopingIgmpGroupVersion OBJECT-TYPE
         "Group version."
     DEFVAL { version1 }
     ::= { bsIpv6MldSnoopingIgmpGroupEntry 10 }
+
+
+--
+--  The IPv6 MLD Snooping Proxy Cache Table
+--
+
+bsIpv6MldSnoopingProxyCacheTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF BsIpv6MldSnoopingProxyCacheEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The (conceptual) table listing the IPv6 multicast
+         groups for which the switch is registered in order to 
+         receive the multicast traffic."
+    ::= { bsIpv6MldSnoopingObjects 4 }
+
+bsIpv6MldSnoopingProxyCacheEntry OBJECT-TYPE
+    SYNTAX     BsIpv6MldSnoopingProxyCacheEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "An entry (conceptual row) in the bsIpv6MldSnoopingProxyCacheTable."
+    INDEX      { bsIpv6MldSnoopingProxyCacheIfIndex,
+                 bsIpv6MldSnoopingProxyCacheGroupAddress,
+                 bsIpv6MldSnoopingProxyCacheSourceAddress }
+    ::= { bsIpv6MldSnoopingProxyCacheTable 1 }
+
+BsIpv6MldSnoopingProxyCacheEntry ::= SEQUENCE {
+    bsIpv6MldSnoopingProxyCacheIfIndex        InterfaceIndex,
+    bsIpv6MldSnoopingProxyCacheGroupAddress   InetAddressIPv6,
+    bsIpv6MldSnoopingProxyCacheSourceAddress  InetAddressIPv6,
+    bsIpv6MldSnoopingProxyCacheVersion        INTEGER,
+    bsIpv6MldSnoopingProxyCacheType           INTEGER,
+    bsIpv6MldSnoopingProxyCacheMode           INTEGER
+}
+
+bsIpv6MldSnoopingProxyCacheIfIndex OBJECT-TYPE
+    SYNTAX          InterfaceIndex
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION     
+        "An unique value to identify a logical interface (VLAN) which is
+         registered as MLD host for receiving multicast traffic"
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 1 }
+
+bsIpv6MldSnoopingProxyCacheGroupAddress OBJECT-TYPE
+    SYNTAX          InetAddressIPv6 (SIZE (16))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION     
+        "The IPv6 destination address of the multicast
+         traffic that the interface is registered for receiving it."
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 2 }
+
+bsIpv6MldSnoopingProxyCacheSourceAddress OBJECT-TYPE
+    SYNTAX          InetAddressIPv6 (SIZE (16))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION     
+        "The IPv6 source address of the multicast
+         traffic that the interface is registered for receiving it."
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 3 }
+
+bsIpv6MldSnoopingProxyCacheVersion OBJECT-TYPE
+    SYNTAX          INTEGER {
+                        version1(1),
+                        version2(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION     
+        "Interface proxy version."
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 4 }
+
+bsIpv6MldSnoopingProxyCacheType OBJECT-TYPE
+    SYNTAX          INTEGER {
+                        static(1),
+                        dynamic(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION     
+        "The entry registration type (static or dynamic)."
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 5 }
+
+bsIpv6MldSnoopingProxyCacheMode OBJECT-TYPE
+    SYNTAX          INTEGER {
+                        version1(1),
+                        include(2),
+                        exclude(3)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION     
+        "Proxy mode for MLDv2 entries.
+         version1(1) value is returned for MLDv1 entries"
+    ::= { bsIpv6MldSnoopingProxyCacheEntry 6 }
+
+
+--
+--  The IPv6 MLD Snooping Scalars
+--
+
+bsIpv6MldSnoopingFlush OBJECT-TYPE
+    SYNTAX     INTEGER {
+                   noAction(1),
+                   groups(2),
+                   mrouters(3),
+                   all(4)
+               }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object is used to remove MLD members
+         from all the interfaces.
+         noAction(1) value is returned at read.
+         all(4) value is used to flush groups and mrouters."
+    ::= { bsIpv6MldSnoopingScalars 1 }
+
+bsIpv6MldSnoopingFlushPorts OBJECT-TYPE
+    SYNTAX      PortSet    
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The set of ports from all interfaces that are going to be flushed.
+         An empty port set is returned at read."
+    ::= { bsIpv6MldSnoopingScalars 2 }
 END
 
