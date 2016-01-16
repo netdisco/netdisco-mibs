@@ -1,6 +1,6 @@
 -- *********************************************************************
 --   
--- IEEE8021X-PAE-MIB : MIB for IEEE 802.1X (Revision of 802.1X-2004)
+-- IEEE8021X-PAE-MIB : MIB for IEEE 802.1X (802.1X-2010 + 802.1Xbx)
 --   
 -- *********************************************************************
 
@@ -34,10 +34,20 @@ IMPORTS
         FROM IEEE8021-SECY-MIB;
 
 ieee8021XPaeMIB MODULE-IDENTITY
-    LAST-UPDATED    "200910011650Z"
+    LAST-UPDATED    "201404101619Z"
     ORGANIZATION    "IEEE 802.1 Working Group"
     CONTACT-INFO
-            "http://grouper.ieee.org/groups/802/1/index.html"
+      " WG-URL: http://grouper.ieee.org/groups/802/1/index.html
+        WG-EMail: stds-802-1@ieee.org
+        Contact: Mick Seaman
+        Postal: C/O IEEE 802.1 Working Group
+                IEEE Standards Association
+                445 Hoes Lane
+                P.O. Box 1331
+                Piscataway
+                NJ 08855-1331
+                USA
+                E-mail: STDS-802-1-L@LISTSERV.IEEE.ORG"
     DESCRIPTION
         "The MIB module for managing the Port Access Entity (PAE)
         functions of IEEE 802.1X (Revision of 802.1X-2004).
@@ -212,6 +222,10 @@ ieee8021XPaeMIB MODULE-IDENTITY
         Supplicant : An entity at one end of a point-to-point LAN
             segment that seeks to be authenticated by an Authenticator
             attached to the other end of that link.
+            
+        Suspension: Temporary suspension of MKA operation to facilitate
+            in-service control plane software upgrades without
+            disrupting existing secure connectivity.
 
         Uncontrolled Port : The access point used to provide the
             insecure MAC Service to a client of a SecY or PAC.
@@ -221,6 +235,10 @@ ieee8021XPaeMIB MODULE-IDENTITY
             created on demand.  Virtual ports can be used to provide
             separate secure connectivity associations over the same
             LAN."
+    REVISION        "201404101619Z"
+    DESCRIPTION
+        "Update published as part of IEEE 802.1Xbx (Amendment to
+        IEEE 802.1X-2010)"
     REVISION        "200910011650Z"
     DESCRIPTION
         "Initial version of this MIB module.  Published as part of
@@ -326,8 +344,8 @@ Ieee8021XMkaMI ::= TEXTUAL-CONVENTION
 
         The MI is a 96-bit random value chosen when the MKA Instance
         begins, used with a 32-bit MN to protect against replay attacks
-        and to record liveliness in the Live Peers List or potential
-        liveliness in the Potential Peers List. If the MN wraps, a new
+        and to record liveliness in the Live Peer List or potential
+        liveliness in the Potential Peer List. If the MN wraps, a new
         random MI value is chosen and the MN begins again at 1."
 
     REFERENCE       "IEEE 802.1X Clause 9.4.2"
@@ -342,7 +360,7 @@ Ieee8021XMkaMN ::= TEXTUAL-CONVENTION
         The MN is a 32-bit value which begins at 1 and increases for
         each MKPDU transmitted.  It is used with the MI to protect
         against replay attacks and to record liveliness in the Live
-        Peers List or potential liveliness in the Potential Peers List.
+        Peers List or potential liveliness in the Potential Peer List.
         If the MN wraps, a new random MI value is chosen and the MN
         begins again at a value of 1."
 
@@ -1898,8 +1916,8 @@ ieee8021XKayMkaTable OBJECT-TYPE
         partners: Participants or members attached to the same LAN as
             the actor, excluding the actor.
 
-        principal actor: The actor participating in the MKA instance
-            that has elected the highest priority key server.
+        principal actor: The actor controlling the PAC or SecY
+            associated with the KaY.
 
         Each participant selects the live participant advertising the
         highest priority as its key server provided that participant
@@ -1971,7 +1989,13 @@ Ieee8021XKayMkaEntry ::= SEQUENCE {
         ieee8021XKayMkaRxKN
             Ieee8021XMkaKN,
         ieee8021XKayMkaRxAN
-            RowPointer
+            RowPointer,
+        ieee8021XKayMkaSuspendFor
+            INTEGER,
+        ieee8021XKayMkaSuspendOnRequest
+            TruthValue,
+        ieee8021XKayMkaSuspendedWhile
+            INTEGER
 }
 
 ieee8021XKayMkaActive OBJECT-TYPE
@@ -1989,9 +2013,9 @@ ieee8021XKayMkaAuthenticated OBJECT-TYPE
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "This object will be 'true' if the principal actor, i.e. the
-        participant that has the highest priority key server and one
-        or more live peers, has determined that Controlled Port
+        "This object will be 'true' if the principal actor,
+        i.e. the actor controlling the PAC or SecY associated with
+        the KaY, has determined that Controlled Port communication
         communication should proceed without MACsec."
     REFERENCE       "IEEE 802.1X Clause 9.16, Figure 12-3" 
     ::= { ieee8021XKayMkaEntry 2 }
@@ -2081,9 +2105,8 @@ ieee8021XKayAllowedFormGroup OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "This object will be 'true' if the KaY will attempt to use
-        point-to-point CAs to distribute a group CAK, if its MKA
-        principal actor is the key server for all the point-to-point
-        CAs."
+        point-to-point CAKs to distribute a group CAK, if it is the
+        Key Server for the MKA instances for all the point-to-point CAKs."
     REFERENCE       "IEEE 802.1X Clause 9.16, Figure 12-3" 
     ::= { ieee8021XKayMkaEntry 10 }
 
@@ -2092,10 +2115,10 @@ ieee8021XKayCreateNewGroup OBJECT-TYPE
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "This object is set 'true' if a new group CAK is to be
-        distributed and the MKA principal actor is the key server for
-        all point-to-point CAs.  This object will be set 'false' by the
-        KaY when distribution is complete."
+        "This object is set 'true' if a new Group CAK is to be
+        distributed if the KaY is the Key Server for the MKA instances
+        for all the point-to-point CAKs.  This object will be set 'false'
+        by the KaY when distribution is complete."
     REFERENCE       "IEEE 802.1X Clause 9.16, Figure 12-3" 
     ::= { ieee8021XKayMkaEntry 11 }
 
@@ -2273,7 +2296,46 @@ ieee8021XKayMkaRxAN OBJECT-TYPE
         "IEEE 802.1X Clause 9.6.1, Clause 9.16, Figure 12-3,
          IEEE8021-SECY-MIB" 
     ::= { ieee8021XKayMkaEntry 21 }
- 
+
+ieee8021XKayMkaSuspendFor OBJECT-TYPE
+    SYNTAX INTEGER (1..120)
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "Set by management to a non-zero number of seconds between 1
+        and MKA Suspension Limit to initiate a suspension (9.18) of
+        that duration (if the KaY's principal actor is the Key
+        Server) or to request a suspension (otherwise)"
+    REFERENCE "IEEE 802.1X Clause 9.16, Figure 12-3"
+    ::= { ieee8021XKayMkaEntry 22 }
+
+ieee8021XKayMkaSuspendOnRequest OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "The status of the suspendOnRequest function for this KaY.
+        'true' : then the KaY's principal actor will initiate a
+        suspension if it is the Key Server and another participant
+        has requested a suspension by transmitting a non-zero value
+        of its suspendFor parameter
+        'false' : then the KaY will not initiate a suspension on
+        request from another participant."
+    REFERENCE "IEEE 802.1X Clause 9.16, Figure 12-3"
+    ::= { ieee8021XKayMkaEntry 23 }
+
+ieee8021XKayMkaSuspendedWhile OBJECT-TYPE
+    SYNTAX INTEGER (1..126)
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "Read by management to determine if a suspension is in
+        progress and to discover the remaining duration of that
+        suspension. May be set directly to coordinate in-service
+        upgrades."
+    REFERENCE "IEEE 802.1X Clause 5.11.4, Clause 9.16, Clause 9.18.5,
+               Clause 9.18.6, Figure 12-3"
+    ::= { ieee8021XKayMkaEntry 24 }
 
 -- ------------------------------------------------------------------ --
 -- The 802.1X PAE KaY MKA Participants Table
@@ -2390,7 +2452,7 @@ ieee8021XKayMkaPartActivateControl OBJECT-TYPE
     DESCRIPTION
         "This object is for controlling the participant's behavior when
         the participant is activated.
-
+        
         'default' : the participant is from cached entries created by
             the KaY as part of normal operation, without explicit
             management, and is activated according to the
@@ -2400,8 +2462,8 @@ ieee8021XKayMkaPartActivateControl OBJECT-TYPE
             be retained, but disabled for indefinite period.
 
         'onOperUp' : causing the participant to be activated when the
-            PAE's part is activated, and therefore when the SecY or
-            PAC's 'Common Port' becomes operational.
+            PAE's 'Uncontrolled Port' becomes operational and when the
+            PAE resumes following suspension.
 
         'always' : causing the participant to remain active all the
             time, even in the continued absence of partners.
@@ -2411,7 +2473,7 @@ ieee8021XKayMkaPartActivateControl OBJECT-TYPE
         with a matching CKN during a subsequent period of twice MKA
         lifetime will not cause the participant to become active once
         more."
-    REFERENCE       "IEEE 802.1X Clause 9.14, Clause 9.16, Figure 12-3" 
+    REFERENCE       "IEEE 802.1X Clause 9.14, Clause 9.16, Figure 12-3"
     ::= { ieee8021XKayMkaParticipantEntry 7 }
 
 ieee8021XKayMkaPartPrincipal OBJECT-TYPE
@@ -2531,7 +2593,6 @@ ieee8021XKayMkaPeerListSCI OBJECT-TYPE
         active participant in MKA protocol."
     REFERENCE       "IEEE 802.1X Clause 9.16, Figure 12-3" 
     ::= { ieee8021XKayMkaPeerListEntry 4 }
- 
 
 -- ------------------------------------------------------------------ --
 -- The 802.1X PAE NID Group
@@ -3059,6 +3120,110 @@ ieee8021XPaeCompliance MODULE-COMPLIANCE
         "read-create access is not required.  This may be
         read-only."
     ::= { ieee8021XPaeCompliances 1 }
+    
+    ieee8021XPaeV2Compliance MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for device support of
+        Port Access Control as specified in 802.1X-2010
+        amended by 802.1Xbx."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ieee8021XPaeSystemGroup,
+                        ieee8021XPaeLogonGroup,
+                        ieee8021XPaeEapolStatsGroup
+                    }
+
+    GROUP           ieee8021XPacGroup
+    DESCRIPTION
+        "This group is mandatory for systems that does not support
+        the MACsec functions of the PAE."
+
+    GROUP           ieee8021XPaeAuthConfigGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support the
+        Authenticator functions of the PAE."
+
+    GROUP           ieee8021XPaeSuppConfigGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support the
+        Supplicant functions of the PAE."
+
+    GROUP           ieee8021XPaeKaYMkaGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support the KaY
+        MKA functions of the PAE."
+
+    GROUP           ieee8021XPaeNetworkIdentifierGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support the
+        network announcement functions of the PAE."
+
+    GROUP           ieee8021XPaeAnnouncerGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support the
+        network announcement and the Announcer functions of the
+        PAE."
+
+    GROUP           ieee8021XPaeListenerGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support
+        the network announcement and the Listener functions of the
+        PAE."
+
+    GROUP           ieee8021XPaeKaYIsupgradeGroup
+    DESCRIPTION
+        "This group is mandatory for systems that support KaY MKA
+        in-service upgrades."
+
+    OBJECT          ieee8021XKayMacSecConfidentialityOffset
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-write access is not required.  This may be read-only."
+
+    OBJECT          ieee8021XNidUseEap
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidUnauthAllowed
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidUnsecuredAllowed
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidUnauthenticatedAccess
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidAccessCapabilities
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidKMD
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+
+    OBJECT          ieee8021XNidRowStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "read-create access is not required.  This may be
+        read-only."
+    ::= { ieee8021XPaeCompliances 2 }
+
 
 ieee8021XPaeSystemGroup OBJECT-GROUP
     OBJECTS         {
@@ -3266,9 +3431,17 @@ ieee8021XPaeListenerGroup OBJECT-GROUP
         a Listener in the system."
     ::= { ieee8021XPaeGroups 10 }
 
+ieee8021XPaeKaYIsupgradeGroup OBJECT-GROUP
+    OBJECTS         {
+                        ieee8021XKayMkaSuspendFor,
+                        ieee8021XKayMkaSuspendOnRequest,
+                        ieee8021XKayMkaSuspendedWhile
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing monitoring and control
+        for MKA support of in-service upgrades."
+    ::= { ieee8021XPaeGroups 11 }
+    
 END
 
-
---%DNP%  MLC -Compiled MLC
-
---%DNP%  MTF -TRUE MTF
