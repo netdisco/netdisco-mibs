@@ -21,7 +21,7 @@ IMPORTS
 
 jnxBoxAnatomy MODULE-IDENTITY
 
-    LAST-UPDATED "201305220000Z" -- Wed May 22 00:00:00 2013 UTC
+    LAST-UPDATED "201504220000Z" -- Tue Apr 22 00:00:00 2015 UTC
     ORGANIZATION "Juniper Networks, Inc."
     CONTACT-INFO
             "        Juniper Technical Assistance Center
@@ -137,7 +137,28 @@ jnxBoxAnatomy MODULE-IDENTITY
                "Added new offline reason fruPfeErrors to
                 jnxFruOfflineReason enumeration."
 
+    REVISION     "201404080000Z"    -- Apr 08, 2014
+    DESCRIPTION
+               "Added new offline reason vpnLocalizationRoleChange to
+                jnxFruOfflineReason enumeration."
 
+    REVISION     "201405200000Z"    -- May 20, 2014
+    DESCRIPTION
+               "Added MIBs for 1, 5 and 15 min average CPU util"
+    
+    REVISION     "201407300000Z"    -- Jul 30, 2014
+    DESCRIPTION
+               "Added new offline reasons fruFpcFanTrayIncompatible &
+                fruFpcPEMIncompatible to jnxFruOfflineReason enumeration."
+
+    REVISION     "201412040000Z"    -- Dec 04, 2014
+    DESCRIPTION
+               "Added new trap: jnxFmAsicErr."
+    
+    REVISION     "201504220000Z"    -- Apr 22, 2015
+    DESCRIPTION
+              "Added new FRU Power consumption variable."
+    
     ::= { jnxMibs 1 }
 
 --
@@ -895,13 +916,17 @@ JnxChassisId ::= TEXTUAL-CONVENTION
 	    jnxOperatingUpTime          TimeInterval,
 	    jnxOperatingLastRestart     TimeStamp,
 	    jnxOperatingMemory          Integer32,
-            jnxOperatingStateOrdered    INTEGER,
-            jnxOperatingChassisId       JnxChassisId,
-            jnxOperatingChassisDescr    DisplayString,
-            jnxOperatingRestartTime     DateAndTime,
-            jnxOperating1MinLoadAvg     Gauge32,
-            jnxOperating5MinLoadAvg     Gauge32,
-            jnxOperating15MinLoadAvg     Gauge32
+        jnxOperatingStateOrdered    INTEGER,
+        jnxOperatingChassisId       JnxChassisId,
+        jnxOperatingChassisDescr    DisplayString,
+        jnxOperatingRestartTime     DateAndTime,
+        jnxOperating1MinLoadAvg     Gauge32,
+        jnxOperating5MinLoadAvg     Gauge32,
+        jnxOperating15MinLoadAvg    Gauge32,
+        jnxOperating1MinAvgCPU      Gauge32,
+        jnxOperating5MinAvgCPU      Gauge32,
+        jnxOperating15MinAvgCPU     Gauge32,
+        jnxOperatingFRUPower        Gauge32
     }
 
     jnxOperatingContentsIndex OBJECT-TYPE
@@ -1129,6 +1154,57 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                      Here it will be shown as percentage value
                      Zero if unavailable or inapplicable."
             ::= { jnxOperatingEntry 22 }
+
+    jnxOperating1MinAvgCPU OBJECT-TYPE
+        SYNTAX          Gauge32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+            "The CPU utilization in percentage of this
+             subject averaged over last 1 minutes. Zero if
+             unavailable or inapplicable."
+        ::= { jnxOperatingEntry 23 }
+
+    jnxOperating5MinAvgCPU OBJECT-TYPE
+        SYNTAX          Gauge32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+            "The CPU utilization in percentage of this
+             subject averaged over last 5 minutes.  Zero if
+             unavailable or inapplicable."
+        ::= { jnxOperatingEntry 24 }
+
+    jnxOperating15MinAvgCPU OBJECT-TYPE
+        SYNTAX          Gauge32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+            "The CPU utilization in percentage of this
+             subject averaged over last 15 minutes.  Zero
+             if unavailable or inapplicable."
+        ::= { jnxOperatingEntry 25 }
+  
+    jnxOperatingFRUPower   OBJECT-TYPE
+           SYNTAX          Gauge32
+           MAX-ACCESS      read-only
+           STATUS          current
+           DESCRIPTION
+                   "The present power of each FRU. Here it will
+                    be shown in terms of voltage. Zero if unavailable
+                    or inapplicable"
+           ::= { jnxOperatingEntry 26 }
+
+
+        jnxOperatingFRUPower	OBJECT-TYPE
+	    SYNTAX	    Gauge32
+	    MAX-ACCESS	    read-only
+	    STATUS	    current
+	    DESCRIPTION
+		    "The present power of each FRU. Here it will
+ 		     be shown in terms of voltage. Zero if unavailable
+		     or inapplicable"
+	    ::= { jnxOperatingEntry 26 }
 
 --
 -- Box Redundancy Information Table
@@ -1605,7 +1681,10 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                 fruIncompatibleWithPEM(94),      -- FRU incompatible with power supply
                 fruIncompatibleWithSIB(95),      -- FRU incompatible with SIB
                 sibIncompatibleWithOtherSIB(96), -- FRU incompatible with other SIB
-                fruPfeErrors(97)                 -- PIC offlined on PFE Errors cross limit.
+                fruPfeErrors(97),                -- PIC offlined on PFE Errors cross limit.
+                vpnLocalizationRoleChange(98),   -- VPN localization core-facing-FPC role change
+                fruFpcFanTrayIncompatible(99),   -- FPC incompatible with FAN-TRAYs
+                fruFpcPEMIncompatible(100)       -- FPC incompatible with PEMs
 
 	}
 	MAX-ACCESS	read-only
@@ -2122,7 +2201,35 @@ JnxChassisId ::= TEXTUAL-CONVENTION
             in the chassis has been in the failure condition."
         ::= { jnxChassisTraps 24 }
 
+    jnxFmAsicErr NOTIFICATION-TYPE
+        OBJECTS         { jnxFruContentsIndex,
+                          jnxFruL1Index,
+                          jnxFruL2Index,
+                          jnxFruL3Index,
+                          jnxFruName,
+                          jnxFruType,
+                          jnxFruSlot }
+        STATUS          current
+        DESCRIPTION
+                "A jnxFmAsicErr trap signifies that the SNMP
+                entity, acting in an agent role, has detected 
+                errors in a switching device within the fabric."
+        ::= { jnxChassisTraps 25 }
 
+    jnxMountVarOffHardDiskFailed NOTIFICATION-TYPE
+        OBJECTS         { jnxFruContentsIndex,
+                          jnxFruL1Index,
+                          jnxFruL2Index,
+                          jnxFruL3Index,
+                          jnxFruName,
+                          jnxFruType,
+                          jnxFruSlot }
+        STATUS          current
+        DESCRIPTION
+                "A jnxMountVarOffHardDiskFailed signifies that the SNMP
+                entity, acting in an agent role, has detected that
+                mount of /var failed off harddisk, emergency /var created."
+        ::= { jnxChassisTraps 26 }
 
     -- Traps for chassis alarm cleared conditions
 
