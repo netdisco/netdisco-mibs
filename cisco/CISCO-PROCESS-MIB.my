@@ -3,7 +3,7 @@
 --   
 -- August 1998, Ramanathan R. Kavasseri
 --   
--- Copyright (c) 1998, 2001, 2003, 2006-2010 by cisco Systems Inc.
+-- Copyright (c) 1998, 2001, 2003, 2006-2011 by cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 --   
@@ -43,7 +43,7 @@ IMPORTS
 
 
 ciscoProcessMIB MODULE-IDENTITY
-    LAST-UPDATED    "201005060000Z"
+    LAST-UPDATED    "201106230000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -66,6 +66,10 @@ ciscoProcessMIB MODULE-IDENTITY
         Thread is a sequence of instructions to be executed
         within a program. Thread which adhere to POSIX standard
         is referred as a POSIX thread."
+    REVISION        "201106230000Z"
+    DESCRIPTION
+        "Added new table cpmCoreTable as well as a new optoinal
+        compliance group cpmCoreGroup."
     REVISION        "201005060000Z"
     DESCRIPTION
         "Added the following new objects to the cpmCPUTotalTable.
@@ -562,6 +566,122 @@ cpmCPUMemoryHCCommitted OBJECT-TYPE
         committed. This object is a 64-bit version of
         cpmCPUMemoryCommitted" 
     ::= { cpmCPUTotalEntry 29 }
+ 
+
+-- Cisco Core Table
+
+cpmCoreTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CpmCoreEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A table of per-Core statistics."
+    ::= { cpmCPU 2 }
+
+cpmCoreEntry OBJECT-TYPE
+    SYNTAX          CpmCoreEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Overall information about the Core load. Entries in this
+        table could come and go as Cores go online or offline."
+    INDEX           {
+                        cpmCPUTotalIndex,
+                        cpmCoreIndex
+                    } 
+    ::= { cpmCoreTable 1 }
+
+CpmCoreEntry ::= SEQUENCE {
+        cpmCoreIndex         Unsigned32,
+        cpmCorePhysicalIndex EntPhysicalIndexOrZero,
+        cpmCore5sec          Gauge32,
+        cpmCore1min          Gauge32,
+        cpmCore5min          Gauge32,
+        cpmCoreLoadAvg1min   CPULoadAverage,
+        cpmCoreLoadAvg5min   CPULoadAverage,
+        cpmCoreLoadAvg15min  CPULoadAverage
+}
+
+cpmCoreIndex OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..4294967295)
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An index that uniquely represents a Core (or group of Cores)
+        whose Core load information is reported by a row in this table.
+        This index is assigned arbitrarily by the engine
+        and is not saved over reboots." 
+    ::= { cpmCoreEntry 1 }
+
+cpmCorePhysicalIndex OBJECT-TYPE
+    SYNTAX          EntPhysicalIndexOrZero
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The entCorePhysicalIndex of the physical entity for which
+        the Core statistics in this entry are maintained.
+        The physical entity can be a CPU chip, a group of CPUs,
+        a CPU card etc. The exact type of this entity is described by
+        its entPhysicalVendorType value. If the Core statistics
+        in this entry correspond to more than one physical entity
+        (or to no physical entity), or if the entPhysicalTable is
+        not supported on the SNMP agent, the value of this object
+        must be zero." 
+    ::= { cpmCoreEntry 2 }
+
+cpmCore5sec OBJECT-TYPE
+    SYNTAX          Gauge32 (0..100)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core busy percentage in the last 5 second
+        period." 
+    ::= { cpmCoreEntry 3 }
+
+cpmCore1min OBJECT-TYPE
+    SYNTAX          Gauge32 (0..100)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core busy percentage in the last 1 minute
+        period." 
+    ::= { cpmCoreEntry 4 }
+
+cpmCore5min OBJECT-TYPE
+    SYNTAX          Gauge32 (0..100)
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core busy percentage in the last 5 minute
+        period." 
+    ::= { cpmCoreEntry 5 }
+
+cpmCoreLoadAvg1min OBJECT-TYPE
+    SYNTAX          CPULoadAverage
+    UNITS           "hundredths of processes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core load Average in the last 1 minute period" 
+    ::= { cpmCoreEntry 6 }
+
+cpmCoreLoadAvg5min OBJECT-TYPE
+    SYNTAX          CPULoadAverage
+    UNITS           "hundredths of processes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core load Average in the last 5 minutes period" 
+    ::= { cpmCoreEntry 7 }
+
+cpmCoreLoadAvg15min OBJECT-TYPE
+    SYNTAX          CPULoadAverage
+    UNITS           "hundredths of processes"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The overall Core load Average in the last 15 minutes period" 
+    ::= { cpmCoreEntry 8 }
  
 
 -- Cisco Processes Common Table
@@ -2315,9 +2435,13 @@ cProcessMIBComplianceRev5 MODULE-COMPLIANCE
     MODULE          -- this module
     MANDATORY-GROUPS { cpmCPUTotalGroupRev1 }
 
+    GROUP           cpmCoreGroup
+    DESCRIPTION
+        "The cpmCoreGroup is optoinal and gives per-core CPU utilization."
+
     GROUP           cpmCPUHistoryGroup
     DESCRIPTION
-        "The cpmCPUHistoryGroup is optional and gives the information    
+        "The cpmCPUHistoryGroup is optional and gives the information
         about process CPU utilization history."
 
     GROUP           cpmCPUThresholdNotificationGroup
@@ -2349,7 +2473,7 @@ cProcessMIBComplianceRev5 MODULE-COMPLIANCE
 
     GROUP           cpmPosixProcessGroup
     DESCRIPTION
-        "The cpmPosixProcessGroup gives information about POSIX process. 
+        "The cpmPosixProcessGroup gives information about POSIX process.
         cpmPosixProcessGroup is mandatory if the Operating System
         of the managed system supports Posix standard kernel."
 
@@ -2387,22 +2511,22 @@ cProcessMIBComplianceRev5 MODULE-COMPLIANCE
 
     GROUP           cpmThreadOverflowGroup
     DESCRIPTION
-        "This group is an optional group for the devices which run on    
+        "This group is an optional group for the devices which run on
         32-bit operating system"
 
     GROUP           cpmThreadHCGroup
     DESCRIPTION
-        "This group is an optional group for the devices which run on    
+        "This group is an optional group for the devices which run on
         32-bit operating system"
 
     GROUP           cpmVirtualProcessOverflowGroup
     DESCRIPTION
-        "This group is an optional group for the devices which run on    
+        "This group is an optional group for the devices which run on
         32-bit operating system."
 
     GROUP           cpmVirtualProcessHCGroup
     DESCRIPTION
-        "This group is an optional group for the devices which run on    
+        "This group is an optional group for the devices which run on
         32-bit operating system"
 
     GROUP           cpmCPULoadAvgGroup
@@ -2773,7 +2897,403 @@ cpmCPUTotalMemoryCommitGroup OBJECT-GROUP
         information."
     ::= { cpmGroups 24 }
 
+cpmCoreGroup OBJECT-GROUP
+    OBJECTS         {
+                        cpmCorePhysicalIndex,
+                        cpmCore5sec,
+                        cpmCore1min,
+                        cpmCore5min,
+                        cpmCoreLoadAvg1min,
+                        cpmCoreLoadAvg5min,
+                        cpmCoreLoadAvg15min
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing per-Core CPU utilization."
+    ::= { cpmGroups 25 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

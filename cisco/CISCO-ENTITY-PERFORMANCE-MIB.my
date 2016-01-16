@@ -4,7 +4,7 @@
 --   
 -- June 2010, Muthukrishnan Venkatraman
 --   
--- Copyright (c) 2010 by Cisco Systems Inc.
+-- Copyright (c) 2010, 2014 by Cisco Systems Inc.
 -- All rights reserved.
 --   
 -- *****************************************************************
@@ -17,7 +17,8 @@ IMPORTS
     Counter32,
     NOTIFICATION-TYPE,
     Unsigned32,
-    Counter64
+    Counter64,
+    Integer32
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE,
     NOTIFICATION-GROUP,
@@ -35,7 +36,7 @@ IMPORTS
 
 
 ciscoEntityPerformanceMIB MODULE-IDENTITY
-    LAST-UPDATED    "201009090000Z"
+    LAST-UPDATED    "201406180000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -98,6 +99,25 @@ ciscoEntityPerformanceMIB MODULE-IDENTITY
         Acronyms
         ========
         SMA - Simple Moving Average"
+    REVISION        "201406180000Z"
+    DESCRIPTION
+        "Added the following objects to the MIB.
+
+        cepThroughputLicensedBW, cepThroughputLevel,
+        cepThroughputInterval, cepThroughputThreshold,
+        cepThroughputAvgRate to cepThroughputTable.
+
+        Added cepThroughputNotifEnabled to
+        ciscoEntityPerformanceMIBNotifObjects group.
+
+        Added cepThroughputNotif as a new notification to the MIB.
+
+        Added a new MIB conform group,
+        ciscoEntityPerformanceMIBThroughputGroup for the new
+        objects.
+
+        Also modified the ciscoEntityPerformanceMIBCompliance to add
+        the new group ciscoEntityPerformanceMIBThroughputGroup."
     REVISION        "201009090000Z"
     DESCRIPTION
         "The initial version of this MIB module."
@@ -676,6 +696,104 @@ ciscoEntityPerformanceMIBNotifObjects  OBJECT IDENTIFIER
     ::= { ciscoEntityPerformanceMIBObjects 6 }
 
 
+cepThroughputTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CepThroughputEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table maintains the specific throughput information for
+        each physical entity, which supports throughput monitoring.
+
+        An agent creates a conceptual row to this table corresponding
+        to a physical entity upon detection of a physical entity
+        supporting the throughput monitoring.
+
+        An agent destroys a conceptual row from this table
+        corresponding to a physical entity upon removal of
+        the physical entity."
+    ::= { ciscoEntityPerformanceMIBObjects 7 }
+
+cepThroughputEntry OBJECT-TYPE
+    SYNTAX          CepThroughputEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A conceptual row in the cepThroughputTable. There is an entry
+        in this table for each entity which supports throughput
+        monitoring, as defined by a value of entPhysicalIndex."
+    INDEX           { entPhysicalIndex } 
+    ::= { cepThroughputTable 1 }
+
+CepThroughputEntry ::= SEQUENCE {
+        cepThroughputLicensedBW Counter64,
+        cepThroughputLevel      INTEGER,
+        cepThroughputInterval   Integer32,
+        cepThroughputThreshold  Integer32,
+        cepThroughputAvgRate    Counter64
+}
+
+cepThroughputLicensedBW OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object represents the bandwidth for installed throughput
+        license of the entity." 
+    ::= { cepThroughputEntry 1 }
+
+cepThroughputLevel OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        normal(1),
+                        warning(2),
+                        exceed(3)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object represents the current throughput level for
+        installed throughput license of the entity.
+
+        normal  (1) - Throughput usage is normal
+        warning (2) - Throughput usage has crossed the configured
+        threshold
+                      limit
+        exceed  (3) - Throughput usage has exceeded the total licensed
+                      bandwidth"
+    ::= { cepThroughputEntry 2 }
+
+cepThroughputInterval OBJECT-TYPE
+    SYNTAX          Integer32 (10..86400)
+    UNITS           "seconds"
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "The object represents the configured time interval at which the
+        cepThroughputLevel is checked for this entity."
+    ::= { cepThroughputEntry 3 }
+
+cepThroughputThreshold OBJECT-TYPE
+    SYNTAX          Integer32 (75..95)
+    UNITS           "percent"
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "The object represents the configured throughput threshold for
+        this entity."
+    ::= { cepThroughputEntry 4 }
+
+cepThroughputAvgRate OBJECT-TYPE
+    SYNTAX          Counter64
+    UNITS           "bits per second"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object represents the average throughput rate in the
+        interval cepThroughputInterval for this entity." 
+    ::= { cepThroughputEntry 5 }
+ 
+
+
 cepThresholdNotifEnabled OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-write
@@ -693,6 +811,19 @@ cepThresholdNotifEnabled OBJECT-TYPE
         'cepConfigThresholdNotifEnabled' present in cepConfigTable."
     DEFVAL          { false } 
     ::= { ciscoEntityPerformanceMIBNotifObjects 1 }
+
+cepThroughputNotifEnabled OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object controls throughput rate notification.
+
+        When this object contains a value 'true', then generation of
+        cepThroughputNotif is enabled. If this object contains a value
+        'false', then generation of cepThroughputNotif is disabled."
+    DEFVAL          { false } 
+    ::= { ciscoEntityPerformanceMIBNotifObjects 2 }
 
 -- Default Notification Type
 
@@ -745,6 +876,32 @@ cepPerfThreshFallingEvent NOTIFICATION-TYPE
         gap between notification for an entity of specific 
         performance measurement type at a specific interval."
    ::= { ciscoEntityPerformanceMIBNotifs 2 }
+
+cepThroughputNotif NOTIFICATION-TYPE
+    OBJECTS         {
+                        cepThroughputLicensedBW,
+                        cepThroughputLevel,
+                        cepThroughputAvgRate
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A notification indicating that the average throughput rate for
+        the configured interval has exceeded the threshold or reached
+        maximum bandwidth allowed.
+
+                This notification will be sent, whenever the
+        cepThroughputLevel object has the value warning(2) or exceed(3).
+        The condition for trap generation will be checked in every
+        cepThroughputInterval.
+
+                cepThroughputNotif with ceqfpThrougputLevel as
+        warning(2) indicates that average throughput rate has crossed
+        the configured threshold.
+
+                cepThroughputNotif with cepThrougputLevel as exceed(3)
+        indicates that average throughput rate has reached maximum
+        licensed bandwidth."
+   ::= { ciscoEntityPerformanceMIBNotifs 3 }
 ciscoEntityPerformanceMIBCompliances  OBJECT IDENTIFIER
     ::= { ciscoEntityPerformanceMIBConform 1 }
 
@@ -778,6 +935,11 @@ ciscoEntityPerformanceMIBCompliance MODULE-COMPLIANCE
     DESCRIPTION
         "This group is optional for the entity, which does not
         support historic performance data."
+
+    GROUP           ciscoEntityPerformanceMIBThroughputGroup
+    DESCRIPTION
+        "This group is optional for the entity which does not maintain
+        throughput rate data."
 
     OBJECT          cepConfigRisingThreshold
     MIN-ACCESS      read-only
@@ -851,7 +1013,10 @@ ciscoEntityPerformanceMIBIntervalStatsGroup OBJECT-GROUP
     ::= { ciscoEntityPerformanceMIBGroups 5 }
 
 ciscoEntityPerformanceMIBNotifControlGroup OBJECT-GROUP
-    OBJECTS         { cepThresholdNotifEnabled }
+    OBJECTS         {
+                        cepThresholdNotifEnabled,
+                        cepThroughputNotifEnabled
+                    }
     STATUS          current
     DESCRIPTION
         "This group contains collection of notification
@@ -861,7 +1026,8 @@ ciscoEntityPerformanceMIBNotifControlGroup OBJECT-GROUP
 ciscoEntityPerformanceMIBNotificationGroup NOTIFICATION-GROUP
    NOTIFICATIONS    {
                         cepPerfThreshRisingEvent,
-                        cepPerfThreshFallingEvent
+                        cepPerfThreshFallingEvent,
+                        cepThroughputNotif
                     }
     STATUS          current
     DESCRIPTION
@@ -869,115 +1035,20 @@ ciscoEntityPerformanceMIBNotificationGroup NOTIFICATION-GROUP
         objects."
     ::= { ciscoEntityPerformanceMIBGroups 7 }
 
+ciscoEntityPerformanceMIBThroughputGroup OBJECT-GROUP
+    OBJECTS         {
+                        cepThroughputLicensedBW,
+                        cepThroughputLevel,
+                        cepThroughputInterval,
+                        cepThroughputThreshold,
+                        cepThroughputAvgRate
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group contains collection of throughput rate objects."
+    ::= { ciscoEntityPerformanceMIBGroups 8 }
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

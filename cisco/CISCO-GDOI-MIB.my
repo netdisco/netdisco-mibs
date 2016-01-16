@@ -1,10 +1,11 @@
 -- *********************************************************************
--- Copyright (c)2010-2011, 2010 by Cisco Systems Inc.
+-- Copyright (c)2010-2011, 2010, 2015 by Cisco Systems Inc.
 -- All rights reserved.
 --   
 -- CISCO-GDOI-MIB: MIB for Group Domain of Interpretation (GDOI)
 -- July 2010 - Preethi Sundaradevan, Manoj Vellala,
 -- Mike Hamada, Tanya Roosta
+-- February 2015 - Rohini Kamath, Yogesh Sharma
 -- *********************************************************************
 
 CISCO-GDOI-MIB DEFINITIONS ::= BEGIN
@@ -24,6 +25,8 @@ IMPORTS
     DisplayString,
     TruthValue
         FROM SNMPv2-TC
+    CiscoMilliSeconds
+        FROM CISCO-TC
     ciscoMgmt
         FROM CISCO-SMI;
 
@@ -33,7 +36,7 @@ IMPORTS
 -- ------------------------------------------------------------------ --
 
 ciscoGdoiMIB MODULE-IDENTITY
-    LAST-UPDATED    "201008310000Z"
+    LAST-UPDATED    "201507170000Z"
     ORGANIZATION    "cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -50,8 +53,48 @@ ciscoGdoiMIB MODULE-IDENTITY
         "This MIB module defines objects for managing the GDOI protocol.
 
         Copyright (c) The IETF Trust (2010).  This version of this MIB
-        module is part of RFC ????; see the RFC itself for full legal
+        module is based on RFC 6407; see the RFC itself for full legal
         notices."
+    REVISION        "201507170000Z"
+    DESCRIPTION
+        "Added the following textual conventions:
+        - CgmGdoiKsStatus
+        - CgmGdoiKsRole
+        Added the following objects to cgmGdoiGroupTable:
+        - cgmGdoiGroupMemberCount
+        - cgmGdoiGroupActivePeerKeyServerCount
+        - cgmGdoiGroupLastRekeyRetransmits
+        - cgmGdoiGroupLastRekeyTimeTaken
+        Added the following objects to cgmGdoiKeyServerTable:
+        - cgmGdoiKeyServerRole
+        - cgmGdoiKeyServerRegisteredGMs
+        Added the following objects to cgmGdoiGmTable:
+        - cgmGdoiGmActiveTEKNum
+        Added the following objects to cgmGdoiNotifCntl:
+        - cgmGdoiKsRoleChangeNotifEnable
+        - cgmGdoiKsGmDeletedNotifEnable
+        - cgmGdoiKsPeerReachNotifEnable
+        - cgmGdoiKsPeerUnreachNotifEnable
+        Added the following tables:
+        - cgmGdoiNotifVars
+        - cgmGdoiCoopPeerTable
+        Added the following notifications:
+        - cgmGdoiKeyServerRoleChange
+        - cgmGdoiKeyServerGmDeleted
+        - cgmGdoiKeyServerPeerReachable
+        - cgmGdoiKeyServerPeerUnreachable
+        Added new MIB Groups (for conformance)
+        - cgmGdoiGroupIdGroupRev1
+        - cgmGdoiKeyServerGroupRev1
+        - cgmGdoiGmGroupRev1
+        - cgmGdoiNotificationControlGroupRev1
+        - cgmGdoiKeyServerNotificationGroupRev1
+        - cgmGdoiCoopPeerGroup
+        - cgmGdoiNotificationVariablesGroup
+        Added a new compliance group:
+        - cgmGdoiMIBComplianceRev1
+        Deprecated an old compliance group:
+        - cgmGdoiMIBCompliance"
     REVISION        "201008310000Z"
     DESCRIPTION
         "Final Ciscoized version of the MIB draft after review comments"
@@ -71,6 +114,47 @@ ciscoGdoiMIB MODULE-IDENTITY
 -- ------------------------------------------------------------------ --
 -- GDOI MIB Textual Conventions
 -- ------------------------------------------------------------------ --
+
+CgmGdoiKsStatus ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "A textual convention identifying the status of Key Server in
+        the COOP/Stand-alone scenario.
+
+        Following are the possible values:
+
+          ID Type              Value
+          -------              -----
+          Alive                  1  -- Key Server is perceived as Alive
+          Dead                   2  -- Key Server is perceived as Dead
+          Unknown                3  -- Failed to determine the status;
+                                       or, the status of a secondary 
+                                       peer when seen from a Secondary 
+                                       Key Server."
+    SYNTAX          INTEGER  {
+                        keyServerAlive(1),
+                        keyServerDead(2),
+                        keyServerUnknown(3)
+                    }
+
+CgmGdoiKsRole ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "A textual convention identifying the role of Key Server in the
+        COOP/Stand-alone scenario.
+
+        Following are the possible values:
+
+          ID Type              Value
+          -------              -----
+          Primary                1  -- Role is Primary
+          Secondary              2  -- Role is Secondary
+          Unknown                3  -- Failed to determine the role"
+    SYNTAX          INTEGER  {
+                        keyServerPrimary(1),
+                        keyServerSecondary(2),
+                        keyServerUnknown(3)
+                    }
 
 CgmGdoiIdentificationType ::= TEXTUAL-CONVENTION
     STATUS          current
@@ -194,7 +278,7 @@ CgmGdoiIdentificationValue ::= TEXTUAL-CONVENTION
 
         The following  CgmGdoiIdentificationType values indicate that
         the CgmGdoiIdentificationValue object should be parsed as an 
-        ascii string of characters. Note that a length MUST be 
+        ASCII string of characters. Note that a length MUST be 
         associated with the object in these cases:
 
           domainName(2)
@@ -342,7 +426,7 @@ CgmGdoiEncryptionAlgorithm ::= TEXTUAL-CONVENTION
                -- encrAlgNullAuthAesGmac
 
         Following are the possible KEK_ALGORITHM values specifying
-        the encyption algorithm used with a KEK &
+        the encryption algorithm used with a KEK &
         CgmGdoiEncryptionAlgorithm mappings from the GDOI RFC 3547:
 
           Algorithm Type  Value
@@ -801,7 +885,7 @@ cgmGdoiKeyServerRekeyPushed NOTIFICATION-TYPE
     OBJECTS         { cgmGdoiKeyServerRekeysPushed }
     STATUS          current
     DESCRIPTION
-        "A notification from a Key Srver sent when a GROUPKEY-PUSH
+        "A notification from a Key Server sent when a GROUPKEY-PUSH
         message is sent to refresh KEK(s) and or TEK(s).  A rekey
         is sent  periodically by a Key Server based on a configured
         time to the Group Members registered to its GDOI Group."
@@ -838,7 +922,7 @@ cgmGdoiGmRegister NOTIFICATION-TYPE
     DESCRIPTION
         "A notification from a Group Member when it is starting to
         register with its GDOI Group's Key Server.  Registration
-        includes downloading keying & security assosiation material.
+        includes downloading keying & security association material.
         This is equivalent to a Group Member or Initiator sending the
         first message of a GROUPKEY-PULL exchange to its Group's Key
         Server."
@@ -952,6 +1036,81 @@ cgmGdoiGmRekeyFailure NOTIFICATION-TYPE
               4.   GROUPKEY-PUSH Message
               4.8. Group Member Operations"
    ::= { cgmGdoiMIBNotifications 11 }
+
+-- *---------------------------------------------------------------- --
+-- * GDOI Key Server (KS) Notifications
+-- *---------------------------------------------------------------- --
+
+cgmGdoiKeyServerRoleChange NOTIFICATION-TYPE
+    OBJECTS         {
+                        cgmGdoiNotifGroupIdType,
+                        cgmGdoiNotifGroupIdValue,
+                        cgmGdoiNotifGroupName,
+                        cgmGdoiNotifKeyServerIdType,
+                        cgmGdoiNotifKeyServerIdValue,
+                        cgmGdoiNotifKeyServerRole
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated when a Key Server changes it's
+        role from Primary to Secondary or vice-versa. The varbinds
+        encapsulate the Group information, the Key Server identifier and
+        the role it has moved to."
+   ::= { cgmGdoiMIBNotifications 12 }
+
+cgmGdoiKeyServerGmDeleted NOTIFICATION-TYPE
+    OBJECTS         {
+                        cgmGdoiNotifGroupIdType,
+                        cgmGdoiNotifGroupIdValue,
+                        cgmGdoiNotifGroupName,
+                        cgmGdoiNotifKeyServerIdType,
+                        cgmGdoiNotifKeyServerIdValue,
+                        cgmGdoiNotifGmIdType,
+                        cgmGdoiNotifGmIdValue
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated when a Group Member is deleted
+        from a Key Server. The varbinds encapsulate the Group
+        information, the Key Server identifier and the Group Member
+        identifier which is deleted."
+   ::= { cgmGdoiMIBNotifications 13 }
+
+cgmGdoiKeyServerPeerReachable NOTIFICATION-TYPE
+    OBJECTS         {
+                        cgmGdoiNotifGroupIdType,
+                        cgmGdoiNotifGroupIdValue,
+                        cgmGdoiNotifGroupName,
+                        cgmGdoiNotifKeyServerIdType,
+                        cgmGdoiNotifKeyServerIdValue,
+                        cgmGdoiNotifPeerKsIdType,
+                        cgmGdoiNotifPeerKsIdValue
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated from a Key Server when an
+        unreachable peer Key Server becomes reachable. The varbinds
+        encapsulate the Group information, the Key Server identifier and
+        the peer Key Server identifier."
+   ::= { cgmGdoiMIBNotifications 14 }
+
+cgmGdoiKeyServerPeerUnreachable NOTIFICATION-TYPE
+    OBJECTS         {
+                        cgmGdoiNotifGroupIdType,
+                        cgmGdoiNotifGroupIdValue,
+                        cgmGdoiNotifGroupName,
+                        cgmGdoiNotifKeyServerIdType,
+                        cgmGdoiNotifKeyServerIdValue,
+                        cgmGdoiNotifPeerKsIdType,
+                        cgmGdoiNotifPeerKsIdValue
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This notification is generated from a Key Server when a
+        reachable peer Key Server becomes unreachable. The varbinds
+        encapsulate the Group information, the Key Server identifier and
+        the peer Key Server identifier."
+   ::= { cgmGdoiMIBNotifications 15 }
 -- ------------------------------------------------------------------ --
 -- GDOI MIB Management Objects
 -- ------------------------------------------------------------------ --
@@ -987,10 +1146,14 @@ cgmGdoiGroupEntry OBJECT-TYPE
     ::= { cgmGdoiGroupTable 1 }
 
 CgmGdoiGroupEntry ::= SEQUENCE {
-        cgmGdoiGroupIdType   CgmGdoiIdentificationType,
-        cgmGdoiGroupIdLength Unsigned32,
-        cgmGdoiGroupIdValue  CgmGdoiIdentificationValue,
-        cgmGdoiGroupName     DisplayString
+        cgmGdoiGroupIdType                   CgmGdoiIdentificationType,
+        cgmGdoiGroupIdLength                 Unsigned32,
+        cgmGdoiGroupIdValue                  CgmGdoiIdentificationValue,
+        cgmGdoiGroupName                     DisplayString,
+        cgmGdoiGroupMemberCount              Unsigned32,
+        cgmGdoiGroupActivePeerKeyServerCount Unsigned32,
+        cgmGdoiGroupLastRekeyRetransmits     Unsigned32,
+        cgmGdoiGroupLastRekeyTimeTaken       CiscoMilliSeconds
 }
 
 cgmGdoiGroupIdType OBJECT-TYPE
@@ -1055,6 +1218,53 @@ cgmGdoiGroupName OBJECT-TYPE
         "The string-readable name configured for or given to a GDOI
         Group." 
     ::= { cgmGdoiGroupEntry 4 }
+
+cgmGdoiGroupMemberCount OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The count of registered Group Members to this group, on a Key
+        Server." 
+    ::= { cgmGdoiGroupEntry 5 }
+
+cgmGdoiGroupActivePeerKeyServerCount OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The count of the active Key Server sessions between the local
+        Key Server and peer Key Servers for this group." 
+    ::= { cgmGdoiGroupEntry 6 }
+
+cgmGdoiGroupLastRekeyRetransmits OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This variable returns the cummulative count of number of rekey
+        messages and retransmits during the last cycle of rekey. This
+        count displays the information pertaining to Group Members only
+        (and is not related to any sync operation pertaining to peer Key
+        Servers). This information is a reflection of rekey operation on
+        a Primary Key Server, and is not available for Secondary Key
+        Server(s), because they do not perform rekeys and do not receive
+        any ACKs. While a rekey is in progress, this variable will give
+        information of the last rekey operation." 
+    ::= { cgmGdoiGroupEntry 7 }
+
+cgmGdoiGroupLastRekeyTimeTaken OBJECT-TYPE
+    SYNTAX          CiscoMilliSeconds
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This variable returns the duration (in milliseconds) of the
+        last rekey operation. This information is valid for a Primary
+        Key Server, and is not available with Secondary Key Server(s),
+        because they do not perform rekeys and do not receive any ACKs.
+        While a rekey is in progress, this variable will give
+        information of the last rekey operation." 
+    ::= { cgmGdoiGroupEntry 8 }
  
 
 -- *---------------------------------------------------------------- --
@@ -1069,6 +1279,13 @@ cgmGdoiSecAssociations  OBJECT IDENTIFIER
 
 cgmGdoiNotifCntl  OBJECT IDENTIFIER
     ::= { cgmGdoiMIBObjects 4 }
+
+-- #-------------------------------------------------------------- --
+-- # The GDOI Notification Variables Table
+-- #-------------------------------------------------------------- --
+
+cgmGdoiNotifVars  OBJECT IDENTIFIER
+    ::= { cgmGdoiMIBObjects 5 }
 
 -- *---------------------------------------------------------------- --
 -- * The GDOI "Peers" Group
@@ -1108,11 +1325,13 @@ cgmGdoiKeyServerEntry OBJECT-TYPE
     ::= { cgmGdoiKeyServerTable 1 }
 
 CgmGdoiKeyServerEntry ::= SEQUENCE {
-        cgmGdoiKeyServerIdType       CgmGdoiIdentificationType,
-        cgmGdoiKeyServerIdLength     Unsigned32,
-        cgmGdoiKeyServerIdValue      CgmGdoiIdentificationValue,
-        cgmGdoiKeyServerActiveKEK    CgmGdoiKekSPI,
-        cgmGdoiKeyServerRekeysPushed Counter32
+        cgmGdoiKeyServerIdType        CgmGdoiIdentificationType,
+        cgmGdoiKeyServerIdLength      Unsigned32,
+        cgmGdoiKeyServerIdValue       CgmGdoiIdentificationValue,
+        cgmGdoiKeyServerActiveKEK     CgmGdoiKekSPI,
+        cgmGdoiKeyServerRekeysPushed  Counter32,
+        cgmGdoiKeyServerRole          CgmGdoiKsRole,
+        cgmGdoiKeyServerRegisteredGMs Unsigned32
 }
 
 cgmGdoiKeyServerIdType OBJECT-TYPE
@@ -1196,6 +1415,23 @@ cgmGdoiKeyServerRekeysPushed OBJECT-TYPE
               4.7. GCKS Operations
               5.6. Sequence Number Payload" 
     ::= { cgmGdoiKeyServerEntry 5 }
+
+cgmGdoiKeyServerRole OBJECT-TYPE
+    SYNTAX          CgmGdoiKsRole
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The current role of the queried Key Server for the Group." 
+    ::= { cgmGdoiKeyServerEntry 6 }
+
+cgmGdoiKeyServerRegisteredGMs OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The count of registered Group Members to the Key Server
+        identified by the index." 
+    ::= { cgmGdoiKeyServerEntry 7 }
  
 
 -- #-------------------------------------------------------------- --
@@ -1243,7 +1479,8 @@ CgmGdoiGmEntry ::= SEQUENCE {
         cgmGdoiGmRegKeyServerIdLength Unsigned32,
         cgmGdoiGmRegKeyServerIdValue  CgmGdoiIdentificationValue,
         cgmGdoiGmActiveKEK            CgmGdoiKekSPI,
-        cgmGdoiGmRekeysReceived       Counter32
+        cgmGdoiGmRekeysReceived       Counter32,
+        cgmGdoiGmActiveTEKNum         Counter32
 }
 
 cgmGdoiGmIdType OBJECT-TYPE
@@ -1380,6 +1617,126 @@ cgmGdoiGmRekeysReceived OBJECT-TYPE
               4.8. Group Member Operations
               5.6. Sequence Number Payload" 
     ::= { cgmGdoiGmEntry 8 }
+
+cgmGdoiGmActiveTEKNum OBJECT-TYPE
+    SYNTAX          Counter32
+    UNITS           "Number of traffic encryption keys"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of active traffic encryption keys (TEKS) currently
+        being used by the Group Member to encrypt/decrypt/authenticate
+        dataplane traffic." 
+    ::= { cgmGdoiGmEntry 9 }
+ 
+
+-- #-------------------------------------------------------------- --
+-- # The COOP Peer Table
+-- #-------------------------------------------------------------- --
+
+cgmGdoiCoopPeerTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CgmGdoiCoopPeerEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A table of information for the COOP peer(s). The information
+        populated in this table, is extracted from the COOP messages
+        exchanged between the local KS (device being queried) and the
+        COOP Peer(s)."
+    ::= { cgmGdoiPeers 3 }
+
+cgmGdoiCoopPeerEntry OBJECT-TYPE
+    SYNTAX          CgmGdoiCoopPeerEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry containing COOP Peer Key Server's (KS) information,
+        uniquely identified by the Group & Peer Key Server IDs."
+    INDEX           {
+                        cgmGdoiGroupIdType,
+                        cgmGdoiGroupIdValue,
+                        cgmGdoiCoopPeerIdType,
+                        cgmGdoiCoopPeerIdValue
+                    } 
+    ::= { cgmGdoiCoopPeerTable 1 }
+
+CgmGdoiCoopPeerEntry ::= SEQUENCE {
+        cgmGdoiCoopPeerIdType        CgmGdoiIdentificationType,
+        cgmGdoiCoopPeerIdLength      Unsigned32,
+        cgmGdoiCoopPeerIdValue       CgmGdoiIdentificationValue,
+        cgmGdoiCoopPeerRole          CgmGdoiKsRole,
+        cgmGdoiCoopPeerStatus        CgmGdoiKsStatus,
+        cgmGdoiCoopPeerRegisteredGMs Unsigned32
+}
+
+cgmGdoiCoopPeerIdType OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The Identification Type Value used to parse the identity
+        information for a Key Server.  RFC 4306 defines all valid types
+        that can be used as an identifier.  These identification types
+        are sent as the 'SRC ID Type' and 'DST ID Type' of the KEK and
+        TEK payloads for GDOI GROUPKEY-PULL and GROUPKEY-PUSH
+        exchanges." 
+    ::= { cgmGdoiCoopPeerEntry 1 }
+
+cgmGdoiCoopPeerIdLength OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The length (i.e. number of octets) of a Peer (Key Server) ID.
+        If no length is given (i.e. it has a value of 0), the default
+        length of its cgmGdoiCoopPeerIdType should be used as long as it
+        is not reprsented by an ASCII string.  If the value has a type
+        that is represented by an ASCII string, a length MUST be
+        included.  If the length given is not 0, it should match the
+        'SRC ID Data Len' and 'DST ID Data Len' fields sent in the KEK
+        and TEK payloads for GDOI GROUPKEY-PULL and GROUPKEY-PUSH
+        exchanges." 
+    ::= { cgmGdoiCoopPeerEntry 2 }
+
+cgmGdoiCoopPeerIdValue OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationValue
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The value of the identity information for a COOP Key Server
+        with its type indicated by the cgmGdoiCoopPeerIdType. Use the
+        cgmGdoiCoopPeerIdType to parse the COOP Peer (Key Server) ID
+        correctly. This COOP Peer (Key Server) ID value is sent as the
+        'SRC Identification Data' and 'DST Identification Data' of the
+        KEK and TEK payloads for GDOI GROUPKEY-PULL and GROUPKEY-PUSH
+        exchanges." 
+    ::= { cgmGdoiCoopPeerEntry 3 }
+
+cgmGdoiCoopPeerRole OBJECT-TYPE
+    SYNTAX          CgmGdoiKsRole
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The current role of the COOP Peer (Key Server) for the Group." 
+    ::= { cgmGdoiCoopPeerEntry 4 }
+
+cgmGdoiCoopPeerStatus OBJECT-TYPE
+    SYNTAX          CgmGdoiKsStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The current status of the COOP Peer (Key Server) as seen from
+        the local Key Server." 
+    ::= { cgmGdoiCoopPeerEntry 5 }
+
+cgmGdoiCoopPeerRegisteredGMs OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The count of registered Group Members to the COOP Peer (Key
+        Server) identified by the index." 
+    ::= { cgmGdoiCoopPeerEntry 6 }
  
 
 -- *---------------------------------------------------------------- --
@@ -3161,6 +3518,145 @@ cgmGdoiGmRekeyFailNotifEnable OBJECT-TYPE
         be generated on a Group Member when it is unable
         to successfully process and install a rekey." 
     ::= { cgmGdoiNotifCntl 11 }
+
+cgmGdoiKsRoleChangeNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Indicates whether or not cgmGdoiKeyServerRoleChange
+        notification should be generated on a Key Server when its role
+        changes from Primary to Secondary or vice-versa." 
+    ::= { cgmGdoiNotifCntl 12 }
+
+cgmGdoiKsGmDeletedNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Indicates whether or not cgmGdoiKeyServerGmDeleted notification
+        should be generated on a Key Server when a Group Member is
+        deleted from the group database." 
+    ::= { cgmGdoiNotifCntl 13 }
+
+cgmGdoiKsPeerReachNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Indicates whether or not cgmGdoiKeyServerPeerReachable
+        notification should be generated on a Key Server when
+        unreachable peer Key Server becomes reachable." 
+    ::= { cgmGdoiNotifCntl 14 }
+
+cgmGdoiKsPeerUnreachNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Indicates whether or not cgmGdoiKeyServerPeerUnreachable
+        notification should be generated on a Key Server when reachable
+        peer Key Server becomes unreachable." 
+    ::= { cgmGdoiNotifCntl 15 }
+
+cgmGdoiNotifGroupIdType OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationType
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. This variable captures
+        the identification type of the GDOI group." 
+    ::= { cgmGdoiNotifVars 1 }
+
+cgmGdoiNotifGroupIdValue OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationValue
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The value of a Group ID
+        with its type indicated by the cgmGdoiNotifGroupIdType. Use the
+        cgmGdoiNotifGroupIdType to parse the value of this field
+        correctly." 
+    ::= { cgmGdoiNotifVars 2 }
+
+cgmGdoiNotifGroupName OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The string-readable name
+        configured for or given to a GDOI Group." 
+    ::= { cgmGdoiNotifVars 3 }
+
+cgmGdoiNotifKeyServerIdType OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationType
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The Identification Type
+        Value used to parse the identity information of a Key Server." 
+    ::= { cgmGdoiNotifVars 4 }
+
+cgmGdoiNotifKeyServerIdValue OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationValue
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The value of the identity
+        information for a Key Server with its type indicated by the
+        cgmGdoiNotifKeyServerIdType. Use the cgmGdoiNotifKeyServerIdType
+        to parse the Key Server ID correctly." 
+    ::= { cgmGdoiNotifVars 5 }
+
+cgmGdoiNotifKeyServerRole OBJECT-TYPE
+    SYNTAX          CgmGdoiKsRole
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The current role of the
+        Key Server for the Group." 
+    ::= { cgmGdoiNotifVars 6 }
+
+cgmGdoiNotifGmIdType OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationType
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The Identification Type
+        Value used to parse the identity information for a Initiator or
+        Group Member." 
+    ::= { cgmGdoiNotifVars 7 }
+
+cgmGdoiNotifGmIdValue OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationValue
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The value of the identity
+        information for a Group Member with its type indicated by the
+        cgmGdoiNotifGmIdType. Use the cgmGdoiNotifGmIdType to parse the
+        Group Member ID's value correctly." 
+    ::= { cgmGdoiNotifVars 8 }
+
+cgmGdoiNotifPeerKsIdType OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationType
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The Identification Type
+        Value used to parse the identity information of a Key Server." 
+    ::= { cgmGdoiNotifVars 9 }
+
+cgmGdoiNotifPeerKsIdValue OBJECT-TYPE
+    SYNTAX          CgmGdoiIdentificationValue
+    MAX-ACCESS      accessible-for-notify
+    STATUS          current
+    DESCRIPTION
+        "Variable used only for notifications. The value of the identity
+        information for a Peer Key Server with its type indicated by the
+        cgmGdoiNotifPeerKsIdType. Use the cgmGdoiNotifPeerKsIdType to
+        parse the Peer Key Server ID correctly." 
+    ::= { cgmGdoiNotifVars 10 }
 -- ------------------------------------------------------------------ --
 -- GDOI MIB Conformance & Compliance Information
 -- ------------------------------------------------------------------ --
@@ -3188,7 +3684,9 @@ cgmGdoiGroupIdGroup OBJECT-GROUP
     STATUS          current
     DESCRIPTION
         "This group consists of:
-        1) GDOI Group Table"
+        1) GDOI Group Table
+
+        cgmGdoiGroupIdGroupRev1 is an extension to this group."
     ::= { cgmGdoiMIBGroups 1 }
 
 cgmGdoiKeyServerGroup OBJECT-GROUP
@@ -3200,7 +3698,9 @@ cgmGdoiKeyServerGroup OBJECT-GROUP
     STATUS          current
     DESCRIPTION
         "This group consists of:
-        1) GDOI Key Server Table"
+        1) GDOI Key Server Table
+
+        cgmGdoiKeyServerGroupRev1 is an extension to this group."
     ::= { cgmGdoiMIBGroups 2 }
 
 cgmGdoiGmGroup OBJECT-GROUP
@@ -3215,7 +3715,9 @@ cgmGdoiGmGroup OBJECT-GROUP
     STATUS          current
     DESCRIPTION
         "This group consists of:
-        1) GDOI GM Table"
+        1) GDOI GM Table
+
+        cgmGdoiGmGroupRev1 is an extension to this group."
     ::= { cgmGdoiMIBGroups 3 }
 
 cgmGdoiKsSecurityAssociationsGroup OBJECT-GROUP
@@ -3325,7 +3827,10 @@ cgmGdoiKeyServerNotificationGroup NOTIFICATION-GROUP
     STATUS          current
     DESCRIPTION
         "This group contains the Key Server (GCKS) notifications
-        for the GDOI MIB."
+        for the GDOI MIB.
+
+        cgmGdoiKeyServerNotificationGroupRev1 is an extension to this
+        group."
     ::= { cgmGdoiMIBGroups 6 }
 
 cgmGdoiKeyServerErrorNotificationGroup NOTIFICATION-GROUP
@@ -3378,21 +3883,128 @@ cgmGdoiNotificationControlGroup OBJECT-GROUP
     STATUS          current
     DESCRIPTION
         "This group contains the GDOI notification control objects
-        for the GDOI MIB."
+        for the GDOI MIB.
+
+        cgmGdoiNotificationControlGroupRev1 is an extension to this
+        group."
     ::= { cgmGdoiMIBGroups 10 }
+
+cgmGdoiGroupIdGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cgmGdoiGroupMemberCount,
+                        cgmGdoiGroupActivePeerKeyServerCount,
+                        cgmGdoiGroupLastRekeyRetransmits,
+                        cgmGdoiGroupLastRekeyTimeTaken
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group consists of:
+        1) GDOI Group Table
+
+        This group is an extension to cgmGdoiGroupIdGroup."
+    ::= { cgmGdoiMIBGroups 11 }
+
+cgmGdoiKeyServerGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cgmGdoiKeyServerRole,
+                        cgmGdoiKeyServerRegisteredGMs
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group consists of:
+        1) GDOI Key Server Table
+
+        This group is an extension to cgmGdoiKeyServerGroup."
+    ::= { cgmGdoiMIBGroups 12 }
+
+cgmGdoiGmGroupRev1 OBJECT-GROUP
+    OBJECTS         { cgmGdoiGmActiveTEKNum }
+    STATUS          current
+    DESCRIPTION
+        "This group consists of:
+        1) GDOI GM Table
+
+        This group is an extension to cgmGdoiGmGroup."
+    ::= { cgmGdoiMIBGroups 13 }
+
+cgmGdoiKeyServerNotificationGroupRev1 NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        cgmGdoiKeyServerRoleChange,
+                        cgmGdoiKeyServerGmDeleted,
+                        cgmGdoiKeyServerPeerReachable,
+                        cgmGdoiKeyServerPeerUnreachable
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group contains the Key Server (GCKS) notifications for the
+        GDOI MIB.
+
+        This group is an extension to
+        cgmGdoiKeyServerNotificationGroup."
+    ::= { cgmGdoiMIBGroups 14 }
+
+cgmGdoiNotificationControlGroupRev1 OBJECT-GROUP
+    OBJECTS         {
+                        cgmGdoiKsRoleChangeNotifEnable,
+                        cgmGdoiKsGmDeletedNotifEnable,
+                        cgmGdoiKsPeerReachNotifEnable,
+                        cgmGdoiKsPeerUnreachNotifEnable
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group contains the GDOI notification control objects
+        for the GDOI MIB.
+
+        This group is an extension to cgmGdoiNotificationControlGroup."
+    ::= { cgmGdoiMIBGroups 15 }
+
+cgmGdoiCoopPeerGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgmGdoiCoopPeerIdLength,
+                        cgmGdoiCoopPeerRole,
+                        cgmGdoiCoopPeerStatus,
+                        cgmGdoiCoopPeerRegisteredGMs
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group consists of:
+        1) COOP Peer Key Server Table"
+    ::= { cgmGdoiMIBGroups 16 }
+
+cgmGdoiNotificationVariablesGroup OBJECT-GROUP
+    OBJECTS         {
+                        cgmGdoiNotifGroupIdType,
+                        cgmGdoiNotifGroupIdValue,
+                        cgmGdoiNotifGroupName,
+                        cgmGdoiNotifKeyServerIdType,
+                        cgmGdoiNotifKeyServerIdValue,
+                        cgmGdoiNotifKeyServerRole,
+                        cgmGdoiNotifGmIdType,
+                        cgmGdoiNotifGmIdValue,
+                        cgmGdoiNotifPeerKsIdType,
+                        cgmGdoiNotifPeerKsIdValue
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group contains the GDOI notification variables for the
+        GDOI MIB."
+    ::= { cgmGdoiMIBGroups 17 }
 
 -- #-------------------------------------------------------------- --
 -- # GDOI MIB Compliance Statements
 -- #-------------------------------------------------------------- --
 
 cgmGdoiMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "At minimum, only GDOI Group Member functionality is required
-        so only objects associated with and needed by Group Members
-        are mandatory to implement.  If Key Server functionality is
-        also implemented, all other objects will need to be
-        implemented as well."
+        "At minimum, only GDOI Group Member functionality is required so
+        only objects associated with and needed by Group Members are
+        mandatory to implement.  If Key Server functionality is also
+        implemented, all other objects will need to be implemented as
+        well.
+
+        This group is deprecated and is superseeded by
+        cgmGdoiMIBCompliance1."
     MODULE          -- this module
     MANDATORY-GROUPS {
                         cgmGdoiGroupIdGroup,
@@ -3436,7 +4048,575 @@ cgmGdoiMIBCompliance MODULE-COMPLIANCE
         that supports the sending of notifications."
     ::= { cgmGdoiMIBCompliances 1 }
 
+cgmGdoiMIBComplianceRev1 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "At minimum, only GDOI Group Member functionality is required so
+        only objects associated with and needed by Group Members are
+        mandatory to implement. If Key Server functionality is also
+        implemented, all other objects will need to be implemented as
+        well.
+
+        Updated the conformance group with new MIB Groups and objects
+        with min-access as read-only."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cgmGdoiGroupIdGroup,
+                        cgmGdoiGroupIdGroupRev1,
+                        cgmGdoiGmSecurityAssociationsGroup,
+                        cgmGdoiGmGroup,
+                        cgmGdoiGmGroupRev1
+                    }
+
+    GROUP           cgmGdoiKeyServerGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports being the Group Controller Key Server (GCKS)."
+
+    GROUP           cgmGdoiKeyServerGroupRev1
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports being the Group Controller Key Server (GCKS), this
+        group is an extension of cgmGdoiKeyServerGroup."
+
+    GROUP           cgmGdoiKsSecurityAssociationsGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports being the Group Controller Key Server (GCKS)."
+
+    GROUP           cgmGdoiKeyServerNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device that
+        supports the sending of notifications & being the GCKS."
+
+    GROUP           cgmGdoiKeyServerNotificationGroupRev1
+    DESCRIPTION
+        "Implementation of this group is for any network device that
+        supports the sending of notifications & being the GCKS, this
+        group is an extension of cgmGdoiKeyServerNotificationGroup."
+
+    GROUP           cgmGdoiKeyServerErrorNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports the sending of notifications & being the GCKS."
+
+    GROUP           cgmGdoiGmNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports the sending of notifications."
+
+    GROUP           cgmGdoiGmErrorNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports the sending of notifications."
+
+    GROUP           cgmGdoiNotificationControlGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports the sending of notifications."
+
+    GROUP           cgmGdoiNotificationControlGroupRev1
+    DESCRIPTION
+        "Implementation of this group is for any network device
+        that supports the sending of notifications, this group is an
+        extension to cgmGdoiNotificationControlGroup."
+
+    GROUP           cgmGdoiCoopPeerGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device that
+        supports the COOP."
+
+    GROUP           cgmGdoiNotificationVariablesGroup
+    DESCRIPTION
+        "Implementation of this group is for any network device that
+        supports the sending of notifications, packed with the
+        variables defined as a part of the said table."
+
+    OBJECT          cgmGdoiKSNewRegNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgmGdoiKSRegCompNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgmGdoiKSRekeyPushNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cgmGdoiKSNoRSANotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { cgmGdoiMIBCompliances 2 }
+
 END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
