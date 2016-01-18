@@ -1,0 +1,793 @@
+BROCADE-ROUTEMAP-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+  MODULE-IDENTITY, OBJECT-TYPE,IpAddress,Counter64, Unsigned32,Integer32
+     FROM SNMPv2-SMI                   -- [RFC2578]
+  DisplayString, MacAddress, TruthValue, RowStatus, TEXTUAL-CONVENTION
+     FROM SNMPv2-TC                    -- [RFC2579]
+   InterfaceIndex
+       FROM IF-MIB                         -- [RFC2863]
+   InetAddress, InetAddressType
+      FROM INET-ADDRESS-MIB      -- [RFC4001]
+  Action, AclNumber
+     FROM FOUNDRY-SN-IP-ACL-MIB        -- [snaclu]
+    brcdRouteMap, FdryVlanIdOrNoneTC
+      FROM FOUNDRY-SN-SWITCH-GROUP-MIB;        -- [snswitch]
+
+brcdRouteMapMIB MODULE-IDENTITY
+    LAST-UPDATED "201111280000Z"  -- Novemeber 28, 2011
+    ORGANIZATION "Brocade Communications Systems, Inc."
+    CONTACT-INFO
+             "Technical Support Center
+              130 Holger Way,
+              San Jose, CA  95134
+              Email:  ipsupport@brocade.com
+              Phone: 1-800-752-8061
+              URL:  www.brocade.com"
+    DESCRIPTION
+             "This MIB module contains the managed object definitions for
+              routemaps within the IP Routers.
+
+              Copyright 1996-2011 Brocade Communications Systems, Inc.
+              All rights reserved.
+              This Brocade Communications Systems SNMP Management Information
+              Base Specification embodies Brocade Communications Systems'
+              confidential and proprietary intellectual property.
+              Brocade Communications Systems retains all title and ownership
+              in the Specification, including any revisions.
+
+              This Specification is supplied AS IS, and Brocade Communications
+              Systems makes no warranty, either express or implied, as to the
+              use, operation, condition, or performance of the specification,
+              and any unintended consequence it may on the user environment."
+
+    REVISION     "201111280000Z"          -- November 28, 2011
+    DESCRIPTION
+            "Initial revision"
+    ::= { brcdRouteMap 1 }
+
+--
+-- high level object identifiers
+--
+  brcdRouteMapConfig    OBJECT IDENTIFIER ::= { brcdRouteMapMIB 1 }
+  brcdRouteMapShow    OBJECT IDENTIFIER ::= { brcdRouteMapMIB 2 }
+
+  --
+   -- RouteMap Configuration Table
+  --
+
+  brcdRouteMapTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF BrcdRouteMapEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "This table contains the routemap entries."
+    ::= { brcdRouteMapConfig 1 }
+
+  brcdRouteMapEntry OBJECT-TYPE
+    SYNTAX  BrcdRouteMapEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A row in this table represents a routemap entry."
+    INDEX  {brcdRouteMapName, brcdRouteMapSequence }
+    ::= { brcdRouteMapTable 1 }
+
+  BrcdRouteMapEntry ::= SEQUENCE {
+      brcdRouteMapName
+          DisplayString,
+      brcdRouteMapSequence
+          Unsigned32,
+      brcdRouteMapAction
+          Action,
+      brcdRouteMapRuleName
+          DisplayString,
+      brcdRouteMapRowStatus
+          RowStatus
+    }
+
+  brcdRouteMapName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the route map.
+         In NetIron, the name can have max 80 characters."
+    ::= { brcdRouteMapEntry 1 }
+
+  brcdRouteMapSequence OBJECT-TYPE
+    SYNTAX  Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the sequence to insert to/delete from existing route-map entry."
+    ::= { brcdRouteMapEntry 2 }
+
+  brcdRouteMapAction OBJECT-TYPE
+    SYNTAX  Action
+    MAX-ACCESS  read-create
+    STATUS  current
+    DESCRIPTION
+        "Identifies the action to be taken for this Route Map entry."
+    ::= { brcdRouteMapEntry 3 }
+
+
+  brcdRouteMapRuleName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-create
+    STATUS  current
+    DESCRIPTION
+        "Identifies the path name for this map. Max size is 127.
+        This object is not supported in CES/CER platform."
+    ::= { brcdRouteMapEntry 4 }
+
+brcdRouteMapRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+         "Setting this object to createAndGo(4) results in addition
+           of new row. Setting this object to destroy( 6)results in
+           removal of a row. The value active(1) is returned for
+           get and get-next requests.
+           Other values in the enumeration are not used."
+    ::= { brcdRouteMapEntry 5 }
+
+
+  --
+   -- RouteMap Match Clause Config Table for a given routemap.
+  --
+
+  brcdRouteMapMatchTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF BrcdRouteMapMatchEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "RouteMap Match Clause Config Table for a given routemap."
+    ::= { brcdRouteMapConfig 2 }
+
+  brcdRouteMapMatchEntry OBJECT-TYPE
+    SYNTAX  BrcdRouteMapMatchEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A row in this table represents a routemap match clause entry.
+        Before creating an instance row in this table using a name, a
+        corresponding entry with that name needs to be existing in the
+        brcdRouteMapTable."
+    INDEX  {brcdRouteMapName,brcdRouteMapSequence, brcdRouteMapMatchSequence, brcdRouteMapMatchType }
+::= { brcdRouteMapMatchTable 1 }
+
+BrcdRouteMapMatchEntry ::= SEQUENCE {
+      brcdRouteMapMatchSequence
+		Integer32,
+	 brcdRouteMapMatchType
+		INTEGER,
+	brcdRouteMapMatchValue
+		DisplayString,
+	brcdRouteMapMatchCliString
+		DisplayString,
+      brcdRouteMapMatchRowStatus
+          RowStatus
+}
+
+brcdRouteMapMatchSequence  OBJECT-TYPE
+	SYNTAX	Integer32
+	MAX-ACCESS   not-accessible
+	STATUS	current
+	DESCRIPTION
+		"This object identifies the position in this table where this
+		match rule is added.  This is running integer.
+		If the brcdRouteMapMatchRowStatus is createAndGo then the row
+		is inserted if there is no match rule is present at
+		brcdRouteMapMatchIndex position.
+		If there is a rule present it should be of same kind.
+		If not then the set request fails.
+		Application can obtain value for this object in the last row
+		and use the next value to insert a new row in this table."
+		::= {	 brcdRouteMapMatchEntry 1 }
+
+brcdRouteMapMatchType		OBJECT-TYPE
+	SYNTAX	INTEGER { matchUndefined(0),
+		matchAsPath(1),
+             matchBgpCommunityName(2),
+             matchBgpCommunityNameExact(3),
+             matchBgpExtCommunityNumber(4),
+             matchInterfaces(5),
+             matchIpv4AddressAclNames(6),
+             matchIpv4AddressAclNumbers(7),
+             matchIpv4AddressPrefixList(8),
+             matchIpv4NextHopAclNames(9),
+             matchIpv4NextHopAclNumbers(10),
+             matchIpv4NextHopPrefixList(11),
+             matchIpv4RouteSourceAclNames(12),
+             matchIpv4RouteSourceAclNumbers(13),
+             matchIpv4RouteSourcePrefixList(14),
+             matchIpv6AddressAclNames(15),
+             matchIpv6AddressPrefixList(16),
+             matchIpv6NextHopPrefixList(17),
+             matchIpv6RouteSourcePrefixList(18),
+             matchMetric(19),
+             matchRoutingProtocol(20),
+             matchRouteType(21),
+             matchTags(22)}
+	MAX-ACCESS  not-accessible
+	STATUS	current
+	DESCRIPTION
+		"A pair of brcdRouteMapMatchType and brcdRouteMapMatchValue
+		 objects specifies a particular match clause."
+	::= {	 brcdRouteMapMatchEntry 2 }
+
+brcdRouteMapMatchValue	OBJECT-TYPE
+ SYNTAX     DisplayString
+ MAX-ACCESS read-create
+ STATUS     current
+ DESCRIPTION
+	"This object specifies the value corresponding to the
+	 brcdRouteMapMatchType.
+
+	 matchAsPath - Identifies one or more BGP AS Paths to be matched.
+	 This list of AS Path names are separated by one or more spaces.
+
+	 matchBgpCommunityName ֠Identifies one or more BGP community ACL names to
+	 be matched. This list of BGP community ACL names separated by one or more
+	 spaces.
+
+	 matchBgpCommunityNameExact ֠Identifies one or more BGP community ACL names
+	 to be matched (which requires exact match).
+	 This list of BGP community ACL names separated by one or more spaces.
+
+	 matchBgpExtCommunityNumber ֠ Identifies one or more BGP community list
+	 numbers to be matched. This is list of BGP community list numbers
+	 separated by one or more spaces.
+
+	 matchInterfaces ֠Identifies the list of IfIndices that need to be matched
+	 in this Routemap. It means traffic from these interfaces will satisfy this
+	 match.  Value 0 matches to null0 interface.
+
+	 In NetIron, supported interfaces are ethernet, pos, ve, loopback and tunnel.
+	 Each IfIndex is a 32-bit integer in big endian order.
+	 One or more Interface IfIndices can be specified by separating each
+	 IfIndex by one or more spaces.
+
+	 matchIpv4AddressAclNames ֠Matches Ipv4 address of route.
+	 Identifies the list of Ipv4 standard or extended ACL names to be matched.
+	 The value is list of ACL names separated by one or more spaces.
+
+	 matchIpv4AddressAclNumbers ֠Matches Ipv4 address of route.
+	 Identifies the list of Ipv4 ACL numbers to be matched.
+	 The value is list of ACL numbers separated by one or more spaces.
+
+	 matchIpv4AddressPrefixList ֠Matches Ipv4 address of route.  Identifies
+	 the list of Ipv4 prefix-lists to be matched.
+	 The value is list of IPv4 prefix-list names separated by one or more spaces.
+
+	 matchIpv4NextHopAclNames ֠Matches next hop Ipv4 address of route.
+	 Identifies the list of Ipv4 standard or extended ACL names to be matched.
+	 The value is list of ACL names separated by one or more spaces.
+
+	 matchIpv4NextHopAclNumbers ֠ Matches next hop Ipv4 address of route.
+	 Identifies the list of Ipv4 ACL numbers to be matched.
+	 The value is list of ACL numbers separated by one or more spaces.
+
+	 matchIpv4NextHopPrefixList ֠Matches next hop Ipv4 address of route.
+	 Identifies the list of Ipv4 prefix-lists to be matched.
+	 The value is list of IPv4 prefix-list names separated by one or more spaces.
+
+	 matchIpv4RouteSourceAclNames ֠Matches advertising source Ipv4 address of
+	 route.Identifies the list of Ipv4 standard or extended ACL names to be matched.
+	 The value is list of ACL names separated by one or more spaces.
+
+	 matchIpv4RouteSourceAclNumbers ֠ Matches advertising source Ipv4
+	 address of route.Identifies the list of Ipv4 ACL numbers to be matched.
+	 The value is list of ACL numbers separated by one or more spaces.
+
+	 matchIpv4RouteSourcePrefixList ֠Matches advertising source Ipv4
+	 address of route.  Identifies the list of Ipv4 prefix-lists to be matched.
+	 The value is list of IPv4 prefix-list names separated by one or more spaces.
+
+	 matchIpv6AddressAclNames ֠Matches Ipv6 address of route.  Identifies
+	 the list of Ipv6 ACL names to be matched.  The value is list of ACL names
+	 separated by one or more spaces.
+
+	 matchIpv6AddressPrefixList ֠Matches Ipv6 address of route.  Identifies the
+	 list of Ipv6 prefix-lists to be matched.  The value is list of IPv6 prefix-list
+	 names separated by one or more spaces.
+
+	 matchIpv6NextHopPrefixList ֠Matches next hop Ipv6 address of route.
+	 Identifies the list of Ipv6 prefix-lists to be matched.  The value is
+	 list of IPv6 prefix-list names separated by one or more spaces.
+
+	 matchIpv6RouteSourcePrefixList ֠Matches advertising source Ipv6 address
+	 of route.  Identifies the list of Ipv6 prefix-lists to be matched.  The value
+	 is list of IPv6 prefix-list names separated by one or more spaces.
+
+	 matchMetric ֠Specifies the route metric to be used for the match.
+	 Value is string representation of the decimal metric value. Agent
+	 will do ascii to integer conversion before using this value.
+
+	 matchRoutingProtocol ֠Specifies the routing protocol to be used for
+	 the match.  Value is string representation of one of the following decimal
+	 values.  static-BGP(1), iBGP(2), eBGP(3), non-staticBGP(4), isisLevel1(5), isisLevel2(6),
+	 isis(7),rip(8),static(9).  The other values are not supported.  The agent will do ascii to
+	 integer conversion before using this value.
+
+	 matchRouteType ֠Specifies the route type to be used for the match.
+	 Value is string representation of one of the following decimal values.
+	 ospfExternalType1(2), ospfExternalType2(3), ospfInternal(4), isisLevel1(5),
+	 isisLevel2(6). The other values are not supported.  The agent will do ascii
+	 to integer conversion before using this value.
+
+	 matchTags ֠Specifies list of tag values to be matched (string
+	 representation of decimal values) Each tag value is separated by one
+	 or more spaces.  There cannot be more than 16 values."
+	::= {brcdRouteMapMatchEntry 3}
+
+brcdRouteMapMatchCliString	OBJECT-TYPE
+    SYNTAX     DisplayString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+	"This is read-only object. This object is for informative purpose only.
+	 For a pair of brcdRouteMapMatchType and brcdRouteMapMatchValue, this object
+	 represents equivalent CLI routemap match command."
+	::= {brcdRouteMapMatchEntry  4}
+
+brcdRouteMapMatchRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+         "Setting this object to createAndGo(4) results in addition of new row.
+	  Setting this object to destroy( 6)results in removal of a row.
+	  The value active(1) is returned for get and get-next requests.
+	  Other values in the enumeration are not used."
+    ::= { brcdRouteMapMatchEntry 5 }
+
+  --
+   -- RouteMap Set Clause Config Table for a given routemap.
+  --
+
+  brcdRouteMapSetTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF BrcdRouteMapSetEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "RouteMap Set Clause Config Table for a given routemap."
+    ::= { brcdRouteMapConfig 3 }
+
+  brcdRouteMapSetEntry OBJECT-TYPE
+    SYNTAX  BrcdRouteMapSetEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A row in this table represents a routemap set clause entry.
+	 Before creating an instance row in this table using a name, a
+	 corresponding entry with that name needs to be existing in the
+	 brcdRouteMapTable."
+	INDEX  {brcdRouteMapName,brcdRouteMapSequence, brcdRouteMapSetSequence, brcdRouteMapSetType  }
+    ::= { brcdRouteMapSetTable 1 }
+
+  BrcdRouteMapSetEntry ::= SEQUENCE {
+	brcdRouteMapSetSequence
+		Integer32,
+	brcdRouteMapSetType
+		INTEGER,
+	brcdRouteMapSetValue
+		DisplayString,
+	brcdRouteMapSetCliString
+		DisplayString,
+     brcdRouteMapSetRowStatus
+          RowStatus
+    }
+
+brcdRouteMapSetSequence	OBJECT-TYPE
+	SYNTAX	Integer32
+	MAX-ACCESS not-accessible
+	STATUS	current
+	DESCRIPTION
+		"This object identifies the position in this table where this
+		 match rule is added.  This is running integer.  If the
+		 brcdRouteMapSetRowStatus is createAndGo then the row is inserted
+		 if there is no match rule is present at brcdRouteMapSetIndex
+		 position.  If there is a rule present it should be of same kind.
+		 If not then the set request fails.  Application can obtain value
+		 for this object in the last row and use the next value to insert
+		a new row in this table."
+	::= { brcdRouteMapSetEntry 1}
+
+brcdRouteMapSetType	OBJECT-TYPE
+	SYNTAX	INTEGER {
+	setUnDefinedType(0),
+	setAsPath(1),
+	setAutomaticTag(2),
+        setDeleteCommunityList(3),
+        setCommunityNumber(4),
+        setCommunityFlag(5),
+        setDampening(6),
+        setDistance(7),
+        setExtCommunityRT(8),
+        setExtCommunityRTAdditive(9),
+        setExtCommunitySOO(10),
+        setOutputInterfaces(11),
+        setNextHopIpv4Addr(12),
+        setNextHopIpv4AddrWithPreserveVlan(13),
+        setNextHopIpv6Addr(14),
+        setNextHopIpv6AddrWithPreserveVlan(15),
+        setNextHopIpPeerAddr(16),
+        setIsisLevel(17),
+        setLocalPreference(18),
+        setMetricType(19),
+        setMetric(20),
+        setNextHopFloodVlan(21),
+        setNextHopFloodVlanPreserveVlan(22),
+	setNextHopFloodVlanOutgoingDa(23),
+        setNextHopIpTunnel(24),
+        setNextHopLsp(25),
+        setBgpOrigin(26),
+        setTag(27),
+        setWeight(28)
+}
+MAX-ACCESS  not-accessible
+STATUS	current
+DESCRIPTION
+	"A pair of brcdRouteMapSetType and brcdRouteMapSetValue objects
+	 specifies a particular set clause."
+		::= { brcdRouteMapSetEntry 2}
+
+brcdRouteMapSetValue OBJECT-TYPE
+	SYNTAX	DisplayString
+	MAX-ACCESS   read-create
+	STATUS	current
+	DESCRIPTION
+	 "This object specifies the value corresponding to the
+	 brcdRouteMapSetType.
+	 setAsPath ֠Identifies the prepend string for BGP AS path attribute.
+	 The value is the string representation of BGP AS number to be
+	 prepended with the AS Path.
+	 If the value specified is the string ҴagҠinstead of the AS path
+	 number then itwill set the tag as an AS path attribute.
+
+	 setAutomaticTag ֠Specifies that the routemap tag is to be computed
+	 automatically.  Value is string representation of a truth value 1.
+	 This object will not be present if it is not configured. Truth value
+	 of 0 can be used to mark its deletion. 
+
+	 setDeleteCommunityList ֠Specifies the name of the BGP community
+	 List to be set for deletion.
+
+	 setCommunityNumber ֠Specifies the BGP community number to be added.
+	 Format is either ӁA:NNҠor '<community number>'.
+
+	 setCommunityFlag ֠This value relates to setCommunityNumber.  It
+	 specifies that the BGP community in setCommunityNumber have the
+	 following behavior noExport(1),noAdvertise(2), localAs(3),additive(4).
+	 The value is string representation of one of the above decimal values.
+	 For additive(4), the value is followed by the community number in either
+         'AA:NN' or <community number> format.
+
+	 setDampening ֠It consists of four values separated by space.
+         The first value specifies the string representation of decimal value
+         for BGP route flap dampening. It should be enabled with half-time in
+         minutes for the penalty.  Default value is 15 minutes. Valid range is
+         1-45.
+         The second value relates to the 1st value and specifies the string
+         representation of the value to start reusing a BGP route.  Default is
+         750, with each flap penalty as 1000. Valid range is 1-20000.
+         The third value relates to the 1st value and specifies the string
+         representation of value to start suppressing a BGP route. Default
+         is 2000, with each flap penalty as 1000. Valid range is 1-20000.
+         The Fourth value relates to the 1st value and specifies the string
+         representation of maximum duration in minutes to suppress a stable
+         route. Default is 40. Valid range is 1-255.
+         If a value is not provided then the default value will be picked up.
+
+	 setDistance ֠Specifies the string representation of admin distance to
+	 be set for matching OSPF routes.
+
+	 setExtCommunityRT ֠Specifies one or more (separated by space)  VPN
+	 extended community attributes.  Each VPN community is of format ҁSN:nnҮ
+
+	 setExtCommunityRTAdditive ֠This object is related to earlier object
+	 setExtCommunityRT.  It specifies that the VPN communities in earlier
+	 should be added to the existing extended community. 
+
+	 setExtCommunitySOO ֠Specifies site-of-origin VPN extended community attributes. The VPN community is
+	 of format ҁSN:nnҮ
+
+	 setOutputInterfaces ֠Identifies the list of output IfIndices.
+	 Value 0 matches to null0 interface.  Each IfIndex is a 32-bit integer in
+	 big endian order.  One or more Interface IfIndices can be specified by
+	 separating each IfIndex by one or more spaces.  If the ifIndex is not
+	 null0 then the preserve-vlan flag is mandatory and which is always
+	 implicitly set.
+
+	 setNextHopIpv4Addr ֠Identifies the string representation of the next
+	 hop ipv4 address without preserve vlan flag.
+
+	 setNextHopIpv4AddrWithPreserveVlan ֠Identifies the string
+	 representation of the next hop ipv4 address with preserve vlan flag.
+
+	setNextHopIpv6Addr ֠Identifies the string representation of the next
+	 hop ipv6 address without preserve vlan flag.
+
+	 setNextHopIpv6AddrWithPreserveVlan ֠Identifies the string representation
+	 of the next hop ipv6 address with preserve vlan flag.
+
+	 setNextHopIpPeerAddr ֠The value is string representation of truth value.
+	 Identifies that the next hop is BGP IPv4 peer address. When set to Ѱҍ
+	 this object is deleted.
+
+	 setIsisLevel ֠Identifies the level to which the ISIS route to import.
+	 The value is string representation of one of the following decimal values,
+	 level1(1), level2(2) level1or2(3).
+
+	 setLocalPreference ֠Identifies the BGP local preference path attribute
+	 value to be set.  The value is string representation of the decimal
+	 preference value.
+
+	 setMetricType ֠Specifies the route metric type for the destination
+	 routing protocol.  Value is string representation of one of the
+	 following internal(1), external(2), type1(3), type2(4).
+
+	 setMetric ֠Specifies the metric value set for the destination routing
+	 protocol.  Value is string representation of the following:
+	 <n>: Metric value
+	+<n>: Add <n> to metric
+	-<n>: Subtract <n> to metric
+	None: remove metric value
+
+	 setNextHopFloodVlan ֠Specifies the next hop vlan without preserve vlan
+	 to be set.  Value is string representation of vlan Id (1-4090)
+
+	setNextHopFloodVlanPreserveVlan ֠Specifies the next hop vlan with preserve
+	vlan to be set.  Value is string representation of vlan Id (1-4090)
+
+	setNextHopFloodVlanOutgoingDa ֠Specifies the next hop vlan with outgoing
+	destination address flag set. Value is string representation of vlan id (1-4090) 
+	followed with MAC address.
+
+	setNextHopIpTunnel ֠ Specifies the next hop IP tunnel, it can only be
+	configured for configured GRE tunnels.  The value is string representation
+	of decimal tunnel ID
+
+	setNextHopLsp ֠Specifies the next hop LSP name.
+
+	setBgpOrigin ֠Specifies the BGP origin code.  The value is string
+	representation of one the following decimal value, igp(1), incomplete(2)
+
+	setTag ֠Specifies the string representation of the decimal tag value
+	for the destination routing protocol.
+
+	setWeight ֠Specifies the string representation of the decimal value for
+	BGP weight for the routing table."
+	::= { brcdRouteMapSetEntry 3}
+
+brcdRouteMapSetCliString	OBJECT-TYPE
+SYNTAX	DisplayString
+MAX-ACCESS read-only
+STATUS	current
+DESCRIPTION
+	"This is read-only object. This object is for informative purpose only.
+	 For a pair of brcdRouteMapSetType and brcdRouteMapSetValue, this object
+	 represents equivalent CLI routemap set command."
+	::= {brcdRouteMapSetEntry 4}
+
+brcdRouteMapSetRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+         "Setting this object to createAndGo(4) results in addition of new row.
+	  Setting this object to destroy( 6)results in removal of a row. The
+	  value active(1) is returned for get and get-next requests. Other
+	  values in the enumeration are not used."
+    ::= { brcdRouteMapSetEntry 5 }
+
+  --
+   -- RouteMap Bind Configuration Table
+  --
+-- ip policy route-map <name>
+
+brcdRouteMapBindTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF BrcdRouteMapBindEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "This table contains the bindings for routemap entries to interfaces.
+        Only one route map can be bounded to a given interface. Attempting
+        to bind a second routemap to the same interface will return an error."
+    ::= { brcdRouteMapConfig 4 }
+
+  brcdRouteMapBindEntry OBJECT-TYPE
+    SYNTAX  BrcdRouteMapBindEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A row in this table represents a binding of a routemap to one interface."
+    INDEX  { brcdRouteMapBindIfIndex, brcdRouteMapBindIpType }
+    ::= { brcdRouteMapBindTable 1 }
+
+  BrcdRouteMapBindEntry ::= SEQUENCE {
+      brcdRouteMapBindIfIndex
+          InterfaceIndex,
+	 brcdRouteMapBindIpType
+		InetAddressType,
+      brcdRouteMapBindMapName
+          DisplayString,
+      brcdRouteMapBindRowStatus
+          RowStatus
+    }
+
+  brcdRouteMapBindIfIndex OBJECT-TYPE
+    SYNTAX  InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the interface to bind a routemap.
+        The interface can only be of type physical or virtual."
+    ::= { brcdRouteMapBindEntry 1 }
+
+      brcdRouteMapBindIpType	OBJECT-TYPE
+	SYNTAX	InetAddressType
+	MAX-ACCESS  not-accessible
+	STATUS	current
+	DESCRIPTION
+	"Identifies the IP type for the bind.  Route map can be
+	 bound only to ipv4 or ipv6 policy."
+	::= {brcdRouteMapBindEntry 2}
+
+   brcdRouteMapBindMapName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-create
+    STATUS  current
+    DESCRIPTION
+        "Identifies the route map name.
+         In NetIron, the name can have max 80 characters."
+
+    ::= { brcdRouteMapBindEntry 3 }
+
+brcdRouteMapBindRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+         "Setting this object to createAndGo(4) results in addition
+           of new row. Setting this object to destroy( 6)results in
+           removal of a row. The value active(1) is returned for
+           get and get-next requests.
+           Other values in the enumeration are not used. Once created,
+           a row cannot be modified"
+    ::= { brcdRouteMapBindEntry 4 }
+
+  --
+   -- RouteMap Show Rule Table
+  --
+-- show telemetry route-map [rule-name]
+
+  brcdRMapRuleDisplayTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF BrcdRMapRuleDisplayEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "This table contains the various route map rule entries.
+        A routemap rule instance (map and sequence number) can
+        have only one rule name. The same rule name could be
+        applied to multiple routemaps"
+    ::= { brcdRouteMapShow 1 }
+
+  brcdRMapRuleDisplayEntry OBJECT-TYPE
+    SYNTAX  BrcdRMapRuleDisplayEntry
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A row in this table represents a route map rule entry."
+    INDEX  { brcdRMapRuleDisplayRuleName,
+             brcdRMapRuleDisplayRouteMapName,
+             brcdRMapRuleDisplaySequence,
+             brcdRMapRuleDisplayIpType
+           }
+    ::= { brcdRMapRuleDisplayTable 1 }
+
+  BrcdRMapRuleDisplayEntry ::= SEQUENCE {
+      brcdRMapRuleDisplayRuleName
+          DisplayString,
+      brcdRMapRuleDisplayRouteMapName
+          DisplayString,
+      brcdRMapRuleDisplaySequence
+          Unsigned32,
+      brcdRMapRuleDisplayIpType
+          InetAddressType,
+      brcdRMapRuleDisplayInputInterfaceList
+          DisplayString,
+      brcdRMapRuleDisplayAclMatchFilter
+          DisplayString,
+      brcdRMapRuleDisplayOutputVlan
+          DisplayString,
+      brcdRMapRuleDisplayOutputPort
+          DisplayString,
+      brcdRMapRuleDisplayOutputIPAddress
+	  DisplayString
+    }
+
+  brcdRMapRuleDisplayRuleName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the rule name."
+    ::= { brcdRMapRuleDisplayEntry 1 }
+
+  brcdRMapRuleDisplayRouteMapName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the route map that has this rule."
+    ::= { brcdRMapRuleDisplayEntry 2 }
+
+  brcdRMapRuleDisplaySequence OBJECT-TYPE
+    SYNTAX  Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Identifies the instance sequence number."
+    ::= { brcdRMapRuleDisplayEntry 3 }
+
+  brcdRMapRuleDisplayIpType	OBJECT-TYPE
+	SYNTAX	InetAddressType
+	MAX-ACCESS  not-accessible
+	STATUS	current
+	DESCRIPTION
+	    "Identifies the IP type for the Rule Display (1(ipv4), or 2(ipv6)).
+	    A row is present if the corresponding ipv4 or ipv6 AclMatchFilter
+	    is present."
+    ::= { brcdRMapRuleDisplayEntry 4 }
+
+  brcdRMapRuleDisplayInputInterfaceList OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "A list of space separated interface indices which are the
+         port membership of this rule. An * here means the path is
+         configured but disabled."
+    ::= { brcdRMapRuleDisplayEntry 5 }
+
+  brcdRMapRuleDisplayAclMatchFilter OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+        "The list of space separated ACL match filters name or number used
+         in this rule."
+    ::= { brcdRMapRuleDisplayEntry 6 }
+
+  brcdRMapRuleDisplayOutputVlan OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+        "Identifies the next-hop-flood VLAN selected (by the interface
+        card). Empty string will be returned if there is no value."
+    ::= { brcdRMapRuleDisplayEntry 7 }
+
+brcdRMapRuleDisplayOutputPort OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "A list of space separated egress interfaces selected (by the interface card).
+         Empty string will be returned if there is no value."
+    ::= { brcdRMapRuleDisplayEntry 8 }
+
+
+brcdRMapRuleDisplayOutputIPAddress OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+        "A list of space separated selected IPv4 next-hop or
+	 IPv6 next-hop address.Empty string will be returned if there is no value."
+    ::= { brcdRMapRuleDisplayEntry 9 }
+END

@@ -10,10 +10,12 @@ IMPORTS
 	InterfaceIndex, ifIndex, InterfaceIndexOrZero
 		FROM IF-MIB
 	TruthValue,TEXTUAL-CONVENTION
-		FROM SNMPv2-TC;
+		FROM SNMPv2-TC
+	EnabledStatus
+		FROM P-BRIDGE-MIB;
 
 snSwitch MODULE-IDENTITY
-    LAST-UPDATED "201006020000Z"  -- 04 June 2010
+    LAST-UPDATED "201310250000Z"  -- 25 October 2013
     ORGANIZATION "Brocade Communications Systems, Inc."
     CONTACT-INFO
              "Technical Support Center
@@ -34,6 +36,10 @@ snSwitch MODULE-IDENTITY
               no warranty, either express or implied, as to the use,
               operation, condition, or performance of the specification, and any unintended
               consequence it may on the user environment."
+
+    REVISION        "201310250000Z"  -- 25 October 2013
+    DESCRIPTION
+        "Changed the DESCRIPTION field of snSwIfInfoMonitorMode object."
 
     REVISION        "201006020000Z"  -- 04 June 2010
     DESCRIPTION
@@ -232,7 +238,7 @@ FdryVlanIdOrNoneTC ::= TEXTUAL-CONVENTION
 			Note that a MIB object that is defined using this
 			TEXTUAL-CONVENTION should clarify the meaning of
 			'no VLAN' (i.e., the special value 0)."
-		SYNTAX       Integer32 (0 | 1..4094)
+		SYNTAX       Integer32 (0 | 1..4095)
 
 BrcdVlanIdTC ::= TEXTUAL-CONVENTION
 		DISPLAY-HINT "d"
@@ -240,6 +246,14 @@ BrcdVlanIdTC ::= TEXTUAL-CONVENTION
 		DESCRIPTION
 			"The VLAN-ID that uniquely identifies a specific VLAN."
 		SYNTAX       Integer32 (1..4090)
+
+BrcdVlanIdOrNoneTC ::= TEXTUAL-CONVENTION
+		DISPLAY-HINT "d"
+		STATUS       current
+		DESCRIPTION
+			"The VLAN-ID that uniquely identifies a specific VLAN
+                         or to no VLAN."
+		SYNTAX       Integer32 (0 | 1..4090)
 
 PortQosTC ::= TEXTUAL-CONVENTION
    STATUS      current
@@ -317,6 +331,10 @@ fdryDaiMIB				OBJECT IDENTIFIER ::= { snSwitch 35 }
 fdryDhcpSnoopMIB			OBJECT IDENTIFIER ::= { snSwitch 36 }
 fdryIpSrcGuardMIB			OBJECT IDENTIFIER ::= { snSwitch 37 }
 -- snSwitch 38 used for brcdDot1xAuth MIB
+--brcdDot1xAuth			OBJECT IDENTIFIER ::= { snSwitch 38 }
+brcdRouteMap				OBJECT IDENTIFIER ::= { snSwitch 39 }
+brcdSPXMIB				OBJECT IDENTIFIER ::= { snSwitch 40 }
+
 
 -- SECTION 2: Switch Group Configuration MIBs
 
@@ -388,7 +406,11 @@ snSwGroupSwitchAgeTime OBJECT-TYPE
 	MAX-ACCESS  read-write
 	STATUS  current
 	DESCRIPTION
-		"The Switch Age time is 180sec by default.
+		"For FastIron: Sets the aging period for ports on the device, defining how long a port
+		address remains active in the address table.
+		Valid values: 0 = no aging, or 67 - 65535 seconds
+		Default: 300 seconds.
+		For NetIron: The Switch Age time is 180sec by default.
 		 The configured range is 10 to 10,000sec.  The time
 		 represents the time span to age out an MAC Address
 		 entry."
@@ -764,7 +786,8 @@ snSwBroadcastLimit OBJECT-TYPE
 		"Limit the number of broadcast packets to forward out of the
 		switch ports. This object specifies the number of broadcast
 		packets per second. Setting a value of 0 to this object
-		disables the limitation check."
+		disables the limitation check. This object is deprecated by
+		snSwBroadcastLimit2 on NI platform."
 	DEFVAL { 0 }
 	::= { snSwInfo 35 }
 
@@ -822,7 +845,8 @@ snSwQosMechanism OBJECT-TYPE
 	STATUS	current
 	DESCRIPTION
 		"Indicates whether the qos mechanism is
-		 strict or weighted."
+		 strict or weighted. This object is not
+		 supported on NI platform."
 	DEFVAL { weighted }
 	::= { snSwInfo 40 }
 
@@ -878,6 +902,16 @@ snSwSingleStpVLanId OBJECT-TYPE
 		Single Spanning Tree was disabled."
 	::= { snSwInfo 44 }
 
+snSwBroadcastLimit2 OBJECT-TYPE
+	SYNTAX  Unsigned32
+	MAX-ACCESS  read-write
+	STATUS  current
+	DESCRIPTION
+		"Limit the number of broadcast packets to forward out of the
+		switch ports. This object specifies the number of broadcast
+		packets per second."
+	DEFVAL { 4294967295 }
+	::= { snSwInfo 45 } 
 
 -- VLAN Layer 2 Switch VLAN By Port Information Table
 
@@ -1522,7 +1556,9 @@ SnVLanByPortCfgEntry ::= SEQUENCE {
 	snVLanByPortCfgStpVersion
 		INTEGER,
 	snVLanByPortCfgInOctets
-		Counter64
+		Counter64,
+	snVLanByPortCfgTransparentHwFlooding
+		INTEGER
 	}
 
 snVLanByPortCfgVLanId OBJECT-TYPE
@@ -1592,7 +1628,7 @@ snVLanByPortCfgStpGroupMaxAge OBJECT-TYPE
 	 An agent may return a badValue error if a set is
 	 attempted to a value which is not a whole number
 	 of seconds.
-	   Valid value betweek 6 and 40. Default is 20 seconds.
+	   Valid value between 6 and 40. Default is 20 seconds.
 	 Value 0 is returned if no STP is not configured for this vlan."
 		::= { snVLanByPortCfgEntry 5 }
 
@@ -1608,7 +1644,7 @@ snVLanByPortCfgStpGroupHelloTime OBJECT-TYPE
 	 1990 to be 1 second.  An agent may return a
 	 badValue error if a set is attempted to a value
 	 which is not a whole number of seconds.
-	   Valid value betweek 1 and 10. Default is 2 seconds.
+	   Valid value between 1 and 10. Default is 2 seconds.
 	 Value 0 is returned if no STP is not configured for this vlan."
 	::= { snVLanByPortCfgEntry 6 }
 
@@ -1627,7 +1663,7 @@ snVLanByPortCfgStpGroupForwardDelay OBJECT-TYPE
 	 An agent may return a badValue error if a set is
 	 attempted to a value which is not a whole number
 	 of seconds.
-	   Valid value betweek 2 and 30. Default is 15 seconds.
+	   Valid value between 2 and 30. Default is 15 seconds.
 	 Value 0 is returned if no STP is not configured for this vlan."
 	::= { snVLanByPortCfgEntry 7 }
 
@@ -1865,6 +1901,14 @@ snVLanByPortCfgInOctets OBJECT-TYPE
 		 couter, if there is one-to-one map for VLAN-VE."
 	::= { snVLanByPortCfgEntry 25 }
 
+snVLanByPortCfgTransparentHwFlooding OBJECT-TYPE
+	SYNTAX  INTEGER { disabled(0), enabled(1) }
+	MAX-ACCESS  read-write
+	STATUS  current
+	DESCRIPTION
+		"Specifies the transparent VLAN flooding feature."
+	DEFVAL  { disabled }
+	::= { snVLanByPortCfgEntry 26 }
 
 --
 --
@@ -1874,9 +1918,10 @@ brcdVlanExtStatsTable OBJECT-TYPE
 	MAX-ACCESS  not-accessible
 	STATUS  current
 	DESCRIPTION
-		"This table contains the extended statistics for VLAN ports of G2 cards.
-		 These applies to L2 VLANs and as well as port VLANs that are associated to
- 		 IP interfaces (physical or VE)."
+		"This table contains the extended statistics for VLAN ports of G2 and 
+		 later modules. Not applicable for G1 cards. 
+		 These applies to L2 VLANs and as well as port VLANs that are 
+		 associated to IP interfaces (physical or VE)."
 	::= { snVLanInfo 8 }
 
 brcdVlanExtStatsEntry OBJECT-TYPE
@@ -3175,7 +3220,8 @@ snSwPortInfoSpeed OBJECT-TYPE
 		s2488M(9),
 		s9953M(10),
 		s16G(11),
-		s40G(13)
+		s40G(13),
+		s2500M(14)
 		}
 	MAX-ACCESS  read-write
 	STATUS  deprecated
@@ -3194,6 +3240,7 @@ snSwPortInfoSpeed OBJECT-TYPE
 		  s9953M(10).......OC192 - 9.953Gbits per second
 		  s16G(11)..........16Gbits per second.
 		  s40G(13)..........40Gbits per second.
+		  s2500M(14)..........2.5Gbits per second.
 
 		 The read-back hardware status are the following:
 		  none(0)..........link down or no traffic.
@@ -3208,6 +3255,7 @@ snSwPortInfoSpeed OBJECT-TYPE
 		  s9953M(10).......OC192 - 9.953Gbits per second
 		  s16G(11)..........16Gbits per second.
 		  s40G(13)..........40Gbits per second.
+		  s2500M(14)..........2.5Gbits per second.
 
 		The port media type (expansion or regular)
 		and port link type (trunk or feeder) determine
@@ -3239,7 +3287,11 @@ snSwPortInfoMediaType OBJECT-TYPE
 		m10000BaseFX(12),
 		m9953POS(13),
 		m16GStacking(14),
-		m40GStacking(16)
+		m100GBaseFX(15),
+		m40GStacking(16),
+        m40GBaseFX(17),
+        m10000BaseTX(18),
+		m2500BaseTX(19)
 		}
 	MAX-ACCESS  read-only
 	STATUS  deprecated
@@ -3712,6 +3764,7 @@ snSwPortInfoGigType OBJECT-TYPE
 		  sfpCWDM1590nm100Km(23)....1Gbits per second CWDM fiber, with a wavelength 1590nm, reach 100 kms.
 		  sfpCWDM1610nm100Km(24)....1Gbits per second CWDM fiber, with a wavelength 1610nm, reach 100 kms.
 		  m1000BaseLHX(25)...1Gbits per second fiber, with a special wavelength transceiver (150km).
+		  m2500BaseTX(50)...2.5GBASE fiber.
 		  notApplicable(255)....a non-gigabit port."
 	::= { snSwPortInfoEntry 36 }
 
@@ -4193,7 +4246,13 @@ SnSwIfInfoEntry ::= SEQUENCE {
 	snSwIfInfoMirrorMode
 		INTEGER,
 	snSwIfMacLearningDisable
-		TruthValue
+		TruthValue,
+	snSwIfInfoL2FowardEnable
+		INTEGER,
+	snSwIfInfoAllowAllVlan
+		TruthValue,
+	snSwIfInfoNativeMacAddress
+		PhysAddress
 	}
 
 snSwIfInfoPortNum OBJECT-TYPE
@@ -4214,8 +4273,10 @@ snSwIfInfoMonitorMode OBJECT-TYPE
 	MAX-ACCESS  read-write
 	STATUS  deprecated
 	DESCRIPTION
-		"DEPRECATED by snSwIf2MirrorMode and
-		snPortMonitorTable."
+		"For FastIron platforms, this object is DEPRECATED by
+		 snSwIf2MirrorMode and snPortMonitorTable.
+		 For NetIron platforms, this object is DEPRECATED by
+		 snPortMonitorTable."
 	::= { snSwIfInfoEntry 2 }
 
 snSwIfInfoMirrorPorts OBJECT-TYPE
@@ -4297,7 +4358,8 @@ snSwIfInfoSpeed OBJECT-TYPE
 				s9953M(10),
 				s16G(11),
 				s100G(12),
-				s40G(13)
+				s40G(13),
+				s2500M(14)
 			}
 	MAX-ACCESS  read-write
 	STATUS  current
@@ -4316,8 +4378,10 @@ snSwIfInfoSpeed OBJECT-TYPE
 		  s9953M(10).......OC192 - 9.953Gbits per second
 		  s16G(11)..........16Gbits per second.
 		  s40G(13)..........40Gbits per second.
+		  s2500M(14)..........2.5Gbits per second.
 
 		 The read-back hardware status are the following:
+		  none(0)..........link down or no traffic.
 		  s10M(2)..........10Mbits per second.
 		  s100M(3).........100Mbits per second.
 		  s1G(4)...........1Gbits per second.
@@ -4329,6 +4393,7 @@ snSwIfInfoSpeed OBJECT-TYPE
 		  s9953M(10).......OC192 - 9.953Gbits per second
 		  s16G(11)..........16Gbits per second.
 		  s40G(13)..........40Gbits per second.
+		  s2500M(14)..........2.5Gbits per second.
 
 		The port media type (expansion or regular)
 		and port link type (trunk or feeder) determine
@@ -4359,7 +4424,10 @@ snSwIfInfoMediaType OBJECT-TYPE
 				m9953POS(13),
 				m16GStacking(14),
 				m100GBaseFX(15),
-				m40GStacking(16)
+				m40GStacking(16),
+				m40GBaseFX(17),
+				m10000BaseTX(18),
+				m2500BaseTX(19)
 			}
 	MAX-ACCESS  read-only
 	STATUS  current
@@ -4380,14 +4448,18 @@ snSwIfInfoMediaType OBJECT-TYPE
 		  m10000BaseFX(12).10Gbits per second fiber.
 		  m9953POS(13).....9953Mbits per second (POS).
 		  m16GStacking(14)...16Gbits per second fiber.
-		  m40GStacking(16). 40Gbits per second fiber."
+		  m40GStacking(16). 40Gbits per second fiber.
+		  m40GBaseFX(17)....40Gbits per second fiber.
+		  m10000BaseTX(18)..10Gbits per second copper.
+		  m2500BaseTX(19). 2.5Gbits per second fiber."
 	::= { snSwIfInfoEntry 8 }
 
 snSwIfInfoConnectorType OBJECT-TYPE
 	SYNTAX  INTEGER {
 				other(1),
 				copper(2),
-				fiber(3)
+				fiber(3),
+				both(4)
 			}
 	MAX-ACCESS  read-only
 	STATUS  current
@@ -4397,6 +4469,7 @@ snSwIfInfoConnectorType OBJECT-TYPE
 		  other(1)...........other or unknown connector
 		  copper(2)..........Copper connector
 		  fiber(3)...........Fiber connector
+		  both(4)............Supports both Copper and Fiber
 		 This describes the physical connector type"
 	::= { snSwIfInfoEntry 9 }
 
@@ -4598,6 +4671,8 @@ snSwIfInfoGigType OBJECT-TYPE
 				mXFP10000BaseSRSW(46),
 				mXFP10000BaseLRLW(47),
 				mXFP10000BaseEREW(48),
+				m10000BaseT(49),
+				m2500BaseTX(50),
 				m1000BaseGBXU(127),
 				m1000BaseGBXD(128),
 				m1000BaseFBX(129),
@@ -4620,6 +4695,15 @@ snSwIfInfoGigType OBJECT-TYPE
 				mCFP100GBaseER4(147),
 				mCFP100GBase10x10g2Km(148),
 				mCFP100GBase10x10g10Km(149),
+				qSFP40000BaseSR4(150),
+				qSFP40000Base10KmLR4(151),
+				mXFP10000BaseUSR(152),
+				mXFP10000BaseTwinax(153),
+				mCFP2-100GBaseSR10(154),
+				mCFP2-100GBaseLR4(155),
+				mCFP2-100GBaseER4(156),
+				mCFP2-100GBase10x10g2Km(157),
+				mCFP2-100GBase10x10g10Km(158),
 				notApplicable(255)
 			}
 	MAX-ACCESS  read-only
@@ -4666,11 +4750,20 @@ snSwIfInfoGigType OBJECT-TYPE
 		  mXFP10000BaseSRSW(46)...same as .mXFP10000BaseSR(36)
 		  mXFP10000BaseLRLW(47)...same as .mXFP10000BaseLR(37)
 		  mXFP10000BaseEREW(48)...same as mXFP10000BaseER(38).
+		  m10000BaseT(49)...10GBASE fiber.
+		  m2500BaseTX(50)...2.5GBASE fiber.
 		  mCFP100GBaseSR10(145)... 100GbE CFP optic (MPO 2x12), SR10, for distances up to 100m over MMF.
 		  mCFP100GBaseLR4(146)... 100GbE CFP optic (SC), LR4, for distances up to 10 km over SMF.
 		  mCFP100GBaseER4(147)... 100GbE CFP optic, ER4, for distances up to 40 km over SMF.
 		  mCFP100GBase10x10g2Km(148)... 100GbE CFP optic (LC), 10x10, for distances up to 2 km over SMF.
 		  mCFP100GBase10x10g10Km(149)... 100GbE CFP optic (LC), 10x10, for distances up to 10 km over SMF.
+		  mXFP10000BaseUSR(152)... 10 Gbps Ultra-Short Range (USR) 100m Ethernet optical transceiver.
+		  mXFP10000BaseTwinax(153)... 10Gbps Active copper twinax cables.
+		  mCFP2-100GBaseSR10(154)... 100GbE CFP2 optic (MPO 2x12), SR10, for distances up to 100m over MMF.
+		  mCFP2-100GBaseLR4(155)... 100GbE CFP2 optic (SC), LR4, for distances up to 10 km over SMF.
+		  mCFP2-100GBaseER4(156)... 100GbE CFP2 optic, ER4, for distances up to 40 km over SMF.
+		  mCFP2-100GBase10x10g2Km(157)... 100GbE CFP2 optic (LC), 10x10, for distances up to 2 km over SMF.
+		  mCFP2-100GBase10x10g10Km(158)... 100GbE CFP2 optic (LC), 10x10, for distances up to 10 km over SMF.
 		  notApplicable(255)....a non-gigabit port."
 	::= { snSwIfInfoEntry 21 }
 
@@ -5101,7 +5194,44 @@ snSwIfMacLearningDisable OBJECT-TYPE
 		  { false }
 	 ::= { snSwIfInfoEntry 59 }
 
+snSwIfInfoL2FowardEnable OBJECT-TYPE
+    SYNTAX  INTEGER {
+		   enabled(1),
+		   disabled(2),
+		   globalConfig(3)
+			 }
+   MAX-ACCESS  read-write
+   STATUS  current
+   DESCRIPTION
+       "The status of cluster L2 forward feature on an ethernet port.
+        When this object is set to disable, the STP protocol packets
+        coming on the MCT VLANs are dropped.
 
+        The snSwIfInfoL2FowardEnable has more preference than brcdMctL2Forward
+        for this interface when set with enable(1) or disable(2). When set to 
+        globalConfig(3) the status of brcdMctL2Forward object applies for this
+        interface."
+   DEFVAL { globalConfig }
+   ::= { snSwIfInfoEntry 60 }
+
+snSwIfInfoAllowAllVlan  OBJECT-TYPE
+	SYNTAX  TruthValue
+	MAX-ACCESS read-write
+	STATUS   current
+	DESCRIPTION
+		"Specifies allowing all vlan packets for pbr"
+	DEFVAL { false }
+	::= { snSwIfInfoEntry 61 }
+
+snSwIfInfoNativeMacAddress OBJECT-TYPE
+	SYNTAX  PhysAddress
+	MAX-ACCESS  read-only
+	STATUS  current
+	DESCRIPTION
+		"The port native MAC address. The native MAC address 
+		represents the switch port."
+	::= { snSwIfInfoEntry 62 }
+	
 -- Interface ID Registration Group
 
 snInterfaceId OBJECT IDENTIFIER				::= { snSwPortInfo 2 }
@@ -5477,7 +5607,7 @@ snIfMediaSerialNumber  OBJECT-TYPE
 		  "The vendor serial number of the media device."
 	 ::= { snIfMediaInfoEntry 5 }
 
--- Optical Parameters Table per lane for a 100G LR4 and LR10 optic.
+-- Optical Parameters Table per lane for a 40G SR4 and LR4, 100G LR4 and LR10 optics.
 
 snIfOpticalLaneMonitoringTable  OBJECT-TYPE
 	 SYNTAX      SEQUENCE OF SnIfOpticalLaneMonitoringEntry
@@ -5485,8 +5615,9 @@ snIfOpticalLaneMonitoringTable  OBJECT-TYPE
 	 STATUS      current
 	 DESCRIPTION
 		  "This table lists the instrumented parameters of all
-		  lanes within a 100G optic of type LR4 and LR10.
-		  LR4 has 4 lanes per optic, LR10 has 10 lanes per optic."
+		  lanes within a 40G Optic of type SR4 and LR4,
+		  100G optic of type LR4 and LR10. LR4 and SR4 have 4 lanes
+		  per optic, LR10 has 10 lanes per optic."
 	 REFERENCE
 		  "ITU recommendations G.783, G.784, G.953"
 	::= { snSwPortInfo 10 }
@@ -5521,8 +5652,9 @@ snIfOpticalLaneMonitoringLane  OBJECT-TYPE
 	  MAX-ACCESS    not-accessible
 	  STATUS    current
 	  DESCRIPTION
-		   "The lane number of this 100G optic. LR4 has 4, and LR10 has
-			10 lanes."
+		   "The lane number of this 40G or 100G optic.
+		    LR4 and SR4 have 4 lanes per optic. LR10 has
+                    10 lanes per optic."
 	::= { snIfOpticalLaneMonitoringEntry 1 }
 
 snIfOpticalLaneMonitoringTemperature  OBJECT-TYPE
@@ -5570,6 +5702,92 @@ snIfOpticalLaneMonitoringTxBiasCurrent  OBJECT-TYPE
 		   by whether this is a normal value, or high/low warning or
 		   alarm."
 	 ::= { snIfOpticalLaneMonitoringEntry 5 }
+
+
+--
+-- Show egress port counter information
+-- The egress counters of all queues given a particular port.
+--
+
+brcdIfEgressCounterInfoTable  OBJECT-TYPE
+	 SYNTAX      SEQUENCE OF BrcdIfEgressCounterInfoEntry
+	 MAX-ACCESS      not-accessible
+	 STATUS      current
+	 DESCRIPTION
+		  "This table lists the information of egress counters of 
+		   all the queues in the physical ports."
+		::= { snSwPortInfo 11 }
+
+brcdIfEgressCounterInfoEntry  OBJECT-TYPE
+	 SYNTAX      BrcdIfEgressCounterInfoEntry
+	 MAX-ACCESS      not-accessible
+	 STATUS      current
+	 DESCRIPTION
+		  "An entry in the Interface Egress Counter Information table. 
+		   The ifIndices of ethernet interfaces and the queue number will 
+		   be used to index this table."
+	 INDEX       { brcdIfEgressCounterIfIndex, brcdIfEgressCounterQueueId }
+	 ::= { brcdIfEgressCounterInfoTable 1 }
+
+BrcdIfEgressCounterInfoEntry ::=
+	 SEQUENCE  {
+	     brcdIfEgressCounterIfIndex
+			   InterfaceIndex,
+		 brcdIfEgressCounterQueueId
+			   INTEGER,
+		 brcdIfEgressCounterType
+			   INTEGER,
+		 brcdIfEgressCounterPkts
+			   Counter64,
+		 brcdIfEgressCounterDropPkts
+			   Counter64
+	 }
+
+brcdIfEgressCounterIfIndex  OBJECT-TYPE
+	 SYNTAX       InterfaceIndex
+	 MAX-ACCESS   not-accessible
+	 STATUS       current
+	 DESCRIPTION
+		  "The port number of egress counter in the physical port. The port/interface index (ifindex)." 
+	 ::= { brcdIfEgressCounterInfoEntry 1 }
+
+brcdIfEgressCounterQueueId  OBJECT-TYPE
+	 SYNTAX       INTEGER
+	 MAX-ACCESS   not-accessible
+	 STATUS       current
+	 DESCRIPTION
+		  "The queue number of egress counter in the given port." 
+	 ::= { brcdIfEgressCounterInfoEntry 2 }
+
+brcdIfEgressCounterType  OBJECT-TYPE
+	 SYNTAX  INTEGER {
+				other(1),
+				unicast(2),
+				multicast(3)
+			}
+	 MAX-ACCESS   read-only
+	 STATUS       current
+	 DESCRIPTION
+		  "The queue type of the egress counter in a given port."
+	 ::= { brcdIfEgressCounterInfoEntry 3 }
+
+brcdIfEgressCounterPkts  OBJECT-TYPE
+	 SYNTAX       Counter64
+	 MAX-ACCESS   read-only
+	 STATUS       current
+	 DESCRIPTION
+		  "The egress packet counters of the queue in a given port."
+	 ::= { brcdIfEgressCounterInfoEntry 4 }
+
+brcdIfEgressCounterDropPkts  OBJECT-TYPE
+	 SYNTAX       Counter64
+	 MAX-ACCESS   read-only
+	 STATUS       current
+	 DESCRIPTION
+		  "The egress dropped packet counters of the queue in a given port."
+
+	 ::= { brcdIfEgressCounterInfoEntry 5 }
+	 
 
 --      Forwarding Database Group
 --
@@ -6138,7 +6356,10 @@ snIfStpOperState OBJECT-TYPE
 	MAX-ACCESS  read-only
 	STATUS  current
 	DESCRIPTION
-		"By default, this mode is set to notActivated(0).
+		"For FastIron: By default, this mode is set to notActivated(0).
+		 notActivated(0)...the Port STP or RSTP entry is not configured  and not in running mode.
+		 activated(1)......the Port STP or RSTP entry is enabled.
+		 For NetIron: By default, this mode is set to notActivated(0).
 		 notActivated(0)...the Port STP entry is not activated and not in running mode.
 		 activated(1)......the Port STP entry is activated and in running mode"
 	::= { snIfStpEntry 5 }
@@ -7154,9 +7375,9 @@ snRadiusSNMPAccess         OBJECT-TYPE
 	MAX-ACCESS  read-only
 	STATUS  current
 	DESCRIPTION
-		"Indicate whether Radius group MIB obejcts can be
-		accessed by SNMP manager. If value is disabled,
-		all Radius group MIB objects return 'general error'."
+		"Indicate whether RADIUS server and key related MIB objects can be
+		accessed by SNMP manager. If value is disabled, then snRadiusKey
+		and snRadiusServerTable objects will not be accessible."
 	DEFVAL  { disabled }
 	::= { snRadiusGeneral 1 }
 
@@ -7437,9 +7658,9 @@ snTacacsSNMPAccess         OBJECT-TYPE
 	MAX-ACCESS  read-only
 	STATUS  current
 	DESCRIPTION
-		"Indicate whether Tacacs group MIB obejcts can be
-		accessed by SNMP manager. If value is disabled,
-		all Tacacs group MIB objects return 'general error'."
+		"Indicate whether TACACS+ server and key related MIB objects can be
+		accessed by SNMP manager. If value is disabled, then snTacacsKey
+		and snTacacsServerTable MIB objects will not be accessible."
 	DEFVAL  { disabled }
 	::= { snTacacsGeneral 5 }
 
