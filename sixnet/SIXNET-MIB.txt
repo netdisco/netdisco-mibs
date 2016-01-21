@@ -1,0 +1,537 @@
+SIXNET-MIB DEFINITIONS ::= BEGIN
+
+--
+-- SIXNET enterprise MIB tree
+--
+
+IMPORTS
+    Integer32, MODULE-IDENTITY, OBJECT-TYPE, enterprises FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP FROM SNMPv2-CONF
+    TEXTUAL-CONVENTION, TruthValue FROM SNMPv2-TC
+    InterfaceIndex FROM IF-MIB;
+
+sixnet MODULE-IDENTITY
+    LAST-UPDATED "200904270000Z"
+    ORGANIZATION "www.sixnet.com"
+    CONTACT-INFO    
+         "postal:   SIXNET, LLC
+                    SIXNET Technology Park
+                    331 Ushers Road
+                    Ballston Lake, NY 12019
+
+          email:    support@sixnet.com"
+    DESCRIPTION
+        "Updated contact addresses"
+    REVISION     "200904270000Z"
+    DESCRIPTION
+        "Added real-time ring status items"
+    REVISION     "200812160000Z"
+    DESCRIPTION
+	"Top-level infrastructure of the SIXNET enterprise MIB tree"
+    REVISION     "200607260000Z"
+    DESCRIPTION
+	"Revised testing section"
+    REVISION     "200607140000Z"
+    DESCRIPTION
+	"et9ms -> etms with backwards-compatible aliases
+	add PPP
+	add conformance group"
+    REVISION     "200512120000Z"
+    DESCRIPTION
+	"Added fields for v3.0 releases"
+    ::= { enterprises 20540}
+
+
+--
+--  SIXNET enterprise-specific management objects
+--
+
+sixnetObjects               OBJECT IDENTIFIER ::= {sixnet 1}
+sixnetDevices               OBJECT IDENTIFIER ::= {sixnet 2}
+-- sixnetEnumerations         OBJECT IDENTIFIER ::= {sixnet 3}
+-- sixnetModuleIDs            OBJECT IDENTIFIER ::= {sixnetEnumerations 1}
+-- sixnetAgentOIDs            OBJECT IDENTIFIER ::= {sixnetEnumerations 2}
+sixnetExperimental          OBJECT IDENTIFIER ::= {sixnet 9999}
+
+--
+-- A subtree specifically designed for private testing purposes.
+-- No "public" management objects should ever be defined within this tree.
+--
+-- It is provided for private experimentation, prior to transferring a MIB
+-- structure to another part of the overall OID tree
+--
+sixnetPlaypen              OBJECT IDENTIFIER ::= {sixnetExperimental 9999}
+
+
+--
+--  Notifications
+--
+
+sixnetNotificationPrefix   OBJECT IDENTIFIER ::= {sixnet 4}
+sixnetNotifications        OBJECT IDENTIFIER ::= {sixnetNotificationPrefix 0}
+sixnetNotificationObjects  OBJECT IDENTIFIER ::= {sixnetNotificationPrefix 1}
+
+
+--
+--  Conformance
+--
+
+sixnetConformance          OBJECT IDENTIFIER ::= {sixnet 5}
+sixnetCompliances          OBJECT IDENTIFIER ::= {sixnetConformance 1}
+sixnetGroups               OBJECT IDENTIFIER ::= {sixnetConformance 2}
+
+
+--
+-- Devices
+--
+
+-- These names used to be used for all managed switches but it was
+-- misleading becuase they didn't depend on port count.  These
+-- entries accomplish backwards-compatible "aliases"
+--
+-- These are deprecated and will be removed from a future version of
+-- this MIB.
+et9ms             OBJECT IDENTIFIER ::= { sixnetDevices 1 }
+et9msScalars      OBJECT IDENTIFIER ::= { et9ms 1 }
+
+
+etms              OBJECT IDENTIFIER ::= { sixnetDevices 1 }
+etmsScalars       OBJECT IDENTIFIER ::= { etms 1 }
+etmsTables        OBJECT IDENTIFIER ::= { etms 2 }
+-- etmsNotifications OBJECT IDENTIFIER ::= { etms 3 }
+etmsTest          OBJECT IDENTIFIER ::= { etms 9999 }
+
+
+
+--
+-- Scalars
+--
+
+SixnetDiscrete ::= TEXTUAL-CONVENTION
+    STATUS       current
+    DESCRIPTION
+            "A discrete input or output value which may be turned on
+            or off or may have an unknown state."
+    SYNTAX  INTEGER {
+                off(0),
+                on(1),
+                unknown(2)
+            }
+
+p1status OBJECT-TYPE
+    SYNTAX SixnetDiscrete
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The current operational state of P1 power input."
+    ::= { etmsScalars 1 }
+
+p2status OBJECT-TYPE
+    SYNTAX  SixnetDiscrete
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The current operational state of P2 power input."
+    ::= { etmsScalars 2 }
+
+oKstatus OBJECT-TYPE
+    SYNTAX  SixnetDiscrete
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The current operational state of OK relay output."
+    ::= { etmsScalars 3 }
+
+serialNumber OBJECT-TYPE
+    SYNTAX  Integer32
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The serial number of the device."
+    ::= { etmsScalars 4 }
+
+sxid OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..16))
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The SXID of the device."
+    ::= { etmsScalars 5 }
+
+firmwareRevision OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..16))
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The firmware revision."
+    ::= { etmsScalars 6 }
+
+fromPLCstatus OBJECT-TYPE
+    SYNTAX  SixnetDiscrete
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+            "The current operational state of From PLC input."
+    ::= { etmsScalars 7 }
+
+-- The following two scalars are summary flags that can be calculated
+-- from sxRingTable below.
+sxAllRingsGood OBJECT-TYPE
+    SYNTAX  TruthValue
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+        "True if all rings configured for this switch are complete."
+    ::= { etmsScalars 8 }
+
+sxAllRingNeighborsGood OBJECT-TYPE
+    SYNTAX  TruthValue
+    MAX-ACCESS  read-only
+    STATUS  current
+    DESCRIPTION
+        "True if all neighbors in all configured rings for this switch are
+        complete."
+    ::= { etmsScalars 9 }
+
+--
+-- PPP
+---
+
+pppTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF PppEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "A list of interface entries."
+    ::= { etmsTables 1 }
+
+pppEntry OBJECT-TYPE
+    SYNTAX      PppEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "An entry containing management information applicable to a
+            particular interface."
+    INDEX   { pppifIndex }
+    ::= { pppTable 1 }
+
+PppEntry ::=
+    SEQUENCE {
+        pppifIndex              InterfaceIndex,
+        pppifOperStatus		INTEGER
+    }
+
+pppifIndex OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+           "A unique value, greater than zero, for each interface.  It
+            is recommended that values are assigned contiguously
+           starting from 1.  The value for each interface sub-layer
+            must remain constant at least from one re-initialization of
+            the entity's network management system to the next re-
+            initialization."
+    ::= { pppEntry 1 }
+
+pppifOperStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+		unknown(0),
+                down(1),
+                up(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The current operational state of the interface."
+    ::= { pppEntry 2 }
+
+--
+-- Ring table
+--
+
+-- There are two scalar summary flags, sxAllRingsGood and sxAllNeighborsGood,
+-- which are calculated from the data in this table.
+
+SxRingIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT    "d"
+    STATUS          current
+    DESCRIPTION
+        "A unique value, greater than zero, identifying a ring in which this
+        switch participates."
+    SYNTAX          Integer32 (1..2147483647)
+
+sxRingTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF sxRingEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A list of configured rings."
+    ::= { etmsTables 2 }
+
+sxRingEntry OBJECT-TYPE
+    SYNTAX      SxRingEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A row containing status and configuration information for a
+        particular ring."
+    INDEX       { sxRingIndex }
+    ::= { sxRingTable 1 }
+
+SxRingEntry ::=
+    SEQUENCE {
+        sxRingIndex             SxRingIndex,
+        sxRingName              DisplayString,
+        sxRingGood              TruthValue,
+        sxRingPrimarySeen       TruthValue,
+        sxRingBackupSeen        TruthValue,
+        sxRingPrimaryIf         InterfaceIndex,
+        sxRingBackupIf          InterfaceIndex
+    }
+
+sxRingIndex OBJECT-TYPE
+    SYNTAX      SxRingIndex
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "A unique value, greater than zero, identifying a ring in which this
+        switch participates."
+    ::= { sxRingEntry 1 }
+
+sxRingName OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255)) -- current limit is 33 chars
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "A name describing the ring, unique among configured rings. The name
+        has no inherent meaning to the switch."
+    ::= { sxRingEntry 2 }
+
+sxRingGood OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "True if the ring is complete, false otherwise."
+    ::= { sxRingEntry 3 }
+
+sxRingPrimarySeen OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "True if the switch has recently seen RPDUs from its primary neighbor
+        on this ring."
+    ::= { sxRingEntry 4 }
+
+sxRingBackupSeen OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "True if the switch has recently seen RPDUs from its backup neighbor
+        on this ring."
+    ::= { sxRingEntry 5 }
+
+sxRingPrimaryIf OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates the interface configured as the primary port for this
+        ring. Unique among all ports for all configured rings on this switch."
+    ::= { sxRingEntry 6 }
+
+sxRingBackupIf OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Indicates the interface configured as the backup port for this
+        ring. Unique among all ports for all configured rings on this switch."
+    ::= { sxRingEntry 7 }
+
+--
+-- Conformance information
+-- 
+
+sixnetCompliance1 MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION 
+	   "This really just keeps MIB verification programs happy
+	   because there is no external standard to which our private
+	   MIB must conform."
+    MODULE -- this module
+         MANDATORY-GROUPS { sixnetSwitchGroup, sixnetTestGroup }
+    GROUP sixnetSwitchGroup
+    DESCRIPTION
+        "Public objects in SIXNET switches"
+    ::= { sixnetCompliances 1 }
+
+sixnetSwitchGroup OBJECT-GROUP
+    OBJECTS { p1status, p2status, oKstatus, 
+              serialNumber, sxid, firmwareRevision, 
+              fromPLCstatus, pppifOperStatus }
+    STATUS current
+    DESCRIPTION
+            "A collection of objects providing information about
+            SIXNET switches"
+    ::= { sixnetGroups 1}
+
+sixnetTestGroup OBJECT-GROUP
+    OBJECTS { ifAdminSpeed, ifAdminPower, ledTestTrigger, 
+              sixnetConfigState, sixnetConfigResult, sixnetConfigServer,
+	      sixnetConfigFile }
+    STATUS current
+    DESCRIPTION
+            "A collection of objects for testing."
+    ::= { sixnetGroups 2}
+
+--
+-- Test
+--
+
+portTestTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF PortTestEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "A list of interface entries."
+    ::= { etmsTest 1 }
+
+portTestEntry OBJECT-TYPE
+    SYNTAX      PortTestEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "An entry containing management information applicable to a
+            particular interface."
+    INDEX   { testifIndex }
+    ::= { portTestTable 1 }
+
+PortTestEntry ::=
+    SEQUENCE {
+        testifIndex             InterfaceIndex,
+        ifAdminSpeed            INTEGER,
+        ifAdminPower            INTEGER
+    }
+
+testifIndex OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+           "A unique value, greater than zero, for each interface.  It
+            is recommended that values are assigned contiguously
+           starting from 1.  The value for each interface sub-layer
+            must remain constant at least from one re-initialization of
+            the entity's network management system to the next re-
+            initialization."
+    ::= { portTestEntry 1 }
+
+ifAdminSpeed OBJECT-TYPE
+    SYNTAX      INTEGER {
+                  m10(10),
+                  m100(100),
+		  g1(1000)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "Force port speed (in megabits/sec)"
+    ::= { portTestEntry 2 }
+
+ifAdminPower OBJECT-TYPE
+    SYNTAX  INTEGER {
+                down(0),
+                up(1),
+                unknown(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "The PHYs PwrDown bit.  ifAdminPower in the down(2) state
+            indicates that the PHY control regsiter, bit 11 is 1
+            (Power Down).  ifAdminPower in the up(1) date indicates
+            that the PHY control register, bit 11 is 0 (Normal
+            operation)"
+    ::= { portTestEntry 3 }
+
+ledTestTrigger OBJECT-TYPE
+    SYNTAX      INTEGER {
+		normal(0),
+		testing(1)
+		}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "Trigger LED test"
+    ::= { etmsTest 2 }
+
+sixnetTestConfig          OBJECT IDENTIFIER ::= { etmsTest 3 }
+
+-- Configuration state
+--
+-- Normally idle.
+-- When management station has set server and file, it sets state to 1
+-- When agent sees configure, it sets to working and begins work
+-- When agent is done, it sets state to done
+-- When management station sees done, it sets to idle.
+-- If there was a problem during startup, state will always be crash
+
+sixnetConfigState OBJECT-TYPE
+    SYNTAX      INTEGER {
+		idle(0),
+		reserved(1),
+		configure(2),
+		working(3),
+		done(4),
+		crash(5)
+		}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "Trigger LED test"
+    ::= { sixnetTestConfig 1 }
+
+-- Result of configuration operation.  agent sets this before setting
+-- state to done. 'abort' means the script did not commit before quitting
+sixnetConfigResult OBJECT-TYPE
+    SYNTAX      INTEGER {
+		success(0),
+		failure(1),
+		abort(99)
+		}
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+            "Result of configuration.  Valid only when configState is done."
+    ::= { sixnetTestConfig 2 }
+
+
+-- Configuration server
+--
+-- The agent will retrieve configFile from this address with TFTP
+sixnetConfigServer OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..255))
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+            "The address of the configuration server. 
+	    Typically an IP address but might be a FQDN."
+    ::= { sixnetTestConfig 3 }
+
+-- Configuration file
+--
+-- The agent retrieves this file from configServer when configState
+-- goes to configure.
+sixnetConfigFile OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..255))
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+            "The file to retrieve and process."
+    ::= { sixnetTestConfig 4 }
+
+END
