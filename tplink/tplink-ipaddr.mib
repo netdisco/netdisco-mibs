@@ -1,0 +1,471 @@
+TPLINK-IPADDR-MIB	DEFINITIONS ::= BEGIN	
+    IMPORTS
+	    TPRowStatus       	 
+  			FROM TPLINK-TC-MIB
+		tplinkMgmt
+			FROM TPLINK-MIB			
+        OBJECT-TYPE,IpAddress
+          	FROM SNMPv2-SMI
+		ifIndex
+			FROM RFC1213-MIB;
+	
+	TpInterfaceMode ::= TEXTUAL-CONVENTION
+		STATUS      current
+		DESCRIPTION
+			"Ip address alloc-mode:
+			-'none(0)', which indicate vlan interface has no ip address.
+			
+			-'manual(1)',vlan interface's ip address is manually assigned.
+			
+			-'dhcp(2)',vlan interface's ip address is allocated by DHCP protocol.
+			
+			-'bootp(3)',vlan interface's ip address is allocated by BOOTP protocol."
+		SYNTAX 	INTEGER{
+					none(0),
+					manual(1),
+					dhcp(2),
+					bootp(3)
+				}   
+	
+	TpInterfaceMode2 ::= TEXTUAL-CONVENTION
+		STATUS      current
+		DESCRIPTION
+			"Ip address alloc-mode:
+			-'none(0)', which indicate vlan interface has no ip address.
+			
+			-'manual(1)',vlan interface's ip address is manually assigned."
+		SYNTAX 	INTEGER{
+					none(0),
+					manual(1)
+				}  
+
+	TpPortLinkMode ::= TEXTUAL-CONVENTION
+		STATUS		current
+		DESCRIPTION
+			"Port link-mode: bridge(0) or route(1)"
+		SYNTAX	INTEGER {
+				bridge(0),
+				route(1)
+			}
+	
+	tplinkIpAddrMIB MODULE-IDENTITY
+		LAST-UPDATED    "201212130930Z"
+		ORGANIZATION    "TPLINK"
+		CONTACT-INFO    "www.tplink.com.cn"
+		DESCRIPTION	    "Private MIB for ip address configuration."
+		REVISION        "201212130930Z"
+		DESCRIPTION
+				"Initial version of this MIB module."
+		::= { tplinkMgmt 6 }
+		
+	tplinkIpAddrMIBObjects		OBJECT IDENTIFIER	::= { tplinkIpAddrMIB 1 }
+	tplinkIpAddrNotifications	OBJECT IDENTIFIER	::= { tplinkIpAddrMIB 2 }
+	
+	tpInterfaceConfig	OBJECT IDENTIFIER ::= {tplinkIpAddrMIBObjects 1}
+
+	--**************
+	--Set vlan Interface	
+	--**************
+
+    tpVlanInterfaceTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF STATICADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "A list of VLAN interface entries. VLAN interface is a virtual interface which is working in the level 3,
+            it is used to communicate between the VLAN in the level 3, and it is not a physical entity in the device.
+            Each VLAN has a VLAN interface,and the VLAN interface can transmit the packets for the port which belong to this VLAN.
+            In general,because the VLAN can isolate broadcast, each VLAN has a subnet address,and as a gateway of the subnet address,
+            the VLAN interface can do the transmittance basic of IP address in level 3 for the packet which need to span the subnet address. "
+        ::= { tpInterfaceConfig 1 }
+        
+    tpVlanInterfaceConfigEntry OBJECT-TYPE
+        SYNTAX  STATICADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "   The interface can be added or removed ."
+        INDEX   { tpVlanInterfaceVlanId,tpVlanInterfaceIp,tpVlanInterfaceSecondary }
+        ::= { tpVlanInterfaceTable 1 }
+              
+              
+    STATICADDRCTRLENTRY ::=
+        SEQUENCE {
+			tpVlanInterfaceMode
+				TpInterfaceMode,
+            tpVlanInterfaceIp
+                IpAddress, 
+            tpVlanInterfaceMsk
+                IpAddress,
+            tpVlanInterfaceVlanId
+                INTEGER,
+            tpVlanInterfaceSecondary
+                INTEGER,
+            tpVlanInterfaceName
+                OCTET STRING (SIZE (0..20)),
+            tpVlanInterfaceStatus
+                TPRowStatus
+        }
+              
+    tpVlanInterfaceVlanId  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"The id of the VLAN interface,and it must be in the 802.1Q VLAN of the ingress port."
+		::= { tpVlanInterfaceConfigEntry 1 }  
+
+	tpVlanInterfaceSecondary  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"If the ip address is secondary IP."
+		::= { tpVlanInterfaceConfigEntry 2 }
+
+			      
+	tpVlanInterfaceMode OBJECT-TYPE
+		SYNTAX TpInterfaceMode
+		MAX-ACCESS read-create
+		STATUS current
+		DESCRIPTION
+			"The IP address alloc-mode of VLAN interface."
+		::= { tpVlanInterfaceConfigEntry 3 }
+				  
+    tpVlanInterfaceIp OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "The IP address of the VLAN interface."
+        ::= { tpVlanInterfaceConfigEntry 4 }
+            
+    tpVlanInterfaceMsk  OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            "The IP mask of the VLAN interface."
+        ::= { tpVlanInterfaceConfigEntry 5 }			
+			      
+	tpVlanInterfaceName  OBJECT-TYPE
+		SYNTAX  OCTET STRING (SIZE (0..20))  
+		MAX-ACCESS  read-create
+		STATUS  current
+		DESCRIPTION
+			" The name of the VLAN interface."
+		::= { tpVlanInterfaceConfigEntry 6 }
+			      
+	tpVlanInterfaceStatus OBJECT-TYPE
+        SYNTAX  TPRowStatus
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            " The following values are states:
+            these values may be used as follow:
+            active(1),if the entry is being used.
+            notInService(2),destory the entry.
+            notReady(3),destory the entry.
+            createAndGo(4),not being used
+            createAndWait(5),creat a new entry
+            destroy(6),destory the entry."
+        ::={tpVlanInterfaceConfigEntry 7 }
+	
+	--**************
+	--Set Loopback Interface	
+	--**************
+	
+	tpLoopbackInterfaceTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF LOOPBACKADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "A list of Loopback interface entries. Loopback interface is a virtual interface which purely software implemented, 
+			commonly used as router-id or network test. "
+        ::= { tpInterfaceConfig 2 }
+        
+    tpLoopbackInterfaceConfigEntry OBJECT-TYPE
+        SYNTAX  LOOPBACKADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "   The interface can be added or removed ."
+        INDEX   { tpLoopbackInterfaceId,tpLoopbackInterfaceIp,tpLoopbackInterfaceSecondary }
+        ::= { tpLoopbackInterfaceTable 1 }
+              
+              
+    LOOPBACKADDRCTRLENTRY ::=
+        SEQUENCE {
+			tpLoopbackInterfaceMode
+				TpInterfaceMode2,
+            tpLoopbackInterfaceIp
+                IpAddress, 
+            tpLoopbackInterfaceMsk
+                IpAddress,
+            tpLoopbackInterfaceId
+                INTEGER,
+            tpLoopbackInterfaceSecondary
+                INTEGER,
+            tpLoopbackInterfaceName
+                OCTET STRING (SIZE (0..20)),
+            tpLoopbackInterfaceStatus
+                TPRowStatus
+        }
+              
+    tpLoopbackInterfaceId  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"The id of the loopback interface (1-2147483647)."
+		::= { tpLoopbackInterfaceConfigEntry 1 }
+
+	tpLoopbackInterfaceSecondary  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"If the ip address is secondary IP."
+		::= { tpLoopbackInterfaceConfigEntry 2 }
+
+	tpLoopbackInterfaceMode OBJECT-TYPE
+		SYNTAX TpInterfaceMode2
+		MAX-ACCESS read-create
+		STATUS current
+		DESCRIPTION
+			"The IP address alloc-mode of loopback interface."
+		::= { tpLoopbackInterfaceConfigEntry 3 }
+				  
+    tpLoopbackInterfaceIp OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "The IP address of the loopback interface."
+        ::= { tpLoopbackInterfaceConfigEntry 4 }
+            
+    tpLoopbackInterfaceMsk  OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            "The IP mask of the loopback interface."
+        ::= { tpLoopbackInterfaceConfigEntry 5 }			
+			      
+	tpLoopbackInterfaceName  OBJECT-TYPE
+		SYNTAX  OCTET STRING (SIZE (0..20))  
+		MAX-ACCESS  read-create
+		STATUS  current
+		DESCRIPTION
+			" The name of the loopback interface."
+		::= { tpLoopbackInterfaceConfigEntry 6 }
+			      
+	tpLoopbackInterfaceStatus OBJECT-TYPE
+        SYNTAX  TPRowStatus
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            " Action status."
+        ::={tpLoopbackInterfaceConfigEntry 7 }
+
+	--**************
+	--Set Routed port
+	--**************
+
+	tpRoutedPortTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF ROUTEDPORTADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "A list of routed port. A routed port is special port mode which you can configure Layer 3 function like RIP, OSPF,
+			while some Layer 2 function like speed, flow-control is also available. "
+        ::= { tpInterfaceConfig 3 }
+        
+    tpRoutedPortConfigEntry OBJECT-TYPE
+        SYNTAX  ROUTEDPORTADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "   The interface can be added or removed ."
+        INDEX   { ifIndex, tpRoutedPortIp, tpRoutedPortSecondary}
+        ::= { tpRoutedPortTable 1 }
+              
+    ROUTEDPORTADDRCTRLENTRY ::=
+        SEQUENCE {
+			tpRoutedPortMode
+				TpInterfaceMode,
+            tpRoutedPortIp
+                IpAddress, 
+            tpRoutedPortMsk
+                IpAddress,
+            tpRoutedPortId
+                OCTET STRING,
+            tpRoutedPortSecondary
+                INTEGER,
+            tpRoutedPortName
+                OCTET STRING (SIZE (0..20)),
+			tpRoutedPortStatus
+                TPRowStatus
+        }
+
+    tpRoutedPortId  OBJECT-TYPE
+		SYNTAX  OCTET STRING (SIZE (0..16))  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+		    "The port id."
+		::= { tpRoutedPortConfigEntry 1 }
+
+	tpRoutedPortSecondary  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"If the ip address is secondary IP."
+		::= { tpRoutedPortConfigEntry 2 }
+		
+	tpRoutedPortMode OBJECT-TYPE
+		SYNTAX TpInterfaceMode
+		MAX-ACCESS read-create
+		STATUS current
+		DESCRIPTION
+			"The IP address alloc-mode of the routed port."
+		::= { tpRoutedPortConfigEntry 3 }
+
+    tpRoutedPortIp OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "The IP address of the routed port."
+        ::= { tpRoutedPortConfigEntry 4 }
+            
+    tpRoutedPortMsk  OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            "The IP mask of the routed port."
+        ::= { tpRoutedPortConfigEntry 5 }			
+			      
+	tpRoutedPortName  OBJECT-TYPE
+		SYNTAX  OCTET STRING (SIZE (0..20))  
+		MAX-ACCESS  read-create
+		STATUS  current
+		DESCRIPTION
+			" The name of the routed port."
+		::= { tpRoutedPortConfigEntry 6 }
+        
+    tpRoutedPortStatus OBJECT-TYPE
+        SYNTAX  TPRowStatus
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            " Action status."
+        ::={ tpRoutedPortConfigEntry 7 }
+
+	--**************
+	--Set channelGroup Interface
+	--**************
+
+    tpPortChannelTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF PORTCHANNELADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "A list of port-channel interface entries. "
+        ::= { tpInterfaceConfig 4 }
+        
+    tpPortChannelConfigEntry OBJECT-TYPE
+        SYNTAX  PORTCHANNELADDRCTRLENTRY
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "   The interface can be added or removed ."
+        INDEX   { tpPortChannelId,tpPortChannelIp,tpPortChannelSecondary }
+        ::= { tpPortChannelTable 1 }
+              
+              
+    PORTCHANNELADDRCTRLENTRY ::=
+        SEQUENCE {
+			tpPortChannelMode
+				TpInterfaceMode,
+            tpPortChannelIp
+                IpAddress, 
+            tpPortChannelMsk
+                IpAddress,
+            tpPortChannelId
+                INTEGER,
+            tpPortChannelSecondary
+                INTEGER,
+            tpPortChannelName
+                OCTET STRING (SIZE (0..20)),
+            tpPortChannelStatus
+                TPRowStatus
+        }
+              
+    tpPortChannelId  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"The id of the port-channel interface."
+		::= { tpPortChannelConfigEntry 1 }  
+
+	tpPortChannelSecondary  OBJECT-TYPE
+		SYNTAX  INTEGER  
+		MAX-ACCESS  read-only
+		STATUS  current
+		DESCRIPTION
+			"If the ip address is secondary IP."
+		::= { tpPortChannelConfigEntry 2 }
+
+			      
+	tpPortChannelMode OBJECT-TYPE
+		SYNTAX TpInterfaceMode
+		MAX-ACCESS read-create
+		STATUS current
+		DESCRIPTION
+			"The IP address alloc-mode of port-channel interface."
+		::= { tpPortChannelConfigEntry 3 }
+				  
+    tpPortChannelIp OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "The IP address of the port-channel interface."
+        ::= { tpPortChannelConfigEntry 4 }
+            
+    tpPortChannelMsk  OBJECT-TYPE
+        SYNTAX  IpAddress  
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            "The IP mask of the port-channel interface."
+        ::= { tpPortChannelConfigEntry 5 }			
+			      
+	tpPortChannelName  OBJECT-TYPE
+		SYNTAX  OCTET STRING (SIZE (0..20))  
+		MAX-ACCESS  read-create
+		STATUS  current
+		DESCRIPTION
+			" The name of the port-channel interface."
+		::= { tpPortChannelConfigEntry 6 }
+			      
+	tpPortChannelStatus OBJECT-TYPE
+        SYNTAX  TPRowStatus
+        MAX-ACCESS  read-create
+        STATUS  current
+        DESCRIPTION
+            " The following values are states:
+            these values may be used as follow:
+            active(1),if the entry is being used.
+            notInService(2),destory the entry.
+            notReady(3),destory the entry.
+            createAndGo(4),not being used
+            createAndWait(5),creat a new entry
+            destroy(6),destory the entry."
+        ::={tpPortChannelConfigEntry 7 }
+
+END	
