@@ -1,3 +1,19 @@
+--**MOD+***********************************************************************
+-- * Module:    hpSwitchConfig.mib
+-- *
+-- * Copyright (C) 2016 Hewlett Packard Enterprise Development LP 
+-- * All Rights Reserved.
+-- * 
+-- * The contents of this software are proprietary and confidential
+-- * to the Hewlett-Packard Enterprise Development LP.  No part of this
+-- * program may be photocopied, reproduced, or translated into another
+-- * programming language without prior written consent of the
+-- * Hewlett-Packard Enterprise Development LP.
+-- *
+-- * Purpose:   Contains MIB Objects for switch configuration.
+-- *
+-- **MOD-***********************************************************************/
+
 -- HP Enterprise Switch Configuration MIB 
 
 
@@ -15,7 +31,9 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
             FROM BRIDGE-MIB -- RFC-1493
         DisplayString, RowStatus, MacAddress, TimeStamp, TruthValue
             FROM SNMPv2-TC
-        HpSwitchPortType, ConfigStatus
+        HpSwitchPortType, ConfigStatus, HpSwitchIfMauTypeListBits,
+        HpSwitchIfMauAutoNegCapabilityBits, HpSwitchIfMauAutoNegCapAdvertisedBits,
+        HpSwitchIfMauAutoNegCapReceivedBits
             FROM HP-ICF-TC
         hpSwitch
             FROM HP-ICF-OID
@@ -24,7 +42,13 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         PortList
             FROM Q-BRIDGE-MIB
         Dscp    
-            FROM DIFFSERV-DSCP-TC;
+            FROM DIFFSERV-DSCP-TC
+        HpPartnerDeviceType, HpPartnerDeviceTypeList
+	    FROM HP-ICF-DEV-CONF-MIB;
+
+    -- Icf Switch Specific 
+
+    hpConfig OBJECT IDENTIFIER ::= { hpSwitch 7 }
 
     -- type.
 
@@ -32,12 +56,27 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
 -- Textual Conventions
 -- -------------------------------------------------------------
 
-    -- Icf Switch Specific 
-    hpConfig      OBJECT IDENTIFIER ::= { hpSwitch 7 }
-
     VlanID ::= Integer32(1..65535)
 
     Timeout ::= INTEGER
+
+   HpicfUsrProfilePortSpeed ::= TEXTUAL-CONVENTION
+   STATUS      current
+   DESCRIPTION "An enumerated value for the Port Speed"
+   SYNTAX  INTEGER {
+            speed10HDX(1),
+            speed100HDX(2),
+            speed10FDx(3),
+            speed100FDx(4),
+            speedAuto(5),
+            speed1000FDx(6),
+            speedAuto10Mbits(7),
+            speedAuto100Mbits(8),
+            speedAuto1000Mbits(9),
+            speedAuto-10Gbits(10),
+            speedAuto10or100Mbits(11)
+          }
+
 
     -- ###########################################################
     -- the hpConfig Group
@@ -52,16 +91,16 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
     hpSwitchAutoReboot OBJECT-TYPE
         SYNTAX      INTEGER {
                         yes(1),
-                        no(2)
+                        no(2),
+                        useHw(3)
                     }
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "If the value of this variable was set to yes(1),
-                    booting will conditionally enable all application
-                    modules-the spanning tree, IP and IPX etc.. Otherwise
-                    every application module must be manually enabled
-                    through Network Control Language Interpreter's ENABLE
-                    command."
+        DESCRIPTION "When set to yes(1), the switch will automatically
+                     reboot on crash. When set to no(2), the switch will halt
+                     on crash and wait until power cycled. When set to
+                     useHw(3), physical jumper is used to determine the
+                     behavior of the switch. The default value is useHw(3)."
         ::= { hpSwitchSystemConfig 1 }
           
     hpSwitchTimeZone OBJECT-TYPE
@@ -205,13 +244,70 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                     }
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "enable : both V1 and V2 modules can inter-operate.
-	             disable: only V2 modules will be up and V1 modules will be
-		     powered down. 
-		     By enabling this mib object,the config will be erased and 
-		     system will reboot.The default mode is enable."   
+        DESCRIPTION "This object enables or disables V1 module
+                     compatibility. When set to 'enable', V1 modules
+                     are enabled and V2 modules operate in
+                     V1-compatibility mode. When set to 'disable', V1
+                     modules are disabled and V2 modules have full
+                     functionality. Changing the value of this object
+                     to 'enable' erases the current configuration of
+                     the device and reboots it."
         ::= { hpSwitchSystemConfig 14 }
-    
+
+    hpSwitchAllowV2Modules OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        enable(1),
+                        disable(2),
+ 	                    erase(3)
+                    }
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "This object enables or disables V2 interface module support.
+                     When enabled, the ports of V2 modules operate normally and 
+                     any V3 modules in the system operate in V2-compatibility 
+                     mode. When disabled, V3 modules have full functionality and 
+                     any V2 modules in the system are completely disabled. 
+                     Changing the value of this object results in an immediate 
+                     reboot of the system to apply the new mode.
+                     The special value 'erase' enables V2 module support such as
+                     'enable', but also erases the switch configuration. It can 
+                     be used to clear all configuration settings when changing
+                     the mode from 'disable' to 'enable'. Normally, V2 module
+                     support cannot be enabled if there are any configuration 
+                     settings that are specific to V3 modules.
+                     This object returns a value of 'enable' after being set to
+                     'erase' and reboots the device."
+        DEFVAL       { enable }
+        ::= { hpSwitchSystemConfig 15 } 
+	
+   hpicfPrivateVlanPromiscuousPorts OBJECT-TYPE
+        SYNTAX       PortList
+        MAX-ACCESS   read-write
+        STATUS       optional
+        DESCRIPTION  "This object refers to the list of Promiscuous ports. By
+                      default all the ports on the switch are promiscuous ports.
+                      The promiscuous characteristics will be applied when port
+                      becomes a member of  private primary VLAN."
+        ::= { hpSwitchSystemConfig 16 }
+	
+    hpSwitchPreviewMode OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        enable(1),
+                        disable(2)
+                    }
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "This object enables or disables preview mode support.
+                     When set to 'enable', preview mdoe is enabled and 
+                     the user can configure the features available in the
+                     preview mode. When set to 'disable', preview mode is
+                     disabled and the user cannot configure any feature
+                     available in preview mode. Changing the value of this
+                     object from 'enable' to 'disable' reboots the device.
+                     The default value is disable."
+        DEFVAL       { disable }
+        ::= { hpSwitchSystemConfig 17 }    
+
               
     hpSwitchConsoleConfig OBJECT IDENTIFIER ::= { hpSwitchConfig 2 }
 
@@ -262,8 +358,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                     }
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "The type of event messages are automatically
-                    displayed on the console."
+        DESCRIPTION "The type of event messages to display on the console."
         ::= { hpSwitchConsoleConfig 4 }
 
     hpSwitchConsoleConfigStatus OBJECT-TYPE
@@ -288,8 +383,55 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         DEFVAL      { true }
         ::= { hpSwitchConsoleConfig 6 }
  
+    hpSwitchUsbConsoleAdminStatus OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        enable(1),
+                        disable(2)
+                    }
+        ACCESS      read-write
+        STATUS      optional
+        DESCRIPTION "The status of the USB console port."
+        ::= { hpSwitchConsoleConfig 7 }
 
-         
+    hpSwitchSessionGlobalIdleTimeout OBJECT-TYPE
+        SYNTAX      INTEGER (0..7200)
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "The number of seconds to wait after no character was
+                    input to log out of a session. Valid values are 0 (no
+                    timeout) through 7200 (two hours)."
+        DEFVAL      { 0 }
+        ::= { hpSwitchConsoleConfig 8 }
+
+    hpSwitchSessionConsoleIdleTimeout OBJECT-TYPE
+        SYNTAX      INTEGER (-1..7200)
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "The number of seconds to wait after no character was
+                    input to log out of a serial or USB console session.
+                    This value takes precedence over
+                    hpSwitchSessionGlobalIdleTimeout for the serial or USB
+                    console. Valid values are -1 (no override), or 0 (no
+                    timeout) through 7200 (two hours)."
+        DEFVAL      { -1 }
+        ::= { hpSwitchConsoleConfig 9 }
+
+    hpSwitchMaxSessions OBJECT-TYPE
+        SYNTAX      INTEGER (1..14)
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "Specifies the maximum number of concurrent sessions
+                    supported by the device."
+        ::= { hpSwitchConsoleConfig 10 }
+
+    hpSwitchMaxUserSessions OBJECT-TYPE
+        SYNTAX      INTEGER (1..14)
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "Specifies the maximum number of concurrent sessions
+                    allowed per user."
+        ::= { hpSwitchConsoleConfig 11 }
+
     hpSwitchPortConfig    OBJECT IDENTIFIER ::= { hpSwitchConfig 3 }
 
     hpSwitchPortTable OBJECT-TYPE
@@ -328,12 +470,21 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
             hpSwitchPortMDIXStatus             INTEGER,
             hpSwitchPortAutoMDIX               INTEGER,
             hpSwitchPortLACPKey                INTEGER,
+            hpSwitchPortTrafficTemplateName    OCTET STRING (SIZE(0..255)),
             hpSwitchPortEEEAdminStatus         INTEGER,
             hpSwitchPortEEEOperStatus          INTEGER,
             hpSwitchPortEEECurrentTwSysTx      INTEGER,
             hpSwitchPortEEEMinTwSysTx          INTEGER,
-            hpSwitchPortEEEMaxTwSysTx          INTEGER
-        }
+            hpSwitchPortEEEMaxTwSysTx          INTEGER,
+            hpSwitchPortPvid                   INTEGER,
+            hpSwitchPortTaggedVlanMap1k        OCTET STRING,
+            hpSwitchPortTaggedVlanMap2k        OCTET STRING,
+            hpSwitchPortTaggedVlanMap3k        OCTET STRING,
+            hpSwitchPortTaggedVlanMap4k        OCTET STRING, 
+            hpSwitchPortEEECurrentTwSysTx1     INTEGER,
+            hpSwitchPortEEEMinTwSysTx1         INTEGER,
+            hpSwitchPortEEEMaxTwSysTx1         INTEGER
+       }
        
     hpSwitchPortIndex OBJECT-TYPE
         SYNTAX      INTEGER (1..65535)
@@ -433,13 +584,26 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                         auto-100Mbits(8),
                         auto-1000Mbits(9),
                         auto-10Gbits(10),
-                        auto-10-100Mbits(11)
+                        auto-10-100Mbits(11),
+                        auto-40Gbits(12),
+                        auto-2500Mbits(13),
+                        auto-5000Mbits(14),
+                        auto-2500-5000Mbits(15),
+			auto-1000-2500Mbits(16),
+			auto-1000-2500-5000Mbits(17)
                     }
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "The type of transmission on this port. This variable
-                    is valid only if the hpSwitchPortType was Fast
-                    Ethernet."
+        DESCRIPTION "This object provides the mode of data transfer operation on a port. The port can transfer the data either in full-duplex or in half-duplex mode. 
+                    In full-duplex mode, the port can send and receive the data simultaneously. 
+                    In half-duplex mode, the port can either send or receive data at any given time.
+                    In auto mode, the port negotiates the duplex mode with the port at the other end of the link. 
+                    When configured in auto mode at both ends of the link, the port conforms to the following duplex modes for different Ethernet types:
+                    Ethernet (10 Mbps)             - Half-duplex
+                    Fast Ethernet (100 Mbps)       - Half-duplex
+                    Gigabit Ethernet (1 Gbps)      - Full-duplex
+                    10 Gigabit Ethernet (10 Gbps)  - Full-duplex
+                    40 Gigabit Ethernet (40 Gbps)  - Full-duplex ."
         ::= { hpSwitchPortEntry 10 }
 
     hpSwitchPortFlowControl OBJECT-TYPE
@@ -541,6 +705,14 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                      will be created only when the LACP is enabled on the port."
         ::= {hpSwitchPortEntry 17}
 
+    hpSwitchPortTrafficTemplateName OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE(0..255))
+        ACCESS      read-only
+        STATUS      mandatory
+        DESCRIPTION "The name of Traffic template that is applied to this
+                     port defining the priority to queue mapping."
+        ::= { hpSwitchPortEntry 18 }
+
     hpSwitchPortEEEAdminStatus OBJECT-TYPE
         SYNTAX       INTEGER {
                         enable(1),
@@ -574,7 +746,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         SYNTAX       INTEGER (1..65535)
         UNITS        "microseconds"
         ACCESS       read-only
-        STATUS       mandatory
+        STATUS       deprecated
         DESCRIPTION  "This indicates the current period of time the 
                       system has to wait between a request to transmit
                       and its readiness to transmit."
@@ -584,7 +756,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         SYNTAX       INTEGER (1..65535)
         UNITS        "microseconds"
         ACCESS       read-only
-        STATUS       mandatory
+        STATUS       deprecated
         DESCRIPTION  "This indicates the minimum period of time the 
                       system has to wait between a request to transmit
                       and its readiness to transmit."
@@ -594,11 +766,106 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         SYNTAX       INTEGER (1..65535)
         UNITS        "microseconds"
         ACCESS       read-only
-        STATUS       mandatory
+        STATUS       deprecated
         DESCRIPTION  "This indicates the maximum period of time the 
                       system has to wait between a request to transmit
                       and its readiness to transmit."
     ::= {hpSwitchPortEntry 23}
+
+   hpSwitchPortPvid OBJECT-TYPE
+        SYNTAX       INTEGER (1..4096)
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "This indicates the vlan in which the given port
+                      is untagged in."
+      ::= {hpSwitchPortEntry 25}
+
+   hpSwitchPortTaggedVlanMap1k OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE (0..128))
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "A string of octets containing one bit per VLAN ID in
+                     the range 1 through 1024. The first octet corresponds
+                     to VLAN IDs 1 through 8, the second octet to VLAN IDs
+                     9 through 16, etc. Within each octet, the most
+                     significant bit represents the lowest numbered VLAN ID,
+                     and the least significant bit represents the highest
+                     numbered VLAN ID. If a bit is set to 1, then the given 
+                     port is tagged in the corresponding VLAN ."
+    ::= {hpSwitchPortEntry 26}
+
+   hpSwitchPortTaggedVlanMap2k OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE (0..128))
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "A string of octets containing one bit per VLAN ID in
+                     the range 1025 through 2048. The first octet corresponds
+                     to VLAN IDs 1025 through 1032, the second octet to VLAN
+                     IDs 1033 through 1040, etc. Within each octet, the most
+                     significant bit represents the lowest numbered VLAN ID,
+                     and the least significant bit represents the highest
+                     numbered VLAN ID.If a bit is set to 1, then the given
+                     port is tagged in the corresponding VLAN ."
+    ::= {hpSwitchPortEntry 27}
+
+   hpSwitchPortTaggedVlanMap3k OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE (0..128))
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "A string of octets containing one bit per VLAN ID in
+                     the range 2049 through 3072. The first octet corresponds
+                     to VLAN IDs 2049 through 2056, the second octet to VLAN
+                     IDs 2057 through 2064, etc. Within each octet, the most
+                     significant bit represents the lowest numbered VLAN ID,
+                     and the least significant bit represents the highest
+                     numbered VLAN ID.If a bit is set to 1, then the given
+                     port is tagged in the corresponding VLAN ."
+    ::= {hpSwitchPortEntry 28}
+
+   hpSwitchPortTaggedVlanMap4k OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE (0..128))
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "A string of octets containing one bit per VLAN ID in
+                     the range 3073 through 4096. The first octet corresponds
+                     to VLAN IDs 3073 through 3080, the second octet to VLAN
+                     IDs 3081 through 3088, etc. Within each octet, the most
+                     significant bit represents the lowest numbered VLAN ID,
+                     and the least significant bit represents the highest
+                     numbered VLAN ID. If a bit is set to 1, then the given
+                     port is tagged in the corresponding VLAN ."
+    ::= {hpSwitchPortEntry 29}
+     
+    hpSwitchPortEEECurrentTwSysTx1 OBJECT-TYPE
+        SYNTAX       INTEGER (0..65535)
+        UNITS        "microseconds"
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "This indicates the current period of time the 
+                      system has to wait between a request to transmit
+                      and its readiness to transmit."
+    ::= {hpSwitchPortEntry 30}
+
+    hpSwitchPortEEEMinTwSysTx1 OBJECT-TYPE
+        SYNTAX       INTEGER (0..65535)
+        UNITS        "microseconds"
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "This indicates the minimum period of time the 
+                      system has to wait between a request to transmit
+                      and its readiness to transmit."
+    ::= {hpSwitchPortEntry 31}
+
+    hpSwitchPortEEEMaxTwSysTx1 OBJECT-TYPE
+        SYNTAX       INTEGER (0..65535)
+        UNITS        "microseconds"
+        ACCESS       read-only
+        STATUS       mandatory
+        DESCRIPTION  "This indicates the maximum period of time the 
+                      system has to wait between a request to transmit
+                      and its readiness to transmit."
+    ::= {hpSwitchPortEntry 32}
+
 
     hpSwitchPortConfigStatus OBJECT-TYPE
         SYNTAX      ConfigStatus
@@ -673,8 +940,10 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                         unsecure(2)
                     }
         ACCESS      read-write
-        STATUS      mandatory
-        DESCRIPTION "The operational mode of the Tftp protocol." 
+        STATUS      obsolete
+        DESCRIPTION "The operational mode of the Tftp protocol.
+                     This object is obsoleted by 
+                     hpicfDownloadTftpServerConfig."
         ::= { hpSwitchIpConfig 6 }
 
     hpSwitchIpTimepInetServerAddrType OBJECT-TYPE
@@ -742,7 +1011,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
     hpSwitchSLinkConnInactTime OBJECT-TYPE
         SYNTAX      INTEGER (0..120)
         ACCESS      read-write
-        STATUS      mandatory
+        STATUS      deprecated
         DESCRIPTION "The number of minutes to wait after no character was
                     input to log out the console. Valid values are 0 (not
                     to log out of the console for inactivity) through 120
@@ -1468,7 +1737,10 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
 
     hpSwitchStpTrapCntl OBJECT-TYPE
         SYNTAX       BITS {
-                         errantBpdu(0)
+                         errantBpdu(0),
+                         newRoot(1),
+                         rootGuard(2),
+                         loopGuard(3)
                      }
         ACCESS       read-write
         STATUS       optional
@@ -1479,7 +1751,27 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                       - errantBpdu(0)
                         The state of this bit specifies whether the 
                         notification trap allowed to be send when 
-                        unexpected (errant) BPDU is received on a port."
+                        unexpected (errant) BPDU is received on a port.
+
+                       - newRoot(1):
+                        The state of this bit specifies whether the 
+                        trap is allowed to be send when 
+                        sending agent has become the new root. 
+                        Currently, it is only supported in RPVST mode.
+
+                      - rootGuard(2): 
+                        The state of this bit specifies whether  the 
+                        trap is allowed to be send when Root-Guard
+                        enabled port receives superior BPDUs 
+                        on its interface.
+                        Currently, it is only supported in RPVST mode.
+
+                      - loopGuard(3):
+                        The state of this bit specifies whether the trap 
+                        is allowed to be send when a Loop Guard 
+                        enabled port stops receiving BPDUs from its 
+                        designated port.
+                        Currently, it is only supported in RPVST mode."
 
         ::= { hpSwitchStpConfig 3 }
 
@@ -1492,6 +1784,32 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                      remain in down state. The zero value means infinity."
         DEFVAL      { 0 }
         ::= { hpSwitchStpConfig 4 }
+
+        hpSwitchSTPAdminStatus OBJECT-TYPE
+            SYNTAX          INTEGER {
+                                 enabled(1),
+                                 disabled(2)
+                             }
+            ACCESS      read-write
+            STATUS          mandatory
+            DESCRIPTION
+                "The administrative status of STP in the switch.
+                 The value 'enabled' denotes that the
+                 STP is active; 'disabled' disables it. 
+                "
+            ::= { hpSwitchStpConfig 5 }
+
+      hpicfSwitchSTPVersion    OBJECT-TYPE
+            SYNTAX      INTEGER {
+                                 mstp(3),
+                                 rapidPvst(4)
+                             }
+            ACCESS      read-write
+            STATUS      mandatory
+            DESCRIPTION
+                "The version of Spanning Tree Protocol the bridge is
+                 currently running.  "
+            ::= { hpSwitchStpConfig 6 }
 
     hpSwitchIgmpConfig OBJECT IDENTIFIER ::= { hpSwitchConfig 15 }
 
@@ -1776,13 +2094,15 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
 
     HpSwitchCosPortConfigEntry ::=        
         SEQUENCE {
-            hpSwitchCosPortIndex              INTEGER,
-            hpSwitchCosPortType               HpSwitchPortType,
-            hpSwitchCosPortPriority           INTEGER,
-            hpSwitchCosPortDSCPPolicy         INTEGER,
-            hpSwitchCosPortResolvedPriority   INTEGER,
-            hpSwitchCosPortApplyPolicy        INTEGER,
-            hpSwitchCosPortTrustMode          INTEGER
+            hpSwitchCosPortIndex               INTEGER,
+            hpSwitchCosPortType                HpSwitchPortType,
+            hpSwitchCosPortPriority            INTEGER,
+            hpSwitchCosPortDSCPPolicy          INTEGER,
+            hpSwitchCosPortResolvedPriority    INTEGER,
+            hpSwitchCosPortApplyPolicy         INTEGER,
+            hpSwitchCosPortTrustMode           INTEGER,
+	        hpSwitchCosPortPartnerDevice       BITS,
+	        hpSwitchCosPortTrustedPartnerState INTEGER
         }
 
     hpSwitchCosPortIndex OBJECT-TYPE
@@ -1860,14 +2180,16 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                         trust8021pCos(2),
                         trustTosIpPrecedence(3),
                         trustTosDiffserv(4),
-                        trustAll(5) 
+                        trustAll(5),
+			            trustPartnerDevice(6)
                     }
         ACCESS      read-write
         STATUS      mandatory
         DESCRIPTION "This object determines which trust mode,
                     trustNone, trust802.1pCos, trustTosIpPrecedence, 
-                    trustTosDffserv, or trustAll, applies for the given 
-                    Port CoS entry.  When the trust-mode is anything other 
+                    trustTosDffserv, trustAll or trustPartnerDevice 
+ 		    applies for the given Port CoS entry.  
+		    When the trust-mode is anything other 
                     than trustNone, the inbound QoS values for the trusted 
                     fields will be preserved and any associated inbound 
                     queuing will occur.  For all configurations, any 
@@ -1877,6 +2199,25 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                     exclusive of one another."
         ::= { hpSwitchCosPortConfigEntry 7 }
 
+    hpSwitchCosPortPartnerDevice OBJECT-TYPE
+        SYNTAX      HpPartnerDeviceTypeList
+        ACCESS      read-write
+        STATUS      mandatory
+        DESCRIPTION "This object lists the device-types for which DSCP
+                     priority is trusted when hpSwitchCosPortTrustMode is set
+                     to trustPartnerDevice."
+        ::= { hpSwitchCosPortConfigEntry 8 }
+
+    hpSwitchCosPortTrustedPartnerState OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        untrusted(1),
+                        trusted(2)
+                    }
+        ACCESS      read-only
+        STATUS      mandatory
+        DESCRIPTION "This object is set to 'trusted' when an approved device
+                     is detected. The default value is 'untrusted'."
+        ::= { hpSwitchCosPortConfigEntry 9 }
 
     hpSwitchCosVlanConfigTable OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpSwitchCosVlanConfigEntry
@@ -2614,9 +2955,9 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                         enable(1),
                         disable(2)
                     }
-        ACCESS      read-write
+        ACCESS  read-write
         STATUS      mandatory
-	DESCRIPTION "Due to some hardware differences, the Series
+	     DESCRIPTION "Due to some hardware differences, the Series
                      1600/24xx/4000/8000 switches cannot be used
                      directly in a mesh environment with Series 5300XL
                      switches.  Series 5300XL switches need to emulate
@@ -2634,7 +2975,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
                      will be ignored by the Series 5300XL switches."
         ::= { hpSwitchMeshConfig 2 }
 
-    hpSwitchMeshConfiguredId  OBJECT-TYPE
+ hpSwitchMeshConfiguredId  OBJECT-TYPE
         SYNTAX        INTEGER
         ACCESS        read-write
         STATUS        mandatory
@@ -2872,7 +3213,7 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         ACCESS      read-only
         STATUS      deprecated
         DESCRIPTION "New definitions under HP-ICF-RATE-LIMIT-MIB.
-                The ifIndex value which uniquely identifies a row
+                    The ifIndex value which uniquely identifies a row
                     in the Interfaces Table."
         ::= { hpSwitchBWMinEgressPortConfigEntry 1 }
 
@@ -3132,17 +3473,15 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         SYNTAX      SEQUENCE OF HpSwitchDSCPRateLimitConfigEntry
         ACCESS      not-accessible
         STATUS      mandatory
-        DESCRIPTION "A table that contains information about the 
-	             DSCP code point Rate-Limiting value, and port map
-		     of ports that are being DSCP rate limited "
+        DESCRIPTION "A table containing information about DSCP-based
+                     rate limits and ports on which they are applied."
         ::= { hpSwitchDSCPRateLimitConfig 1 }
 
     hpSwitchDSCPRateLimitConfigEntry OBJECT-TYPE
         SYNTAX      HpSwitchDSCPRateLimitConfigEntry
         ACCESS      not-accessible
         STATUS      mandatory
-        DESCRIPTION "The information associated with each DSCP
-                     code point rate-limited "
+        DESCRIPTION "Information about a single DSCP-based rate limit."
         INDEX       { hpSwitchDSCPRateLimitIndex }
         ::= { hpSwitchDSCPRateLimitConfigTable 1 }
 
@@ -3157,38 +3496,95 @@ CONFIG-MIB DEFINITIONS ::= BEGIN
         SYNTAX      Dscp
         ACCESS      not-accessible
         STATUS      mandatory
-        DESCRIPTION "The ifIndex value which uniquely identifies a row
-                    in the Interfaces Table."
+        DESCRIPTION "An index into the DSCP rate limit table.  The value is
+                     a DSCP codepoint."
         ::= { hpSwitchDSCPRateLimitConfigEntry 1 }
 
     hpSwitchDSCPRateLimitKbps  OBJECT-TYPE
         SYNTAX      INTEGER (-1..10000000)
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "The value in kbps that the given dscp code point
-                    cannot exceed in ingress any ports represented in the
-                    hpSwitchDSCPRateLimitKbps.  A value of -1 indicates no
-                    limit. If this is -1, hpSwitchDSCPRateLimitPorts cannot
-                    be set. Default is -1."
+        DESCRIPTION "The rate limit in kilobits per second for a row of the
+                     DSCP rate limit table.  Incoming traffic with the DSCP
+                     field of the IP header matching the index of the row
+                     will be limited to this rate and excess traffic will be
+                     dropped.  On some devices, the actual traffic rate
+                     allowed may be slightly higher or lower due to hardware
+                     limitations.  A value of -1 indicates no limit and is
+                     the default.  Setting a value of -1 will clear all rate
+                     limits for the codepoint.  The rate limit is only applied
+                     on the ports set in the hpSwitchDSCPRateLimitPorts column
+                     of the row."
         ::= { hpSwitchDSCPRateLimitConfigEntry 2 }
 
     hpSwitchDSCPRateLimitPorts OBJECT-TYPE
         SYNTAX      PortList
         ACCESS      read-write
         STATUS      mandatory
-        DESCRIPTION "This variable specifies individual ports that are DSCP
-                    rate-limited to the given value (kbps) specified in the
-                    hpSwitchDSCPRateLimitKbps, associated with the DSCP code
-                    point specified in hpSwitchDSCPRateLimitIndex. 
-                    the value of this object. This is not allowed to be set
-                    if the hpSwitchDSCPRateLimitKbps value is -1. If this
-                    is cleared (all ports set to zero) 
-                    hpSwitchDSCPRateLimitKbps will be set to -1 to prevent
-                    unintentionally adding a port again without first setting
-                    a rate limit."
-
+        DESCRIPTION "The applied ports for a row of the DSCP rate limit table.
+                     The rate limit from the hpSwitchDSCPRateLimitKbps column
+                     of the row will be applied on the logical ports specified.
+                     A rate limit may not be applied to individual ports that
+                     are members of a trunk, but must be applied to the entire
+                     trunk instead.  It is an error to apply a DSCP rate limit
+                     to any ports before setting hpSwitchDSCPRateLimitKbps to
+                     a value other than -1.  When the port list for a row is
+                     cleared, the hpSwitchDSCPRateLimitKbps column is set to
+                     the default of -1."
     ::= { hpSwitchDSCPRateLimitConfigEntry 3 }		     
-	       
+
+  hpSwitchTcpPushPreserve OBJECT IDENTIFIER ::= { hpSwitchConfig 33 }
+
+    hpSwitchTcpPushPreserveConfig OBJECT-TYPE
+        SYNTAX  INTEGER {
+                        enable (1),
+                        disable(2)
+                    }
+        ACCESS  read-write
+        STATUS  mandatory
+        DESCRIPTION "This object is used to enable the TCP Push Preserve functionality on the device.
+                     The TCP Push Preserve functionality determines the flow of the TCP packets with
+                     the push flag set. When this feature is enabled and the egress queue is full, the
+                     TCP packets with the push flag set are lined up at the head of the ingress queue
+                     for egress queue space.  This might delay the subsequent incoming packets in the
+                     same queue. When this feature is disabled and the egress queue is full, the TCP
+                     packets with the push flag set placed in the ingress queue are dropped from the
+                     head of the ingress queue. 
+                     By default, the TCP Push Preserve functionality is enabled on the device."
+        DEFVAL      { enable }
+        ::= { hpSwitchTcpPushPreserve 1 }
+
+  hpSwitchIfMau OBJECT IDENTIFIER ::= {hpSwitchConfig 34 }
+
+    hpSwitchIfMauTypeListBits OBJECT-TYPE
+        SYNTAX  HpSwitchIfMauTypeListBits
+        ACCESS  read-only
+        STATUS  mandatory
+        DESCRIPTION  "This object is used to generate the MauType values for 2.5G and 5G port speed."
+         ::= { hpSwitchIfMau 1 }
+
+  hpSwitchIfMauAutoNegCapabilityBits OBJECT-TYPE
+       SYNTAX HpSwitchIfMauAutoNegCapabilityBits
+       ACCESS  read-only
+       STATUS  mandatory
+       DESCRIPTION  "This object is used to generate the MauAutoNegCapBits values for 2.5G and 5G port speed."
+         ::= { hpSwitchIfMau 2 }
+
+  hpSwitchIfMauAutoNegCapAdvertisedBits OBJECT-TYPE
+       SYNTAX HpSwitchIfMauAutoNegCapAdvertisedBits
+       ACCESS  read-only
+       STATUS  mandatory
+       DESCRIPTION  "This object is used to generate the MauAutoNegCapBits values for 2.5G and 5G port speed."
+         ::= { hpSwitchIfMau 3 }
+
+  hpSwitchIfMauAutoNegCapReceivedBits OBJECT-TYPE
+       SYNTAX HpSwitchIfMauAutoNegCapReceivedBits
+       ACCESS  read-only
+       STATUS  mandatory
+       DESCRIPTION  "This object is used to generate the MauAutoNegCapBits values for 2.5G and 5G port speed."
+         ::= { hpSwitchIfMau 4 }
+
+
     -- **********************************************************
     -- Trap Definitions
     -- **********************************************************
