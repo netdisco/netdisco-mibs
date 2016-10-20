@@ -1,0 +1,799 @@
+--**MOD+***********************************************************************
+--* Module:    hpicfNtp.mib
+--*
+--* Copyright (C) 2015-2016 Hewlett Packard Enterprise Development LP
+--* All Rights Reserved.
+--* 
+--* The contents of this software are proprietary and confidential
+--* to the Hewlett Packard Enterprise Development LP.  No part of this
+--* program may be photocopied, reproduced, or translated into another
+--* programming language without prior written consent of the
+--* Hewlett Packard Enterprise Development LP.
+--*
+--* Purpose: This file contains MIB definition of HP-ICF-NTP  MIB
+--*
+--**MOD-*********************************************************************** 
+
+HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
+
+   IMPORTS
+      OBJECT-TYPE, MODULE-IDENTITY, Integer32,
+      Unsigned32
+         FROM SNMPv2-SMI
+      RowStatus, TruthValue
+         FROM SNMPv2-TC
+      OBJECT-GROUP, MODULE-COMPLIANCE
+         FROM SNMPv2-CONF
+      SnmpAdminString
+         FROM SNMP-FRAMEWORK-MIB   
+             hpSwitch
+         FROM HP-ICF-OID 
+             ifIndex
+         FROM IF-MIB
+      InetAddressType, InetAddress
+         FROM INET-ADDRESS-MIB;
+
+    hpicfNtpMIB MODULE-IDENTITY
+      LAST-UPDATED "201602100000Z"  -- Feb 10, 2016
+      ORGANIZATION "HP Networking"
+      CONTACT-INFO "Hewlett-Packard Company
+                    8000 Foothills Blvd.
+                    Roseville, CA 95747"
+      DESCRIPTION  "Management information for configuring the NTP client
+                    on Hewlett-Packard network devices."
+
+      REVISION     "201602100000Z"  -- Feb 10, 2016
+      DESCRIPTION  " Added new enum in following MIB object hpicfNtpAuthenticationKeyAuthMode"
+
+      REVISION     "201507010000Z"  -- Jul 01, 2015
+      DESCRIPTION  "Initial version of the MIB module."
+
+      ::= { hpSwitch 121 }
+
+   hpicfNtpConfig            OBJECT IDENTIFIER ::= { hpicfNtpMIB 1 }
+   hpicfNtpConfigScalars     OBJECT IDENTIFIER ::= { hpicfNtpConfig 1 }
+   hpicfNtpGlobal            OBJECT IDENTIFIER ::= { hpicfNtpMIB 2 }
+
+-- ----------------------------------------------------------------------   
+-- Global Adminstatus
+-- ----------------------------------------------------------------------
+  
+   hpicfNtpAdminStatus OBJECT-TYPE
+      SYNTAX      TruthValue
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION "When set to true, this enables NTP globally on the
+                   router. If set to false, this would disable NTP." 
+      DEFVAL      { false }
+      ::= { hpicfNtpGlobal 1 }
+
+-- ----------------------------------------------------------------------   
+-- NTP client configuration parameters
+-- ----------------------------------------------------------------------
+      
+   hpicfNtpConfigMode OBJECT-TYPE
+      SYNTAX      INTEGER {
+                      disabled(1),
+                      unicast(2),
+                      broadcast(3)
+                  }
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION "The current operational mode of the NTP client."
+      ::= { hpicfNtpConfigScalars 1 }
+
+   hpicfNtpMaxAssociation OBJECT-TYPE
+      SYNTAX      Integer32 (1..8) 
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION "The maximum number of associations of the NTP client with
+                   different server's."
+      DEFVAL      { 8 }             
+      ::= { hpicfNtpConfigScalars 2 }
+
+   hpicfNtpStatusReferenceTimeFrac OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The fractional part of the local time at which the local 
+                   clock was last set or corrected. 
+                   For example: a timestamp of 16.25 seconds would be stored as 
+                   two Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpConfigScalars 3 }      
+
+   hpicfNtpStatusReferenceTimeSec OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The integer part of the local time at which the local 
+                   clock was last set or corrected. 
+                   For example: timestamp of 16.25 seconds would be stored as two
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpConfigScalars 4 }   
+
+   hpicfNtpStatusClockOffset OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The offset of the system clock, in milliseconds, 
+                   to the synchronized peer."
+      ::= { hpicfNtpConfigScalars 5 }
+
+   hpicfNtpStatusRootDelay OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The total round-trip delay, in milliseconds, to 
+                   the primary reference source at the root of the 
+                   synchronization."
+      ::= { hpicfNtpConfigScalars 6 }    
+
+   hpicfNtpStatusRootDispersion OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The root dispersion, in milliseconds, of the 
+                   running NTP entity." 
+      ::= { hpicfNtpConfigScalars 7 }
+
+   hpicfNtpAssoDrift OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is the rate of change in the system clock offset."
+      ::= { hpicfNtpConfigScalars 8 }
+
+
+-- ----------------------------------------------------------------------
+-- Table for configuring Servers
+-- ----------------------------------------------------------------------
+
+   hpicfNtpInetConfigServerTable OBJECT-TYPE
+      SYNTAX      SEQUENCE OF HpicfNtpInetConfigServerEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "A table containing trusted IPv4 or IPv6 NTP server's to be 
+                   queried in unicast mode."
+      ::= { hpicfNtpConfig 2 }
+
+   hpicfNtpInetConfigServerEntry OBJECT-TYPE
+      SYNTAX       HpicfNtpInetConfigServerEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "The NTP server description."
+      INDEX       { 
+                    hpicfNtpInetServerAddressType,
+                    hpicfNtpInetServerAddress
+                  }
+      ::= { hpicfNtpInetConfigServerTable 1 }
+
+   HpicfNtpInetConfigServerEntry ::=
+      SEQUENCE {
+         hpicfNtpInetServerAddressType    InetAddressType,
+         hpicfNtpInetServerAddress        InetAddress,         
+         hpicfNtpInetServerRowStatus      RowStatus,
+         hpicfNtpInetServerAuthKeyId      Unsigned32,
+         hpicfNtpConfigPollMinInterval    Integer32,
+         hpicfNtpConfigPollMaxInterval    Integer32,
+         hpicfNtpAssoBurst                INTEGER,
+         hpicfNtpAssoIsOobm               TruthValue
+      }      
+      
+   hpicfNtpInetServerAddressType OBJECT-TYPE
+      SYNTAX      InetAddressType
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "The IP address type of a trusted NTP server."
+      ::= { hpicfNtpInetConfigServerEntry 1 }
+
+   hpicfNtpInetServerAddress OBJECT-TYPE
+      SYNTAX      InetAddress ( SIZE (4|16) )
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "The IP address of a trusted NTP server in which
+                   client communicates with server to synchorize its time.
+                   hpicfNtpInetServerAddress is always interpreted
+                   within the context of hpicfNtpInetServerAddressType."
+      ::= { hpicfNtpInetConfigServerEntry 2 }
+
+
+   hpicfNtpInetServerRowStatus OBJECT-TYPE
+      SYNTAX      RowStatus
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "The row status of this NTP server information.
+                   Supporting CREATEANDGO and DESTROY only."
+      ::= { hpicfNtpInetConfigServerEntry 4 }
+
+   hpicfNtpInetServerAuthKeyId OBJECT-TYPE
+      SYNTAX      Unsigned32 (0..4294967295)  
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "The key identifier associated with the
+                   NTP server specified by this instance. It is an index
+                   to the  hpicfntpAuthenticationKeyTable. The value identifies 
+                   the row in the hpicfntpAuthenticationKeyTable where the 
+                   authentication key can be found. The value '0' indicates
+                   that the key-id is disassociated from the NTP server."                  
+      DEFVAL       { 0 }       
+      ::= { hpicfNtpInetConfigServerEntry 5 }
+
+   hpicfNtpConfigPollMinInterval OBJECT-TYPE
+      SYNTAX      Integer32 (4..17)
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "Period of time between successive attempts to
+                   perform an update via NTP."
+      DEFVAL      { 6 }                    
+      ::= { hpicfNtpInetConfigServerEntry 6 }
+
+   hpicfNtpConfigPollMaxInterval OBJECT-TYPE
+      SYNTAX      Integer32 (4..17)
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "Maximum period of time between successive attempts to
+                   perform an update via NTP."
+      DEFVAL      { 10 }             
+      ::= { hpicfNtpInetConfigServerEntry 7 }
+
+
+   hpicfNtpAssoBurst  OBJECT-TYPE
+      SYNTAX      INTEGER {
+           noburst(1),
+             burst(2),
+            iburst(3)
+      }
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "This option is used for, to speed up the initial
+                   synchronization acquisition with the server, Below are
+                   different options supported.
+                   
+                   noburst - Burst not set, Polling happens with configured or
+                             default poll interval.  
+
+                    burst - Send a burst of eight packets instead of the usual one 
+                            packet. The interval between the first and the second   
+                            packets is about 16 seconds to allow a modem call to   
+                            complete, while the spacing between the remaining   
+                            packets is about 2s. 
+
+                  iburst - Send a burst of eight packets instead of the usual one. 
+                           As long as the server is unreachable, the interval 
+                           between packets is about 16 seconds to allow a modem 
+                           call to complete. 
+                           After the server is reachable, the spacing between 
+                           packets is about 2 seconds."
+      DEFVAL      { 1 }               
+      ::= { hpicfNtpInetConfigServerEntry 8 }
+
+   hpicfNtpAssoIsOobm OBJECT-TYPE
+      SYNTAX      TruthValue
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "This object indicates whether this NTP Server
+                   is reachable over OOBM (Out Of Band Management)
+                   interface or not. This mib object will be applicable
+                   only if there is a physical OOBM port on the device."
+      DEFVAL      { false }
+      ::= { hpicfNtpInetConfigServerEntry 9 }   
+
+-- ----------------------------------------------------------------------
+-- Association information
+-- ----------------------------------------------------------------------
+
+   hpicfNtpInetServerInfoTable OBJECT-TYPE
+      SYNTAX      SEQUENCE OF HpicfNtpInetServerInfoEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "A table containing trusted IPv4 or IPv6 NTP server's 
+                   information."
+      ::= { hpicfNtpConfig 3 }
+
+   hpicfNtpInetServerInfoEntry OBJECT-TYPE
+      SYNTAX       HpicfNtpInetServerInfoEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "The NTP server description."
+      INDEX       {
+         hpicfNtpInetServerAddressType,
+         hpicfNtpInetServerAddress
+      }
+   ::= { hpicfNtpInetServerInfoTable 1 }
+
+   HpicfNtpInetServerInfoEntry ::=
+   SEQUENCE {
+      hpicfNtpAssoOurPollInterval      Integer32,
+      hpicfNtpAssoPeerPollInterval     Integer32,
+      hpicfNtpAssoRootDelay            OCTET STRING,
+      hpicfNtpAssoRootDispersion       OCTET STRING,
+      hpicfNtpAssoPeerReach            OCTET STRING,
+      hpicfNtpAssoOriginTimeFrac       Unsigned32,
+      hpicfNtpAssoOriginTimeSec        Unsigned32,
+      hpicfNtpAssoRecvTimeFrac         Unsigned32,
+      hpicfNtpAssoRecvTimeSec          Unsigned32,
+      hpicfNtpAssoXmtTimeFrac          Unsigned32,
+      hpicfNtpAssoXmtTimeSec           Unsigned32,
+      hpicfNtpAssolastPollreq          Integer32,
+      hpicfNtpAssoPrecision            Integer32,
+      hpicfNtpAssoCurrentMode          INTEGER,
+      hpicfNtpAssoPeerDispersion       OCTET STRING
+
+   }
+
+   hpicfNtpAssoOurPollInterval OBJECT-TYPE
+      SYNTAX      Integer32 
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "Poll interval for this peer."
+      ::= { hpicfNtpInetServerInfoEntry 1 }
+
+   hpicfNtpAssoPeerPollInterval OBJECT-TYPE
+      SYNTAX      Integer32 
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "Poll interval from peer to the local machine."
+      ::= { hpicfNtpInetServerInfoEntry 2 }    
+
+   hpicfNtpAssoRootDelay OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "Delay in, milliseconds, to the root of the 
+                   NTP setup. Stratum 1 clocks are considered to be at 
+                   the root of an NTP setup/design."
+      ::= { hpicfNtpInetServerInfoEntry 3 }       
+
+   hpicfNtpAssoRootDispersion OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "Maximum clock time difference that 
+                   was ever observed between the local clock and 
+                   the root clock."
+      ::= { hpicfNtpInetServerInfoEntry 4 }     
+
+
+   hpicfNtpAssoPeerReach OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The reachability register of the remote
+                   association, in octal format. This number is
+                   determined by the NTP algorithm."
+      ::= { hpicfNtpInetServerInfoEntry 6 }
+
+   hpicfNtpAssoOriginTimeFrac OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "It is the fractional part of this client time stamp when 
+                   the request was sent to the server after the poll interval.
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 7 }
+
+   hpicfNtpAssoOriginTimeSec OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "It is integer part of this client time stamp when 
+                   the request was sent to the server after the poll interval.
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 8 }
+
+   hpicfNtpAssoRecvTimeFrac OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is fractional part of the time stamp when the local client 
+                   received the message. The difference between the origin time  
+                   and the receive time is the offset for this peer. 
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 9 }
+
+   hpicfNtpAssoRecvTimeSec OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is the integer part of time stamp when the local
+                   client received the message. The difference between the 
+                   origin time and the receive time is the offset for this peer. 
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 10 }
+
+   hpicfNtpAssoXmtTimeFrac OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is the fractional part of the server's time stamp for
+                   the NTP packet when it sends back the packet to the client.
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 11 }
+
+   hpicfNtpAssoXmtTimeSec OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is the integer part of the server's time stamp for
+                   the NTP packet when it sends back the packet to the client.
+                   For example: a timestamp of 16.25 seconds would be stored as two 
+                   Object IDs - the integer part 16 and the fraction part .25."
+      ::= { hpicfNtpInetServerInfoEntry 12 }
+
+   hpicfNtpAssolastPollreq OBJECT-TYPE
+       SYNTAX      Integer32
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION "This is the time in seconds since the last NTP packet 
+                    was received from a peer is reported. This value 
+                    should be lower than the polling interval."
+       ::= { hpicfNtpInetServerInfoEntry 13 }
+
+   hpicfNtpAssoPrecision OBJECT-TYPE
+      SYNTAX      Integer32
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This is the precision of the peer clock in Hz."
+      ::= { hpicfNtpInetServerInfoEntry 14 }
+
+   hpicfNtpAssoCurrentMode OBJECT-TYPE
+      SYNTAX      INTEGER {
+            synchronized(1),
+            notsynchronized(2),
+            unknown(99)
+      }
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The current mode of the NTP. The definition 
+                   of each possible value as follows:
+                   notsynchronized(2) - NTP is not synchronized to any time
+                   source (stratum = 16).
+                   synchronized(1) - NTP is synchronized.
+                   unknown(99) - The state of NTP is unknown."
+      ::= { hpicfNtpInetServerInfoEntry 15 }
+
+   hpicfNtpAssoPeerDispersion OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION " The estimated maximum error of the peer clock
+                    relative to the local clock over the network path
+                    between them, in seconds. This value is determined
+                    by using NTP clock-filter algorithm."
+      ::= { hpicfNtpInetServerInfoEntry 16 }
+
+
+-- -------------------------------------------------------------------------
+-- NTP server Authentication table 
+-- --------------------------------------------------------------------------
+   hpicfNtpAuthenticationKeyTable OBJECT-TYPE
+     SYNTAX SEQUENCE OF HpicfNtpAuthenticationKeyEntry
+     MAX-ACCESS   not-accessible
+     STATUS       current
+     DESCRIPTION "A table containing entries of authentication key-id.
+                  The number of key-id is restricted to 8."
+     ::= { hpicfNtpConfig 4 }
+
+   hpicfNtpAuthenticationKeyEntry OBJECT-TYPE
+     SYNTAX      HpicfNtpAuthenticationKeyEntry
+     MAX-ACCESS  not-accessible
+     STATUS      current
+     DESCRIPTION "An authentication key entry comprising key-identifiers 
+                  such as key-id, key-value, authentication mode (MD5/SHA1),
+                  and status of the key-id if it is trusted or not."
+     INDEX        {  hpicfNtpAuthenticationKeyId }
+     ::= { hpicfNtpAuthenticationKeyTable 1 }
+
+   HpicfNtpAuthenticationKeyEntry ::= 
+     SEQUENCE {
+        hpicfNtpAuthenticationKeyId        Unsigned32,
+        hpicfNtpAuthenticationKeyAuthMode  INTEGER,
+        hpicfNtpAuthenticationKeyValue     OCTET STRING,
+        hpicfNtpAuthenticationKeyTrusted   TruthValue,
+        hpicfNtpAuthenticationKeyRowStatus RowStatus,
+        hpicfNtpAuthenticationKeyEncrypted OCTET STRING
+     }
+
+   hpicfNtpAuthenticationKeyId OBJECT-TYPE
+     SYNTAX      Unsigned32 (1..4294967295) 
+     MAX-ACCESS  not-accessible 
+     STATUS      current
+     DESCRIPTION "A unique identifier for the authentication key."
+     ::= { hpicfNtpAuthenticationKeyEntry 1 }
+
+   hpicfNtpAuthenticationKeyAuthMode OBJECT-TYPE
+     SYNTAX      INTEGER {
+                     none(1),
+                     md5(2),
+                     sha1(3)
+                 }
+     MAX-ACCESS  read-create
+     STATUS      current
+     DESCRIPTION "The authentication mode supported by this key."
+     DEFVAL       { none }  --no key-value by default
+     ::= { hpicfNtpAuthenticationKeyEntry 2 }
+
+   hpicfNtpAuthenticationKeyValue OBJECT-TYPE
+     SYNTAX      OCTET STRING (SIZE(1..32))
+     MAX-ACCESS  read-create
+     STATUS      current
+     DESCRIPTION "A unique string that serves as the key-value for generating 
+                  the message digest sent in the NTP packet. A read on 
+                  this object will return an empty string."
+     ::= { hpicfNtpAuthenticationKeyEntry 3 }
+
+   hpicfNtpAuthenticationKeyTrusted OBJECT-TYPE
+     SYNTAX      TruthValue
+     MAX-ACCESS  read-create
+     STATUS      current
+     DESCRIPTION "This object is used to configure the status of the 
+                  authentication key as trusted. If the key-value is
+                  not trusted, the packet is not trusted. By default,
+                  the key-value is not trusted."
+     DEFVAL       { 2 }             
+     ::= { hpicfNtpAuthenticationKeyEntry 4 }
+
+   hpicfNtpAuthenticationKeyRowStatus OBJECT-TYPE
+     SYNTAX       RowStatus
+     MAX-ACCESS   read-create
+     STATUS       current
+     DESCRIPTION "The row status for this NTP authentication
+                  key instance. The key-id is the index and 
+                  it cannot be edited.
+                  Supporting CREATEANDGO and DESTROY only."
+     ::= { hpicfNtpAuthenticationKeyEntry 5 }
+
+   hpicfNtpAuthenticationKeyEncrypted OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE(0..256))
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "The encrypted form of a unique string that serves as the
+                   key-value for generating the message digest sent in the
+                   NTP packet. This object may only be read or written when
+                   hpSwitchAuthenticationEncryptCredentialsMethod is set to
+                   a value other than none(0). 
+                   This object should only be written with
+                   an encrypted key previously read from a compatible
+                   HP Networking device."
+      ::= { hpicfNtpAuthenticationKeyEntry 6 }
+
+
+-- -------------------------------------------------------------------------
+-- NTP ipv6 multicast table
+-- -------------------------------------------------------------------------
+
+   hpicfNtpIpv6MulticastTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF HpicfNtpIpv6MulticastEntry
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION "A table containing entry for enabling NTP multicast."
+      ::= { hpicfNtpConfig 5 }
+
+      hpicfNtpIpv6MulticastEntry OBJECT-TYPE
+      SYNTAX      HpicfNtpIpv6MulticastEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "An NTP multicast entry comprising NTP multicast on vlan."
+      INDEX       { ifIndex }
+      ::= { hpicfNtpIpv6MulticastTable 1 }
+
+   HpicfNtpIpv6MulticastEntry ::=
+      SEQUENCE {
+         hpicfNtpIpv6Multicast       TruthValue,
+         hpicfNtpIpv6MulticastStatus RowStatus
+      }
+
+   hpicfNtpIpv6Multicast OBJECT-TYPE
+      SYNTAX      TruthValue
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION "Indicates whether this interface should listen to 
+                   NTP multicast packets."
+      DEFVAL     { false }             
+      ::= { hpicfNtpIpv6MulticastEntry 1 }
+
+     hpicfNtpIpv6MulticastStatus OBJECT-TYPE
+       SYNTAX      RowStatus
+       MAX-ACCESS  read-create
+       STATUS      current
+       DESCRIPTION "Row status of the NTP Multicast.
+                    Supporting CREATEANDGO and DESTROY only."
+       ::= { hpicfNtpIpv6MulticastEntry 2 }    
+
+
+-- -------------------------------------------------------------------------
+-- NTP server association sample table 
+-- -------------------------------------------------------------------------
+
+   hpicfNtpAssoSampleTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF HpicfNtpAssoSampleEntry
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION "A table containing samples for association."
+      ::= { hpicfNtpConfig 7 }
+
+   hpicfNtpAssoSampleEntry OBJECT-TYPE
+      SYNTAX      HpicfNtpAssoSampleEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "An association sample entry comprising 8 samples
+                   of each association for filter delay and offset."
+      INDEX   { 
+                hpicfNtpInetServerAddressType,
+                hpicfNtpInetServerAddress,
+                hpicfNtpAssoSampleId
+      }
+   ::= { hpicfNtpAssoSampleTable 1 }
+
+   HpicfNtpAssoSampleEntry ::=
+      SEQUENCE {
+         hpicfNtpAssoSampleId             Unsigned32,
+         hpicfNtpfiltDelaySample          OCTET STRING,
+         hpicfNtpfiltOffsetSample         OCTET STRING
+      }
+
+   hpicfNtpAssoSampleId OBJECT-TYPE
+      SYNTAX      Unsigned32
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION "The sample Id for every sample per association."
+      ::= { hpicfNtpAssoSampleEntry 1 }
+
+   hpicfNtpfiltDelaySample  OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The round trip delay of the sample of this association."
+      ::= { hpicfNtpAssoSampleEntry 2 }
+
+   hpicfNtpfiltOffsetSample OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE (1..65535))
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "The offset of the sample of this association."
+      ::= { hpicfNtpAssoSampleEntry 3 }
+
+
+-- --------------------------------------------------------------------------
+-- Compliance Information
+-- --------------------------------------------------------------------------
+   
+   hpicfNtpConfigConformance
+      OBJECT IDENTIFIER ::= { hpicfNtpMIB 3 }
+
+   hpicfNtpConfigCompliances
+      OBJECT IDENTIFIER ::= { hpicfNtpConfigConformance 1 }
+
+   hpicfNtpConfigGroups
+      OBJECT IDENTIFIER ::= { hpicfNtpConfigConformance 2 }
+
+   hpicfNtpInetConfigCompliance MODULE-COMPLIANCE
+      STATUS           current
+      DESCRIPTION      "The compliance statement for devices implementing
+                        the hpicfNtpConfig MIB."
+      MODULE
+      MANDATORY-GROUPS  { hpicfNtpConfigGroup }
+
+      GROUP             hpicfNtpInetServerConfigGroup
+      DESCRIPTION       "This group is optional if a device implements
+                         the NTP client in broadcast mode only."
+
+      ::= { hpicfNtpConfigCompliances 1 }
+  
+   hpicfNtpAuthenticationConfigCompliance MODULE-COMPLIANCE
+       STATUS           current
+       DESCRIPTION      "The compliance statement for devices implementing
+                         the hpicfNtpConfig MIB."
+      
+       MODULE
+       MANDATORY-GROUPS   {  hpicfNtpAuthenticationKeyIdConfigGroup }
+ 
+       GROUP              hpicfNtpAuthenticationKeyIdConfigGroup
+       DESCRIPTION        "This group is required if a device implements
+                           the NTP client in broadcast mode only."
+       ::= { hpicfNtpConfigCompliances 2 }
+
+   hpicfNtpServerConfigCompliance MODULE-COMPLIANCE
+       STATUS           current
+       DESCRIPTION      "The compliance statement for devices implementing
+                         the hpicfNtpConfig MIB."
+                                    
+       MODULE
+       MANDATORY-GROUPS   { hpicfNtpInetServerConfigGroup }
+                                          
+       GROUP              hpicfNtpInetServerConfigGroup
+       DESCRIPTION        "This group is required for server configurations
+                           for syncronization."
+       ::= { hpicfNtpConfigCompliances 3 }   
+
+   hpicfNtpAssoSampleCompliance MODULE-COMPLIANCE
+      STATUS           current
+      DESCRIPTION      "The compliance statement for devices implementing
+                        the hpicfNtpConfig MIB."
+     
+      MODULE
+      MANDATORY-GROUPS   { hpicfNtpAssociationSampleGroup }
+
+      GROUP              hpicfNtpAssociationSampleGroup
+      DESCRIPTION        "This group is required for samples from different
+                          association."  
+         ::= { hpicfNtpConfigCompliances 4 }
+
+   hpicfNtpConfigGroup OBJECT-GROUP
+      OBJECTS     {
+                    hpicfNtpConfigMode,
+                    hpicfNtpMaxAssociation,
+                    hpicfNtpAdminStatus,
+                    hpicfNtpStatusReferenceTimeFrac,
+                    hpicfNtpStatusReferenceTimeSec,
+                    hpicfNtpStatusClockOffset,
+                    hpicfNtpStatusRootDelay,
+                    hpicfNtpStatusRootDispersion,
+                    hpicfNtpAssoDrift
+                  }
+      STATUS      current
+      DESCRIPTION "A collection of objects for configuring the NTP
+                  client."
+      ::= { hpicfNtpConfigGroups 1 }
+
+   hpicfNtpInetServerConfigGroup OBJECT-GROUP
+      OBJECTS     {
+                    hpicfNtpInetServerRowStatus, 
+                    hpicfNtpInetServerAuthKeyId,   
+                    hpicfNtpConfigPollMinInterval, 
+                    hpicfNtpConfigPollMaxInterval,
+                    hpicfNtpAssoOurPollInterval,
+                    hpicfNtpAssoPeerPollInterval,
+                    hpicfNtpAssoRootDelay,
+                    hpicfNtpAssoRootDispersion,
+                    hpicfNtpAssoPeerReach,
+                    hpicfNtpAssoOriginTimeFrac,
+                    hpicfNtpAssoOriginTimeSec,
+                    hpicfNtpAssoRecvTimeFrac,
+                    hpicfNtpAssoRecvTimeSec,
+                    hpicfNtpAssoXmtTimeFrac,
+                    hpicfNtpAssoXmtTimeSec,
+                    hpicfNtpAssolastPollreq,
+                    hpicfNtpAssoPrecision,
+                    hpicfNtpAssoCurrentMode,
+                    hpicfNtpAssoPeerDispersion,
+                    hpicfNtpAssoBurst,
+                    hpicfNtpAssoIsOobm
+                  }
+      STATUS      current
+      DESCRIPTION "A collection of objects for configuring the
+                   NTP server entry." 
+      ::= { hpicfNtpConfigGroups 2 }
+
+   hpicfNtpAuthenticationKeyIdConfigGroup OBJECT-GROUP
+      OBJECTS   { 
+                  hpicfNtpAuthenticationKeyAuthMode,
+                  hpicfNtpAuthenticationKeyValue,
+                  hpicfNtpAuthenticationKeyEncrypted,
+                  hpicfNtpAuthenticationKeyTrusted,
+                  hpicfNtpAuthenticationKeyRowStatus
+                }
+      STATUS      current
+      DESCRIPTION "This group defines NTP authentication related information.
+                   It includes  Key-Identifier, Key-Value, encrypted key
+                   value, flag to indicate whether the information is trusted
+                   or not and whether the authentication mode(MD5/SHA1) currently supported."
+      ::= { hpicfNtpConfigGroups 3 }
+
+   hpicfNtpAssociationSampleGroup OBJECT-GROUP
+      OBJECTS   {
+                  hpicfNtpfiltDelaySample,         
+                  hpicfNtpfiltOffsetSample,
+                  hpicfNtpIpv6Multicast,
+                  hpicfNtpIpv6MulticastStatus 
+                }
+     STATUS      current
+     DESCRIPTION "This group defines sample information for eight 
+                  samples taken per association."
+     ::= { hpicfNtpConfigGroups 4 }             
+END
