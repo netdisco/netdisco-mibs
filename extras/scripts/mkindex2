@@ -1,0 +1,60 @@
+#!/usr/bin/env perl
+# mkindex2 - Makes a portable net-snmp persistent index cache of MIBS
+
+use strict;
+use warnings;
+use File::Find;
+
+if (!defined $ENV{MIBHOME}) {
+  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
+  exit(1);
+}
+
+$ENV{SNMPCONFPATH} = '';
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+$ENV{MIBS} = 'SNMPv2-MIB';
+$ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc:$ENV{MIBHOME}/cisco";
+
+# first setup
+mkdir "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes";
+mkdir "$ENV{SNMP_PERSISTENT_DIR}/cache";
+
+# clean out any live indexes
+find(sub{ -d or unlink or die $! },
+  "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
+
+# bootstrap initial three indexes
+system(qw(snmptranslate -IR sysName));
+
+# now for all the other dirs
+find(sub{
+  return if -f or m/^\./ or m/^(?:net-snmp|rfc|cisco|extras)$/;
+  my $newmibdirs = $ENV{MIBDIRS} .":$ENV{MIBHOME}/$_";
+  system(qq(\\snmptranslate -M'$newmibdirs' -IR sysName)) and die ($? >> 8);
+}, $ENV{MIBHOME});
+
+# sort each index and change developer's MIBHOME to be {{mibhome}}
+find(sub{
+  return if -d;
+  my $DEST = "$ENV{SNMP_PERSISTENT_DIR}/cache/$_";
+
+  # store platform name from the index
+  my $platform = undef;
+  open my $index, '<', $_ or die $!;
+  while (my $line = <$index>) {
+    $platform = $1 if ($line =~ m/$ENV{MIBHOME}.(.+)$/);
+    last if $platform;
+  }
+  close $index;
+  die "no platform: $File::Find::name" if !defined $platform;
+
+  # init portable index in the cache dir
+  open my $newindex, '>', $DEST or die $!;
+  print $newindex "DIR {{mibhome}}/$platform\n";
+  close $newindex;
+
+  # copy over sorted content of the index
+  system(qq(egrep -v '^DIR' $_ | sort -dfs >> '$DEST')) and die ($? >> 8);
+}, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
+
+exit(0);
