@@ -1,0 +1,67 @@
+#!/usr/bin/env perl
+# diff_dir [new_dir]
+# will look into new_dir for MIBs to add or replace in MIBHOME/...
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
+use List::Util 'max';
+use File::Copy;
+use File::Spec::Functions qw(splitdir catfile);
+use Term::ANSIColor qw(:constants);
+
+if (!defined $ENV{MIBHOME}) {
+  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
+  exit(1);
+}
+
+my $from = shift;
+if (!defined $from or not -d $from) {
+  print "usage: $0 new_dir (containing new MIBs and named same as old_dir)\n";
+  exit(1);
+}
+
+my $platform = (grep {m/\S/} splitdir($from))[-1];
+my $to = catfile($ENV{MIBHOME}, $platform);
+
+if (! -d $to) {
+  print "error: I don't see a directory in MIBHOME named $platform\n";
+  exit(1);
+}
+
+my $diffcmd = 'diff -bBN';
+my @files = grep {m/\.(?:my|mib|txt)$/}
+            map {(splitdir($_))[-1]}
+            grep {-f} glob(catfile($from, '*'));
+
+foreach my $file (sort @files) {
+    my $newfile = catfile($from, $file);
+    my $oldfile = catfile($to, $file);
+
+    if (! -e $oldfile) {
+        print GREEN, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $platform\n", RESET;
+        copy($newfile, $to) or die $!;
+    }
+    else {
+        my $diff = qx($diffcmd $oldfile $newfile);
+        if ($diff !~ m/^\s*$/) {
+            # Look for version numbers - https://tools.ietf.org/html/rfc2578
+            my $oldv = max(`egrep -A1 '(REVISION|LAST-UPDATED)' $oldfile`
+              =~ m/"(\d{10}|\d{12})Z"/g);
+            my $newv = max(`egrep -A1 '(REVISION|LAST-UPDATED)' $newfile`
+              =~ m/"(\d{10}|\d{12})Z"/g);
+
+            next if $newv <= $oldv;
+            print YELLOW, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $platform ($newv > $oldv)\n", RESET;
+            copy($newfile, $to) or die $!;
+        }
+        else {
+            print BLUE, "$file \N{HEAVY CHECK MARK}\n", RESET;
+        }
+    }
+}
+
+exit(0);
