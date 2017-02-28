@@ -10,6 +10,7 @@ binmode STDOUT, ':utf8';
 use Time::HiRes 'sleep';
 use Term::ANSIColor qw(:constants);
 use File::Find;
+use File::Spec::Functions qw(splitdir catfile);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -33,14 +34,12 @@ find(sub{ -d or unlink or die $! },
 system(q(snmptranslate -IR sysName | sed -e '/SNMPv2-MIB::sysName/d'));
 
 # now for all the other dirs
-find(sub{
-  # FIXME this is not catching everything
-  return if -f or m/^(?:net-snmp|rfc|cisco|extras)$/
-    or $File::Find::name =~ m/\./;
+foreach (map {(splitdir($_))[-1]} grep {-d} glob(catfile($ENV{MIBHOME},'*'))) {
+  next if m/^(?:net-snmp|rfc|cisco|extras)$/ or m/\./;
   &status($_);
   my $newmibdirs = $ENV{MIBDIRS} .":$ENV{MIBHOME}/$_";
   system(qq(\\snmptranslate -M'$newmibdirs' -IR sysName | grep -v 'SNMPv2-MIB::sysName'));
-}, $ENV{MIBHOME});
+}
 
 # sort each index and change developer's MIBHOME to be {{mibhome}}
 &status('Building cache...');
