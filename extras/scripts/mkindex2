@@ -3,6 +3,12 @@
 
 use strict;
 use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
+use Time::HiRes 'sleep';
+use Term::ANSIColor qw(:constants);
 use File::Find;
 
 if (!defined $ENV{MIBHOME}) {
@@ -24,16 +30,20 @@ find(sub{ -d or unlink or die $! },
   "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
 # bootstrap initial three indexes
-system(qw(snmptranslate -IR sysName));
+system(q(snmptranslate -IR sysName | sed -e '/SNMPv2-MIB::sysName/d'));
 
 # now for all the other dirs
 find(sub{
-  return if -f or m/^\./ or m/^(?:net-snmp|rfc|cisco|extras)$/;
+  # FIXME this is not catching everything
+  return if -f or m/^(?:net-snmp|rfc|cisco|extras)$/
+    or $File::Find::name =~ m/\./;
+  &status($_);
   my $newmibdirs = $ENV{MIBDIRS} .":$ENV{MIBHOME}/$_";
-  system(qq(\\snmptranslate -M'$newmibdirs' -IR sysName)) and die ($? >> 8);
+  system(qq(\\snmptranslate -M'$newmibdirs' -IR sysName | grep -v 'SNMPv2-MIB::sysName'));
 }, $ENV{MIBHOME});
 
 # sort each index and change developer's MIBHOME to be {{mibhome}}
+&status('Building cache...');
 find(sub{
   return if -d;
   my $DEST = "$ENV{SNMP_PERSISTENT_DIR}/cache/$_";
@@ -57,4 +67,24 @@ find(sub{
   system(qq(egrep -v '^DIR' $_ | sort -dfs >> '$DEST')) and die ($? >> 8);
 }, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
+&status("Indexes updated.\n");
 exit(0);
+
+my $i = undef;
+sub status {
+  my $note = (shift || '');
+  my %spinner = (
+    "\N{BRAILLE PATTERN DOTS-2345678}" => "\N{BRAILLE PATTERN DOTS-1235678}",
+    "\N{BRAILLE PATTERN DOTS-1235678}" => "\N{BRAILLE PATTERN DOTS-1234678}",
+    "\N{BRAILLE PATTERN DOTS-1234678}" => "\N{BRAILLE PATTERN DOTS-1234578}",
+    "\N{BRAILLE PATTERN DOTS-1234578}" => "\N{BRAILLE PATTERN DOTS-1234567}",
+    "\N{BRAILLE PATTERN DOTS-1234567}" => "\N{BRAILLE PATTERN DOTS-1234568}",
+    "\N{BRAILLE PATTERN DOTS-1234568}" => "\N{BRAILLE PATTERN DOTS-1245678}",
+    "\N{BRAILLE PATTERN DOTS-1245678}" => "\N{BRAILLE PATTERN DOTS-1345678}",
+    "\N{BRAILLE PATTERN DOTS-1345678}" => "\N{BRAILLE PATTERN DOTS-2345678}"
+  );
+  $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
+  print "\r\e[K"; # blank line
+  print YELLOW, "$i ", GREEN, $note, RESET;
+  sleep 0.05;
+}
