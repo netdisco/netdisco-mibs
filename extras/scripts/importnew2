@@ -9,7 +9,7 @@ use charnames ':full';
 binmode STDOUT, ':utf8';
 
 use List::Util 'max';
-use File::Find;
+use File::Temp;
 use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
@@ -39,29 +39,39 @@ if (! -d $to) {
   exit(1);
 }
 
-# check for files with more than one MIB or no MIB definition
-my $bail = 0;
-my (%mib_for, %file_for);
-find(sub{
-  return unless -f;
-  my @defs = qx(egrep '^\\s*(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $_);
-  ++$bail if scalar @defs != 1;
+# let net-snmp find MIBs in the new bundle
+my $tmpdir = File::Temp->newdir();
+$ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
+qx(snmptranslate -IR sysName 2>&1 >/dev/null);
+my $newmibdirs = $ENV{MIBDIRS} .":$from";
+qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
 
-  if (scalar @defs == 0) {
-    print YELLOW, "\N{WARNING SIGN} ", CYAN, "not a MIB?:    ", YELLOW, "$_\n", RESET;
-  }
-  elsif (scalar @defs > 1) {
-    print RED, "\N{HEAVY BALLOT X} ", CYAN,  "multiple MIBs: ", MAGENTA, "$_\n", RESET;
-  }
-  else {
-    # store mib-file mapping
-    foreach my $def (@defs) {
-      my ($mib) = ($def =~ m/^\s*([\w-]+)\s+/);
-      $mib_for{$_} = $mib;
-      $file_for{$mib} = $_;
-    }
-  }
-}, $from);
+# read the MIBs that net-snmp likes
+my (%mib_for, %file_for, %mibs_in);
+open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
+
+while (my $line = <$cache>) {
+  next if $line =~ m/^DIR /;
+  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+
+  # store mib-file mapping
+  $mib_for{$file} = $mib;
+  $file_for{$mib} = $file;
+  ++$mibs_in{$file};
+  print "$mib $file\n";
+}
+
+close $cache;
+undef $tmpdir;
+my $bail = 0;
+
+# check for files with more than one MIB
+foreach (keys %mibs_in) {
+  next unless $mibs_in{$_} > 1;
+  print RED, "\N{HEAVY BALLOT X} ", CYAN,  "multiple MIBs: ", MAGENTA, "$_\n", RESET;
+  ++$bail;
+}
 
 # check any MIB is not featured in another vendor's bundle
 foreach my $mib (keys %file_for) {
@@ -80,12 +90,12 @@ foreach my $mib (keys %file_for) {
 }
 
 if ($bail) {
-  print "\N{CLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n",
-    "  (note: MIBs must be in single files with one-line DEFINITION statements.)\n";
+  print "\N{CLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
   exit(1);
 }
 
 __END__
+  my @defs = qx(egrep '^\\s*(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $_);
 
 my @files = grep {m/\.(?:my|mib|txt)$/}
             map {(splitdir($_))[-1]}
