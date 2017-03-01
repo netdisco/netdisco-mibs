@@ -9,6 +9,7 @@ use charnames ':full';
 binmode STDOUT, ':utf8';
 
 use List::Util 'max';
+use File::Find;
 use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
@@ -18,31 +19,87 @@ if (!defined $ENV{MIBHOME}) {
   exit(1);
 }
 
+$ENV{SNMPCONFPATH} = '';
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+$ENV{MIBS} = 'SNMPv2-MIB';
+$ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc:$ENV{MIBHOME}/cisco";
+
 my $from = shift;
 if (!defined $from or not -d $from) {
-  print "usage: $0 new_dir (containing new MIBs and named same as old_dir)\n";
-  exit(1);
-}
-
-my $platform = (grep {m/\S/} splitdir($from))[-1];
-my $to = catfile($ENV{MIBHOME}, $platform);
-
-if (! -d $to) {
-  print "error: I don't see a directory in MIBHOME named $platform\n";
+  print "usage: $0 new_dir (named same as old_dir and containing new MIBs)\n";
   exit(1);
 }
 
 my $diffcmd = 'diff -bBN';
+my $vendor = (grep {m/\S/} splitdir($from))[-1];
+
+my $to = catfile($ENV{MIBHOME}, $vendor);
+if (! -d $to) {
+  print "error: no directory in MIBHOME named $vendor\n";
+  exit(1);
+}
+
+# check for files with more than one MIB or no MIB definition
+my $bail = 0;
+my (%mib_for, %file_for);
+find(sub{
+  return unless -f;
+  my @defs = qx(egrep '^\\s*(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $_);
+  ++$bail if scalar @defs != 1;
+
+  if (scalar @defs == 0) {
+    print YELLOW, "\N{WARNING SIGN} ", CYAN, "not a MIB?:    ", YELLOW, "$_\n", RESET;
+  }
+  elsif (scalar @defs > 1) {
+    print RED, "\N{HEAVY BALLOT X} ", CYAN,  "multiple MIBs: ", MAGENTA, "$_\n", RESET;
+  }
+  else {
+    # store mib-file mappting
+    foreach my $def (@defs) {
+      my ($mib) = ($def =~ m/^\s*([\w-]+)\s+/);
+      $mib_for{$_} = $mib;
+      $file_for{$mib} = $_;
+    }
+  }
+}, $from);
+
+# check any MIB is not featured in another vendor's bundle
+foreach my $mib (keys %file_for) {
+  my @cache = qx(egrep -li '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
+  foreach my $hit (@cache) {
+    chomp($hit);
+    my $header = qx(head -1 $hit);
+    my ($owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
+
+    if ($vendor ne $owner) {
+      print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN,
+        ' is already featured within vendor ', MAGENTA, "$owner\n", RESET;
+      ++$bail;
+    }
+  }
+}
+
+if ($bail) {
+  # FIXME
+  print "\N{CLOCKWISE GAPPED CIRCLE ARROW} Please ensure all files are single ",
+    "MIBs and have one-line definitions, then start again.\n";
+  exit(0);
+}
+
+__END__
+
 my @files = grep {m/\.(?:my|mib|txt)$/}
             map {(splitdir($_))[-1]}
             grep {-f} glob(catfile($from, '*'));
+
+# TODO: test for other file extensions, and copy without permissions
 
 foreach my $file (sort @files) {
     my $newfile = catfile($from, $file);
     my $oldfile = catfile($to, $file);
 
     if (! -e $oldfile) {
-        print GREEN, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $platform\n", RESET;
+        print GREEN, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $vendor\n", RESET;
         copy($newfile, $to) or die $!;
     }
     else {
@@ -55,7 +112,8 @@ foreach my $file (sort @files) {
               =~ m/"(\d{10}|\d{12})Z"/g);
 
             next if $newv <= $oldv;
-            print YELLOW, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $platform ($newv > $oldv)\n", RESET;
+            # or NEXT PAGE
+            print YELLOW, "$file \N{HEAVY WIDE-HEADED RIGHTWARDS ARROW} $vendor ($newv > $oldv)\n", RESET;
             copy($newfile, $to) or die $!;
         }
         else {
