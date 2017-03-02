@@ -64,19 +64,46 @@ close $cache;
 undef $tmpdir;
 my $bail = 0;
 
-foreach my $mib (keys %file_for) {
+foreach my $mib (sort keys %file_for) {
   # check no MIB is featured in another vendor's bundle
-  my @cache = qx(egrep -li '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
+  my @cache = qx(egrep -m1 -i '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
   foreach my $hit (@cache) {
-    chomp($hit);
-    my $header = qx(head -1 $hit);
+    my ($cachefile, $oldfile) = ($hit =~ m/^([^:]+):$mib\s+(\S+)$/);
+    my $header = qx(head -1 $cachefile);
     my ($owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
 
     if ($vendor ne $owner) {
-      print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
-        " (in '$file_for{$mib}') is already featured within vendor ",
-        MAGENTA, "$owner\n", RESET;
       ++$bail;
+
+      # Look for version numbers - https://tools.ietf.org/html/rfc2578
+      my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$ENV{MIBHOME}/$owner/$oldfile')
+        =~ m/"(\d{10}|\d{12})Z"/g);
+      my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$from/$file_for{$mib}')
+        =~ m/"(\d{10}|\d{12})Z"/g);
+
+      print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
+
+      if ($oldv and $newv) {
+        $oldv = "20$oldv" if length($oldv) == 10;
+        $newv = "20$newv" if length($newv) == 10;
+
+        if ($oldv < $newv) {
+          print " (in '$file_for{$mib}') is within vendor ",
+          MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
+        }
+        elsif ($oldv > $newv) {
+          print " (in '$file_for{$mib}') is within vendor ",
+          MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
+        }
+        else {
+          print " (in '$file_for{$mib}') is within vendor ",
+          MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
+        }
+      }
+      else {
+        print " (in '$file_for{$mib}') is already featured within vendor ",
+        MAGENTA, "$owner\n", RESET;
+      }
     }
   }
 
@@ -84,20 +111,20 @@ foreach my $mib (keys %file_for) {
   my $mibfile = catfile($from, $file_for{$mib});
   my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
   if (scalar @defs > 1) {
+    ++$bail;
     print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for{$mib},
       CYAN, " defines multiple MIBs\n", RESET;
-    ++$bail;
   }
 }
 
 if ($bail) {
   print "\N{CLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
-  # exit(1);
+  exit(1);
 }
 
 # TODO: need to compare MIB not filename!!
 # that is, each MIB in new_dir that is not in cache of the vendor
-foreach my $file (keys %mib_for) {
+foreach my $file (sort keys %mib_for) {
     my $newfile = catfile($from, $file);
     my $oldfile = catfile($to, $file);
 
@@ -118,9 +145,9 @@ foreach my $file (keys %mib_for) {
         my $diff = qx($diffcmd $oldfile $newfile);
         if ($diff !~ m/^\s*$/) {
             # Look for version numbers - https://tools.ietf.org/html/rfc2578
-            my $oldv = max(`egrep -A1 '(REVISION|LAST-UPDATED)' $oldfile`
+            my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $oldfile)
               =~ m/"(\d{10}|\d{12})Z"/g);
-            my $newv = max(`egrep -A1 '(REVISION|LAST-UPDATED)' $newfile`
+            my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $newfile)
               =~ m/"(\d{10}|\d{12})Z"/g);
 
             next if $newv <= $oldv;
