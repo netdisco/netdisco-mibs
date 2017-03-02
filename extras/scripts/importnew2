@@ -47,8 +47,8 @@ my $newmibdirs = $ENV{MIBDIRS} .":$from";
 qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
 $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
 
-# read the MIBs that net-snmp likes
-my (%mib_for, %file_for, %mibs_in);
+# read the MIBs that net-snmp likes (file '3' is new_dir vendor)
+my (%mib_for, %file_for);
 open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
 
 while (my $line = <$cache>) {
@@ -58,23 +58,14 @@ while (my $line = <$cache>) {
   # store mib-file mapping
   $mib_for{$file} = $mib;
   $file_for{$mib} = $file;
-  ++$mibs_in{$file};
-  print "$mib $file\n";
 }
 
 close $cache;
 undef $tmpdir;
 my $bail = 0;
 
-# check for files with more than one MIB
-foreach (keys %mibs_in) {
-  next unless $mibs_in{$_} > 1;
-  print RED, "\N{HEAVY BALLOT X} ", CYAN,  "multiple MIBs: ", MAGENTA, "$_\n", RESET;
-  ++$bail;
-}
-
-# check any MIB is not featured in another vendor's bundle
 foreach my $mib (keys %file_for) {
+  # check no MIB is featured in another vendor's bundle
   my @cache = qx(egrep -li '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
   foreach my $hit (@cache) {
     chomp($hit);
@@ -82,10 +73,20 @@ foreach my $mib (keys %file_for) {
     my ($owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
 
     if ($vendor ne $owner) {
-      print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN,
-        ' is already featured within vendor ', MAGENTA, "$owner\n", RESET;
+      print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
+        " (in '$file_for{$mib}') is already featured within vendor ",
+        MAGENTA, "$owner\n", RESET;
       ++$bail;
     }
+  }
+
+  # check for multiple MIB defs within one file (net-snmp cannot detect)
+  my $mibfile = catfile($from, $file_for{$mib});
+  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
+  if (scalar @defs > 1) {
+    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for{$mib},
+      CYAN, " defines multiple MIBs\n", RESET;
+    ++$bail;
   }
 }
 
@@ -95,7 +96,6 @@ if ($bail) {
 }
 
 __END__
-  my @defs = qx(egrep '^\\s*(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $_);
 
 my @files = grep {m/\.(?:my|mib|txt)$/}
             map {(splitdir($_))[-1]}
