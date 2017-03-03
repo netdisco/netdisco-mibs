@@ -69,6 +69,7 @@ my %newfiles = map  {($_ => 1)}
                grep {-f} glob(catfile($from, '*'));
 
 foreach my $mib (sort keys %file_for) {
+  &status($mib);
   my $mibfile = catfile($from, $file_for{$mib});
   delete $newfiles{ $file_for{$mib} };
 
@@ -85,6 +86,7 @@ foreach my $mib (sort keys %file_for) {
     }
     else {
       ++$bail;
+      print "\r\e[K"; # blank line
       print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
 
       # Look for version numbers - https://tools.ietf.org/html/rfc2578
@@ -122,21 +124,25 @@ foreach my $mib (sort keys %file_for) {
   my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
   if (scalar @defs > 1) {
     ++$bail;
+    print "\r\e[K"; # blank line
     print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for{$mib},
       CYAN, " defines multiple MIBs\n", RESET;
   }
 }
 
-if ($bail) {
-  print "\N{ANTICLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
-#  exit(1);
-}
-
 # show files being ignored by this script
 foreach my $file (sort keys %newfiles) {
+  print "\r\e[K"; # blank line
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
     $file, CYAN, " is not a MIB\n", RESET;
 }
+
+print "\r\e[K"; # blank line
+if ($bail) {
+  print "\N{ANTICLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
+  exit(1);
+}
+&status('Analysing MIBs...');
 
 # build a lookup of the current MIB index for vendor
 my (%oldmib_for, %oldfile_for);
@@ -185,6 +191,7 @@ foreach my $mib (keys %file_for) {
   }
 }
 
+print "\r\e[K"; # blank line
 foreach (sort keys %oldmibs) {
   print FAINT, "\N{HEAVY BALLOT X} $_ $oldmibs{$_}\n", RESET;
 }
@@ -195,13 +202,31 @@ foreach (sort keys %newermibs) {
   print YELLOW, "\N{HEAVY CHECK MARK}",
     GREEN, " $_ ", CYAN,
     "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newermibs{$_}\n", RESET;
-#  copy(catfile($from, $file_for{$_}), catfile($to, $oldfile_for{$_})) or die $!;
+  copy(catfile($from, $file_for{$_}), catfile($to, $oldfile_for{$_})) or die $!;
 }
 foreach (sort keys %newmibs) {
   print YELLOW,
     "\N{BLACK SMALL STAR}", GREEN, " $_ ", CYAN,
     "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newmibs{$_}\n", RESET;
-#  copy(catfile($from, $file_for{$_}), $to) or die $!;
+  copy(catfile($from, $file_for{$_}), $to) or die $!;
 }
 
 exit(0);
+
+my $i = undef;
+sub status {
+  my $note = (shift || '');
+  my %spinner = (
+    "\N{BRAILLE PATTERN DOTS-2345678}" => "\N{BRAILLE PATTERN DOTS-1235678}",
+    "\N{BRAILLE PATTERN DOTS-1235678}" => "\N{BRAILLE PATTERN DOTS-1234678}",
+    "\N{BRAILLE PATTERN DOTS-1234678}" => "\N{BRAILLE PATTERN DOTS-1234578}",
+    "\N{BRAILLE PATTERN DOTS-1234578}" => "\N{BRAILLE PATTERN DOTS-1234567}",
+    "\N{BRAILLE PATTERN DOTS-1234567}" => "\N{BRAILLE PATTERN DOTS-1234568}",
+    "\N{BRAILLE PATTERN DOTS-1234568}" => "\N{BRAILLE PATTERN DOTS-1245678}",
+    "\N{BRAILLE PATTERN DOTS-1245678}" => "\N{BRAILLE PATTERN DOTS-1345678}",
+    "\N{BRAILLE PATTERN DOTS-1345678}" => "\N{BRAILLE PATTERN DOTS-2345678}"
+  );
+  $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
+  print "\r\e[K"; # blank line
+  print YELLOW, "$i ", CYAN, $note, RESET;
+}
