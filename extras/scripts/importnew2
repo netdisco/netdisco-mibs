@@ -64,10 +64,13 @@ close $cache;
 undef $tmpdir;
 my $bail = 0;
 my $vendorcache = undef;
+my %newfiles = map  {($_ => 1)}
+               map  {(splitdir($_))[-1]}
+               grep {-f} glob(catfile($from, '*'));
 
-# TODO also summary of number of files not interesting/copied/etc
 foreach my $mib (sort keys %file_for) {
   my $mibfile = catfile($from, $file_for{$mib});
+  delete $newfiles{ $file_for{$mib} };
 
   # check no MIB is featured in another vendor's bundle
   my @cache = qx(egrep -m1 -i '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
@@ -129,6 +132,12 @@ if ($bail) {
 #  exit(1);
 }
 
+# show files being ignored by this script
+foreach my $file (sort keys %newfiles) {
+  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
+    $file, CYAN, " is not a MIB\n", RESET;
+}
+
 # build a lookup of the current MIB index for vendor
 my (%oldmib_for, %oldfile_for);
 if ($vendorcache) {
@@ -183,7 +192,7 @@ foreach (sort keys %samemibs) {
   print FAINT, "\N{EQUALS SIGN} $_\n", RESET;
 }
 foreach (sort keys %newermibs) {
-  print YELLOW, "\N{HEAVY WIDE-HEADED RIGHTWARDS ARROW}",
+  print YELLOW, "\N{HEAVY CHECK MARK}",
     GREEN, " $_ ", CYAN,
     "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newermibs{$_}\n", RESET;
 #  copy(catfile($from, $file_for{$_}), catfile($to, $oldfile_for{$_})) or die $!;
