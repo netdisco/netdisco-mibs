@@ -14,7 +14,6 @@ binmode STDOUT, ':utf8';
 
 use List::Util 'max';
 use File::Temp;
-use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
 
@@ -34,7 +33,6 @@ if (!defined $from or not -d $from) {
   exit(1);
 }
 
-my $diffcmd = 'diff -bBN';
 my $vendor = (grep {m/\S/} splitdir($from))[-1];
 
 my $to = catfile($ENV{MIBHOME}, $vendor);
@@ -44,51 +42,27 @@ if (! -d $to) {
 }
 
 # let net-snmp find MIBs in the new bundle
-my $tmpdir = File::Temp->newdir();
-$ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
-qx(snmptranslate -IR sysName 2>&1 >/dev/null);
-my $newmibdirs = $ENV{MIBDIRS} .":$from";
-qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
-$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+my ($mib_for, $file_for) = build_index($from);
 
-# read the MIBs that net-snmp likes (file '3' is new_dir vendor)
-my (%mib_for, %file_for);
-open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
-
-while (my $line = <$cache>) {
-  next if $line =~ m/^DIR /;
-  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-  # store mib-file mapping
-  $mib_for{$file} = $mib;
-  $file_for{$mib} = $file;
-}
-
-close $cache;
-undef $tmpdir;
 my $bail = 0;
-my $vendorcache = undef;
 my %newfiles = map  {($_ => 1)}
                map  {(splitdir($_))[-1]}
                grep {-f} glob(catfile($from, '*'));
 
-foreach my $mib (sort keys %file_for) {
+foreach my $mib (sort keys %{$file_for}) {
+  my $mibfile = catfile($from, $file_for->{$mib});
+  delete $newfiles{ $file_for->{$mib} };
   &status($mib);
-  my $mibfile = catfile($from, $file_for{$mib});
-  delete $newfiles{ $file_for{$mib} };
 
   # check no MIB is featured in another vendor's bundle
+  # TODO: instead use the mib_index.txt file for speed
   my @cache = qx(egrep -m1 -i '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
   foreach my $hit (@cache) {
     my ($cachefile, $oldfile) = ($hit =~ m/^([^:]+):$mib\s+(\S+)$/);
     my $header = qx(head -1 $cachefile);
     (my $owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
 
-    if ($vendor eq $owner) {
-      # remember the file that's the cache for this vendor
-      $vendorcache = $hit;
-    }
-    else {
+    if ($vendor ne $owner) {
       ++$bail;
       print "\r\e[K"; # blank line
       print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
@@ -105,21 +79,21 @@ foreach my $mib (sort keys %file_for) {
         $newv = "20$newv" if length($newv) == 10;
 
         if ($oldv < $newv) {
-          print " (in '$file_for{$mib}') is within vendor ",
+          print " (in '", $file_for->{$mib}, "') is within vendor ",
           MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
         }
         elsif ($oldv > $newv) {
-          print " (in '$file_for{$mib}') is within vendor ",
+          print " (in '", $file_for->{$mib}, "') is within vendor ",
           MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
         }
         else {
-          print " (in '$file_for{$mib}') is within vendor ",
+          print " (in '", $file_for->{$mib}, "') is within vendor ",
           MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
         }
       }
       else {
-        print " (in '$file_for{$mib}') is already featured within vendor ",
-        MAGENTA, "$owner\n", RESET;
+        print " (in '", $file_for->{$mib},
+        "') is already featured within vendor ", MAGENTA, "$owner\n", RESET;
       }
     }
   }
@@ -129,93 +103,54 @@ foreach my $mib (sort keys %file_for) {
   if (scalar @defs > 1) {
     ++$bail;
     print "\r\e[K"; # blank line
-    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for{$mib},
+    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for->{$mib},
       CYAN, " defines multiple MIBs\n", RESET;
   }
 }
 
+print "\r\e[K"; # blank line
+
 # show files being ignored by this script
 foreach my $file (sort keys %newfiles) {
-  print "\r\e[K"; # blank line
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
     $file, CYAN, " is not a MIB\n", RESET;
 }
 
-print "\r\e[K"; # blank line
 if ($bail) {
   print "\N{ANTICLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
   exit(1);
 }
-&status('Analysing MIBs...');
+else {
+  print "\N{HEAVY CHECK MARK} Sanity checks have passed.\n";
+  exit(0);
+}
 
-# build a lookup of the current MIB index for vendor
-my (%oldmib_for, %oldfile_for);
-if ($vendorcache) {
-  (my $cachefile) = ($vendorcache =~ m/^([^:]+):/);
-  open(my $cache, '<', $cachefile) or die $!;
+sub build_index {
+  my $bundle = shift;
+  my (%mib_for, %file_for);
+
+  my $tmpdir = File::Temp->newdir();
+  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
+  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
+  my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
+  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
+  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+
+  # read the MIBs that net-snmp likes (file '3' is the vendor)
+  open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
   while (my $line = <$cache>) {
     next if $line =~ m/^DIR /;
     my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
 
     # store mib-file mapping
-    $oldmib_for{$file} = $mib;
-    $oldfile_for{$mib} = $file;
+    $mib_for{$file} = $mib;
+    $file_for{$mib} = $file;
   }
   close $cache;
-}
+  undef $tmpdir;
 
-my (%newmibs, %oldmibs, %newermibs, %samemibs);
-foreach my $mib (keys %file_for) {
-  my $oldfile = exists $oldfile_for{$mib}
-    ? catfile($to, $oldfile_for{$mib}) : undef;
-  my $newfile = catfile($from, $file_for{$mib});
-
-  if (!defined $oldfile or !-e $oldfile) {
-    $newmibs{$mib} = $vendor;
-  }
-  else {
-    my $diff = qx($diffcmd $oldfile $newfile);
-    if ($diff !~ m/^\s*$/) {
-      # Look for version numbers - https://tools.ietf.org/html/rfc2578
-      my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $oldfile)
-        =~ m/"(\d{10}|\d{12})Z"/g);
-      my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $newfile)
-        =~ m/"(\d{10}|\d{12})Z"/g);
-
-      if ($newv <= $oldv) {
-        $oldmibs{$mib} = "($newv <= $oldv)";
-      }
-      else {
-        $newermibs{$mib} = "$vendor ($newv > $oldv)";
-      }
-    }
-    else {
-      $samemibs{$mib} = 1;
-    }
-  }
+  return (\%mib_for, \%file_for);
 }
-
-print "\r\e[K"; # blank line
-foreach (sort keys %oldmibs) {
-  print FAINT, "\N{HEAVY BALLOT X} $_ $oldmibs{$_}\n", RESET;
-}
-foreach (sort keys %samemibs) {
-  print FAINT, "\N{EQUALS SIGN} $_\n", RESET;
-}
-foreach (sort keys %newermibs) {
-  print YELLOW, "\N{HEAVY CHECK MARK}",
-    GREEN, " $_ ", CYAN,
-    "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newermibs{$_}\n", RESET;
-  copy(catfile($from, $file_for{$_}), catfile($to, $oldfile_for{$_})) or die $!;
-}
-foreach (sort keys %newmibs) {
-  print YELLOW,
-    "\N{BLACK SMALL STAR}", GREEN, " $_ ", CYAN,
-    "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newmibs{$_}\n", RESET;
-  copy(catfile($from, $file_for{$_}), $to) or die $!;
-}
-
-exit(0);
 
 my $i = undef;
 sub status {

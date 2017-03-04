@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# diff_dir [new_dir]
+# importmibs [new_dir]
 # will look into new_dir for MIBs to add or replace in MIBHOME/...
 
 use strict;
@@ -30,7 +30,6 @@ if (!defined $from or not -d $from) {
   exit(1);
 }
 
-my $diffcmd = 'diff -bBN';
 my $vendor = (grep {m/\S/} splitdir($from))[-1];
 
 my $to = catfile($ENV{MIBHOME}, $vendor);
@@ -39,132 +38,17 @@ if (! -d $to) {
   exit(1);
 }
 
-# let net-snmp find MIBs in the new bundle
-my $tmpdir = File::Temp->newdir();
-$ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
-qx(snmptranslate -IR sysName 2>&1 >/dev/null);
-my $newmibdirs = $ENV{MIBDIRS} .":$from";
-qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
-$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+# let net-snmp find MIBs in the new/old bundle
+my ($mib_for, $file_for) = build_index($from);
+my ($oldmib_for, $oldfile_for) = build_index($to);
 
-# read the MIBs that net-snmp likes (file '3' is new_dir vendor)
-my (%mib_for, %file_for);
-open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
-
-while (my $line = <$cache>) {
-  next if $line =~ m/^DIR /;
-  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-  # store mib-file mapping
-  $mib_for{$file} = $mib;
-  $file_for{$mib} = $file;
-}
-
-close $cache;
-undef $tmpdir;
-my $bail = 0;
-my $vendorcache = undef;
-my %newfiles = map  {($_ => 1)}
-               map  {(splitdir($_))[-1]}
-               grep {-f} glob(catfile($from, '*'));
-
-foreach my $mib (sort keys %file_for) {
-  &status($mib);
-  my $mibfile = catfile($from, $file_for{$mib});
-  delete $newfiles{ $file_for{$mib} };
-
-  # check no MIB is featured in another vendor's bundle
-  my @cache = qx(egrep -m1 -i '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
-  foreach my $hit (@cache) {
-    my ($cachefile, $oldfile) = ($hit =~ m/^([^:]+):$mib\s+(\S+)$/);
-    my $header = qx(head -1 $cachefile);
-    (my $owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
-
-    if ($vendor eq $owner) {
-      # remember the file that's the cache for this vendor
-      $vendorcache = $hit;
-    }
-    else {
-      ++$bail;
-      print "\r\e[K"; # blank line
-      print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
-
-      # Look for version numbers - https://tools.ietf.org/html/rfc2578
-      # this is a gesture to the maintainer in case there's a newer version
-      my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$ENV{MIBHOME}/$owner/$oldfile')
-        =~ m/"(\d{10}|\d{12})Z"/g);
-      my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
-        =~ m/"(\d{10}|\d{12})Z"/g);
-
-      if ($oldv and $newv) {
-        $oldv = "20$oldv" if length($oldv) == 10;
-        $newv = "20$newv" if length($newv) == 10;
-
-        if ($oldv < $newv) {
-          print " (in '$file_for{$mib}') is within vendor ",
-          MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
-        }
-        elsif ($oldv > $newv) {
-          print " (in '$file_for{$mib}') is within vendor ",
-          MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
-        }
-        else {
-          print " (in '$file_for{$mib}') is within vendor ",
-          MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
-        }
-      }
-      else {
-        print " (in '$file_for{$mib}') is already featured within vendor ",
-        MAGENTA, "$owner\n", RESET;
-      }
-    }
-  }
-
-  # check for multiple MIB defs within one file (net-snmp cannot detect)
-  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
-  if (scalar @defs > 1) {
-    ++$bail;
-    print "\r\e[K"; # blank line
-    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for{$mib},
-      CYAN, " defines multiple MIBs\n", RESET;
-  }
-}
-
-# show files being ignored by this script
-foreach my $file (sort keys %newfiles) {
-  print "\r\e[K"; # blank line
-  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
-    $file, CYAN, " is not a MIB\n", RESET;
-}
-
-print "\r\e[K"; # blank line
-if ($bail) {
-  print "\N{ANTICLOCKWISE GAPPED CIRCLE ARROW} No action taken.\n";
-  exit(1);
-}
-&status('Analysing MIBs...');
-
-# build a lookup of the current MIB index for vendor
-my (%oldmib_for, %oldfile_for);
-if ($vendorcache) {
-  (my $cachefile) = ($vendorcache =~ m/^([^:]+):/);
-  open(my $cache, '<', $cachefile) or die $!;
-  while (my $line = <$cache>) {
-    next if $line =~ m/^DIR /;
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-    # store mib-file mapping
-    $oldmib_for{$file} = $mib;
-    $oldfile_for{$mib} = $file;
-  }
-  close $cache;
-}
-
+my $diffcmd = 'diff -bBN';
 my (%newmibs, %oldmibs, %newermibs, %samemibs);
-foreach my $mib (keys %file_for) {
-  my $oldfile = exists $oldfile_for{$mib}
-    ? catfile($to, $oldfile_for{$mib}) : undef;
-  my $newfile = catfile($from, $file_for{$mib});
+
+foreach my $mib (keys %{$file_for}) {
+  my $oldfile = exists $oldfile_for->{$mib}
+    ? catfile($to, $oldfile_for->{$mib}) : undef;
+  my $newfile = catfile($from, $file_for->{$mib});
 
   if (!defined $oldfile or !-e $oldfile) {
     $newmibs{$mib} = $vendor;
@@ -202,31 +86,40 @@ foreach (sort keys %newermibs) {
   print YELLOW, "\N{HEAVY CHECK MARK}",
     GREEN, " $_ ", CYAN,
     "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newermibs{$_}\n", RESET;
-  copy(catfile($from, $file_for{$_}), catfile($to, $oldfile_for{$_})) or die $!;
+  copy(catfile($from, $file_for->{$_}), catfile($to, $oldfile_for->{$_})) or die $!;
 }
 foreach (sort keys %newmibs) {
   print YELLOW,
     "\N{BLACK SMALL STAR}", GREEN, " $_ ", CYAN,
     "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newmibs{$_}\n", RESET;
-  copy(catfile($from, $file_for{$_}), $to) or die $!;
+  copy(catfile($from, $file_for->{$_}), $to) or die $!;
 }
 
 exit(0);
 
-my $i = undef;
-sub status {
-  my $note = (shift || '');
-  my %spinner = (
-    "\N{BRAILLE PATTERN DOTS-2345678}" => "\N{BRAILLE PATTERN DOTS-1235678}",
-    "\N{BRAILLE PATTERN DOTS-1235678}" => "\N{BRAILLE PATTERN DOTS-1234678}",
-    "\N{BRAILLE PATTERN DOTS-1234678}" => "\N{BRAILLE PATTERN DOTS-1234578}",
-    "\N{BRAILLE PATTERN DOTS-1234578}" => "\N{BRAILLE PATTERN DOTS-1234567}",
-    "\N{BRAILLE PATTERN DOTS-1234567}" => "\N{BRAILLE PATTERN DOTS-1234568}",
-    "\N{BRAILLE PATTERN DOTS-1234568}" => "\N{BRAILLE PATTERN DOTS-1245678}",
-    "\N{BRAILLE PATTERN DOTS-1245678}" => "\N{BRAILLE PATTERN DOTS-1345678}",
-    "\N{BRAILLE PATTERN DOTS-1345678}" => "\N{BRAILLE PATTERN DOTS-2345678}"
-  );
-  $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
-  print "\r\e[K"; # blank line
-  print YELLOW, "$i ", CYAN, $note, RESET;
+sub build_index {
+  my $bundle = shift;
+  my (%mib_for, %file_for);
+
+  my $tmpdir = File::Temp->newdir();
+  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
+  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
+  my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
+  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
+  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+
+  # read the MIBs that net-snmp likes (file '3' is the vendor)
+  open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
+  while (my $line = <$cache>) {
+    next if $line =~ m/^DIR /;
+    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+
+    # store mib-file mapping
+    $mib_for{$file} = $mib;
+    $file_for{$mib} = $file;
+  }
+  close $cache;
+  undef $tmpdir;
+
+  return (\%mib_for, \%file_for);
 }
