@@ -1,9 +1,9 @@
 #!/usr/bin/env perl
 # mibcheck [new_dir]
 # sanity checks on the MIBs in new_dir
-# - MIBs already 'owned' by another vendor
-# - whether already-owend mib is newer and could be imported
-# - multiple MIBs defined in a file
+# - show MIBs already 'owned' by another vendor
+# - note whether already-owend mib is newer and could be imported
+# - alert to multiple MIBs defined in a file
 # - warning about files in new_dir that will be ignored
 
 use strict;
@@ -41,6 +41,33 @@ if (! -d $to) {
   exit(1);
 }
 
+my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
+if (! -f $indexfile) {
+  print "error: missing mib_index2.txt (run mkcache then mkindex)\n";
+  exit(1);
+}
+
+# load mib_index2.txt mapping all current known MIBs
+my (%vendor_for, %oldfile_for, $currvendor);
+open(my $index, '<', $indexfile) or die $!;
+while (my $line = <$index>) {
+  next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
+  if ($line =~ m/^DIR\s+(\S+)/) {
+    $currvendor = (grep {m/\S/} splitdir($1))[-1];
+    next;
+  }
+  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+
+  # store mib-vendor mapping
+  if (exists $vendor_for{$mib}) {
+    print YELLOW, "\N{WARNING SIGN} ", MAGENTA, uc($mib), CYAN,
+      "is duplicated in vendors $vendor_for{$mib} and $currvendor\n", RESET;
+  }
+  $vendor_for{$mib}  = $currvendor;
+  $oldfile_for{$mib} = $file;
+}
+close $index;
+
 # let net-snmp find MIBs in the new bundle
 my ($mib_for, $file_for) = build_index($from);
 
@@ -55,46 +82,39 @@ foreach my $mib (sort keys %{$file_for}) {
   &status($mib);
 
   # check no MIB is featured in another vendor's bundle
-  # TODO: instead use the mib_index.txt file for speed
-  my @cache = qx(egrep -m1 -i '^$mib ' $ENV{SNMP_PERSISTENT_DIR}/cache/*);
-  foreach my $hit (@cache) {
-    my ($cachefile, $oldfile) = ($hit =~ m/^([^:]+):$mib\s+(\S+)$/);
-    my $header = qx(head -1 $cachefile);
-    (my $owner) = ($header =~ m#{{mibhome}}/(\w+)$#);
+  if (exists $vendor_for{$mib} and $vendor_for{$mib} ne $vendor) {
+    ++$bail;
+    print "\r\e[K"; # blank line
+    print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
+    my $owner = $vendor_for{$mib};
 
-    if ($vendor ne $owner) {
-      ++$bail;
-      print "\r\e[K"; # blank line
-      print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
+    # Look for version numbers - https://tools.ietf.org/html/rfc2578
+    # this is a gesture to the maintainer in case there's a newer version
+    my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$ENV{MIBHOME}/$owner/$oldfile_for{$mib}')
+      =~ m/"(\d{10}|\d{12})Z"/g);
+    my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
+      =~ m/"(\d{10}|\d{12})Z"/g);
 
-      # Look for version numbers - https://tools.ietf.org/html/rfc2578
-      # this is a gesture to the maintainer in case there's a newer version
-      my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$ENV{MIBHOME}/$owner/$oldfile')
-        =~ m/"(\d{10}|\d{12})Z"/g);
-      my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
-        =~ m/"(\d{10}|\d{12})Z"/g);
+    if ($oldv and $newv) {
+      $oldv = "20$oldv" if length($oldv) == 10;
+      $newv = "20$newv" if length($newv) == 10;
 
-      if ($oldv and $newv) {
-        $oldv = "20$oldv" if length($oldv) == 10;
-        $newv = "20$newv" if length($newv) == 10;
-
-        if ($oldv < $newv) {
-          print " (in '", $file_for->{$mib}, "') is within vendor ",
-          MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
-        }
-        elsif ($oldv > $newv) {
-          print " (in '", $file_for->{$mib}, "') is within vendor ",
-          MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
-        }
-        else {
-          print " (in '", $file_for->{$mib}, "') is within vendor ",
-          MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
-        }
+      if ($oldv < $newv) {
+        print " (in '", $file_for->{$mib}, "') is within vendor ",
+        MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
+      }
+      elsif ($oldv > $newv) {
+        print " (in '", $file_for->{$mib}, "') is within vendor ",
+        MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
       }
       else {
-        print " (in '", $file_for->{$mib},
-        "') is already featured within vendor ", MAGENTA, "$owner\n", RESET;
+        print " (in '", $file_for->{$mib}, "') is within vendor ",
+        MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
       }
+    }
+    else {
+      print " (in '", $file_for->{$mib},
+      "') is already featured within vendor ", MAGENTA, "$owner\n", RESET;
     }
   }
 
@@ -147,7 +167,6 @@ sub build_index {
     $file_for{$mib} = $file;
   }
   close $cache;
-  undef $tmpdir;
 
   return (\%mib_for, \%file_for);
 }
