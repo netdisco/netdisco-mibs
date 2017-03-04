@@ -7,10 +7,11 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
-use Time::HiRes 'sleep';
-use Term::ANSIColor qw(:constants);
 use File::Find;
+use File::Temp;
+use File::Copy;
 use File::Spec::Functions 'splitdir';
+use Term::ANSIColor qw(:constants);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -35,11 +36,21 @@ find(sub{ -d or unlink or die $! },
 system(q(snmptranslate -IR sysName | egrep -v '^SNMPv2-MIB::sysName$'));
 
 # now for all the other dirs
-foreach (map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
+my $next = 3;
+foreach (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
   next if m/^(?:net-snmp|rfc|cisco|extras)$/ or m/\./;
   &status($_);
+
+  my $tmpdir = File::Temp->newdir();
   my $newmibdirs = $ENV{MIBDIRS} .":$ENV{MIBHOME}/$_";
+
+  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
+  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
   system(qq(\\snmptranslate -M'$newmibdirs' -IR sysName | egrep -v '^SNMPv2-MIB::sysName\$'));
+  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+
+  copy("$tmpdir/mib_indexes/3", "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$next");
+  ++$next;
 }
 
 # sort each index and change developer's MIBHOME to be {{mibhome}}
@@ -86,5 +97,4 @@ sub status {
   $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
   print "\r\e[K"; # blank line
   print YELLOW, "$i ", CYAN, $note, RESET;
-  sleep 0.05;
 }
