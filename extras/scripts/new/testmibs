@@ -1,0 +1,90 @@
+#!/usr/bin/env perl
+# testmibs [vendor] - use snmptranslate to boot all MIBs, print any errors
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
+use File::Spec::Functions qw(splitdir catfile);
+use Term::ANSIColor qw(:constants);
+
+if (!defined $ENV{MIBHOME}) {
+  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
+  exit(1);
+}
+
+$ENV{SNMPCONFPATH} = '';
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+$ENV{MIBS} = 'SNMPv2-MIB';
+
+# TODO: arguably rfc:net-snmp should be enough!
+# but it seems cisco, nortel, etc are required. maybe in the future, fix this.
+my @mibdirs = grep { -d and $_ !~ m#/extras$# } glob("$ENV{MIBHOME}/*");
+$ENV{MIBDIRS} = join ':', @mibdirs;
+
+my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
+if (! -f $indexfile) {
+  print "error: missing mib_index2.txt (run mkcache then mkindex)\n";
+  exit(1);
+}
+
+# load mib_index2.txt mapping all current known MIBs
+my (%mibs_for, %vendor_for, %file_for, @allmibs, $currvendor);
+open(my $index, '<', $indexfile) or die $!;
+while (my $line = <$index>) {
+  next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
+  if ($line =~ m/^DIR\s+(\S+)/) {
+    $currvendor = (grep {m/\S/} splitdir($1))[-1];
+    next;
+  }
+  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+  $file_for{$mib} = $file;
+  $vendor_for{$mib} = $currvendor;
+  push @{$mibs_for{$currvendor}}, $mib;
+  push @allmibs, $mib;
+}
+close $index;
+
+my $vendor = shift;
+if ($vendor and !exists $mibs_for{$vendor}) {
+  print "error: vendor arg must exist in MIBHOME\n";
+  exit(1);
+}
+my @mibs = (defined $vendor) ? @{$mibs_for{$vendor}} : @allmibs;
+
+foreach my $mib (sort @mibs) {
+  &status("Testing $mib");
+  my $check = qx(snmptranslate -Le -m $mib bork 2>&1);
+  # kill last line (our bogus error)
+  $check =~ s/^.*\Z//m;
+  if ($check !~ /^\s*$/){
+    print "\r\e[K"; # blank line
+    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ', MAGENTA,
+      $mib, RESET, FAINT, " in $vendor_for{$mib}/$file_for{$mib}\n", RESET;
+    print $check;
+  }
+}
+
+print "\r\e[K"; # blank line
+print "\N{BLACK FLAG} Checks done.\n";
+exit(0);
+
+my $i = undef;
+sub status {
+  my $note = (shift || '');
+  my %spinner = (
+    "\N{BRAILLE PATTERN DOTS-2345678}" => "\N{BRAILLE PATTERN DOTS-1235678}",
+    "\N{BRAILLE PATTERN DOTS-1235678}" => "\N{BRAILLE PATTERN DOTS-1234678}",
+    "\N{BRAILLE PATTERN DOTS-1234678}" => "\N{BRAILLE PATTERN DOTS-1234578}",
+    "\N{BRAILLE PATTERN DOTS-1234578}" => "\N{BRAILLE PATTERN DOTS-1234567}",
+    "\N{BRAILLE PATTERN DOTS-1234567}" => "\N{BRAILLE PATTERN DOTS-1234568}",
+    "\N{BRAILLE PATTERN DOTS-1234568}" => "\N{BRAILLE PATTERN DOTS-1245678}",
+    "\N{BRAILLE PATTERN DOTS-1245678}" => "\N{BRAILLE PATTERN DOTS-1345678}",
+    "\N{BRAILLE PATTERN DOTS-1345678}" => "\N{BRAILLE PATTERN DOTS-2345678}"
+  );
+  $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
+  print "\r\e[K"; # blank line
+  print YELLOW, "$i ", CYAN, $note, RESET;
+}
