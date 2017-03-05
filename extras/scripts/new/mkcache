@@ -29,6 +29,8 @@ mkdir "$ENV{SNMP_PERSISTENT_DIR}/cache";
 
 # clean out any live indexes
 find(sub{ -d or unlink or die $! },
+  "$ENV{SNMP_PERSISTENT_DIR}/cache");
+find(sub{ -d or unlink or die $! },
   "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
 # bootstrap initial three indexes
@@ -57,9 +59,8 @@ foreach (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
 &status('Building cache...');
 find(sub{
   return if -d;
-  my $dest = "$ENV{SNMP_PERSISTENT_DIR}/cache/$_";
 
-  # store vendor name from the index
+  # retrieve vendor name from the index
   my $vendor = undef;
   open(my $index, '<', $_) or die $!;
   while (my $line = <$index>) {
@@ -69,13 +70,10 @@ find(sub{
   close $index;
   die "no vendor: $File::Find::name" if !defined $vendor;
 
-  # init portable index in the cache dir
-  open(my $newindex, '>', $dest) or die $!;
-  print $newindex "DIR {{mibhome}}/$vendor\n";
-  close $newindex;
-
   # copy over sorted content of the index
-  system(qq(egrep -v '^DIR' $_ | sort -dfs >> '$dest')) and die ($? >> 8);
+  my $dest = "$ENV{SNMP_PERSISTENT_DIR}/cache/$vendor";
+  system(qq(egrep -v '^DIR' $_ | sort -dfs > '$dest')) and die ($? >> 8);
+
 }, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
 print "\r\e[K"; # blank line

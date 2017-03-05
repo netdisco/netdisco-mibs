@@ -29,32 +29,33 @@ mkdir "$ENV{SNMP_PERSISTENT_DIR}/cache";
 find(sub{ -d or unlink or die $! },
   "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
-# copy all from cache
+open(my $mibindex2, '>', "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt") or die $!;
+print $mibindex2 "MIB Index v2\n";
+my $idxcount = 0;
+
 find(sub{
   return if -d;
-  &status("Copying $_");
-  copy($_, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$_") or die $!;
+  &status("Restoring $_");
+  my $dest = "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$idxcount";
+
+  open(my $src, '<', $File::Find::name) or die $!;
+  open(my $newindex, '>', $dest) or die $!;
+
+  print $mibindex2 "\n";
+  print $mibindex2 "DIR $ENV{MIBHOME}/$_\n";
+  print $newindex  "DIR $ENV{MIBHOME}/$_\n";
+
+  while (my $line = <$src>) {
+    print $mibindex2 $line;
+    print $newindex  $line;
+  }
+
+  close $newindex;
+  close $src;
+  ++$idxcount;
 }, "$ENV{SNMP_PERSISTENT_DIR}/cache");
 
-# restore net-snmp DIR in the index
-find(sub{
-  return if -d;
-  &status("Relocating $_");
-  system(qq(perl -pi -e 's#{{mibhome}}#$ENV{MIBHOME}#' $_)) and die ($? >> 8);
-}, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
-
-# build a mib_index2.txt
-open(my $index, '>', "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt") or die $!;
-print $index "MIB Index v2\n";
-find(sub{
-  return if -d;
-  &status('Compiling mib_index2');
-  print $index "\n";
-  open(my $src, '<', $File::Find::name) or die $!;
-  while (my $line = <$src>) { print $index $line }
-  close $src;
-}, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
-close $index;
+close $mibindex2;
 
 print "\r\e[K"; # blank line
 print "\N{HEAVY CHECK MARK} Indexes rebuilt.\n";
