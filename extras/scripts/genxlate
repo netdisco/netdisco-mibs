@@ -6,10 +6,13 @@ use warnings;
 
 use charnames ':full';
 binmode STDOUT, ':utf8';
+$|++;
 
+use Time::HiRes 'sleep';
 use File::Temp;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
+use POSIX qw(:sys_wait_h);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -51,12 +54,20 @@ if ($vendor and !exists $mibs_for{$vendor} and $vendor ne 'all') {
 my @vendors = (defined $vendor) ? ($vendor) : (sort keys %mibs_for);
 
 foreach my $v (@vendors) {
-  &status("Parsing $v");
   my $mibs = ($v eq 'all') ? 'ALL' : (join ':', @{$mibs_for{$v}});
   my $out = catfile($ENV{MIBHOME}, 'extras', 'reports', $v);
   my $err = File::Temp->new();
 
-  system(qq{snmptranslate -Tt -Le -m $mibs 2>$err | sed -re 's/ tc=[0-9]+//g' 1>$out});
+  defined(my $pid = fork) or die "Couldn't fork: $!";
+  if (!$pid) { # Child
+    exec(qq{snmptranslate -Tt -Le -m $mibs 2>$err | sed -re 's/ tc=[0-9]+//g' 1>$out})
+      or die "Couldn't exec: $!";
+  } else { # Parent
+    while (! waitpid($pid, WNOHANG)) {
+      &status("Parsing $v");
+      sleep 0.05;
+    }
+  }
 
   if (-s $err) {
     print "\r\e[K"; # blank line
