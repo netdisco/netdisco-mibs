@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# mibcheck new_dir
+# prepmibs new_dir
 # sanity checks on the MIBs in new_dir
 # - show MIBs already 'owned' by another vendor
 # - note whether already-owend mib is newer and could be imported
@@ -14,6 +14,7 @@ binmode STDOUT, ':utf8';
 
 use List::Util 'max';
 use File::Temp;
+use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
 
@@ -71,7 +72,7 @@ close $index;
 # let net-snmp find MIBs in the new bundle
 my ($mib_for, $file_for) = build_index($from);
 
-my $bail = 0;
+my %res = ();
 my %newfiles = map  {($_ => 1)}
                map  {(splitdir($_))[-1]}
                grep {-f} glob(catfile($from, '*'));
@@ -81,19 +82,28 @@ foreach my $mib (sort keys %{$file_for}) {
   delete $newfiles{ $file_for->{$mib} };
   &status($mib);
 
-  # check no MIB is featured in another vendor's bundle
+  # check for multiple MIB defs within one file (net-snmp cannot detect)
+  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
+  if (scalar @defs > 1) {
+    $res{multi}->{ $file_for->{$mib} } = scalar @defs;
+    next;
+  }
+
+  # check whether MIB is featured in another vendor's bundle
   if (exists $vendor_for{$mib} and $vendor_for{$mib} ne $vendor) {
-    ++$bail;
-    print "\r\e[K"; # blank line
-    print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
-    my $owner = $vendor_for{$mib};
+    $res{other}->{$mib} = $vendor_for{$mib};
+  }
+  elsif (!exists $oldfile_for{$mib}) {
+      $res{new}->{$mib} = 1;
+  }
+  else {
+    my $oldmibfile = catfile($to, $oldfile_for{$mib});
 
     # Look for version numbers - https://tools.ietf.org/html/rfc2578
-    # this is a gesture to the maintainer in case there's a newer version
-    my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$ENV{MIBHOME}/$owner/$oldfile_for{$mib}')
-      =~ m/"(\d{10}|\d{12})Z"/g);
+    my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$oldmibfile')
+      =~ m/"(\d{10}|\d{12})Z?"/g);
     my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
-      =~ m/"(\d{10}|\d{12})Z"/g);
+      =~ m/"(\d{10}|\d{12})Z?"/g);
 
     if ($oldv and $newv) {
       if (length($oldv) == 10) {
@@ -104,50 +114,93 @@ foreach my $mib (sort keys %{$file_for}) {
       }
 
       if ($oldv < $newv) {
-        print " (in '", $file_for->{$mib}, "') is within vendor ",
-        MAGENTA, $owner, CYAN, " and newer ($newv > $oldv)\n", RESET;
+        $res{newer}->{$mib} = [$newv, $oldv];
       }
       elsif ($oldv > $newv) {
-        print " (in '", $file_for->{$mib}, "') is within vendor ",
-        MAGENTA, $owner, CYAN, " but older ($newv < $oldv)\n", RESET;
+        $res{older}->{$mib} = [$newv, $oldv];
       }
       else {
-        print " (in '", $file_for->{$mib}, "') is within vendor ",
-        MAGENTA, $owner, CYAN, " and the same revision\n", RESET;
+        $res{same}->{$mib} = 1;
       }
     }
     else {
-      print " (in '", $file_for->{$mib},
-      "') is already featured within vendor ", MAGENTA, "$owner\n", RESET;
+      $res{nover}->{$mib} = 1;
     }
   }
-
-  # check for multiple MIB defs within one file (net-snmp cannot detect)
-  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
-  if (scalar @defs > 1) {
-    ++$bail;
-    print "\r\e[K"; # blank line
-    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file_for->{$mib},
-      CYAN, " defines multiple MIBs\n", RESET;
-  }
 }
+
+# show files being ignored by this script
+$res{ignore} = \%newfiles;
+
+# other, ignore, older, same, newer, new, multi, nover
+&status('Preparing to organise files...');
+
+foreach (qw(other ignore older same)) {
+  mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
+}
+if (scalar keys %{$res{other}}) {
+  mkdir(catfile($from, 'other', $_)) for values %{$res{other}};
+}
+mkdir(catfile($from, 'error')) if scalar keys %{$res{multi}}
+                                  or scalar keys %{$res{nover}};
 
 print "\r\e[K"; # blank line
 
-# show files being ignored by this script
-foreach my $file (sort keys %newfiles) {
-  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
-    $file, CYAN, " is not a MIB\n", RESET;
+foreach my $mib (sort keys %{$res{other}}) {
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
+    " (in '", $file_for->{$mib}, "') is already featured within vendor ",
+    MAGENTA, $res{other}->{$mib}, "\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for{$mib}));
 }
 
-if ($bail) {
-  print "\N{BLACK FLAG} Checks done, with errors.\n";
-  exit(1);
+foreach my $file (sort keys %{$res{ignore}}) {
+  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
+    $file, CYAN, " is not a MIB\n", RESET;
+  move(catfile($from, $file), catfile($from, 'ignore'));
 }
-else {
-  print "\N{HEAVY CHECK MARK} Sanity checks passed.\n";
-  exit(0);
+
+foreach my $mib (sort keys %{$res{older}}) {
+  my  ($newv, $oldv) = @{ $res{older}->{$mib} };
+  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib),
+    " (in '", $file_for->{$mib}, "') is older ($newv < $oldv)\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, 'older', $oldfile_for{$mib}));
 }
+
+foreach my $mib (sort keys %{$res{same}}) {
+  print FAINT, "\N{EQUALS SIGN} ", uc($mib),
+    " (in '", $file_for->{$mib}, "') is the same revision\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, 'same', $oldfile_for{$mib}));
+}
+
+foreach my $mib (sort keys %{$res{newer}}) {
+  my  ($newv, $oldv) = @{ $res{newer}->{$mib} };
+  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib), CYAN,
+    " (in '", $file_for->{$mib}, "') is newer ($newv > $oldv)\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, $oldfile_for{$mib}));
+}
+
+foreach my $mib (sort keys %{$res{new}}) {
+  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, uc($mib), "\n", RESET;
+}
+
+foreach my $file (sort keys %{$res{multi}}) {
+  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file,
+    CYAN, " defines multiple (", $res{multi}->{$file}, ") MIBs\n", RESET;
+  move(catfile($from, $file), catfile($from, 'error'));
+}
+
+foreach my $mib (sort keys %{$res{nover}}) {
+  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN,
+    " (in '", $file_for->{$mib}, "') has no parseable revision date\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, 'error', $oldfile_for{$mib}));
+}
+
+exit(0);
 
 sub build_index {
   my $bundle = shift;
