@@ -75,6 +75,7 @@ my ($mib_for, $file_for) = build_index($from);
 my %res = ();
 my %newfiles = map  {($_ => 1)}
                map  {(splitdir($_))[-1]}
+               map  {chmod(0644, $_); $_}
                grep {-f} glob(catfile($from, '*'));
 
 foreach my $mib (sort keys %{$file_for}) {
@@ -147,40 +148,47 @@ mkdir(catfile($from, 'error')) if scalar keys %{$res{multi}}
 print "\r\e[K"; # blank line
 
 foreach my $mib (sort keys %{$res{other}}) {
-  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
-    " (in '", $file_for->{$mib}, "') is already featured within vendor ",
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print " is already featured within vendor ",
     MAGENTA, $res{other}->{$mib}, "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for{$mib}));
+       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for{$mib}))
+    or die $!;
 }
 
 foreach my $file (sort keys %{$res{ignore}}) {
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
     $file, CYAN, " is not a MIB\n", RESET;
-  move(catfile($from, $file), catfile($from, 'ignore'));
+  move(catfile($from, $file), catfile($from, 'ignore')) or die $!;
 }
 
 foreach my $mib (sort keys %{$res{older}}) {
   my  ($newv, $oldv) = @{ $res{older}->{$mib} };
-  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib),
-    " (in '", $file_for->{$mib}, "') is older ($newv < $oldv)\n", RESET;
+  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib);
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print " is older ($newv < $oldv)\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'older', $oldfile_for{$mib}));
+       catfile($from, 'older', $oldfile_for{$mib})) or die $!;
 }
 
 foreach my $mib (sort keys %{$res{same}}) {
-  print FAINT, "\N{EQUALS SIGN} ", uc($mib),
-    " (in '", $file_for->{$mib}, "') is the same revision\n", RESET;
+  print FAINT, "\N{EQUALS SIGN} ", uc($mib);
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print " is the same revision\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'same', $oldfile_for{$mib}));
+       catfile($from, 'same', $oldfile_for{$mib}))
+    or die $!;
 }
 
 foreach my $mib (sort keys %{$res{newer}}) {
   my  ($newv, $oldv) = @{ $res{newer}->{$mib} };
-  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib), CYAN,
-    " (in '", $file_for->{$mib}, "') is newer ($newv > $oldv)\n", RESET;
+  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib), CYAN;
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print " is newer ($newv > $oldv)\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, $oldfile_for{$mib}));
+       catfile($from, $oldfile_for{$mib}))
+    or die $!;
 }
 
 foreach my $mib (sort keys %{$res{new}}) {
@@ -190,17 +198,26 @@ foreach my $mib (sort keys %{$res{new}}) {
 foreach my $file (sort keys %{$res{multi}}) {
   print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file,
     CYAN, " defines multiple (", $res{multi}->{$file}, ") MIBs\n", RESET;
-  move(catfile($from, $file), catfile($from, 'error'));
+  move(catfile($from, $file), catfile($from, 'error')) or die $!;
 }
 
 foreach my $mib (sort keys %{$res{nover}}) {
-  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN,
-    " (in '", $file_for->{$mib}, "') has no parseable revision date\n", RESET;
+  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN;
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print " has no parseable revision date\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'error', $oldfile_for{$mib}));
+       catfile($from, 'error', $oldfile_for{$mib}))
+    or die $!;
 }
 
-exit(0);
+if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
+  print "\N{BLACK FLAG} MIBs inspected, with errors.\n";
+  exit(1);
+}
+else {
+  print "\N{HEAVY CHECK MARK} MIBs ready for import.\n";
+  exit(0);
+}
 
 sub build_index {
   my $bundle = shift;
