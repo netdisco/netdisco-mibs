@@ -1,26 +1,51 @@
+-- Copyright (C) 2011-2015 Hewlett-Packard Development Company, L.P.
+
+-- **************************************************************************
+-- The contents of this software are proprietary and confidential to the
+-- Hewlett-Packard Development Company, L.P.  No part of this program may be 
+-- photocopied, reproduced, or translated into another programming language
+-- without prior written consent of the Hewlett-Packard Development Co., L.P. 
+-- **************************************************************************
+
 HP-TUNNEL-MIB DEFINITIONS ::= BEGIN
     IMPORTS
-        MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32
-            FROM SNMPv2-SMI
-        RowStatus, TEXTUAL-CONVENTION 
-            FROM SNMPv2-TC
-        MODULE-COMPLIANCE, OBJECT-GROUP   
-            FROM SNMPv2-CONF
-        InterfaceIndex
-            FROM IF-MIB
-        tunnelIfEntry, tunnelInetConfigEntry
-            FROM TUNNEL-MIB
-        hpSwitch
-            FROM HP-ICF-OID;
+        MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32,
+        NOTIFICATION-TYPE
+                                        FROM SNMPv2-SMI
+    RowStatus, TEXTUAL-CONVENTION       FROM SNMPv2-TC
+    MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+                                        FROM SNMPv2-CONF
+    InterfaceIndex
+                                        FROM IF-MIB
+    SnmpAdminString
+                                        FROM SNMP-FRAMEWORK-MIB
+    InetAddress, InetAddressType        FROM INET-ADDRESS-MIB
+    tunnelIfEntry, tunnelInetConfigEntry,
+    tunnelIfAddressType, tunnelIfLocalInetAddress,
+    tunnelIfRemoteInetAddress
+                                        FROM TUNNEL-MIB
+
+    hpSwitch                            FROM HP-ICF-OID
+    VlanIndex                           FROM Q-BRIDGE-MIB;
 
     hpTunnelMIB MODULE-IDENTITY
-        LAST-UPDATED "201007220000Z"   -- July 22nd  2010
+        LAST-UPDATED "201502020000Z" -- February 2nd, 2015
         ORGANIZATION "HP Networking"
         CONTACT-INFO "Hewlett Packard Company
                       8000 Foothills Blvd.
                       Roseville, CA 95747"
+        DESCRIPTION
+                     "Renamed hpTunnelNotifications"
+        REVISION     "201502020000Z"   -- February 2nd, 2015
+
         DESCRIPTION  "The MIB module for managing the tunnel 
                       interfaces"
+        REVISION      "201408150000Z"   -- August 15th, 2014
+        DESCRIPTION
+           "Added hpTunnelNotifyScalars & hpTunnelNotifications"
+
+        REVISION      "201408130000Z"   -- August 13th  2014
+        DESCRIPTION   "Added option macinudp under HpTunnelType"
 
         REVISION      "201007220000Z"   -- July 22nd 2010
         DESCRIPTION   "The initial revision of this MIB module"
@@ -28,9 +53,9 @@ HP-TUNNEL-MIB DEFINITIONS ::= BEGIN
         ::= { hpSwitch  77}
 
 
-    hpTunnelNotifications OBJECT IDENTIFIER ::= { hpTunnelMIB 0 }
-    hpTunnelObjects       OBJECT IDENTIFIER ::= { hpTunnelMIB 1 }
-    hpTunnelConformance   OBJECT IDENTIFIER ::= { hpTunnelMIB 2 }
+ hpTunnelNotifications OBJECT IDENTIFIER ::= { hpTunnelMIB 0 }
+ hpTunnelObjects       OBJECT IDENTIFIER ::= { hpTunnelMIB 1 }
+ hpTunnelConformance   OBJECT IDENTIFIER ::= { hpTunnelMIB 2 }
 
 --
 -- Textual Conventions
@@ -46,169 +71,453 @@ HP-TUNNEL-MIB DEFINITIONS ::= BEGIN
                           direct6in4Ipsec(4),
                           direct6in6(5),
                           ipsecIpv4(6),
-                          ipsecIpv6(7)
+                          ipsecIpv6(7),
+                          macinudp(8)            -- vxlan tunnel
                      }
 --
 -- MIB objects
 --
 
 --
--- hp Tunnel Config Table
+-- hp Tunnel config Table
 --
-    hpTunnelConfigTable OBJECT-TYPE  
-        SYNTAX      SEQUENCE OF HpTunnelConfigEntry
-        MAX-ACCESS  not-accessible
-        STATUS      current
-        DESCRIPTION
-                  "This table is used to provision a tunnel without 
-                  having to configure the source and destination 
-                  endpoints of the tunnel."
-        ::= { hpTunnelObjects 1 }
+     hpTunnelConfigTable OBJECT-TYPE  
 
-    hpTunnelConfigEntry OBJECT-TYPE
-        SYNTAX      HpTunnelConfigEntry
-        MAX-ACCESS  not-accessible
-        STATUS      current
-        DESCRIPTION
+          SYNTAX      SEQUENCE OF HpTunnelConfigEntry
+          MAX-ACCESS  not-accessible
+          STATUS      current
+          DESCRIPTION
+              "This table is used to provision for a tunnel without 
+               having to configure the source and destination ends of the tunnels. "
+          ::= { hpTunnelObjects 1 }
+
+      hpTunnelConfigEntry OBJECT-TYPE
+          SYNTAX      HpTunnelConfigEntry
+          MAX-ACCESS  not-accessible
+          STATUS      current
+          DESCRIPTION
                   "A set of objects that are used to create a tunnel."
-        INDEX    { hpTunnelID }
-        ::= { hpTunnelConfigTable 1 }
+          INDEX    { hpTunnelID }
+          ::= { hpTunnelConfigTable 1 }
 
     HpTunnelConfigEntry ::= SEQUENCE {
                           hpTunnelID                 Integer32,
                           hpTunnelIfIndex            InterfaceIndex,
-                          hpTunnelRowStatus          RowStatus
+                          hpTunnelRowStatus          RowStatus,
+                          hpTunnelInterfaceIndex     InterfaceIndex
                     }       
 
-    hpTunnelID   OBJECT-TYPE
+
+        hpTunnelID   OBJECT-TYPE
         SYNTAX      Integer32 (1..2147483647)
         MAX-ACCESS  not-accessible
         STATUS      current
         DESCRIPTION
-                  "An identifier to configure the tunnel."
-        ::= { hpTunnelConfigEntry 1 }
+        "The tunnel number to configure a tunnel."
 
-    hpTunnelIfIndex OBJECT-TYPE
+         ::= { hpTunnelConfigEntry 1 }
+
+
+        hpTunnelIfIndex OBJECT-TYPE
         SYNTAX          InterfaceIndex
         MAX-ACCESS      read-only
-        STATUS          current
+        STATUS          deprecated
         DESCRIPTION
                   "The interface index associated with this tunnel 
-                  entry."
+                  entry.
+                  Since this Object is read-only, it is deprecated in favor of
+                  hpTunnelInterfaceIndex."
         ::= { hpTunnelConfigEntry 2 }
 
-    hpTunnelRowStatus OBJECT-TYPE
+        hpTunnelRowStatus OBJECT-TYPE
         SYNTAX                RowStatus
         MAX-ACCESS            read-create
         STATUS                current
         DESCRIPTION
-                  "The status of this row, by which new entries may be
-                  created, or old entries deleted from this table."
+        "The status of this row, by which new entries may be
+         created, or old entries deleted from this table."
         ::= { hpTunnelConfigEntry 3 }
         
+        hpTunnelInterfaceIndex OBJECT-TYPE
+        SYNTAX          InterfaceIndex
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+        "The tunnel interface index associated with this tunnel entry."
+        ::= { hpTunnelConfigEntry 4 }
+
 --
 --  Augments to tunnelIfTable
 --
-    hpTunnelIfTable  OBJECT-TYPE
+        hpTunnelIfTable  OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpTunnelIfEntry
         MAX-ACCESS  not-accessible
         STATUS      current
         DESCRIPTION
-                  "This table augments the tunnelIfTable."
+        "This table augments the tunnelIfTable "
         ::= { hpTunnelObjects 2 }
 
-    hpTunnelIfEntry OBJECT-TYPE
+        hpTunnelIfEntry OBJECT-TYPE
         SYNTAX      HpTunnelIfEntry
         MAX-ACCESS  not-accessible
         STATUS      current
         DESCRIPTION
-                  "A set of objects as an augment to tunnelIfTable."
+          "A set of objects as an augment to tunnelIfTable."
         AUGMENTS    { tunnelIfEntry }
         ::= { hpTunnelIfTable 1 }
 
-    HpTunnelIfEntry ::= SEQUENCE {
+
+        HpTunnelIfEntry ::= SEQUENCE {
+        hpTunnelIfPMTU       INTEGER,
+        hpTunnelIfNUD        INTEGER,
         hpTunnelIfMTU        Unsigned32,
-        hpTunnelEncapsMethod HpTunnelType
+        hpTunnelEncapsMethod HpTunnelType,
+        hpTunnelIpsecName    SnmpAdminString
         }
         
 
-    hpTunnelIfMTU    OBJECT-TYPE
-        SYNTAX            Unsigned32
-        MAX-ACCESS        read-write
-        STATUS            current
+     hpTunnelIfPMTU OBJECT-TYPE
+        SYNTAX                INTEGER {
+               enable (1),
+               disable (2)
+               }
+        MAX-ACCESS            read-write
+        STATUS                current
         DESCRIPTION
-                  "The size of the largest packet which can be 
-                  sent/received on the interface, specified in 
-                  octets. For interfaces that are used for 
-                  transmitting network datagrams, this is the size 
-                  of the largest network datagram that can be sent 
-                  on this interface."
-        DEFVAL {1280}
-        ::= { hpTunnelIfEntry 3 }
+        "Enable/Disable path mtu discovery for this tunnel."
+        DEFVAL {disable}
+       ::= { hpTunnelIfEntry 1 }
 
-    hpTunnelEncapsMethod OBJECT-TYPE
+      hpTunnelIfNUD OBJECT-TYPE
+      SYNTAX                INTEGER {
+                enable(1),
+                disable (2)
+                }
+      MAX-ACCESS            read-write
+      STATUS                current
+      DESCRIPTION
+      "Enable/Disable Neighbor Unreachability Detection for this tunnel."
+      DEFVAL {enable}
+      ::= { hpTunnelIfEntry 2 }
+
+      hpTunnelIfMTU    OBJECT-TYPE
+      SYNTAX            Unsigned32
+      MAX-ACCESS        read-write
+      STATUS            current
+      DESCRIPTION
+        "The size of the largest packet which can be sent/received
+         on the interface, specified in octets.  For interfaces that
+         are used for transmitting network datagrams, this is the
+         size of the largest network datagram that can be sent on the
+         interface."
+      DEFVAL {1280}
+      ::= { hpTunnelIfEntry 3}
+
+
+      hpTunnelEncapsMethod OBJECT-TYPE
         SYNTAX                HpTunnelType
         MAX-ACCESS            read-write
         STATUS                current
         DESCRIPTION
-                  "The encapsulation method used by the tunnel."
+        "The encapsulation method used by the tunnel."
         ::= { hpTunnelIfEntry 4 }
   
+        
+        hpTunnelIpsecName OBJECT-TYPE
+          SYNTAX      SnmpAdminString (SIZE(0..64))
+          MAX-ACCESS  read-write
+          STATUS      current
+          DESCRIPTION "Specifies the IPSEC profile name for tunnel.
+                       This mentioned IPSEC profile can be attached with 
+                       tunnel to avail the protection for tunnel traffic"
+          ::= { hpTunnelIfEntry 5}
+                                             
+   --   hpTunnelLocalAddrIfIndex OBJECT-TYPE
+   --     SYNTAX                 InterfaceIndexOrZero
+   --     MAX-ACCESS             read-create
+   --     STATUS                 current
+   --     DESCRIPTION
+   --     "The interface index from which to pick the local
+   --     address of the tunnel.tunnelIfTable's tunnelIfLocalInetAddress
+   --     will have the first ip (ipv4 or ipv6) address of the specified interface index.
+   --     A value of zero indicates that the address will be provided by the user in
+   --     tunnelIfLocalInetAddress.
+   --     "
+   --     DEFVAL {0}
+   --     ::= { hpTunnelIfEntry 5 }
 --
 --  Augments to tunnelInetConfigTable
 --
-    hpTunnelInetConfigTable  OBJECT-TYPE
+        hpTunnelInetConfigTable  OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpTunnelInetConfigEntry
         MAX-ACCESS  not-accessible
         STATUS      current
         DESCRIPTION
-                  "This table augments the tunnelInetConfigTable."
+        "This table augments the tunnelInetConfigTable "
         ::= { hpTunnelObjects 3 }
 
-    hpTunnelInetConfigEntry OBJECT-TYPE
+        hpTunnelInetConfigEntry OBJECT-TYPE
         SYNTAX      HpTunnelInetConfigEntry
         MAX-ACCESS  not-accessible
         STATUS      current
         DESCRIPTION
-                  "A set of objects as an augment to tunnelInetConfigTable."
+          "A set of objects as an augment to tunnelInetConfigTable."
         AUGMENTS    { tunnelInetConfigEntry }
         ::= { hpTunnelInetConfigTable 1 }
 
-    HpTunnelInetConfigEntry ::= SEQUENCE {
+
+        HpTunnelInetConfigEntry ::= SEQUENCE {
         hpTunnelInetConfigEncapsMethod       HpTunnelType
+
         }
 
-    hpTunnelInetConfigEncapsMethod OBJECT-TYPE
+
+        hpTunnelInetConfigEncapsMethod OBJECT-TYPE
         SYNTAX                HpTunnelType
         MAX-ACCESS            read-write
         STATUS                current
         DESCRIPTION
-                  "The encapsulation method used by this tunnel."
+        "The encapsulation method used by the tunnel.
+        "
         ::= { hpTunnelInetConfigEntry 1 }
+
+-- =============================================================
+-- hpTunnelNotifyScalars & hpTunnelNotifications
+-- =============================================================
+hpTunnelNotifyScalars      OBJECT IDENTIFIER ::= 
+                           { hpTunnelObjects 6 }
+
+
+hpTunnelMTUDropRouterAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "The IP address type of the router that 
+                 sent the ICMP destination unreachable message."
+   ::= { hpTunnelNotifyScalars 1 }
+
+hpTunnelMTUDropRouterAddr OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "IP address of the router that sent 
+                      the ICMP destination unreachable message."
+     ::= { hpTunnelNotifyScalars 2 }
+
+hpTunnelMTUDropRouterMTU OBJECT-TYPE
+     SYNTAX          Integer32
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "The interface MTU of the router that sent 
+                     the ICMP destination unreachable message."
+     ::= { hpTunnelNotifyScalars 3 }
+
+hpTunnelMTUDropTunnelSrcAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "The address type of the source IP address
+                 of the original packet that is encapsulated
+                 by the VXLAN/Tap tunnel interface."
+   ::= { hpTunnelNotifyScalars 4 }
+
+hpTunnelMTUDropTunnelSource OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "The source IP address of the original packet 
+                      that is encapsulated by the VXLAN/Tap tunnel
+                      interface."
+     ::= { hpTunnelNotifyScalars 5 }
+
+hpTunnelMTUDropTunnelDstAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "The address type of the destination IP address 
+                 of the original packet that is encapsulated
+                 by the VXLAN/Tap tunnel interface."
+   ::= { hpTunnelNotifyScalars 6 }
+
+
+hpTunnelMTUDropTunnelDest OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "The destination IP address of the original packet 
+                      that is encapsulated by the VXLAN/Tap tunnel
+                      interface."
+     ::= { hpTunnelNotifyScalars 7 }
+
+
+hpTunnelMTUDropInIfIndex OBJECT-TYPE
+     SYNTAX          InterfaceIndex
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "The interface index of the inbound VLAN of 
+                      the ICMP destination unreachable packet."
+     ::= { hpTunnelNotifyScalars 8 }
+
+hpTunnelMTUDropNotifyEnable   OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          enable (1),
+                          disable (2)
+                     }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION 
+               " This enables or disables the virtual network
+                 notifications."
+         DEFVAL { disable }
+    ::= { hpTunnelNotifyScalars 9 }
+ 
+hpTunnelIcmpErrorRcvd  NOTIFICATION-TYPE
+      OBJECTS {
+                  hpTunnelMTUDropRouterAddrType,
+                  hpTunnelMTUDropRouterAddr,
+                  hpTunnelMTUDropRouterMTU,
+                  hpTunnelMTUDropTunnelSrcAddrType,
+                  hpTunnelMTUDropTunnelSource,
+                  hpTunnelMTUDropTunnelDstAddrType,
+                  hpTunnelMTUDropTunnelDest,
+                  hpTunnelMTUDropInIfIndex,
+                  tunnelIfAddressType,
+                  tunnelIfLocalInetAddress, 
+                  tunnelIfRemoteInetAddress
+              }
+        STATUS  current
+        DESCRIPTION
+                "This notification is generated when the tunnel
+                 source recevied an ICMP destination unreachable 
+                 error message from the router in the underlay
+                 network with the IP address hpTunnelMTUDropRouterAddr 
+                 for the reason of MTU violation."
+        ::= { hpTunnelNotifications 1 }
+
+--
+--- Vlan to Tunnel Mapping Configuration - Table
+--
+
+hpicfVlanTunnelMappingTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF HpicfVlanTunnelMappingEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "A table that maps a VLAN to a tunnel. The tunnel to VLAN mapping                implies that tunnel will carry bidirectional traffic of a VLAN."
+   ::= { hpTunnelObjects 4 }
+
+hpicfVlanTunnelMappingEntry OBJECT-TYPE
+   SYNTAX      HpicfVlanTunnelMappingEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "An entry containing the mapping of a VLAN to a tunnel. 
+                The VLAN-to-tunnel mapping allows all the VLAN traffic to
+                flow through the associated tunnel."
+   INDEX       { hpicfVLANIndex, hpicfTunnelIfIndex }
+   ::= { hpicfVlanTunnelMappingTable 1 }
+
+HpicfVlanTunnelMappingEntry::=
+   SEQUENCE {      
+       hpicfVLANIndex                       VlanIndex,
+       hpicfTunnelIfIndex                   InterfaceIndex,
+       hpicfVlanTunnelMappingRowStatus      RowStatus
+       }
+
+hpicfVLANIndex OBJECT-TYPE
+   SYNTAX      VlanIndex
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "This object refers to the VLANID that is mapped to a tunnel"
+   ::= { hpicfVlanTunnelMappingEntry 1 }
+
+hpicfTunnelIfIndex OBJECT-TYPE
+   SYNTAX      InterfaceIndex
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "This object specifies the tunnel interface index which is 
+                mapped to a speciifc VLAN."
+   ::= { hpicfVlanTunnelMappingEntry 2 }
+
+hpicfVlanTunnelMappingRowStatus 	OBJECT-TYPE
+   SYNTAX      RowStatus
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION "The row status of a VLAN to tunnel mapping entry."
+   ::= { hpicfVlanTunnelMappingEntry 3 }
+
+--
+--- UDP Tunnel Type configuration Table
+--
+   hpicfUDPTunnelTypeTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF HpicfUDPTunnelTypeEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "A table containing the information about the UDP tunnel types."
+   ::= { hpTunnelObjects 5 }
+
+   hpicfUDPTunnelTypeEntry OBJECT-TYPE
+   SYNTAX      HpicfUDPTunnelTypeEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "An entry containing the information on a UDP tunnel type."
+   AUGMENTS    { tunnelInetConfigEntry }
+   ::= { hpicfUDPTunnelTypeTable 1 }
+
+   HpicfUDPTunnelTypeEntry ::=
+   SEQUENCE {
+            hpicfUDPTunnelType                  INTEGER
+        }
+
+   hpicfUDPTunnelType OBJECT-TYPE
+    SYNTAX INTEGER {
+                     none(0),
+                     remotemirror(1),
+                     vxlan(2)                    
+                   }
+    MAX-ACCESS   read-create
+    STATUS       current
+    DESCRIPTION  "This object is used to configure the UDP tunnel type.
+                  A value of none(0) indicates that the tunnel is not a 
+                    UDP tunnel.
+                  A value of remotemirror(1) indicates that the UDP tunnel 
+                    configured is a remote mirroring tunnel.
+                  A value of vxlan(2) indicates that the UDP tunnel configured 
+                    is a VXLAN tunnel."
+    DEFVAL { remotemirror }
+    ::= { hpicfUDPTunnelTypeEntry 1 }
 
   -- conformance information
 
-    hpTunnelMIBCompliances
-        OBJECT IDENTIFIER ::= { hpTunnelConformance 1 }
-    hpTunnelMIBGroups 
-        OBJECT IDENTIFIER ::= { hpTunnelConformance 2 }
+   hpTunnelMIBCompliances
+           OBJECT IDENTIFIER ::= { hpTunnelConformance 1 }
+   hpTunnelMIBGroups  OBJECT IDENTIFIER ::= { hpTunnelConformance 2 }
 
     hpTunnelMIBCompliance MODULE-COMPLIANCE
+        STATUS  deprecated
+        DESCRIPTION
+                  "The compliance statement for the HP Tunnel MIB."
+        MODULE  -- this module
+        MANDATORY-GROUPS  { hpTunnelProvisionGroup, hpTunnelInetConfigGroup,
+                            hpVlanTunnelMappingGroup }
+        ::= { hpTunnelMIBCompliances 1 }
+
+     hpTunnelMIBCompliance2 MODULE-COMPLIANCE
         STATUS  current
         DESCRIPTION
                   "The compliance statement for the HP Tunnel MIB."
         MODULE  -- this module
-        MANDATORY-GROUPS  { hpTunnelProvisionGroup, hpTunnelInetConfigGroup }
-        ::= { hpTunnelMIBCompliances 1 }
+        MANDATORY-GROUPS  { hpTunnelProvisionGroup2, hpTunnelInetConfigGroup, 
+                      hpTunnelNotifyScalarsGroup, hpTunnelNotificationsGroup,
+		      hpVlanTunnelMappingGroup }
+		      
+        ::= { hpTunnelMIBCompliances 2 }
 
    -- units of conformance
 
     hpTunnelProvisionGroup OBJECT-GROUP
-        OBJECTS { hpTunnelIfIndex,hpTunnelEncapsMethod,
-                  hpTunnelIfMTU,  
-                  hpTunnelRowStatus
+        OBJECTS { hpTunnelIfIndex,hpTunnelEncapsMethod,hpTunnelIfPMTU,
+                  hpTunnelIfMTU, hpTunnelIfNUD, hpTunnelRowStatus
          }
-        STATUS  current
+        STATUS  deprecated
         DESCRIPTION
                   "A collection of objects to support creation of 
                   a tunnel."
@@ -216,7 +525,9 @@ HP-TUNNEL-MIB DEFINITIONS ::= BEGIN
 
     hpTunnelInetConfigGroup OBJECT-GROUP
         OBJECTS {
-            hpTunnelInetConfigEncapsMethod
+            hpTunnelInetConfigEncapsMethod,
+            hpTunnelIpsecName,
+            hpicfUDPTunnelType
         }
         STATUS  current
         DESCRIPTION
@@ -224,4 +535,47 @@ HP-TUNNEL-MIB DEFINITIONS ::= BEGIN
                   tunnelInetConfigTable."
         ::= { hpTunnelMIBGroups 2 }
 
+    hpVlanTunnelMappingGroup OBJECT-GROUP
+         OBJECTS {
+             hpicfVlanTunnelMappingRowStatus
+         }
+         STATUS  current
+         DESCRIPTION
+                   "A collection of objects to support VLAN to tunnel mapping."
+         ::= { hpTunnelMIBGroups 3 }
+
+     hpTunnelProvisionGroup2 OBJECT-GROUP
+        OBJECTS { hpTunnelInterfaceIndex, hpTunnelEncapsMethod,hpTunnelIfPMTU,
+                  hpTunnelIfMTU, hpTunnelIfNUD, hpTunnelRowStatus
+        }
+        STATUS  current
+        DESCRIPTION
+                  "A collection of objects to support creation of 
+                  a tunnel."
+        ::= { hpTunnelMIBGroups 4 }
+
+    hpTunnelNotifyScalarsGroup   OBJECT-GROUP
+         OBJECTS { 
+                  hpTunnelMTUDropRouterAddrType,
+                  hpTunnelMTUDropRouterAddr,
+                  hpTunnelMTUDropRouterMTU,
+                  hpTunnelMTUDropTunnelSrcAddrType,
+                  hpTunnelMTUDropTunnelSource,
+                  hpTunnelMTUDropTunnelDstAddrType,
+                  hpTunnelMTUDropTunnelDest,
+                  hpTunnelMTUDropInIfIndex,
+                  hpTunnelMTUDropNotifyEnable
+                 }
+        STATUS          current
+        DESCRIPTION   "Group of objects required for
+                       notifications."
+        ::= { hpTunnelMIBGroups 5}
+
+   hpTunnelNotificationsGroup NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                      hpTunnelIcmpErrorRcvd
+                      }
+        STATUS      current
+        DESCRIPTION "The notifications for the VXLAN/Tap tunnels."
+        ::= { hpTunnelMIBGroups 6 }
 END

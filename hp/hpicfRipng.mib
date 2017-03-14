@@ -1,0 +1,554 @@
+-- Copyright (C) 2014-2015 Hewlett-Packard Development Company, L.P.
+
+-- **************************************************************************
+-- The contents of this software are proprietary and confidential to the
+-- Hewlett-Packard Development Company, L.P.  No part of this program may be 
+-- photocopied, reproduced, or translated into another programming language
+-- without prior written consent of the Hewlett-Packard Development Co., L.P. 
+-- **************************************************************************
+
+HP-ICF-RIPNG-MIB DEFINITIONS ::= BEGIN
+
+   IMPORTS
+        OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE,
+	Integer32, Counter32, Unsigned32
+            FROM SNMPv2-SMI
+        MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+            FROM SNMPv2-CONF
+        TruthValue, RowStatus
+            FROM SNMPv2-TC
+        InetAddress, InetAddressType
+	    FROM INET-ADDRESS-MIB
+        InterfaceIndex
+            FROM IF-MIB
+        hpSwitch
+            FROM HP-ICF-OID;
+
+   hpicfRipng MODULE-IDENTITY
+      LAST-UPDATED "201505110000Z" -- May 11, 2015
+      ORGANIZATION "HP Networking"
+      CONTACT-INFO "Hewlett-Packard Company
+                    8000 Foothills Blvd.
+                    Roseville, CA 95747"
+      DESCRIPTION  "This is a HP proprietary MIB module to describe the RIPng protocol."
+	
+      REVISION     "201505110000Z"
+      DESCRIPTION  "Initial revision."
+
+      ::= { hpSwitch 113}
+
+   hpicfRipngNotifications  OBJECT IDENTIFIER ::= { hpicfRipng 0 }
+   hpicfRipngObjects        OBJECT IDENTIFIER ::= { hpicfRipng 1 }
+   hpicfRipngConformance    OBJECT IDENTIFIER ::= { hpicfRipng 2 }
+
+-- ********************************************************************  
+-- Base Scalars  
+-- ********************************************************************  
+
+   hpicfRipngBaseScalars 
+   OBJECT IDENTIFIER ::= { hpicfRipngObjects 1 }
+
+-- Global Counters
+-- These counters are intended to facilitate debugging quickly
+-- changing routes or failing neighbors
+
+   hpicfRipngGlobalRouteChanges OBJECT-TYPE
+      SYNTAX   Counter32
+      MAX-ACCESS   read-only
+      STATUS   current
+      DESCRIPTION
+         "The number of changes to the RIPng routing table, 
+          excluding the age refresh."
+      ::= { hpicfRipngBaseScalars 1 }
+
+   hpicfRipngGlobalQueries OBJECT-TYPE
+      SYNTAX   Counter32
+      MAX-ACCESS   read-only
+      STATUS   current
+      DESCRIPTION
+         "The number of responses received from other systems 
+          that are sent to the RIPng queries."
+      ::= { hpicfRipngBaseScalars 2 }
+
+-- Global Configuration Parameters
+
+   hpicfRipngAdminStatus OBJECT-TYPE
+      SYNTAX   INTEGER {
+                      enable(1),
+                      disable(2)
+                      }
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+	 "The admin status of the RIPng routing protocol."
+      ::= { hpicfRipngBaseScalars 3 }
+
+   hpicfRipngDefaultMetric OBJECT-TYPE
+      SYNTAX      Integer32 ( 1..15 )
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+         "The default metric value for the routes that are redistributed by RIPng."
+      DEFVAL      { 1 }
+      ::= { hpicfRipngBaseScalars 4 }
+
+   hpicfRipngDistance OBJECT-TYPE
+      SYNTAX      Integer32 (1..255)
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+         "The administrative distance to associate with routes 
+          learned by RIPng. Routes with distances lower than the other 
+          peers in the network are preferred."
+      DEFVAL      { 120 }
+      ::= { hpicfRipngBaseScalars 5 }
+
+-- Timers
+
+   hpicfRipngUpdateTime OBJECT-TYPE
+      SYNTAX      Unsigned32 (5..65535)
+      UNITS       "seconds"
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+         "This timer defines the interval between RIPng 
+          update messages."
+      DEFVAL      { 30 }
+      ::= { hpicfRipngBaseScalars 6}
+  
+   hpicfRipngTimeoutTime OBJECT-TYPE
+      SYNTAX      Unsigned32 (5..65535)
+      UNITS       "seconds"
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+         "This timer defines the route aging time. If no update message
+          related to that route is received within this period, the 
+          metric of this route is set to 16 in the routing table."
+      DEFVAL      { 180 }
+      ::= { hpicfRipngBaseScalars 7}
+  
+   hpicfRipngGarbageCollectTime OBJECT-TYPE
+      SYNTAX      Unsigned32 (5..65535)
+      UNITS       "seconds"
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION 
+         "The garbage-collect timer defines the time interval
+          when the metric of a route is 16 to the time 
+          when it is deleted from the routing table."
+      DEFVAL      { 120 }
+      ::= { hpicfRipngBaseScalars 8}
+
+    hpicfRipngNotificationEnable OBJECT-TYPE
+      SYNTAX      OCTET STRING (SIZE(4))
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION
+         "A four-octet string serving as a bit map for
+          the trap events defined by the RIPng traps. This 
+          object is used to enable or disable specific 
+          RIPng traps where a 1 in the bit field represents  
+          enabled. The right-most bit (least significant)  
+          represents trap 0.  
+          Trap Name                      BitMap
+          ----------------------------------------      
+          RIPNG_IF_STATE_CHANGE         0x00001
+          RIPNG_INTF_CONFIG_ERROR       0x00002
+          RIPNG_INTF_RCV_BAD_PKT        0x00004
+          RIPNG_ALL_TRAPS               0x00008"    
+      ::= { hpicfRipngBaseScalars 9 }
+ 
+-- The RIPng Interface Configuration Table.
+
+   hpicfRipngIfConfTable OBJECT-TYPE
+      SYNTAX   SEQUENCE OF HpicfRipngIfConfEntry
+      MAX-ACCESS   not-accessible
+      STATUS   current
+      DESCRIPTION
+         "A list of the interfaces that require separate
+          configuration in RIPng."
+      ::= { hpicfRipngObjects 2 }
+
+   hpicfRipngIfConfEntry OBJECT-TYPE
+      SYNTAX   HpicfRipngIfConfEntry
+      MAX-ACCESS   not-accessible
+      STATUS   current
+      DESCRIPTION
+         "A single routing domain in a single subnet."
+      INDEX { hpicfRipngIfConfIndex,
+	      hpicfRipngIfConfInstId }
+      ::= { hpicfRipngIfConfTable 1 }
+
+   HpicfRipngIfConfEntry::=
+      SEQUENCE {
+            hpicfRipngIfConfIndex
+                InterfaceIndex,
+            hpicfRipngIfConfInstId
+                Integer32,
+            hpicfRipngIfConfMetric
+                Integer32,
+            hpicfRipngIfConfStatus
+                RowStatus,
+	    hpicfRipngIfConfSrcAddressType
+                InetAddressType,
+            hpicfRipngIfConfSrcAddress
+                InetAddress,
+	    hpicfRipngIfConfDoPoisonReverse          
+		TruthValue
+            }
+
+   hpicfRipngIfConfIndex OBJECT-TYPE
+      SYNTAX       InterfaceIndex
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION
+         "The interface index of this RIPng interface.
+          It corresponds to the interface index of the
+          IPv6 interface on which RIPng is configured."
+      ::= { hpicfRipngIfConfEntry 1 }
+
+   hpicfRipngIfConfInstId OBJECT-TYPE
+      SYNTAX       Integer32 (0..255)
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION
+         "This will allow multiple instances of RIPng to
+          run on the same device. Currently, only one instance
+          is supported."
+      ::= { hpicfRipngIfConfEntry 2 }
+
+   hpicfRipngIfConfMetric OBJECT-TYPE
+      SYNTAX      Integer32 (1..15)
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION 
+         "The RIPng metric for this interface."
+      DEFVAL      {1}
+      ::= { hpicfRipngIfConfEntry 3 }
+      
+   hpicfRipngIfConfStatus OBJECT-TYPE
+      SYNTAX       RowStatus
+      MAX-ACCESS   read-create
+      STATUS       current
+      DESCRIPTION
+         "The row status variable for the hpicfRipngIfConf table."
+      ::= { hpicfRipngIfConfEntry 4 }
+
+   hpicfRipngIfConfSrcAddressType OBJECT-TYPE
+      SYNTAX       InetAddressType
+      MAX-ACCESS   read-only
+      STATUS       current
+      DESCRIPTION
+         "The address type for hpicfRipngIfConfSrcAddress. 
+          Only IPv6 addresses without a zone index value are accepted."  
+      ::= { hpicfRipngIfConfEntry 5 } 
+   
+   hpicfRipngIfConfSrcAddress OBJECT-TYPE
+      SYNTAX       InetAddress (SIZE(0|16))
+      MAX-ACCESS   read-only
+      STATUS       current
+      DESCRIPTION
+         "The link-local IPv6 address that this system will use as a source
+          address on this interface."
+      ::= { hpicfRipngIfConfEntry 6 }    
+           
+   hpicfRipngIfConfDoPoisonReverse OBJECT-TYPE
+      SYNTAX       TruthValue
+      MAX-ACCESS   read-create
+      STATUS       current
+      DESCRIPTION 
+         "A flag indicating whether the router should perform poison
+          reverse on this interface."
+      DEFVAL      { true }
+      ::= { hpicfRipngIfConfEntry 7 }
+
+-- Peer Table
+-- This table provides information about active peer
+-- relationships intended to assist in debugging. An
+-- active peer is a router from which a valid RIPng
+-- update has been heard in the last 180 seconds.
+
+   hpicfRipngPeerTable OBJECT-TYPE
+      SYNTAX       SEQUENCE OF HpicfRipngPeerEntry
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION
+         "A list of RIPng peers."
+      ::= { hpicfRipngObjects 3 }
+
+   hpicfRipngPeerEntry OBJECT-TYPE
+      SYNTAX       HpicfRipngPeerEntry
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION
+         "Information regarding a single routing peer."
+      INDEX { hpicfRipngPeerAddressType, 
+	      hpicfRipngPeerAddress }
+      ::= { hpicfRipngPeerTable 1 }
+
+   HpicfRipngPeerEntry ::=
+      SEQUENCE {
+            hpicfRipngPeerAddressType
+                InetAddressType,
+	    hpicfRipngPeerAddress
+                InetAddress,
+            hpicfRipngPeerLastUpdate
+                Unsigned32,
+            hpicfRipngPeerRcvBadPackets
+                Counter32            
+            }
+
+   hpicfRipngPeerAddressType OBJECT-TYPE
+      SYNTAX       InetAddressType
+      MAX-ACCESS   not-accessible
+      STATUS       current
+      DESCRIPTION
+         "The address type for hpicfRipngPeerAddress.
+	  Only IPv6 addresses without a zone index are expected."
+      ::= { hpicfRipngPeerEntry 1 }
+
+   hpicfRipngPeerAddress OBJECT-TYPE
+      SYNTAX      InetAddress (SIZE(0|16))
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION
+         "The IPv6 address that the peer is using as its source
+          address.  On an unnumbered link, this IPv6 address might
+          not be a member of any subnet on the system."
+      ::= { hpicfRipngPeerEntry 2 }
+
+   hpicfRipngPeerLastUpdate OBJECT-TYPE
+      SYNTAX       Unsigned32
+      MAX-ACCESS   read-only
+      STATUS       current
+      DESCRIPTION
+         "The value of sysUpTime when the most recent
+          RIPng update was received from this peer."
+      ::= { hpicfRipngPeerEntry 3 }
+
+   hpicfRipngPeerRcvBadPackets OBJECT-TYPE
+      SYNTAX       Counter32
+      MAX-ACCESS   read-only
+      STATUS       current
+      DESCRIPTION
+         "The number of RIPng invalid response packets that
+          are received from this peer."
+      ::= { hpicfRipngPeerEntry 4 }
+
+-- The RIPng Notification Table
+-- The RIPng Notification Table record fields that are
+-- required for notifications.
+
+    hpicfRipngNotificationEntry OBJECT IDENTIFIER
+       ::= { hpicfRipngObjects 4 }
+
+    hpicfRipngConfigErrorType OBJECT-TYPE
+        SYNTAX       INTEGER {
+                        badVersion(1),
+                        badIPtype(2),
+                        badHop(3),
+			badField(4),
+			ownPkt(5),          
+                        noError(6) }
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION
+           "Potential types of configuration conflicts.
+            Used by hpicfRipngConfigError notifications."
+        ::= { hpicfRipngNotificationEntry 1 }
+
+    hpicfRipngPacketType OBJECT-TYPE
+        SYNTAX       INTEGER {
+                        request(1),
+                        response(2),
+                        nullPacket(3) }
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION
+           "RIPng packet types."
+        ::= { hpicfRipngNotificationEntry 2 }
+
+    hpicfRipngPacketSrcType  OBJECT-TYPE
+        SYNTAX       InetAddressType
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION
+           "The address type for hpicfRipngPacketSrc."
+        ::= { hpicfRipngNotificationEntry 3 }
+
+    hpicfRipngPacketSrc  OBJECT-TYPE
+        SYNTAX       InetAddress (SIZE(0|16))
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION
+           "The IPv6 address of an inbound packet that cannot
+            be identified by a peer instance.
+            Only IPv6 addresses without a zone index are expected."
+        ::= { hpicfRipngNotificationEntry 4 }
+   
+    hpicfRipngIfState OBJECT-TYPE
+        SYNTAX       INTEGER {
+                        up(1),
+                        down(2)}
+        MAX-ACCESS   accessible-for-notify
+        STATUS       current
+        DESCRIPTION
+            "RIPng interface state types."
+        ::= { hpicfRipngNotificationEntry 5 }
+   
+-- Notification Definitions
+-- The notifications need to be throttled so as to not overwhelm the
+-- management agent in case of rapid changes to the RIPng module.
+
+   hpicfRipngIfStateChange NOTIFICATION-TYPE
+        OBJECTS { 
+           hpicfRipngIfConfSrcAddress,      -- The originator of the notification
+           hpicfRipngIfState                -- The new state
+           }
+        STATUS       current
+        DESCRIPTION
+           "A hpicfRipngIfStateChange notification signifies that
+            there has been a change in the state of a RIPng interface."
+        ::= { hpicfRipngNotifications 1 }
+
+   hpicfRipngIfConfigError NOTIFICATION-TYPE
+        OBJECTS { 
+           hpicfRipngIfConfSrcAddress,     -- The originator of the notification
+           hpicfRipngIfState,              -- State of the interface
+           hpicfRipngPacketSrc,            -- The IPv6 address of the source
+           hpicfRipngConfigErrorType,      -- Type of error
+           hpicfRipngPacketType            -- Type of packet
+           }
+        STATUS       current
+        DESCRIPTION
+           "A hpicfRipngIfConfigError notification signifies that a
+            packet has been received on an interface from a router whose         
+            configuration parameters conflict with this router's
+            configuration parameters."
+        ::= { hpicfRipngNotifications 2 }
+
+   hpicfRipngIfRxBadPacket NOTIFICATION-TYPE
+        OBJECTS { 
+           hpicfRipngIfConfSrcAddress,     -- The originator of the notification
+           hpicfRipngIfState,              -- State of the interface
+           hpicfRipngPacketSrc,            -- The IPv6 address of source
+           hpicfRipngPacketType            -- Type of packet
+           }
+        STATUS       current
+        DESCRIPTION
+           "A hpicfRipngIfRxBadPacket notification signifies that a
+            RIPng packet that cannot be parsed has been received on this
+            interface."
+        ::= { hpicfRipngNotifications 3 }
+
+-- ******************************************************************** 
+-- RIPng Conformance 
+-- ******************************************************************* 
+  
+   hpicfRipngCompliances OBJECT IDENTIFIER ::= { hpicfRipngConformance 1 }
+   hpicfRipngGroups      OBJECT IDENTIFIER ::= { hpicfRipngConformance 2 }
+
+-- ******************************************************************** 
+-- RIPng Complicance 
+-- ******************************************************************** 
+  
+   hpicfRipngCompliance MODULE-COMPLIANCE
+      STATUS      current
+      DESCRIPTION 
+         "The compliance statement for HP routing switches
+          that support RIPng."   
+      MODULE
+      MANDATORY-GROUPS {
+                 hpicfRipngBaseScalarsGroup,
+                 hpicfRipngIfConfGroup,
+		 hpicfRipngPeerGroup
+		 }
+      GROUP       hpicfRipngBaseScalarsGroup
+      DESCRIPTION
+         "This group lists the basic scalars that are required for RIPng systems."
+      GROUP       hpicfRipngIfConfGroup
+      DESCRIPTION
+	 "This group lists the interface configuration for RIPng systems."
+      GROUP       hpicfRipngPeerGroup
+      DESCRIPTION
+         "This group lists the peer information for RIPng systems."
+      GROUP       hpicfRipngNotificationObjectGroup
+      DESCRIPTION
+         "This group lists the notification objects that are used to record RIPng notification parameters."
+
+      GROUP       hpicfRipngNotificationGroup
+      DESCRIPTION
+          "This group lists the notifications that are required for RIPng systems."
+
+      ::= { hpicfRipngCompliances 1 }
+
+--
+-- RIPng Groups
+--
+
+   hpicfRipngBaseScalarsGroup    OBJECT-GROUP
+      OBJECTS {
+	       hpicfRipngGlobalRouteChanges,
+	       hpicfRipngGlobalQueries,
+	       hpicfRipngAdminStatus,
+               hpicfRipngDefaultMetric,
+               hpicfRipngDistance,
+	       hpicfRipngUpdateTime,
+	       hpicfRipngTimeoutTime,
+	       hpicfRipngGarbageCollectTime,
+               hpicfRipngNotificationEnable   
+	      }
+      STATUS   current
+      DESCRIPTION 
+         "This group lists the basic scalars that are required for the RIPng configuration."
+      ::= { hpicfRipngGroups 1 }
+   
+   hpicfRipngIfConfGroup    OBJECT-GROUP
+      OBJECTS {
+	       hpicfRipngIfConfMetric,
+	       hpicfRipngIfConfStatus,
+	       hpicfRipngIfConfSrcAddressType,
+	       hpicfRipngIfConfSrcAddress,
+	       hpicfRipngIfConfDoPoisonReverse
+	       }
+      STATUS   current
+      DESCRIPTION 
+         "This group lists the interface configuration of RIPng systems."
+      ::= { hpicfRipngGroups 2 } 
+   
+   hpicfRipngPeerGroup OBJECT-GROUP
+      OBJECTS { 
+  	       hpicfRipngPeerLastUpdate,
+	       hpicfRipngPeerRcvBadPackets
+	       }
+      STATUS   current
+      DESCRIPTION 
+         "A collection of objects that lists peer information."
+      ::= { hpicfRipngGroups 3 }
+
+   hpicfRipngNotificationObjectGroup OBJECT-GROUP
+      OBJECTS {
+               hpicfRipngConfigErrorType,
+               hpicfRipngPacketType,
+	       hpicfRipngPacketSrcType,
+	       hpicfRipngPacketSrc,
+               hpicfRipngIfState
+	      }
+      STATUS          current
+      DESCRIPTION
+         "A collection of objects that are used to record RIPng notification parameters."
+      ::= { hpicfRipngGroups 4 }
+
+   hpicfRipngNotificationGroup    NOTIFICATION-GROUP
+      NOTIFICATIONS {
+	       hpicfRipngIfStateChange,
+               hpicfRipngIfConfigError,
+               hpicfRipngIfRxBadPacket
+	       }
+      STATUS   current
+      DESCRIPTION 
+         "A collection of objects that lists RIPng notifications."
+      ::= { hpicfRipngGroups 5 } 
+   
+END

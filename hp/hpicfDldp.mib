@@ -1,0 +1,550 @@
+
+-- *****************************************************************
+-- HP-ICF-DLDP-MIB :  DLDP MIB file
+-- Copyright (c) 2014 Hewlett-Packard Development Company, L.P.
+-- All Rights Reserved.
+-- *****************************************************************
+
+HP-ICF-DLDP-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE, Integer32,
+    Counter64
+        FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+        FROM SNMPv2-CONF
+    MacAddress, TruthValue
+        FROM SNMPv2-TC
+    ifIndex
+            FROM IF-MIB
+    hpSwitch
+        FROM HP-ICF-OID;
+
+hpicfDldpMIB MODULE-IDENTITY
+    LAST-UPDATED "201403070000Z"   --March 07, 2014
+    ORGANIZATION "HP Networking"
+    CONTACT-INFO "Hewlett-Packard Company
+                  8000 Foothills Blvd.
+                  Roseville, CA 95747"
+    DESCRIPTION  "This MIB module describes objects to configure 
+                              the Device Link Detection (DLDP) feature."
+   
+    REVISION     "201403070000Z" -- March 07 ,2014
+    DESCRIPTION  "Initial revision."
+
+    ::= { hpSwitch 108 }
+
+
+--
+--- MIB objects
+--
+   hpicfDldpNotifications           OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpMIB 0}
+   hpicfDldpConfigurationObjects    OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpMIB  1}
+   hpicfDldpStatisticsObjects       OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpMIB  2}
+
+   hpicfDldpConformance             OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpMIB  3}
+
+   hpicfDldpScalars                 OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpConfigurationObjects 1}
+
+   hpicfDldpScalarStats             OBJECT IDENTIFIER ::=
+                                                 {hpicfDldpStatisticsObjects 1}
+
+
+-- scalars objects of DLDP
+
+ hpicfDldpGlobalEnable OBJECT-TYPE
+  SYNTAX      TruthValue
+  MAX-ACCESS  read-write
+  STATUS      current
+  DESCRIPTION       
+               "This object provides the status of Device Link Detection Protocol on the device.
+               A value of TRUE enables the DLDP feature on the device.
+               A value of FALSE disables the DLDP feature on the device."
+ ::= { hpicfDldpScalars 1 }
+
+
+ hpicfDldpInterval OBJECT-TYPE    
+ SYNTAX      Integer32(1..100)   
+ MAX-ACCESS  read-write
+ STATUS      current
+ DESCRIPTION
+           "This object provides the interval(seconds) at which the DLDP packets are
+            advertised."
+     DEFVAL      { 5 }
+    ::= { hpicfDldpScalars 2 } 
+
+
+hpicfDldpAuthMode OBJECT-TYPE
+  SYNTAX      INTEGER
+                {
+                    unknown(1), 
+                     none(2),
+                     simple(3),
+                      md5(4)
+                }  
+  MAX-ACCESS  read-write    
+  STATUS      current    
+    DESCRIPTION      
+          "This object provides the authentication mechanism used in DLDP.
+           A value of unknown(1) indicates that the authentication mode cannot be
+           determined. This value cannot be set.
+           A value of none(2) indicates that no authentication mode is selected for
+           DLDP.
+           A value of simple(3) indicates that a clear text password is used for
+           authentication.
+           A value of md5(4) indicates that MD5 encrypted password is used for
+           authentication."
+
+    DEFVAL      { none }    
+     ::= { hpicfDldpScalars 3 }
+
+
+ hpicfDldpAuthPassword OBJECT-TYPE
+ SYNTAX      OCTET STRING(SIZE(0..16)) 
+ MAX-ACCESS  read-write   
+ STATUS      current   
+ DESCRIPTION    
+         "This object is used to set the authentication password.
+          To delete a password, set the object to a zero-length octet string."
+    ::= { hpicfDldpScalars 4 }
+
+ hpicfDldpAuthPasswordEncrypted OBJECT-TYPE
+ SYNTAX      OCTET STRING(SIZE(0..64))
+ MAX-ACCESS  read-write
+ STATUS      current
+ DESCRIPTION
+         "This object provides an encrypted form of the DLDP authentication password.  
+          For SET requests, the encrypted value must be obtained from a compatible 
+          HP Networking device or generated using the 'encrypt-credentials' CLI command.
+          This object can only be read or written when hpSwitchAuthenticationEncryptCredentialsMethod 
+          is set to a value other than 'none'."
+    ::= { hpicfDldpScalars 5 }
+
+ hpicfDldpUniShutdown OBJECT-TYPE    
+ SYNTAX      INTEGER 
+                {
+                     unknown(1), 
+                      auto(2),
+                     manual(3) 
+               }   
+ MAX-ACCESS  read-write 
+ STATUS      current    
+ DESCRIPTION       
+      "This object determines the shutdown mode for a port when a unidirectional link is   
+       detected.
+       A value of unknown(1) indicates that the shutdown mode cannot be determined. This value
+       cannot be set.
+       A value of auto (2) indicates that the port will be shut down automatically by DLDP after
+       the detection of unidirectional link on that port.
+       A value of manual(3) indicates that the port must be shut down manually after the
+       detection of unidirectional link on that port. When this mode is selected, DLDP generates
+       log and trap messages to prompt the user to shut down the unidirectional port manually."
+   DEFVAL  { auto }    
+ ::= { hpicfDldpScalars 6 }
+
+hpicfDldpDelayDownInterval OBJECT-TYPE    
+ SYNTAX      Integer32(1..100)   
+ MAX-ACCESS  read-write
+ STATUS      current
+ DESCRIPTION
+           "This object provides the DelayDown timer for DLDP in seconds.
+            When the status of a DLDP enabled port changes to down, DLDP
+            starts the DelayDown timer. When the DelayDown timer expires,
+            the device removes the corresponding neighbor information from
+            the database. Some devices may only allow a more restricted
+            range of values 1..5. The default value is 1 second."
+     DEFVAL      { 1 }
+    ::= { hpicfDldpScalars 7 } 
+
+-- port config table
+
+hpicfDldpPortConfigTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF HpicfDldpPortConfigEntry 
+   MAX-ACCESS  not-accessible    
+   STATUS      current  
+   DESCRIPTION        "This table contains all ports that support DLDP."
+    ::= { hpicfDldpConfigurationObjects 2 }
+
+
+hpicfDldpPortConfigEntry OBJECT-TYPE
+    SYNTAX       HpicfDldpPortConfigEntry  
+    MAX-ACCESS   not-accessible   
+    STATUS       current    
+     DESCRIPTION 
+              "This entry describes a port that supports DLDP."
+     INDEX        
+      {           
+         ifIndex      
+      }   
+  ::= { hpicfDldpPortConfigTable 1 }
+
+HpicfDldpPortConfigEntry ::= SEQUENCE    
+    {        
+       hpicfDldpPortEnable     TruthValue 
+    }
+
+
+hpicfDldpPortEnable OBJECT-TYPE
+     SYNTAX      TruthValue
+     MAX-ACCESS  read-write 
+     STATUS      current  
+     DESCRIPTION        "This object provides the status of DLDP on ports. A value of TRUE indicates that DLDP is
+                         enabled on the port. A value of FALSE indicates that DLDP is disabled on
+                         the port."
+     ::= { hpicfDldpPortConfigEntry 1 }
+
+-- port status table 
+
+ 
+hpicfDldpPortStatusTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF HpicfDldpPortStatusEntry
+    MAX-ACCESS  not-accessible  
+    STATUS      current   
+    DESCRIPTION      
+         "This table provides the information about all the DLDP enabled ports."    
+  ::= { hpicfDldpConfigurationObjects 3 }
+
+
+hpicfDldpPortStatusEntry OBJECT-TYPE
+    SYNTAX      HpicfDldpPortStatusEntry   
+    MAX-ACCESS  not-accessible  
+    STATUS      current 
+    DESCRIPTION        "An entry in the table that provides the information about a single DLDP
+                        enabled port."
+     INDEX       
+      {           
+       ifIndex     
+     }   
+   ::= { hpicfDldpPortStatusTable 1 }
+
+HpicfDldpPortStatusEntry ::= SEQUENCE  
+  {       
+    hpicfDldpPortOperStatus     INTEGER, 
+    hpicfDldpPortLinkStatus     INTEGER
+  }
+
+
+hpicfDldpPortOperStatus OBJECT-TYPE 
+   SYNTAX  INTEGER {                    
+            unknown(1),
+            initial(2),
+            inactive(3),
+            unidirectional(4),
+            bidirectional(5)                    
+           }   
+  MAX-ACCESS  read-only  
+  STATUS      current    
+  DESCRIPTION        "This object provides the operating status of DLDP on ports.
+                      A value of unknown (1) indicates that the operating status of DLDP cannot be
+                      determined.
+                      A value of initial (2) indicates that DLDP is enabled on port but disabled
+                      globally.
+                      A value of inactive (3) indicates that DLDP is enabled but the physical
+                      status of the port is down.
+                      A value of unidirectional (4) indicates that a unidirectional link is detected on the port.
+                      A value of bidirectional (5) indicates that a bidirectional link is detected on the port."
+
+ ::= { hpicfDldpPortStatusEntry 1 }
+
+
+ hpicfDldpPortLinkStatus OBJECT-TYPE 
+    SYNTAX      INTEGER    
+               {             
+                unknown(1),    
+                down(2),  
+                   up(3)       
+             }  
+  MAX-ACCESS  read-only  
+  STATUS      current   
+  DESCRIPTION     
+          "This object provides the link status of DLDP enabled ports.
+             A value of unknown (1) indicates that the status of the link cannot be determined.
+             A value of down (2) indicates that the status of the link is down.
+             A value of up (3) indicates that the status of the link is up."
+              
+ ::= { hpicfDldpPortStatusEntry 2 }
+
+
+-- port statistics table .
+
+hpicfDldpPortStatTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF HpicfDldpPortStatEntry
+    MAX-ACCESS  not-accessible  
+    STATUS      current   
+    DESCRIPTION      
+         "This table provides the statistics of DLDP ports."    
+  ::= { hpicfDldpConfigurationObjects 4 }
+
+
+hpicfDldpPortStatEntry OBJECT-TYPE
+    SYNTAX      HpicfDldpPortStatEntry   
+    MAX-ACCESS  not-accessible  
+    STATUS      current 
+    DESCRIPTION        "An entry in the table that provides the statistics of a single DLDP port."
+     INDEX       
+      {           
+       ifIndex     
+     }   
+   ::= { hpicfDldpPortStatTable 1 }
+
+HpicfDldpPortStatEntry ::= SEQUENCE  
+  {       
+     hpicfDldpRxPackets               Counter64, 
+     hpicfDldpTxPackets               Counter64,
+     hpicfDldpRxValidPackets          Counter64,
+     hpicfDldpRxInvalidPackets        Counter64,
+     hpicfDldpAuthFailedPackets       Counter64,
+     hpicfDldpStatClear               TruthValue
+  }
+
+
+hpicfDldpRxPackets    OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides number of DLDP packets received on the port."
+   ::= { hpicfDldpPortStatEntry 1 }
+
+hpicfDldpTxPackets    OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides number of DLDP packets sent on the port."
+   ::= { hpicfDldpPortStatEntry 2 }
+
+hpicfDldpRxValidPackets  OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides number of valid DLDP packets received on the port."
+   ::= { hpicfDldpPortStatEntry 3 }
+
+hpicfDldpRxInvalidPackets     OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides number of invalid DLDP packets received on the port."
+   ::= { hpicfDldpPortStatEntry 4 }
+
+
+hpicfDldpAuthFailedPackets       OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides number of DLDP authentication failed packets received on the port."
+   ::= { hpicfDldpPortStatEntry 5 }
+
+hpicfDldpStatClear    OBJECT-TYPE
+  SYNTAX      TruthValue
+  MAX-ACCESS  read-write
+  STATUS      current
+  DESCRIPTION "This object clears DLDP statistics when set to TRUE.
+               A GET request for this object always returns FALSE."
+ ::= { hpicfDldpPortStatEntry 6 }
+-- neighbor table 
+
+  hpicfDldpNeighborTable OBJECT-TYPE 
+    SYNTAX      SEQUENCE OF HpicfDldpNeighborEntry  
+    MAX-ACCESS  not-accessible    
+    STATUS      current    
+    DESCRIPTION        "This table provides the information about the devices connected on the DLDP
+                        enabled ports."
+  ::= { hpicfDldpConfigurationObjects 5 }
+
+
+ hpicfDldpNeighborEntry OBJECT-TYPE
+    SYNTAX      HpicfDldpNeighborEntry 
+    MAX-ACCESS  not-accessible    
+    STATUS      current   
+    DESCRIPTION     
+       "An entry in the table that provides the information about each neighbor device connected on a
+        DLDP enabled port."
+     INDEX    
+      {          
+        ifIndex,
+        hpicfDldpNeighborPortId 
+         
+      }    
+ ::= { hpicfDldpNeighborTable 1 }
+
+ HpicfDldpNeighborEntry 
+   ::= SEQUENCE    
+     {       
+        hpicfDldpNeighborPortId         Integer32,
+        hpicfDldpNeighborBridgeMac      MacAddress,
+        hpicfDldpNeighborPortIndex      Integer32, 
+        hpicfDldpNeighborStatus         INTEGER,
+        hpicfDldpNeighborAgingTime      Integer32
+    }
+
+  hpicfDldpNeighborPortId   OBJECT-TYPE
+  SYNTAX      Integer32(1..2147483647)
+  MAX-ACCESS  not-accessible
+  STATUS      current
+  DESCRIPTION
+      "This object provides the neighbor ID."
+    ::= { hpicfDldpNeighborEntry 1 }
+
+  hpicfDldpNeighborBridgeMac OBJECT-TYPE
+     SYNTAX      MacAddress    
+     MAX-ACCESS  read-only   
+     STATUS      current    
+     DESCRIPTION       
+          "This object provides the bridge MAC address of a neighbor." 
+    ::= { hpicfDldpNeighborEntry 2 }
+
+ hpicfDldpNeighborPortIndex   OBJECT-TYPE 
+  SYNTAX      Integer32  
+  MAX-ACCESS  read-only   
+  STATUS      current  
+  DESCRIPTION  
+      "This object provides the port index of a neighbor."  
+    ::= { hpicfDldpNeighborEntry 3 }
+
+
+hpicfDldpNeighborStatus   OBJECT-TYPE   
+  SYNTAX      INTEGER             
+       {                 
+         unknown(1),         
+         unconfirmed(2),      
+         confirmed(3)             
+   }   
+ MAX-ACCESS  read-only    
+ STATUS      current    
+  DESCRIPTION       
+      "This object provides the status of a neighbor.
+       A value of unknown(1) indicates that the status of the neighbor cannot be determined.
+       A value of unconfirmed(2) indicates that the neighbor is connected on a unidirectional link.
+       A value of confirmed(3) indicates that the neighbor is connected on a bidirectional link."
+ ::= { hpicfDldpNeighborEntry 4 }
+
+
+ hpicfDldpNeighborAgingTime OBJECT-TYPE 
+   SYNTAX      Integer32    
+   MAX-ACCESS  read-only    
+   STATUS      current    
+    DESCRIPTION       
+        "This object provides the aging time of a neighbor.
+         This object returns a value of zero if the neighbor status is unconfirmed or unknown."
+  ::= { hpicfDldpNeighborEntry 5 }
+
+
+-- trap 
+
+ hpicfDldpTrapUniLink NOTIFICATION-TYPE
+   OBJECTS      {
+                   ifIndex
+                   
+                }
+  STATUS       current
+  DESCRIPTION "This trap is generated when DLDP detects a unidirectional link."
+   ::= { hpicfDldpNotifications 1 }
+
+ hpicfDldpTrapBidLink NOTIFICATION-TYPE
+   OBJECTS      {
+                   ifIndex
+                   
+                }
+  STATUS       current
+  DESCRIPTION "This trap is generated when DLDP detects a bidirectional link."
+   ::= { hpicfDldpNotifications 2 }
+
+
+
+-- conformance information 
+
+    hpicfDldpCompliances
+    OBJECT IDENTIFIER ::= { hpicfDldpConformance   1 }
+
+    hpicfDldpGroups
+    OBJECT IDENTIFIER ::= { hpicfDldpConformance   2 }
+
+
+   hpicfDldpCompliance MODULE-COMPLIANCE
+   STATUS  current
+   DESCRIPTION
+          "The compliance statement for the Dldp MIB."
+   MODULE  -- this module
+   MANDATORY-GROUPS { hpicfDldpScalarsGroup,
+                      hpicfDldpPortGroup,
+                      hpicfDldpNeighborGroup,
+                      hpicfDldpStatsGroup,
+                      hpicfDldpNotificationGroup
+                   }
+   ::= { hpicfDldpCompliances 1 }
+
+   hpicfDldpScalarsGroup OBJECT-GROUP
+    OBJECTS  {
+              hpicfDldpGlobalEnable, 
+              hpicfDldpInterval, 
+              hpicfDldpAuthMode, 
+              hpicfDldpAuthPassword,
+              hpicfDldpAuthPasswordEncrypted, 
+              hpicfDldpUniShutdown, 									
+              hpicfDldpDelayDownInterval 
+              }
+    STATUS   current
+    DESCRIPTION
+        "The collection of scalr objects providing information about DLDP."
+      ::= { hpicfDldpGroups 1 }
+
+
+    hpicfDldpPortGroup OBJECT-GROUP
+    OBJECTS  {
+               hpicfDldpPortEnable,     
+               hpicfDldpPortOperStatus,     
+               hpicfDldpPortLinkStatus
+             }
+    STATUS   current
+    DESCRIPTION
+        "The collection of port objects providing information about DLDP."
+      ::= { hpicfDldpGroups 2 }
+
+     hpicfDldpNeighborGroup OBJECT-GROUP
+    OBJECTS  {
+               hpicfDldpNeighborBridgeMac,
+               hpicfDldpNeighborPortIndex,
+               hpicfDldpNeighborStatus,
+               hpicfDldpNeighborAgingTime
+             }
+    STATUS   current
+    DESCRIPTION
+        "The collection of neighbor objects providing information about DLDP."
+      ::= { hpicfDldpGroups 3}
+
+
+    hpicfDldpStatsGroup OBJECT-GROUP
+    OBJECTS  {
+                hpicfDldpRxPackets,               
+                hpicfDldpTxPackets,   
+                hpicfDldpRxValidPackets,
+                hpicfDldpRxInvalidPackets,
+                hpicfDldpAuthFailedPackets,
+                hpicfDldpStatClear   											  
+             }
+    STATUS   current
+    DESCRIPTION
+        "The collection of statistic objects providing information about DLDP."
+      ::= { hpicfDldpGroups 4 }  
+
+
+   hpicfDldpNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS  {
+                hpicfDldpTrapUniLink,
+                hpicfDldpTrapBidLink
+                 											  
+             }
+    STATUS   current
+    DESCRIPTION
+        "A collection of trap objects providing information about DLDP."
+      ::= { hpicfDldpGroups 5 } 
+
+END 
+
+
+

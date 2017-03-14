@@ -1,0 +1,908 @@
+-- ***********************************************************************
+-- Module:    hpicfVsfVC.mib
+-- 
+-- Copyright (C) 2015 Hewlett Packard Enterprise Development LP
+-- All Rights Reserved.
+--  
+-- The contents of this software are proprietary and confidential to
+-- the Hewlett Packard Enterprise Development LP. No part of this
+-- program may be photocopied, reproduced, or translated into another
+-- programming language without prior written consent of the
+-- Hewlett Packard Enterprise Development LP.
+--
+-- Purpose: This file contains MIB definition of HP-VSF-VC-MIB 
+--
+-- ***********************************************************************
+
+
+HP-VSF-VC-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        OBJECT-TYPE, MODULE-IDENTITY, Integer32,
+        Counter32, Unsigned32, TimeTicks, NOTIFICATION-TYPE
+            FROM SNMPv2-SMI
+    OBJECT-GROUP, MODULE-COMPLIANCE, NOTIFICATION-GROUP
+            FROM SNMPv2-CONF
+    InterfaceIndexOrZero, ifIndex
+            FROM IF-MIB              -- RFC2863
+    RowStatus, TruthValue, DisplayString
+            FROM SNMPv2-TC
+    InetAddress, InetAddressType
+            FROM INET-ADDRESS-MIB    -- [RFC4001]
+    PortList
+            FROM Q-BRIDGE-MIB
+    SnmpAdminString
+            FROM SNMP-FRAMEWORK-MIB
+    PhysicalIndex 
+           FROM ENTITY-MIB 
+    hpSwitchBaseMACAddress
+            FROM NETSWITCH-MIB
+    hpSwitch
+            FROM HP-ICF-OID;
+
+    hpicfVsfVCMIB MODULE-IDENTITY
+        LAST-UPDATED "201503040000Z"  -- March 04, 2015
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO "Hewlett Packard Company
+                      8000 Foothills Blvd.
+                      Roseville, CA 95747"
+        DESCRIPTION  "This MIB module describes the objects that are used to 
+                      manage VSF Virtual Chassis feature."   
+
+        REVISION     "201503040000Z"  -- March 04, 2015
+        DESCRIPTION  "Initial version of this MIB."
+     
+        ::= { hpSwitch 116 }
+
+
+    -- Configuration support for VSF Virtual Chassis
+    hpicfVsfVCNotifications      OBJECT IDENTIFIER ::= { hpicfVsfVCMIB 0 }
+    hpicfVsfVCObjects            OBJECT IDENTIFIER ::= { hpicfVsfVCMIB 1 }
+    hpicfVsfVCConfig             OBJECT IDENTIFIER ::= { hpicfVsfVCObjects 1 }
+    hpicfVsfVCStatus             OBJECT IDENTIFIER ::= { hpicfVsfVCObjects 2 }
+
+    --*************************************************************
+    --*    Scalar Group
+    --*************************************************************
+    hpicfVsfVCDomainId   OBJECT-TYPE
+         SYNTAX          Unsigned32
+         MAX-ACCESS      read-write
+         STATUS          current
+         DESCRIPTION
+                  "The VSF virtual chassis domain ID uniquely identifies the VSF
+                   virtual chassis; all members of the virtual chassis have the 
+                   same virtual chassis domain ID. The VSF virtual chassis domain 
+                   ID is valid only when hpicfVsfVCSwitchAdminStatus is set to 
+                   true (1). This value is set by the first elected commander of 
+                   the VSF virtual chassis."
+         ::= {  hpicfVsfVCConfig 1 }
+
+    hpicfVsfVCOperStatus   OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          unAvailable      (0),
+                          disabled         (1),
+                          active           (2),
+                          fragmentInactive (3),
+                          fragmentActive   (4)
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current
+         DESCRIPTION 
+               "This is the current operational status of the VSF virtual chassis."
+         ::= { hpicfVsfVCConfig 2 }
+
+    hpicfVsfVCAdminStatus   OBJECT-TYPE
+         SYNTAX      INTEGER {
+                      enable  (1),
+                      disable (2)
+                   }
+         MAX-ACCESS  read-write 
+         STATUS      current         
+         DESCRIPTION 
+               "The administrative status of the VSF virtual chassis. When set to 
+                enable (1), this object enables VSF on the switch and on the 
+                discovered members. Setting this to disable (2) disables VSF 
+                only on the standalone switch. Enabling or disabling VSF triggers 
+                a reboot of the VSF switch."
+         ::= { hpicfVsfVCConfig 3 }
+
+    hpicfVsfVCTopology   OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          unknown (0),
+                          chain   (1),
+                          ring    (2),
+                          mesh    (3),
+                          partialMesh (4)
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current
+         DESCRIPTION 
+            "This object describes the physical topology of the VSF virtual chassis."
+         ::= { hpicfVsfVCConfig 4 }
+
+    hpicfVsfVCTrapEnable   OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          enable  (1),
+                          disable (2)
+                     }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION 
+               "This object controls the ability of the VSF virtual chassis to send 
+                traps."
+         ::= { hpicfVsfVCConfig 5 }
+    
+    hpicfVsfVCOobmMADEnable   OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          enable  (1),
+                          disable (2)
+                     }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION 
+               "This object enables the VSF OOBM MAD (Multi-Active Detection) feature."
+         DEFVAL { disable }
+         ::= { hpicfVsfVCConfig 6 }
+
+    hpicfVsfLldpMADEnable     OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          enable  (1),
+                          disable (2)
+                     }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION 
+               "This object enables the VSF LLDP MAD (Multi-Active Detection) feature."
+         DEFVAL { disable }
+         ::= { hpicfVsfVCConfig 7 }    
+
+    hpicfVsfVCLldpMADDeviceIpType OBJECT-TYPE        
+         SYNTAX       InetAddressType
+         MAX-ACCESS   read-write
+         STATUS       current
+         DESCRIPTION  "This object provides the address type of the VSF LLDP MAD 
+                       (Multi-Active Detection)device."
+         ::= { hpicfVsfVCConfig 8 }
+
+    hpicfVsfVCLldpMADDeviceIpAddr OBJECT-TYPE
+         SYNTAX       InetAddress
+         MAX-ACCESS   read-write
+         STATUS       current
+         DESCRIPTION  "This object provides the IPv4/IPv6 address of the VSF LLDP MAD 
+                       (Multi-Active Detection) device."
+         ::= { hpicfVsfVCConfig 9}
+
+    hpicfVsfVCLldpMADSnmpVersion OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          v2c (2)
+                          }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION "This object provides the VSF LLDP MAD (Multi-Active Detection) SNMP 
+                      version."
+         ::= { hpicfVsfVCConfig 10 }
+
+    hpicfVsfVCLldpMADSnmpCommunity OBJECT-TYPE
+         SYNTAX      OCTET STRING (SIZE (0..255))
+         MAX-ACCESS  read-write
+         STATUS      current 
+         DESCRIPTION "This object provides the VSF LLDP MAD (Multi-Active Detection) 
+                      SNMP community-string."
+         ::= { hpicfVsfVCConfig 11 }
+
+    --*************************************************************
+    --*    VSF VC Status Scalar Group
+    --*************************************************************
+
+    hpicfVsfVCLldpMADReadinessStatus OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          none    (0),
+                          success (1),
+                          failure (2)
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current 
+         DESCRIPTION "This object indicates the readiness state of VSF LLDP MAD 
+                      (Multi-Active Detection)."
+         ::= { hpicfVsfVCStatus 1 }  
+   
+    hpicfVsfVCLldpMADDeviceMAC OBJECT-TYPE
+         SYNTAX      OCTET STRING (SIZE(0|6))      
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the MAC address of the VSF LLDP MAD 
+                      (Multi-Active Detection) helper-device."
+         ::= { hpicfVsfVCStatus 2 }
+
+    hpicfVsfVCLldpMADVlanId OBJECT-TYPE
+         SYNTAX      Integer32 (1..4095)      
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the VLAN-ID of the domain on which 
+                      the VSF LLDP MAD (Multi-Active Detection) helper-device 
+                      resides."
+         ::= { hpicfVsfVCStatus 3 }
+
+     hpicfVsfVCLldpMADTrunkIfIndex OBJECT-TYPE
+         SYNTAX      InterfaceIndexOrZero
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the trunk ifIndex of the interface on 
+                      the VSF device that is connected to the VSF LLDP MAD 
+                      (Multi-Active Detection) helper-device."
+         ::= { hpicfVsfVCStatus 4 }
+
+     hpicfVsfVCLldpMADProbePortSet OBJECT-TYPE
+         SYNTAX      PortList
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the list of physical ports on the VSF 
+                      LLDP MAD (Multi-Active Detection) helper-device that will be
+                      probed for operational status during MAD probe."
+         ::= { hpicfVsfVCStatus 5 }
+
+     hpicfVsfVCLldpMADConnectivity OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          none    (1),
+                          full    (2),
+                          partial (3)
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the reachability state of the VSF LLDP MAD 
+                      (Multi-Active Detection) helper-device.
+
+                      none (1)    - When there is no connectivity to the LLDP MAD 
+                                    helper-device.
+                      full (2)    - When the LAG has at least one physical port in 
+                                    the enabled state on every VSF member switch.
+                      partial (3) - When the LAG does not have at least one enabled 
+                                    VSF physical port on every VSF member switch."
+         ::= { hpicfVsfVCStatus 6 }
+
+      hpicfVsfVCLldpMADSplitStatus OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          yes    (1),
+                          no     (2)                          
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates the VSF LLDP MAD (Multi-Active Detection) 
+                      split status."
+         ::= { hpicfVsfVCStatus 7 }
+
+      hpicfVsfVCLldpMADProbeOriginator OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          yes    (1),
+                          no     (2)                          
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object indicates whether the VSF fragment is running 
+                      the VSF LLDP MAD (Multi-Active Detection) probe or not."
+         ::= { hpicfVsfVCStatus 8 }
+      
+      hpicfVsfVCLldpMADProbeRequestsSent OBJECT-TYPE
+         SYNTAX      Counter32
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This is the number of SNMP queries sent to the VSF LLDP MAD 
+                     (Multi-Active Detection) helper-device."
+         ::= { hpicfVsfVCStatus 9 }
+
+      hpicfVsfVCLldpMADProbeResponseRcvd OBJECT-TYPE
+         SYNTAX      Counter32
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This is the number of SNMP responses received from the VSF 
+                      LLDP MAD (Multi-Active Detection) helper-device."
+         ::= { hpicfVsfVCStatus 10 }
+
+      hpicfVsfVCLldpMADActiveFragment OBJECT-TYPE
+         SYNTAX      INTEGER {
+                          yes    (1),
+                          no     (2)                          
+                     }
+         MAX-ACCESS  read-only
+         STATUS      current 
+    	 DESCRIPTION "This object specifies whether this VSF fragment is the active 
+                      or an inactive fragment."
+         ::= { hpicfVsfVCStatus 11 }
+
+
+    --*************************************************************
+    --*    hpicfVsfVCMemberTable
+    --*************************************************************
+    hpicfVsfVCMemberTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfVsfVCMemberEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "This table contains information about the VSF virtual 
+                     chassis members."
+        ::= { hpicfVsfVCObjects 3 }
+
+    hpicfVsfVCMemberEntry OBJECT-TYPE
+        SYNTAX      HpicfVsfVCMemberEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "A row in the VSF virtual chassis member table."
+        INDEX       { hpicfVsfVCMemberId }
+        ::= { hpicfVsfVCMemberTable 1 }
+
+    HpicfVsfVCMemberEntry ::=
+        SEQUENCE {
+            hpicfVsfVCMemberId                 Integer32,
+            hpicfVsfVCMemberProductId          DisplayString,
+            hpicfVsfVCMemberMacAddr            OCTET STRING,
+            hpicfVsfVCMemberShutdown           TruthValue,
+            hpicfVsfVCMemberReboot             TruthValue,
+            hpicfVsfVCMemberAdminPriority      Integer32,
+            hpicfVsfVCMemberEntryStatus        RowStatus,
+            hpicfVsfVCMemberEntPhysicalIndex   PhysicalIndex,
+            hpicfVsfVCMemberState              INTEGER,
+            hpicfVsfVCMemberProductName        SnmpAdminString,
+            hpicfVsfVCMemberUpTime             TimeTicks, 
+            hpicfVsfVCMemberSysOid             OBJECT IDENTIFIER,
+            hpicfVsfVCMemberIdForTrap          Integer32,
+            hpicfVsfVCMemberSerialNum          DisplayString, 
+            hpicfVsfVCMemberBootRomVersion     DisplayString,
+            hpicfVsfVCMemberOsVersion          DisplayString,
+            hpicfVsfVCMemberBootImage          INTEGER,
+            hpicfVsfVCMemberRenumber           Integer32,
+            hpicfVsfVCMemberCpuUtil            Integer32,
+            hpicfVsfVCMemberTotalMemory        Integer32,
+            hpicfVsfVCMemberFreeMemory         Integer32
+       }
+
+    hpicfVsfVCMemberId OBJECT-TYPE
+        SYNTAX      Integer32 (1..65535)  
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "This object describes the VSF virtual chassis member ID."
+        ::= { hpicfVsfVCMemberEntry 1 }
+
+    hpicfVsfVCMemberProductId OBJECT-TYPE
+        SYNTAX      DisplayString 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "This object describes the type of VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 2 }
+
+    hpicfVsfVCMemberMacAddr OBJECT-TYPE
+        SYNTAX      OCTET STRING (SIZE(0|6)) 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "This object specifies the VSF member-switch MAC address."
+        ::= { hpicfVsfVCMemberEntry 3 }
+
+    hpicfVsfVCMemberShutdown OBJECT-TYPE
+        SYNTAX      TruthValue 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "When this object is set to true (1) for a specific active-member 
+                     VSF virtual chassis switch, that switch will shut down. Setting 
+                     the object to false (2) has no effect. This object cannot be set
+                     to true (1) if the specified member is an VSF commander. If the 
+                     VSF member is in standby mode, a new standby switch is chosen. 
+     	             The VSF member shutdown is prevented if it will cause a virtual 
+                     chassis split."
+        ::= { hpicfVsfVCMemberEntry 4 } 
+
+    hpicfVsfVCMemberReboot OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "When set to true (1), this object will reboot the VSF member-switch. 
+                     Setting the object to false (2) has no effect. Reboot is prevented if 
+                     it will cause a virtual chassis split."
+        ::= { hpicfVsfVCMemberEntry 5 }
+
+    hpicfVsfVCMemberAdminPriority OBJECT-TYPE
+        SYNTAX      Integer32 (1..255)
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "This object allows the user to set the priority of a switch when VSF 
+                     is enabled on it."
+        DEFVAL { 128 }
+        ::= { hpicfVsfVCMemberEntry 6 }
+
+    hpicfVsfVCMemberEntryStatus OBJECT-TYPE
+        SYNTAX      RowStatus 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION  
+              "This object indicates the row status of an VSF virtual chassis-member 
+               entry. If the VSF member ID corresponds to an VSF commander, the row 
+               cannot be destroyed. 
+               
+               For active switches, if hpicfVsfVCMemberReboot is set to true (1), and 
+               the row status is set to destroy (6), the switch comes up with a default 
+               configuration and acquires a new hpicfVsfVCMemberId."
+        ::= { hpicfVsfVCMemberEntry 7 }
+
+     hpicfVsfVCMemberEntPhysicalIndex OBJECT-TYPE
+        SYNTAX      PhysicalIndex 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION  
+              "This object specifies the entPhysicalTable (rfc2737) index of the 
+               VSF member."
+        ::= { hpicfVsfVCMemberEntry 8 } 
+
+    hpicfVsfVCMemberState OBJECT-TYPE
+        SYNTAX      INTEGER  {
+                      unusedId             (0),
+                      missing              (1),
+                      provision            (2),
+                      commander            (3),
+                      standby              (4),
+                      member               (5),
+                      shutdown             (6),
+                      booting              (7),
+                      communicationFailure (8),
+                      incompatibleOS       (9),
+                      unknownState         (10),
+                      standbyBooting       (11)
+               }
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION  
+               "This object gives the status of the member-switch in the VSF 
+               virtual chassis. 
+
+               unusedId (0)      - The member ID does not exist. 
+               missing (1)       - An VSF virtual chassis member-switch is marked as 
+                                   missing when it becomes non-responsive. A lack of 
+                                   response from the switch means that either the 
+                                   virtual chassis link or the virtual chassis member 
+                                   has crashed. Note that it is possible to remove a 
+                                   missing member from the virtual chassis. Once removed, 
+                                   the missing member's configuration will be deleted 
+                                   from the virtual chassis configuration file.
+              provision (2)      - A member-switch that is not physically present 
+                                   but whose configuration is provisioned .
+              commander (3)      - The member-switch which is the commander of the
+                                   VSF virtual chassis.
+              standby (4)        - The member-switch which is the standby of the 
+                                   VSF virtual chassis.
+              member (5)         - The member-switch that is a part of the VSF 
+                                   virtual chassis.
+              shutdown (6)       - The member-switch is in the shut down state.
+              booting (7)        - The member-switch is booting.
+              communicationFailure (8)- The member-switch cannot be reached.
+              incompatibleOS (9) - The member-switch is running with a different 
+                                   Operating System.
+              unknownState (10)  - The state of the member-switch cannot be determined.                                      
+              standbyBooting (11)- The standby switch is currently booting up. When 
+                                   the switch finishes booting, its state will change 
+                                   to standby (4)."
+        ::= { hpicfVsfVCMemberEntry 9 } 
+
+   hpicfVsfVCMemberProductName OBJECT-TYPE
+        SYNTAX      SnmpAdminString
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The product name of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 10 }
+
+   hpicfVsfVCMemberUpTime OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+              "This object provides the uptime of the VSF member-switch. This 
+               is different from the VSF chassis uptime."
+        ::= { hpicfVsfVCMemberEntry 11 }
+
+   hpicfVsfVCMemberSysOid OBJECT-TYPE
+        SYNTAX      OBJECT IDENTIFIER
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object provides the sysObjectId of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 12 }
+
+   hpicfVsfVCMemberIdForTrap OBJECT-TYPE
+        SYNTAX      Integer32
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "The member ID used in trap notifications. This is the same value 
+                     as hpicfVsfVCMemberId."
+        ::= { hpicfVsfVCMemberEntry 13 }
+
+    hpicfVsfVCMemberSerialNum OBJECT-TYPE
+        SYNTAX      DisplayString 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object specifies the serial number of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 14 }
+    
+   hpicfVsfVCMemberBootRomVersion OBJECT-TYPE
+        SYNTAX      DisplayString
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object specifies the boot-ROM version of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 15 }
+
+    hpicfVsfVCMemberOsVersion OBJECT-TYPE
+        SYNTAX      DisplayString
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION 
+                   "This object specifies the operating system version of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 16 }
+
+    hpicfVsfVCMemberBootImage OBJECT-TYPE
+        SYNTAX      INTEGER {
+                      primary   (1),
+                      secondary (2)
+                    }
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object specifies the boot image of the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 17 }
+
+    hpicfVsfVCMemberRenumber OBJECT-TYPE
+        SYNTAX      Integer32
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "This object specifies the new member ID to be assigned to this 
+                     VSF virtual chassis member-switch."
+        ::= { hpicfVsfVCMemberEntry 18 }
+
+    hpicfVsfVCMemberCpuUtil OBJECT-TYPE
+        SYNTAX      Integer32 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object provides the percentage of CPU utilization of the 
+                     VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 19 }
+
+    hpicfVsfVCMemberTotalMemory OBJECT-TYPE
+        SYNTAX      Integer32 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object provides the total memory usage in bytes of the 
+                     VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 20 }
+
+    hpicfVsfVCMemberFreeMemory OBJECT-TYPE
+        SYNTAX      Integer32 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object provides the free memory available, in bytes, on 
+                     the VSF member-switch."
+        ::= { hpicfVsfVCMemberEntry 21 }
+
+    --*************************************************************
+    --*    hpicfVsfVCLinkTable
+    --*************************************************************
+
+    hpicfVsfVCLinkTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfVsfVCLinkEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION 
+              "This table contains information about the VSF links. An VSF link is
+               a logical interface for the connection between VSF member devices. 
+               To use an VSF link, you must bind at least one physical port to it. 
+               These ports are called 'VSF physical ports' or 'VSF Ports'. The 
+               physical ports assigned to an VSF link automatically form an aggregate 
+               VSF link. An VSF link goes down only if all of its members' physical 
+               ports are down."
+        ::= { hpicfVsfVCObjects 4 }
+
+    hpicfVsfVCLinkEntry OBJECT-TYPE
+        SYNTAX      HpicfVsfVCLinkEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "A row in the VSF link table."
+        INDEX       { hpicfVsfVCLinkMemberId,
+                      hpicfVsfVCLinkId
+                    }
+        ::= { hpicfVsfVCLinkTable 1 }
+
+    HpicfVsfVCLinkEntry ::=
+        SEQUENCE {
+            hpicfVsfVCLinkMemberId       Integer32,
+            hpicfVsfVCLinkId             Integer32,
+            hpicfVsfVCLinkName           DisplayString,
+            hpicfVsfVCLinkOperStatus     INTEGER,
+            hpicfVsfVCPeerMemberId       Integer32,
+            hpicfVsfVCPeerLinkId         Integer32,
+            hpicfVsfVCLinkPortList       PortList,
+            hpicfVsfVCLinkEntryStatus    RowStatus,
+            hpicfVsfVCLinkIdForTrap      Integer32,
+            hpicfVsfVCLinkPortStartState INTEGER
+            }
+
+    hpicfVsfVCLinkMemberId      OBJECT-TYPE
+        SYNTAX      Integer32  (1..65535)
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "This object is the member ID of the VSF virtual chassis to which 
+                     this VSF link belongs."
+        ::= { hpicfVsfVCLinkEntry 1 }         
+
+    hpicfVsfVCLinkId  OBJECT-TYPE 
+        SYNTAX      Integer32  (1..4)  
+        MAX-ACCESS  not-accessible 
+        STATUS      current 
+        DESCRIPTION "This object indicates the link ID for this VSF entry."
+        ::= { hpicfVsfVCLinkEntry 2 }              
+
+   hpicfVsfVCLinkName  OBJECT-TYPE 
+        SYNTAX      DisplayString (SIZE (0..100))
+        MAX-ACCESS  read-write
+        STATUS      current 
+        DESCRIPTION "This object indicates the VSF link name. The maximum allowed 
+                     link name is 32 characters."
+        ::= { hpicfVsfVCLinkEntry 3 }
+
+    hpicfVsfVCLinkOperStatus OBJECT-TYPE 
+        SYNTAX      INTEGER {
+                       up       (1),
+                       down     (2),
+                       disabled (3)
+                    }
+        MAX-ACCESS  read-only 
+        STATUS      current 
+        DESCRIPTION "This object indicates the VSF link state."
+        ::= { hpicfVsfVCLinkEntry 4 }
+
+   hpicfVsfVCPeerMemberId   OBJECT-TYPE
+        SYNTAX      Integer32  
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object indicates the peer-member ID to which the VSF link is 
+                     connected."
+        ::= { hpicfVsfVCLinkEntry 5 }
+         
+   hpicfVsfVCPeerLinkId     OBJECT-TYPE
+        SYNTAX      Integer32  
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "This object indicates the VSF link ID of the peer-member to which 
+                     this VSF link is connected."
+        ::= { hpicfVsfVCLinkEntry 6 }
+
+    hpicfVsfVCLinkPortList       OBJECT-TYPE
+        SYNTAX      PortList
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "This object indicates the list of physical ports belonging to 
+                     this VSF link."
+        ::= { hpicfVsfVCLinkEntry 7 }	
+    
+    hpicfVsfVCLinkEntryStatus OBJECT-TYPE
+        SYNTAX      RowStatus 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "This object indicates the row status of an VSF virtual chassis 
+                     link entry."
+        ::= { hpicfVsfVCLinkEntry 8 }
+
+    hpicfVsfVCLinkIdForTrap OBJECT-TYPE
+        SYNTAX      Integer32
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION
+              "This object indicates the VSF virtual chassis link ID used in 
+               trap notifications. This is the same value as hpicfVsfVCLinkId."
+        ::= { hpicfVsfVCLinkEntry 9 }
+
+    hpicfVsfVCLinkPortStartState OBJECT-TYPE
+        SYNTAX      INTEGER {
+                       enable  (1),
+                       disable (2)
+                    }
+        MAX-ACCESS  read-create
+        STATUS      current 
+        DESCRIPTION 
+              "This object indicates whether ports should be enabled while 
+               creating the VSF virtual chassis link."
+        DEFVAL     { enable }
+        ::= { hpicfVsfVCLinkEntry 10 }
+
+    --*************************************************************
+    --*    hpVsfVCPortTable
+    --*************************************************************
+    hpicfVsfVCPortTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfVsfVCPortEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "This table contains information about the VSF 
+                     virtual chassis physical ports."
+        ::= { hpicfVsfVCObjects 5 }
+
+    hpicfVsfVCPortEntry OBJECT-TYPE
+        SYNTAX      HpicfVsfVCPortEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "A row in the VSF port table."
+        INDEX       { ifIndex }
+        ::= { hpicfVsfVCPortTable 1 }
+
+    HpicfVsfVCPortEntry ::=
+        SEQUENCE {
+            hpicfVsfVCPortOperStatus     INTEGER,
+            hpicfVsfVCPortOperStatusErrorStr DisplayString
+        }
+
+    hpicfVsfVCPortOperStatus OBJECT-TYPE 
+        SYNTAX      INTEGER {
+                       up       (1),
+                       down     (2),
+                       error    (3),
+                       disabled (4),
+                       provisioned (5)
+                    }
+        MAX-ACCESS  read-only 
+        STATUS      current 
+        DESCRIPTION 
+                    "This object provides the VSF virtual chassis physical 
+                     port state."
+        ::= { hpicfVsfVCPortEntry 1 }
+
+    hpicfVsfVCPortOperStatusErrorStr OBJECT-TYPE
+        SYNTAX      DisplayString
+        MAX-ACCESS  read-only 
+        STATUS      current 
+        DESCRIPTION 
+                    "This object provides an error message if hpicfVsfVCPortOperStatus
+                     returns the value error (3)."
+        ::= { hpicfVsfVCPortEntry 2 }
+
+
+   --*************************************************************
+   --*    hpicfVsfVCNotifications
+   --*************************************************************
+   
+   hpicfVsfVCCommanderChange  NOTIFICATION-TYPE
+        OBJECTS { hpicfVsfVCMemberIdForTrap,
+                  hpicfVsfVCMemberState
+                }
+        STATUS  current
+        DESCRIPTION
+              "This notification is generated when a new VSF commander 
+               first comes up. The notification is also sent when a 
+               failover happens, and the VSF standby becomes an VSF 
+               commander or when the VSF commander is down."
+        ::= { hpicfVsfVCNotifications 2 }
+
+   hpicfVsfVCMemberChange  NOTIFICATION-TYPE
+        OBJECTS { hpicfVsfVCMemberIdForTrap,
+                  hpicfVsfVCMemberState
+                }  
+        STATUS  current
+        DESCRIPTION
+              "This notification is generated when a new member joins the VSF 
+               virtual chassis or when a member switch is moved from the 
+               loose-provisioned state to the strict-provisioned state."
+        ::= { hpicfVsfVCNotifications 3 }
+
+   hpicfVsfVCMemberStatusChange  NOTIFICATION-TYPE
+        OBJECTS { hpicfVsfVCMemberIdForTrap,
+                  hpSwitchBaseMACAddress,
+                  hpicfVsfVCMemberState
+                }  
+        STATUS  current
+        DESCRIPTION
+              "This notification is generated when an VSF member becomes
+               active or inactive."
+        ::= { hpicfVsfVCNotifications 4 }
+
+    hpicfVsfVCConformance        OBJECT IDENTIFIER ::= { hpicfVsfVCMIB 2 }    
+    hpicfVsfVCCompliances        OBJECT IDENTIFIER ::= { hpicfVsfVCConformance 1 }
+    hpicfVsfVCGroups             OBJECT IDENTIFIER ::= { hpicfVsfVCConformance 2 }
+
+    hpicfVsfVCConfigScalarGroup OBJECT-GROUP
+        OBJECTS   { hpicfVsfVCDomainId                 ,
+                    hpicfVsfVCOperStatus               ,
+                    hpicfVsfVCAdminStatus              ,
+                    hpicfVsfVCTopology                 ,
+                    hpicfVsfVCTrapEnable               ,
+                    hpicfVsfLldpMADEnable              ,
+                    hpicfVsfVCOobmMADEnable            ,
+                    hpicfVsfVCLldpMADDeviceIpType      ,
+                    hpicfVsfVCLldpMADDeviceIpAddr      ,
+                    hpicfVsfVCLldpMADSnmpVersion       ,
+                    hpicfVsfVCLldpMADSnmpCommunity     
+                  }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis scalar objects."
+        ::= { hpicfVsfVCGroups 1 }
+
+    hpicfVsfVCMemberTableGroup OBJECT-GROUP
+        OBJECTS   {
+                    hpicfVsfVCMemberProductId          ,
+                    hpicfVsfVCMemberMacAddr            ,
+                    hpicfVsfVCMemberShutdown           ,
+                    hpicfVsfVCMemberReboot             ,
+                    hpicfVsfVCMemberAdminPriority      ,
+                    hpicfVsfVCMemberEntryStatus        ,
+                    hpicfVsfVCMemberEntPhysicalIndex   ,
+                    hpicfVsfVCMemberState              ,
+                    hpicfVsfVCMemberProductName        ,
+                    hpicfVsfVCMemberUpTime             , 
+                    hpicfVsfVCMemberSysOid             ,
+                    hpicfVsfVCMemberIdForTrap          ,
+                    hpicfVsfVCMemberSerialNum          , 
+                    hpicfVsfVCMemberBootRomVersion     ,
+                    hpicfVsfVCMemberOsVersion          ,
+                    hpicfVsfVCMemberBootImage          ,
+                    hpicfVsfVCMemberRenumber           ,
+                    hpicfVsfVCMemberCpuUtil            ,
+                    hpicfVsfVCMemberTotalMemory        ,
+                    hpicfVsfVCMemberFreeMemory         
+                  }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis member table objects."
+        ::= { hpicfVsfVCGroups 2 }   
+
+   hpicfVsfVCLinkTableGroup OBJECT-GROUP
+        OBJECTS   {
+                    hpicfVsfVCLinkName           ,
+                    hpicfVsfVCLinkOperStatus     ,
+                    hpicfVsfVCPeerMemberId       ,
+                    hpicfVsfVCPeerLinkId         ,
+                    hpicfVsfVCLinkPortList       ,
+                    hpicfVsfVCLinkEntryStatus    ,
+                    hpicfVsfVCLinkIdForTrap      ,
+                    hpicfVsfVCLinkPortStartState
+                  }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis link table objects."
+        ::= { hpicfVsfVCGroups 3 }
+
+    hpicfVsfVCNotificationsGroup NOTIFICATION-GROUP
+        NOTIFICATIONS   {
+                    hpicfVsfVCCommanderChange    ,
+                    hpicfVsfVCMemberChange       ,
+                    hpicfVsfVCMemberStatusChange 
+                  }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis notifications objects."
+        ::= { hpicfVsfVCGroups 4 }
+
+    hpicfVsfVCStatusScalarGroup OBJECT-GROUP
+    OBJECTS   {
+                    hpicfVsfVCLldpMADReadinessStatus   ,
+                    hpicfVsfVCLldpMADDeviceMAC         ,
+                    hpicfVsfVCLldpMADVlanId            ,
+                    hpicfVsfVCLldpMADTrunkIfIndex      ,
+                    hpicfVsfVCLldpMADProbePortSet      ,
+                    hpicfVsfVCLldpMADConnectivity      ,
+                    hpicfVsfVCLldpMADSplitStatus       ,
+                    hpicfVsfVCLldpMADProbeOriginator   ,
+                    hpicfVsfVCLldpMADProbeRequestsSent ,
+                    hpicfVsfVCLldpMADProbeResponseRcvd ,
+                    hpicfVsfVCLldpMADActiveFragment
+              }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis notifications objects."
+        ::= { hpicfVsfVCGroups 5 }
+
+    hpicfVsfVCPortTableGroup OBJECT-GROUP
+        OBJECTS {
+                    hpicfVsfVCPortOperStatus,
+                    hpicfVsfVCPortOperStatusErrorStr
+                  }
+        STATUS      current
+        DESCRIPTION "A collection of VSF virtual chassis physical port objects."
+        ::= { hpicfVsfVCGroups 6 }
+
+    hpicfVsfVCMibCompliance MODULE-COMPLIANCE 
+        STATUS      current
+        DESCRIPTION "The compliance statement for devices implementing the
+                     HP VSF VC Mib."
+        MODULE
+            MANDATORY-GROUPS { hpicfVsfVCConfigScalarGroup  ,
+                               hpicfVsfVCMemberTableGroup   ,                               
+                               hpicfVsfVCLinkTableGroup     ,
+                               hpicfVsfVCNotificationsGroup ,
+                               hpicfVsfVCStatusScalarGroup  ,
+                               hpicfVsfVCPortTableGroup     
+                                }
+        ::= { hpicfVsfVCCompliances 1 }
+    
+END

@@ -1,3 +1,20 @@
+--**MOD+***********************************************************************
+ -- Module:   hpicfMld.mib 
+ --
+ -- Copyright (C) 2000-2015 Hewlett Packard Enterprise Development LP
+ -- All Rights Reserved.
+ -- 
+ -- The contents of this software are proprietary and confidential
+ -- to the Hewlett Packard Enterprise Development LP.  No part of this
+ -- program may be photocopied, reproduced, or translated into another
+ -- programming language without prior written consent of the
+ -- Hewlett Packard Enterprise Development LP.
+ --
+ -- Purpose:  Defining proprietary MIB objects for MLD.
+ --
+ --MOD-***********************************************************************/
+
+
 HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
 
     IMPORTS
@@ -22,7 +39,7 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
             FROM IF-MIB;
 
     hpicfMldMIB MODULE-IDENTITY
-        LAST-UPDATED "201103100000Z"  -- Mar 10, 2011
+        LAST-UPDATED "201509110000Z"  -- Sept 11, 2015
         ORGANIZATION "HP Networking"
         CONTACT-INFO "Hewlett-Packard Company
                       8000 Foothills Blvd.
@@ -30,6 +47,15 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION  "This MIB module contains HP proprietary
                      MIB definitions for managing MLD services
                      including extensions to the standard MLD MIB (RFC 3019)."
+	REVISION     "201509110000Z"  -- Sept 11, 2015
+        DESCRIPTION  "Added commands to reset MLD if it is in error state."
+	REVISION     "201302100000Z"  -- Feb 10, 2013
+        DESCRIPTION  "Added objects hpicfMldIfEntryStartupQueryExpiryTime,
+                      hpicfMldIfEntryOtherQuerierInterval,
+                      hpicfMldIfEntryOtherQuerierExpiryTimex,compliance 
+                      hpicfMldMIBComplianceV3 and group hpicfMldIfGroupV3.
+                      deprecated compliance hpicfMldMIBComplianceV2 and 
+                      group hpicfMldIfGroupV2."
         REVISION     "201103100000Z"  -- Mar 10, 2011
         DESCRIPTION  "Added group specific query counter and MLD state"
         REVISION     "201101110000Z"  -- Jan 11, 2011
@@ -209,7 +235,10 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
             hpicfMldIfEntryStatV1GSQRx            Counter32,
             hpicfMldIfEntryStatV1GSQTx            Counter32,
             hpicfMldIfEntryStatV2GSQRx            Counter32,
-            hpicfMldIfEntryStatV2GSQTx            Counter32
+            hpicfMldIfEntryStatV2GSQTx            Counter32,
+            hpicfMldIfEntryStartupQueryExpiryTime TimeTicks,
+            hpicfMldIfEntryOtherQuerierInterval   Unsigned32, 
+            hpicfMldIfEntryOtherQuerierExpiryTime TimeTicks
         }
 
     hpicfMldIfEntryQuerierFeature OBJECT-TYPE
@@ -626,6 +655,39 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION "The number of V2 group specific queries transmitted
                      by this interface."
         ::= { hpicfMldIfEntry  48}
+
+     hpicfMldIfEntryStartupQueryExpiryTime OBJECT-TYPE
+        SYNTAX      TimeTicks 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The minimum amount of time remaining before a multicast 
+                     router decides that there is no longer another multicast
+                     router which should be the querier on startup on this 
+                     interface."
+        ::= { hpicfMldIfEntry  49}
+
+     hpicfMldIfEntryOtherQuerierInterval OBJECT-TYPE
+        SYNTAX      Unsigned32
+        UNITS       "seconds"
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The length of time that must pass before a multicast
+                     router decides that there is no longer another multicast
+                     router which should be the querier on this interface."
+        ::= { hpicfMldIfEntry  50}
+
+     hpicfMldIfEntryOtherQuerierExpiryTime OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The minimum amount of time remaining before a multicast
+                     router decides that there is no longer another multicast
+                     router which should be the querier on this interface."
+        ::= { hpicfMldIfEntry  51}
+
+
+
+    
 
 -- *********************************************************************
 -- The Extensions to the MLD std MIB mldCacheTable (RFC 3019)
@@ -1318,6 +1380,16 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
                 "Current number of sources requested on this port."
         ::= { hpicfMldGroupPortCacheEntry 10 }
 
+    hpicfMldReload OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "Setting this object to true will reset MLD on all interfaces,
+			 while setting this object to false does not have any impact.
+			 A get on this object will always return false."
+        DEFVAL          { false }
+        ::= { hpicfMld 15 }
+	
 -- **********************************************************************
 -- Conformance Information
 -- **********************************************************************
@@ -1458,7 +1530,7 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
                       hpicfMldIfEntryStatV1GSQTx,
                       hpicfMldIfEntryStatV2GSQRx,
                       hpicfMldIfEntryStatV2GSQTx
-  
+
                     }
         STATUS      current
         DESCRIPTION "A collection of objects that extends objects defined
@@ -1528,6 +1600,75 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
                  management of interfaces with MLD enabled."
         ::= { hpicfMldGroups 11 }
 
+    hpicfMldIfGroupV3 OBJECT-GROUP
+        OBJECTS     { hpicfMldIfEntryQuerierFeature,
+                      hpicfMldIfEntrySnoopingFeature, 
+                      hpicfMldIfEntryQuerierPort,       
+                      hpicfMldIfEntryFilteredJoins,  
+                      hpicfMldIfEntryStandardJoins,   
+                      hpicfMldIfEntryPortsWithMcastRouter,
+                      hpicfMldIfEntryStatGeneralQueryRx,
+                      hpicfMldIfEntryStatQueryTx,
+                      hpicfMldIfEntryStatGSQRx,
+                      hpicfMldIfEntryStatGSQTx,
+                      hpicfMldIfEntryStatMldV1ReportRx,
+                      hpicfMldIfEntryStatMldV2ReportRx,
+                      hpicfMldIfEntryStatMldV1LeaveRx,
+                      hpicfMldIfEntryStatUnknownMldTypeRx,
+                      hpicfMldIfEntryStatUnknownPktRx,
+                      hpicfMldIfEntryStatForwardToRoutersTx,
+                      hpicfMldIfEntryStatForwardToAllPortsTx,
+                      hpicfMldIfEntryStatFastLeaves,
+                      hpicfMldIfEntryStatForcedFastLeaves,
+                      hpicfMldIfEntryStatJoinTimeouts,
+                      hpicfMldIfEntryStatWrongVersionQueries,
+                      hpicfMldIfEntryLastMemberQueryCount,
+                      hpicfMldIfEntryStartupQueryCount,
+                      hpicfMldIfEntryStartupQueryInterval,
+                      hpicfMldIfEntryStatExcludeGroupJoinsCount,
+                      hpicfMldIfEntryStatIncludeGroupJoinsCount,
+                      hpicfMldIfEntryStatFilteredExcludeGroupJoinsCount,
+                      hpicfMldIfEntryStatFilteredIncludeGroupJoinsCount,
+                      hpicfMldIfEntryStatStandardExcludeGroupJoinsCount,
+                      hpicfMldIfEntryStatStandardIncludeGroupJoinsCount,
+                      hpicfMldIfEntryStatV1QueryTx,
+                      hpicfMldIfEntryStatV1QueryRx,
+                      hpicfMldIfEntryStatV2QueryTx,
+                      hpicfMldIfEntryStatV2QueryRx,
+                      hpicfMldIfEntryStatGSSQTx,
+                      hpicfMldIfEntryStatGSSQRx,
+                      hpicfMldIfEntryStatMalformedPktRx,
+                      hpicfMldIfEntryStatBadCheckSumRx,
+                      hpicfMldIfEntryStatMartianSourceRx,
+                      hpicfMldIfEntryStatPacketsRxOnDisabled,
+                      hpicfMldIfEntryStrictVersionMode,
+                      hpicfMldIfEntryStatMldV1ReportTx,
+                      hpicfMldIfEntryStatMldV2ReportTx,
+                      hpicfMldIfEntryState,
+                      hpicfMldIfEntryStatV1GSQRx,
+                      hpicfMldIfEntryStatV1GSQTx,
+                      hpicfMldIfEntryStatV2GSQRx,
+                      hpicfMldIfEntryStatV2GSQTx,
+                      hpicfMldIfEntryStartupQueryExpiryTime,
+                      hpicfMldIfEntryOtherQuerierInterval,
+                      hpicfMldIfEntryOtherQuerierExpiryTime
+  
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects that extends objects defined
+                    in mldInterfaceTable and used to support management of 
+                    interfaces with MLD enabled."
+        ::= { hpicfMldGroups 12 }
+
+    hpicfMldReloadModeGroup   OBJECT-GROUP 
+        OBJECTS       { 
+                           hpicfMldReload 
+                      } 
+        STATUS        current 
+        DESCRIPTION    "A collection of objects for MLD Reload mode." 
+        ::= {hpicfMldGroups 13} 
+
+
 -- **********************************************************************
 -- Compliance statements
 -- **********************************************************************
@@ -1559,5 +1700,23 @@ HP-ICF-MLD-MIB DEFINITIONS ::= BEGIN
                                hpicfMldGroupPortCacheGroup
                                }
         ::= { hpicfMldCompliances 2 }
+
+    hpicfMldMIBComplianceV3 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    MLD and implementing the HP-ICF-MLD MIB."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfMldBaseGroupV2,
+                               hpicfMldIfGroupV3,
+                               hpicfMldCacheGroupV2,
+                               hpicfMldPortGroup,
+                               hpicfMldFilteredGroupPortCacheGroup,
+                               hpicfMldSrcListGroup,
+                               hpicfMldPortSrcGroup,
+                               hpicfMldGroupPortCacheGroup,
+			       hpicfMldReloadModeGroup	
+                               }
+        ::= { hpicfMldCompliances 3 }
+
 
 END
