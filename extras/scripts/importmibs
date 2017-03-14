@@ -1,7 +1,6 @@
 #!/usr/bin/env perl
 # importmibs new_dir
 # will look into new_dir for MIBs to add or replace in MIBHOME/...
-# (also runs mibcheck)
 
 use strict;
 use warnings;
@@ -9,9 +8,6 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
-use FindBin;
-use List::Util 'max';
-use File::Temp;
 use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
@@ -33,108 +29,28 @@ if (!defined $from or not -d $from) {
 }
 
 my $vendor = (grep {m/\S/} splitdir($from))[-1];
-
 my $to = catfile($ENV{MIBHOME}, $vendor);
 if (! -d $to) {
   print "error: no directory in MIBHOME named $vendor\n";
   exit(1);
 }
 
-# run mibcheck always
-system(catfile($FindBin::Bin, 'mibcheck'), $from) and exit ($? >> 8);
+if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
+  print "error: prepmibs found some errors you need to address.\n";
+  exit(1);
+}
 
-# let net-snmp find MIBs in the new/old bundle
-my ($mib_for, $file_for) = build_index($from);
-my ($oldmib_for, $oldfile_for) = build_index($to);
-
-my $diffcmd = 'diff -bBN';
-my (%newmibs, %oldmibs, %newermibs, %samemibs);
-
-foreach my $mib (keys %{$file_for}) {
-  my $oldfile = exists $oldfile_for->{$mib}
-    ? catfile($to, $oldfile_for->{$mib}) : undef;
-  my $newfile = catfile($from, $file_for->{$mib});
-
-  if (!defined $oldfile or !-e $oldfile) {
-    $newmibs{$mib} = $vendor;
+foreach my $src (grep {-f} glob(catfile($from, '*'))) {
+  my $name = (splitdir($src))[-1];
+  if (-e catfile($to, $name)) {
+    print YELLOW, "\N{RIGHTWARDS WHITE ARROW FROM WALL} ";
   }
   else {
-    my $diff = qx($diffcmd $oldfile $newfile);
-    if ($diff !~ m/^\s*$/) {
-      # Look for version numbers - https://tools.ietf.org/html/rfc2578
-      my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $oldfile)
-        =~ m/"(\d{10}|\d{12})Z"/g);
-      my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' $newfile)
-        =~ m/"(\d{10}|\d{12})Z"/g);
-
-      if ($newv <= $oldv) {
-        $oldmibs{$mib} = "($newv \N{LESS-THAN OR EQUAL TO} $oldv)";
-      }
-      else {
-        $newermibs{$mib} = "$vendor ($newv \N{GREATER-THAN SIGN} $oldv)";
-      }
-    }
-    else {
-      $samemibs{$mib} = 1;
-    }
+    print YELLOW, "\N{BLACK SMALL STAR} ";
   }
+  print GREEN, "$name\n", RESET;
+  copy($src, $to) or die $!;
 }
 
-print "\r\e[K"; # blank line
-foreach (sort keys %oldmibs) {
-  print FAINT, "\N{HEAVY BALLOT X} $_ $oldmibs{$_}\n", RESET;
-}
-foreach (sort keys %samemibs) {
-  print FAINT, "\N{EQUALS SIGN} $_\n", RESET;
-}
-foreach (sort keys %newermibs) {
-  print YELLOW, "\N{HEAVY CHECK MARK}",
-    GREEN, " $_ ", CYAN,
-    "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newermibs{$_}\n", RESET;
-  copy(catfile($from, $file_for->{$_}), catfile($to, $oldfile_for->{$_})) or die $!;
-}
-foreach (sort keys %newmibs) {
-  print YELLOW,
-    "\N{BLACK SMALL STAR}", GREEN, " $_ ", CYAN,
-    "\N{RIGHTWARDS WHITE ARROW FROM WALL} $newmibs{$_}\n", RESET;
-  copy(catfile($from, $file_for->{$_}), $to) or die $!;
-}
-
-if (scalar keys %newermibs or scalar keys %newmibs) {
-  print "\N{HEAVY CHECK MARK} Imported";
-  if (scalar keys %newermibs) { print ' ', (scalar keys %newermibs), ' updated' }
-  if (scalar keys %newermibs and scalar keys %newmibs) { print ' and' }
-  if (scalar keys %newmibs) { print ' ', (scalar keys %newmibs), ' new' }
-  print " MIBs.\n";
-}
-else {
-  print "\N{HEAVY CHECK MARK} MIBs are already up to date.\n";
-}
+print "\N{HEAVY CHECK MARK} Imported MIBs.\n";
 exit(0);
-
-sub build_index {
-  my $bundle = shift;
-  my (%mib_for, %file_for);
-
-  my $tmpdir = File::Temp->newdir();
-  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
-  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
-  my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
-  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
-  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
-
-  # read the MIBs that net-snmp likes (file '3' is the vendor)
-  open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
-  while (my $line = <$cache>) {
-    next if $line =~ m/^DIR /;
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-    # store mib-file mapping
-    $mib_for{$file} = $mib;
-    $file_for{$mib} = $file;
-  }
-  close $cache;
-  undef $tmpdir;
-
-  return (\%mib_for, \%file_for);
-}
