@@ -1,10 +1,12 @@
 #!/usr/bin/env perl
 # prepmibs new_dir
-# sanity checks on the MIBs in new_dir
-# - show MIBs already 'owned' by another vendor
-# - note whether already-owend mib is newer and could be imported
-# - alert to multiple MIBs defined in a file
-# - warning about files in new_dir that will be ignored
+# The script will rename and organise files to help you.
+# - Any items in "error" folder need manually inspecting
+# - Take a look at items in the "ignore" folder, just in case.
+# - Watch out for new entries that could be RFCs.
+# - MIBs belonging to other vendors will be moved to "other" folder.
+# - Run "prepmibs/importmibs" on each folder in "other" before continuing.
+# - Renames known MIB files to be the same as the equiv in netdisco-mibs.
 
 use strict;
 use warnings;
@@ -132,8 +134,6 @@ foreach my $mib (sort keys %{$file_for}) {
 
 # show files being ignored by this script
 $res{ignore} = \%newfiles;
-
-# other, ignore, older, same, newer, new, multi, nover
 &status('Preparing to organise files...');
 
 foreach (qw(other ignore older same)) {
@@ -148,53 +148,58 @@ mkdir(catfile($from, 'error')) if scalar keys %{$res{multi}}
 print "\r\e[K"; # blank line
 
 foreach my $mib (sort keys %{$res{other}}) {
-  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN;
-  print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
-  print " is already featured within vendor ",
-    MAGENTA, $res{other}->{$mib}, "\n", RESET;
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
+    " is already featured within vendor ", MAGENTA, $res{other}->{$mib};
+  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
        catfile($from, 'other', $res{other}->{$mib}, $oldfile_for{$mib}))
     or die $!;
 }
 
-foreach my $file (sort keys %{$res{ignore}}) {
-  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
-    $file, CYAN, " is not a MIB\n", RESET;
-  move(catfile($from, $file), catfile($from, 'ignore')) or die $!;
-}
-
 foreach my $mib (sort keys %{$res{older}}) {
-  my  ($newv, $oldv) = @{ $res{older}->{$mib} };
-  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib);
+  my ($newv, $oldv) = @{ $res{older}->{$mib} };
+  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib), " is older ($newv < $oldv)";
   print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
-  print " is older ($newv < $oldv)\n", RESET;
+  print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
        catfile($from, 'older', $oldfile_for{$mib})) or die $!;
 }
 
 foreach my $mib (sort keys %{$res{same}}) {
-  print FAINT, "\N{EQUALS SIGN} ", uc($mib);
+  print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
   print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
-  print " is the same revision\n", RESET;
+  print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
        catfile($from, 'same', $oldfile_for{$mib}))
     or die $!;
 }
 
 foreach my $mib (sort keys %{$res{newer}}) {
-  my  ($newv, $oldv) = @{ $res{newer}->{$mib} };
-  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib), CYAN;
-  print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
-  print " is newer ($newv > $oldv)\n", RESET;
+  my ($newv, $oldv) = @{ $res{newer}->{$mib} };
+  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib),
+    CYAN, " is newer ($newv > $oldv)";
+  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
        catfile($from, $oldfile_for{$mib}))
     or die $!;
 }
 
 foreach my $mib (sort keys %{$res{new}}) {
-  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, uc($mib), CYAN;
+  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, uc($mib), CLEAR, FAINT;
   print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
   print "\n", RESET;
+}
+
+foreach my $mib (sort keys %{$res{nover}}) {
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib),
+    CYAN, " has no parseable revision date";
+  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print "\n", RESET;
+  move(catfile($from, $file_for->{$mib}),
+       catfile($from, 'error', $oldfile_for{$mib}))
+    or die $!;
 }
 
 foreach my $file (sort keys %{$res{multi}}) {
@@ -203,13 +208,10 @@ foreach my $file (sort keys %{$res{multi}}) {
   move(catfile($from, $file), catfile($from, 'error')) or die $!;
 }
 
-foreach my $mib (sort keys %{$res{nover}}) {
-  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'MIB ', MAGENTA, uc($mib), CYAN;
-  print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
-  print " has no parseable revision date\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'error', $oldfile_for{$mib}))
-    or die $!;
+foreach my $file (sort keys %{$res{ignore}}) {
+  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
+    $file, CYAN, " is not a MIB\n", RESET;
+  move(catfile($from, $file), catfile($from, 'ignore')) or die $!;
 }
 
 if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
