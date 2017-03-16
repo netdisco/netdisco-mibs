@@ -4,7 +4,7 @@ F5-BIGIP-GLOBAL-MIB DEFINITIONS ::= BEGIN
 -- F5-BIGIP-GLOBAL-MIB 
 --     A private enterprise MIB for F5 global traffic management 
 --     systems.
---     VERSION: 11.3.0
+--     VERSION: 11.5.0
 --================================================================
 
 IMPORTS
@@ -32,7 +32,7 @@ IMPORTS
 
 --================================================================
 bigipGlobalTM MODULE-IDENTITY
-    LAST-UPDATED "201209172224Z" -- Mon Sep 17 22:24:12 UTC 2012 
+    LAST-UPDATED "201310221830Z" -- Tue Oct 22 18:30:35 UTC 2013 
     ORGANIZATION "F5 Networks, Inc."
     CONTACT-INFO
          "postal: F5 Networks, Inc. 
@@ -61,6 +61,7 @@ gtmTopologies            OBJECT IDENTIFIER ::= { bigipGlobalTM 10 }
 gtmVirtualServers        OBJECT IDENTIFIER ::= { bigipGlobalTM 11}
 gtmWideips               OBJECT IDENTIFIER ::= { bigipGlobalTM 12 }
 gtmProberPools           OBJECT IDENTIFIER ::= { bigipGlobalTM 13 }
+gtmDNSSEC                OBJECT IDENTIFIER ::= { bigipGlobalTM 14 }
 
 --gtmGlobals
 gtmGlobalAttrs           OBJECT IDENTIFIER ::= { gtmGlobals 1 }
@@ -69,6 +70,7 @@ gtmGlobalAttr            OBJECT IDENTIFIER ::= { gtmGlobalAttrs 1 }
 gtmGlobalLdnsProbeProto  OBJECT IDENTIFIER ::= { gtmGlobalAttrs 2 }
 gtmGlobalAttr2           OBJECT IDENTIFIER ::= { gtmGlobalAttrs 3 }
 gtmGlobalStat            OBJECT IDENTIFIER ::= { gtmGlobalStats 1 }
+gtmGlobalDnssecStat      OBJECT IDENTIFIER ::= { gtmGlobalStats 2 }
 
 --gtmApplications
 gtmApplication           OBJECT IDENTIFIER ::= { gtmApplications 1 }
@@ -138,7 +140,10 @@ gtmProberPoolStatus            OBJECT IDENTIFIER ::= { gtmProberPools 3 }
 gtmProberPoolMember            OBJECT IDENTIFIER ::= { gtmProberPools 4 }
 gtmProberPoolMemberStat        OBJECT IDENTIFIER ::= { gtmProberPools 5 }
 gtmProberPoolMemberStatus      OBJECT IDENTIFIER ::= { gtmProberPools 6 }
-	
+
+--gtmDNSSEC
+gtmDnssecZoneStat        OBJECT IDENTIFIER ::= { gtmDNSSEC 1 }
+
 
 
 --==================================================================
@@ -1014,15 +1019,15 @@ gtmStatDropped OBJECT-TYPE
 	MAX-ACCESS read-only
 	STATUS current
 	DESCRIPTION
-		"The number of dropped connections for wide IPs for GTM (Global Traffic Management)."
+		"The number of dropped DNS messages for wide IPs for GTM (Global Traffic Management)."
 	::= { gtmGlobalStat 8 } 
 
 gtmStatExplicitIp OBJECT-TYPE 
 	SYNTAX Counter64
 	MAX-ACCESS read-only
-	STATUS current
+	STATUS	 deprecated
 	DESCRIPTION
-		"The number of times which a LDNS  was persisted to wide IPs
+		"Deprecated! The number of times which a LDNS  was persisted to wide IPs
 	        by the explicit IP rule for GTM (Global Traffic Management)."
 	::= { gtmGlobalStat 9 } 
 
@@ -1100,6 +1105,31 @@ gtmStatReturnFromDns OBJECT-TYPE
 		"The number of times which a resolve was returned from DNS
 	        for wide IPs for GTM (Global Traffic Management)."
 	::= { gtmGlobalStat 18 } 
+
+gtmStatCnameResolutions OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of times which a query is resolved by the CNAME of pools
+	        associated with a Wide IP for GTM (Global Traffic Management)."
+	::= { gtmGlobalStat 19 } 
+
+gtmStatARequests OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of A requests for wide IPs for GTM (Global Traffic Management)."
+	::= { gtmGlobalStat 20 } 
+
+gtmStatAaaaRequests OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of AAAA requests for wide IPs for GTM (Global Traffic Management)."
+	::= { gtmGlobalStat 21 } 
 
 --==================================================================
 -- Gtm_application
@@ -3353,7 +3383,8 @@ GtmPoolStatEntry ::=
         	gtmPoolStatDropped                                     Counter64,
         	gtmPoolStatExplicitIp                                  Counter64,
         	gtmPoolStatReturnToDns                                 Counter64,
-        	gtmPoolStatReturnFromDns                               Counter64
+        	gtmPoolStatReturnFromDns                               Counter64,
+        	gtmPoolStatCnameResolutions                            Counter64
 	}
 
 gtmPoolStatName OBJECT-TYPE 
@@ -3396,16 +3427,16 @@ gtmPoolStatDropped OBJECT-TYPE
 	MAX-ACCESS read-only
 	STATUS current
 	DESCRIPTION
-		"The number of dropped connections for the specified pool."
+		"The number of dropped DNS messages for the specified pool."
 	::= { gtmPoolStatEntry 5 } 
 
 gtmPoolStatExplicitIp OBJECT-TYPE 
 	SYNTAX Counter64
 	MAX-ACCESS read-only
-	STATUS current
+	STATUS	 deprecated
 	DESCRIPTION
-		"The number of times which a LDNS  was persisted to the specified pool 
-		by the explicit IP rule."
+		"Deprecated! The number of times which a LDNS  was persisted to the
+	        specified pool by the explicit IP rule."
 	::= { gtmPoolStatEntry 6 } 
 
 gtmPoolStatReturnToDns OBJECT-TYPE 
@@ -3425,6 +3456,15 @@ gtmPoolStatReturnFromDns OBJECT-TYPE
 		"The number of times which a resolve was returned from DNS for the
 	        specified pool."
 	::= { gtmPoolStatEntry 8 } 
+
+gtmPoolStatCnameResolutions OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of times which a query is resolved by the CNAME of the
+	        specified pool."
+	::= { gtmPoolStatEntry 9 } 
 
 --==================================================================
 -- Gtm_pool_member
@@ -6282,7 +6322,10 @@ GtmWideipStatEntry ::=
         	gtmWideipStatDropped                                   Counter64,
         	gtmWideipStatExplicitIp                                Counter64,
         	gtmWideipStatReturnToDns                               Counter64,
-        	gtmWideipStatReturnFromDns                             Counter64
+        	gtmWideipStatReturnFromDns                             Counter64,
+        	gtmWideipStatCnameResolutions                          Counter64,
+        	gtmWideipStatARequests                                 Counter64,
+        	gtmWideipStatAaaaRequests                              Counter64
 	}
 
 gtmWideipStatName OBJECT-TYPE 
@@ -6340,16 +6383,16 @@ gtmWideipStatDropped OBJECT-TYPE
 	MAX-ACCESS read-only
 	STATUS current
 	DESCRIPTION
-		"The number of dropped connections for the specified wide IP."
+		"The number of dropped DNS messages for the specified wide IP."
 	::= { gtmWideipStatEntry 7 } 
 
 gtmWideipStatExplicitIp OBJECT-TYPE 
 	SYNTAX Counter64
 	MAX-ACCESS read-only
-	STATUS current
+	STATUS	 deprecated
 	DESCRIPTION
-		"The number of times which a LDNS  was persisted to the specified wide IP 
-		by the explicit IP rule."
+		"Deprecated! The number of times which a LDNS  was persisted to the
+	        specified wide IP by the explicit IP rule."
 	::= { gtmWideipStatEntry 8 } 
 
 gtmWideipStatReturnToDns OBJECT-TYPE 
@@ -6369,6 +6412,31 @@ gtmWideipStatReturnFromDns OBJECT-TYPE
 		"The number of times which a resolve was returned from DNS for the 
 	        specified wide IP."
 	::= { gtmWideipStatEntry 10 } 
+
+gtmWideipStatCnameResolutions OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of times which a query is resolved by the CNAME of pools
+	        associated with the specified Wide IP."
+	::= { gtmWideipStatEntry 11 } 
+
+gtmWideipStatARequests OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of A requests for the specified wide IP."
+	::= { gtmWideipStatEntry 12 } 
+
+gtmWideipStatAaaaRequests OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of AAAA requests for the specified wide IP."
+	::= { gtmWideipStatEntry 13 } 
 
 --==================================================================
 -- Gtm_wideip_status
@@ -7402,7 +7470,8 @@ GtmAttr2Entry ::=
         	gtmAttr2TimerSendKeepAlive                             Integer32,
         	gtmAttr2CertificateDepth                               Integer32,
         	gtmAttr2MaxMemoryUsage                                 Integer32,
-        	gtmAttr2Name                                           LongDisplayString
+        	gtmAttr2Name                                           LongDisplayString,
+        	gtmAttr2ForwardStatus                                  INTEGER
 	}
 
 gtmAttr2DumpTopology OBJECT-TYPE 
@@ -8083,6 +8152,491 @@ gtmAttr2Name OBJECT-TYPE
 		"name as a key."
 	::= { gtmAttr2Entry 64 } 
 
+gtmAttr2ForwardStatus OBJECT-TYPE 
+	SYNTAX INTEGER {
+		disabled(0),
+		enabled(1)
+	}
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The state indicating whether or not to forward object availability status change notifications."
+	::= { gtmAttr2Entry 65 } 
+
+--==================================================================
+-- Gtm_dnssec_zone_stat
+--==================================================================
+gtmDnssecZoneStatResetStats OBJECT-TYPE 
+	SYNTAX INTEGER
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+		"The action to reset resetable statistics data in  gtmDnssecZoneStat. 
+		 Setting this value to 1 will reset statistics data. 
+		 Note, some statistics data may not be reset including data that are incremental counters."
+	::= { gtmDnssecZoneStat 1 } 
+
+gtmDnssecZoneStatNumber OBJECT-TYPE 
+	SYNTAX INTEGER
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of gtmDnssecZoneStat entries in the table."
+	::= { gtmDnssecZoneStat 2 } 
+
+gtmDnssecZoneStatTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF GtmDnssecZoneStatEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A table containing statistics information for GTM DNSSEC zones."
+	::= { gtmDnssecZoneStat 3 } 
+
+gtmDnssecZoneStatEntry OBJECT-TYPE
+	SYNTAX  GtmDnssecZoneStatEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Columns in the gtmDnssecZoneStat Table"
+	INDEX {
+		gtmDnssecZoneStatName
+	}
+	::= { gtmDnssecZoneStatTable 1 } 
+
+GtmDnssecZoneStatEntry ::= 
+	SEQUENCE {
+        	gtmDnssecZoneStatName                                  LongDisplayString,
+        	gtmDnssecZoneStatNsec3s                                Counter64,
+        	gtmDnssecZoneStatNsec3Nodata                           Counter64,
+        	gtmDnssecZoneStatNsec3Nxdomain                         Counter64,
+        	gtmDnssecZoneStatNsec3Referral                         Counter64,
+        	gtmDnssecZoneStatNsec3Resalt                           Counter64,
+        	gtmDnssecZoneStatDnssecResponses                       Counter64,
+        	gtmDnssecZoneStatDnssecDnskeyQueries                   Counter64,
+        	gtmDnssecZoneStatDnssecNsec3paramQueries               Counter64,
+        	gtmDnssecZoneStatDnssecDsQueries                       Counter64,
+        	gtmDnssecZoneStatSigCryptoFailed                       Counter64,
+        	gtmDnssecZoneStatSigSuccess                            Counter64,
+        	gtmDnssecZoneStatSigFailed                             Counter64,
+        	gtmDnssecZoneStatSigRrsetFailed                        Counter64,
+        	gtmDnssecZoneStatConnectFlowFailed                     Counter64,
+        	gtmDnssecZoneStatTowireFailed                          Counter64,
+        	gtmDnssecZoneStatAxfrQueries                           Counter64,
+        	gtmDnssecZoneStatIxfrQueries                           Counter64,
+        	gtmDnssecZoneStatXfrStarts                             Counter64,
+        	gtmDnssecZoneStatXfrCompletes                          Counter64,
+        	gtmDnssecZoneStatXfrMsgs                               Counter64,
+        	gtmDnssecZoneStatXfrMasterMsgs                         Counter64,
+        	gtmDnssecZoneStatXfrResponseAverageSize                Counter64,
+        	gtmDnssecZoneStatXfrSerial                             Counter64,
+        	gtmDnssecZoneStatXfrMasterSerial                       Counter64
+	}
+
+gtmDnssecZoneStatName OBJECT-TYPE 
+	SYNTAX LongDisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The name of a DNSSEC zone."
+	::= { gtmDnssecZoneStatEntry 1 } 
+
+gtmDnssecZoneStatNsec3s OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of NSEC3 RRs generated."
+	::= { gtmDnssecZoneStatEntry 2 } 
+
+gtmDnssecZoneStatNsec3Nodata OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of no data responses generated needing NSEC3 RR."
+	::= { gtmDnssecZoneStatEntry 3 } 
+
+gtmDnssecZoneStatNsec3Nxdomain OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of no domain responses generated needing NSEC3 RR."
+	::= { gtmDnssecZoneStatEntry 4 } 
+
+gtmDnssecZoneStatNsec3Referral OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of referral responses generated needing NSEC3 RR."
+	::= { gtmDnssecZoneStatEntry 5 } 
+
+gtmDnssecZoneStatNsec3Resalt OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of times that salt was changed for NSEC3."
+	::= { gtmDnssecZoneStatEntry 6 } 
+
+gtmDnssecZoneStatDnssecResponses OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of signed responses."
+	::= { gtmDnssecZoneStatEntry 7 } 
+
+gtmDnssecZoneStatDnssecDnskeyQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of queries for DNSKEY type."
+	::= { gtmDnssecZoneStatEntry 8 } 
+
+gtmDnssecZoneStatDnssecNsec3paramQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of queries for NSEC3PARAM type."
+	::= { gtmDnssecZoneStatEntry 9 } 
+
+gtmDnssecZoneStatDnssecDsQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of queries for DS type."
+	::= { gtmDnssecZoneStatEntry 10 } 
+
+gtmDnssecZoneStatSigCryptoFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of signatures in which the cryptographic operation failed."
+	::= { gtmDnssecZoneStatEntry 11 } 
+
+gtmDnssecZoneStatSigSuccess OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of successfully generated signatures."
+	::= { gtmDnssecZoneStatEntry 12 } 
+
+gtmDnssecZoneStatSigFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of general signature failures."
+	::= { gtmDnssecZoneStatEntry 13 } 
+
+gtmDnssecZoneStatSigRrsetFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of failures due to an RRSET failing to be signed."
+	::= { gtmDnssecZoneStatEntry 14 } 
+
+gtmDnssecZoneStatConnectFlowFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of connection flow failures."
+	::= { gtmDnssecZoneStatEntry 15 } 
+
+gtmDnssecZoneStatTowireFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of failures when converting to a wire format packet."
+	::= { gtmDnssecZoneStatEntry 16 } 
+
+gtmDnssecZoneStatAxfrQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of axfr queries."
+	::= { gtmDnssecZoneStatEntry 17 } 
+
+gtmDnssecZoneStatIxfrQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of ixfr queries."
+	::= { gtmDnssecZoneStatEntry 18 } 
+
+gtmDnssecZoneStatXfrStarts OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of zone transfers which were started."
+	::= { gtmDnssecZoneStatEntry 19 } 
+
+gtmDnssecZoneStatXfrCompletes OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of zone transfers which were completed."
+	::= { gtmDnssecZoneStatEntry 20 } 
+
+gtmDnssecZoneStatXfrMsgs OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of zone transfer packets to clients."
+	::= { gtmDnssecZoneStatEntry 21 } 
+
+gtmDnssecZoneStatXfrMasterMsgs OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Total number of zone transfer packets from the primary server."
+	::= { gtmDnssecZoneStatEntry 22 } 
+
+gtmDnssecZoneStatXfrResponseAverageSize OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Zone transfer average responses size in bytes."
+	::= { gtmDnssecZoneStatEntry 23 } 
+
+gtmDnssecZoneStatXfrSerial OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The serial number advertised to all clients."
+	::= { gtmDnssecZoneStatEntry 24 } 
+
+gtmDnssecZoneStatXfrMasterSerial OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The zone serial number of the primary server."
+	::= { gtmDnssecZoneStatEntry 25 } 
+
+--==================================================================
+-- Global_gtm_dnssec_zone_stat
+--==================================================================
+gtmDnssecStatResetStats OBJECT-TYPE 
+	SYNTAX INTEGER
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+		"The action to reset resetable statistics data in  gtmGlobalDnssecStat. 
+		 Setting this value to 1 will reset statistics data. 
+		 Note, some statistics data may not be reset including data that are incremental counters."
+	::= { gtmGlobalDnssecStat 1 } 
+
+gtmDnssecStatNsec3s OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of NSEC3 RRs generated."
+	::= { gtmGlobalDnssecStat 2 } 
+
+gtmDnssecStatNsec3Nodata OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of no data responses generated needing NSEC3 RR."
+	::= { gtmGlobalDnssecStat 3 } 
+
+gtmDnssecStatNsec3Nxdomain OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of no domain responses generated needing NSEC3 RR."
+	::= { gtmGlobalDnssecStat 4 } 
+
+gtmDnssecStatNsec3Referral OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of referral responses generated needing NSEC3 RR."
+	::= { gtmGlobalDnssecStat 5 } 
+
+gtmDnssecStatNsec3Resalt OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of times that salt was changed for NSEC3."
+	::= { gtmGlobalDnssecStat 6 } 
+
+gtmDnssecStatDnssecResponses OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of signed responses."
+	::= { gtmGlobalDnssecStat 7 } 
+
+gtmDnssecStatDnssecDnskeyQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of queries for DNSKEY type."
+	::= { gtmGlobalDnssecStat 8 } 
+
+gtmDnssecStatDnssecNsec3paramQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of queries for NSEC3PARAM type."
+	::= { gtmGlobalDnssecStat 9 } 
+
+gtmDnssecStatDnssecDsQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of queries for DS type."
+	::= { gtmGlobalDnssecStat 10 } 
+
+gtmDnssecStatSigCryptoFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of signatures in which the cryptographic operation failed."
+	::= { gtmGlobalDnssecStat 11 } 
+
+gtmDnssecStatSigSuccess OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of successfully generated signatures."
+	::= { gtmGlobalDnssecStat 12 } 
+
+gtmDnssecStatSigFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of general signature failures."
+	::= { gtmGlobalDnssecStat 13 } 
+
+gtmDnssecStatSigRrsetFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of failures due to an RRSET failing to be signed."
+	::= { gtmGlobalDnssecStat 14 } 
+
+gtmDnssecStatConnectFlowFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of connection flow failures."
+	::= { gtmGlobalDnssecStat 15 } 
+
+gtmDnssecStatTowireFailed OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of failures when converting to a wire format packet."
+	::= { gtmGlobalDnssecStat 16 } 
+
+gtmDnssecStatAxfrQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of axfr queries."
+	::= { gtmGlobalDnssecStat 17 } 
+
+gtmDnssecStatIxfrQueries OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of ixfr queries."
+	::= { gtmGlobalDnssecStat 18 } 
+
+gtmDnssecStatXfrStarts OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of zone transfers which were started."
+	::= { gtmGlobalDnssecStat 19 } 
+
+gtmDnssecStatXfrCompletes OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of zone transfers which were completed."
+	::= { gtmGlobalDnssecStat 20 } 
+
+gtmDnssecStatXfrMsgs OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of zone transfer packets to clients."
+	::= { gtmGlobalDnssecStat 21 } 
+
+gtmDnssecStatXfrMasterMsgs OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The number of zone transfer packets from the primary server."
+	::= { gtmGlobalDnssecStat 22 } 
+
+gtmDnssecStatXfrResponseAverageSize OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Zone transfer average responses size in bytes."
+	::= { gtmGlobalDnssecStat 23 } 
+
+gtmDnssecStatXfrSerial OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The serial number advertised to all clients."
+	::= { gtmGlobalDnssecStat 24 } 
+
+gtmDnssecStatXfrMasterSerial OBJECT-TYPE 
+	SYNTAX Counter64
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"The zone serial number of the primary server."
+	::= { gtmGlobalDnssecStat 25 } 
+
 --================================================================
  -- Compliance and Group
 --================================================================
@@ -8200,7 +8754,10 @@ gtmStatGroup OBJECT-GROUP
 		gtmStatBytesDropped,
 		gtmStatLdnses,
 		gtmStatPaths,
-		gtmStatReturnFromDns
+		gtmStatReturnFromDns,
+		gtmStatCnameResolutions,
+		gtmStatARequests,
+		gtmStatAaaaRequests
 	}
 	STATUS	 current
 	DESCRIPTION
@@ -8491,7 +9048,8 @@ gtmPoolStatGroup OBJECT-GROUP
 		gtmPoolStatDropped,
 		gtmPoolStatExplicitIp,
 		gtmPoolStatReturnToDns,
-		gtmPoolStatReturnFromDns
+		gtmPoolStatReturnFromDns,
+		gtmPoolStatCnameResolutions
 	}
 	STATUS	 current
 	DESCRIPTION
@@ -8876,7 +9434,10 @@ gtmWideipStatGroup OBJECT-GROUP
 		gtmWideipStatDropped,
 		gtmWideipStatExplicitIp,
 		gtmWideipStatReturnToDns,
-		gtmWideipStatReturnFromDns
+		gtmWideipStatReturnFromDns,
+		gtmWideipStatCnameResolutions,
+		gtmWideipStatARequests,
+		gtmWideipStatAaaaRequests
 	}
 	STATUS	 current
 	DESCRIPTION
@@ -9100,10 +9661,79 @@ gtmAttr2Group OBJECT-GROUP
 		gtmAttr2TimerSendKeepAlive,
 		gtmAttr2CertificateDepth,
 		gtmAttr2MaxMemoryUsage,
-		gtmAttr2Name
+		gtmAttr2Name,
+		gtmAttr2ForwardStatus
 	}
 	STATUS	 current
 	DESCRIPTION
 		"A collection of objects of gtmGlobalAttr2 MIB."
 	::= { bigipGlobalTMGroups 49 }
+
+gtmDnssecZoneStatGroup OBJECT-GROUP
+	 OBJECTS {
+		gtmDnssecZoneStatResetStats,
+		gtmDnssecZoneStatNumber,
+		gtmDnssecZoneStatName,
+		gtmDnssecZoneStatNsec3s,
+		gtmDnssecZoneStatNsec3Nodata,
+		gtmDnssecZoneStatNsec3Nxdomain,
+		gtmDnssecZoneStatNsec3Referral,
+		gtmDnssecZoneStatNsec3Resalt,
+		gtmDnssecZoneStatDnssecResponses,
+		gtmDnssecZoneStatDnssecDnskeyQueries,
+		gtmDnssecZoneStatDnssecNsec3paramQueries,
+		gtmDnssecZoneStatDnssecDsQueries,
+		gtmDnssecZoneStatSigCryptoFailed,
+		gtmDnssecZoneStatSigSuccess,
+		gtmDnssecZoneStatSigFailed,
+		gtmDnssecZoneStatSigRrsetFailed,
+		gtmDnssecZoneStatConnectFlowFailed,
+		gtmDnssecZoneStatTowireFailed,
+		gtmDnssecZoneStatAxfrQueries,
+		gtmDnssecZoneStatIxfrQueries,
+		gtmDnssecZoneStatXfrStarts,
+		gtmDnssecZoneStatXfrCompletes,
+		gtmDnssecZoneStatXfrMsgs,
+		gtmDnssecZoneStatXfrMasterMsgs,
+		gtmDnssecZoneStatXfrResponseAverageSize,
+		gtmDnssecZoneStatXfrSerial,
+		gtmDnssecZoneStatXfrMasterSerial
+	}
+	STATUS	 current
+	DESCRIPTION
+		"A collection of objects of gtmDnssecZoneStat MIB."
+	::= { bigipGlobalTMGroups 50 }
+
+gtmDnssecStatGroup OBJECT-GROUP
+	 OBJECTS {
+		gtmDnssecStatResetStats,
+		gtmDnssecStatNsec3s,
+		gtmDnssecStatNsec3Nodata,
+		gtmDnssecStatNsec3Nxdomain,
+		gtmDnssecStatNsec3Referral,
+		gtmDnssecStatNsec3Resalt,
+		gtmDnssecStatDnssecResponses,
+		gtmDnssecStatDnssecDnskeyQueries,
+		gtmDnssecStatDnssecNsec3paramQueries,
+		gtmDnssecStatDnssecDsQueries,
+		gtmDnssecStatSigCryptoFailed,
+		gtmDnssecStatSigSuccess,
+		gtmDnssecStatSigFailed,
+		gtmDnssecStatSigRrsetFailed,
+		gtmDnssecStatConnectFlowFailed,
+		gtmDnssecStatTowireFailed,
+		gtmDnssecStatAxfrQueries,
+		gtmDnssecStatIxfrQueries,
+		gtmDnssecStatXfrStarts,
+		gtmDnssecStatXfrCompletes,
+		gtmDnssecStatXfrMsgs,
+		gtmDnssecStatXfrMasterMsgs,
+		gtmDnssecStatXfrResponseAverageSize,
+		gtmDnssecStatXfrSerial,
+		gtmDnssecStatXfrMasterSerial
+	}
+	STATUS	 current
+	DESCRIPTION
+		"A collection of objects of gtmGlobalDnssecStat MIB."
+	::= { bigipGlobalTMGroups 51 }
 END
