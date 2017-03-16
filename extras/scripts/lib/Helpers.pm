@@ -81,7 +81,7 @@ sub parse_index2 {
   open(my $index, '<', $indexfile) or die $!;
   while (my $line = <$index>) {
     next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
-    if ($line =~ m/^DIR\s+(\S+)/) {
+    if ($line =~ m/^VENDOR\s+(\S+)/) {
       $currvendor = (grep {m/\S/} splitdir($1))[-1];
       next;
     }
