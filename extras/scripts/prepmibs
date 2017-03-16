@@ -49,36 +49,12 @@ if (! -d $to) {
   exit(1);
 }
 
-my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
-if (! -f $indexfile) {
-  print "error: missing mib_index2.txt (run mkindex)\n";
-  exit(1);
-}
-
-# load mib_index2.txt mapping all current known MIBs
-my (%vendor_for, %oldfile_for, $currvendor);
-open(my $index, '<', $indexfile) or die $!;
-while (my $line = <$index>) {
-  next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
-  if ($line =~ m/^DIR\s+(\S+)/) {
-    $currvendor = (grep {m/\S/} splitdir($1))[-1];
-    next;
-  }
-  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-  # store mib-vendor mapping
-  if (exists $vendor_for{$mib}) {
-    print YELLOW, "\N{WARNING SIGN} ", MAGENTA, uc($mib), CYAN,
-      "is duplicated in vendors $vendor_for{$mib} and $currvendor\n", RESET;
-  }
-  $vendor_for{$mib}  = $currvendor;
-  $oldfile_for{$mib} = $file;
-}
-close $index;
-
 # let net-snmp find MIBs in the new bundle
 # leaves a copy of the mib index file in $from/ignore/dotindex.txt
-my ($mib_for, $file_for) = build_index($from);
+my ($mib_for, $file_for) = build_index($from, 'keep');
+
+# load mib_index2.txt mapping all current known MIBs
+my ($vendor_for, $oldfile_for) = parse_index2();
 
 my %res = ();
 my %newfiles = map  {($_ => 1)}
@@ -99,14 +75,14 @@ foreach my $mib (sort keys %{$file_for}) {
   }
 
   # check whether MIB is featured in another vendor's bundle
-  if (exists $vendor_for{$mib} and $vendor_for{$mib} ne $vendor) {
-    $res{other}->{$mib} = $vendor_for{$mib};
+  if (exists $vendor_for->{$mib} and $vendor_for->{$mib} ne $vendor) {
+    $res{other}->{$mib} = $vendor_for->{$mib};
   }
-  elsif (!exists $oldfile_for{$mib}) {
+  elsif (!exists $oldfile_for->{$mib}) {
       $res{new}->{$mib} = 1;
   }
   else {
-    my $oldmibfile = catfile($to, $oldfile_for{$mib});
+    my $oldmibfile = catfile($to, $oldfile_for->{$mib});
 
     # Look for version numbers - https://tools.ietf.org/html/rfc2578
     my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$oldmibfile')
@@ -156,28 +132,29 @@ blank();
 foreach my $mib (sort keys %{$res{other}}) {
   print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
     " is already featured within vendor ", MAGENTA, $res{other}->{$mib};
-  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for{$mib}))
+       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}))
     or die $!;
 }
 
 foreach my $mib (sort keys %{$res{older}}) {
   my ($newv, $oldv) = @{ $res{older}->{$mib} };
   print FAINT, "\N{LESS-THAN SIGN} ", uc($mib), " is older ($newv < $oldv)";
-  print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'older', $oldfile_for{$mib})) or die $!;
+       catfile($from, 'older', $oldfile_for->{$mib})) or die $!;
 }
 
 foreach my $mib (sort keys %{$res{same}}) {
   print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
-  print " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'same', $oldfile_for{$mib}))
+       catfile($from, 'same', $oldfile_for->{$mib}))
     or die $!;
 }
 
@@ -185,10 +162,11 @@ foreach my $mib (sort keys %{$res{newer}}) {
   my ($newv, $oldv) = @{ $res{newer}->{$mib} };
   print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib),
     CYAN, " is newer ($newv > $oldv)";
-  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, $oldfile_for{$mib}))
+       catfile($from, $oldfile_for->{$mib}))
     or die $!;
 }
 
@@ -201,10 +179,11 @@ foreach my $mib (sort keys %{$res{new}}) {
 foreach my $mib (sort keys %{$res{nover}}) {
   print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib),
     CYAN, " has no parseable revision date";
-  print CLEAR, FAINT, " (in '$oldfile_for{$mib}')" if uc($mib) ne $oldfile_for{$mib};
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
   move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'error', $oldfile_for{$mib}))
+       catfile($from, 'error', $oldfile_for->{$mib}))
     or die $!;
 }
 
@@ -227,35 +206,4 @@ if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
 else {
   print "\N{HEAVY CHECK MARK} MIBs ready for import.\n";
   exit(0);
-}
-
-sub build_index {
-  my $bundle = shift;
-  my (%mib_for, %file_for);
-
-  my $tmpdir = File::Temp->newdir();
-  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
-  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
-  my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
-  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
-  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
-
-  # read the MIBs that net-snmp likes (file '3' is the vendor)
-  # TODO: make this work also for rfc:net-snmp
-  open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
-  while (my $line = <$cache>) {
-    next if $line =~ m/^DIR /;
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-
-    # store mib-file mapping
-    $mib_for{$file} = $mib;
-    $file_for{$mib} = $file;
-  }
-  close $cache;
-
-  # keep a copy of the mib index file to help the dev
-  mkdir(catfile($bundle, 'ignore'));
-  copy("$tmpdir/mib_indexes/3", catfile($bundle, 'ignore', 'dotindex.txt'));
-
-  return (\%mib_for, \%file_for);
 }

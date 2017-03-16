@@ -31,37 +31,20 @@ $ENV{MIBS} = 'SNMPv2-MIB';
 my @mibdirs = grep { -d and $_ !~ m#/extras$# } glob("$ENV{MIBHOME}/*");
 $ENV{MIBDIRS} = join ':', @mibdirs;
 
-my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
-if (! -f $indexfile) {
-  print "error: missing mib_index2.txt (run mkindex)\n";
-  exit(1);
-}
-
 # load mib_index2.txt mapping all current known MIBs
-my (%mibs_for, $currvendor);
-open(my $index, '<', $indexfile) or die $!;
-while (my $line = <$index>) {
-  next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
-  if ($line =~ m/^DIR\s+(\S+)/) {
-    $currvendor = (grep {m/\S/} splitdir($1))[-1];
-    next;
-  }
-  my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
-  push @{$mibs_for{$currvendor}}, $mib;
-}
-close $index;
+my (undef, undef, $mibs_for) = parse_index2();
 
 my $vendor = shift;
-if ($vendor and !exists $mibs_for{$vendor} and $vendor ne '*') {
+if ($vendor and !exists $mibs_for->{$vendor} and $vendor ne '*') {
   print "error: vendor arg must exist in MIBHOME\n";
   exit(1);
 }
 my @vendors = (defined $vendor)
-  ? (($vendor eq '*') ? (sort keys %mibs_for) : ($vendor))
+  ? (($vendor eq '*') ? (sort keys %{$mibs_for}) : ($vendor))
   : ('all');
 
 foreach my $v (@vendors) {
-  my $mibs = ($v eq 'all') ? 'ALL' : (join ':', @{$mibs_for{$v}});
+  my $mibs = ($v eq 'all') ? 'ALL' : (join ':', @{$mibs_for->{$v}});
   my $out = catfile($ENV{MIBHOME}, 'extras', 'reports', $v);
   my $err = File::Temp->new();
 
