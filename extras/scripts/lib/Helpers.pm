@@ -14,6 +14,16 @@ use Term::ANSIColor qw(:constants);
 use Exporter 'import';
 our @EXPORT = qw(status blank build_index parse_index2);
 
+if (!defined $ENV{MIBHOME}) {
+  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
+  exit(1);
+}
+
+$ENV{SNMPCONFPATH} = '';
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+$ENV{MIBS} = 'SNMPv2-MIB';
+$ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc";
+
 sub blank {
   print "\r\e[K"; # blank line
 }
@@ -47,9 +57,9 @@ sub build_index {
   qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
   $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
 
-  # read the MIBs that net-snmp likes (file '3' is the vendor)
+  # read the MIBs that net-snmp likes (file '2' is the vendor)
   # TODO: make this work also for rfc:net-snmp
-  open(my $cache, '<', "$tmpdir/mib_indexes/3") or die $!;
+  open(my $cache, '<', "$tmpdir/mib_indexes/2") or die $!;
   while (my $line = <$cache>) {
     next if $line =~ m/^DIR /;
     my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
@@ -63,7 +73,7 @@ sub build_index {
   # keep a copy of the mib index file to help the dev
   if ($keep) {
     mkdir(catfile($bundle, 'ignore'));
-    copy("$tmpdir/mib_indexes/3", catfile($bundle, 'ignore', 'dotindex.txt'));
+    copy("$tmpdir/mib_indexes/2", catfile($bundle, 'ignore', 'dotindex.txt'));
   }
 
   return (\%mib_for, \%file_for);

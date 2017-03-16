@@ -17,16 +17,6 @@ use FindBin;
 use lib catfile($FindBin::Bin, 'lib');
 use Helpers;
 
-if (!defined $ENV{MIBHOME}) {
-  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
-  exit(1);
-}
-
-$ENV{SNMPCONFPATH} = '';
-$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
-$ENV{MIBS} = 'SNMPv2-MIB';
-$ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc:$ENV{MIBHOME}/cisco";
-
 # first setup
 mkdir "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes";
 mkdir "$ENV{SNMP_PERSISTENT_DIR}/cache";
@@ -38,13 +28,13 @@ find(sub{ -d or unlink or die $! },
   "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
 
 # bootstrap initial three indexes
-status('net-snmp:rfc:cisco');
+status('net-snmp:rfc');
 system(q(snmptranslate -IR sysName | egrep -v '^SNMPv2-MIB::sysName$'));
 
 # now for all the other dirs
-my $next = 3;
+my $next = 2;
 foreach (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
-  next if m/^(?:net-snmp|rfc|cisco|extras)$/ or m/\./;
+  next if m/^(?:net-snmp|rfc|extras)$/ or m/\./;
   status($_);
 
   my $tmpdir = File::Temp->newdir();
@@ -55,7 +45,7 @@ foreach (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
   system(qq(snmptranslate -M'$newmibdirs' -IR sysName | egrep -v '^SNMPv2-MIB::sysName\$'));
   $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
 
-  copy("$tmpdir/mib_indexes/3", "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$next");
+  copy("$tmpdir/mib_indexes/2", "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$next");
   ++$next;
 }
 
