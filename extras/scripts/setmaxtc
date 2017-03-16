@@ -4,7 +4,17 @@
 
 use strict;
 use warnings;
-use File::Path;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+my $i = undef;
+$|++;
+
+use File::Temp;
+use File::Path ();
+use Time::HiRes 'sleep';
+use Term::ANSIColor qw(:constants);
+use POSIX qw(:sys_wait_h);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -18,10 +28,50 @@ if (not (-e $localenv and -x $localenv)) {
   File::Path::remove_tree($home);
   mkdir $home;
 
-  system(qq{curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home}
-    . q{ App::cpanminus App::local::lib::helper PkgConfig }
-    . q{ git@github.com:ollyg/Alien-SNMP-MAXTC.git }) and die ($? >> 8);
+  my $err = File::Temp->new();
+  defined(my $pid = fork) or die "Couldn't fork: $!";
+  if (!$pid) { # Child
+    exec(qq{curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home}
+        . q{ App::cpanminus App::local::lib::helper PkgConfig }
+        . qq{ git\@github.com:ollyg/Alien-SNMP-MAXTC.git 2>$err >/dev/null })
+      or die "Couldn't exec: $!";
+  } else { # Parent
+    while (! waitpid($pid, WNOHANG)) {
+      &status("Building net-snmp...");
+      sleep 0.05;
+    }
+  }
+
+  print "\r\e[K"; # blank line
+  if (-s $err) {
+    print RED, "\N{HEAVY BALLOT X} ", CYAN,
+      "Errors from net-snmp build:\n", RESET;
+    while (<$err>) { print }
+    print "\n";
+  }
+  else {
+    print "\N{HEAVY CHECK MARK} Entering localenv...\n";
+  }
 }
 
 my $bindir = qx($localenv perl -MAlien::SNMP::MAXTC -e 'print Alien::SNMP::MAXTC->bin_dir');
 exec(qq{$localenv $ENV{SHELL} -c 'export PATH="$bindir:\$PATH";\$SHELL'});
+
+# -- exit(0)
+
+sub status {
+  my $note = (shift || '');
+  my %spinner = (
+    "\N{BRAILLE PATTERN DOTS-2345678}" => "\N{BRAILLE PATTERN DOTS-1235678}",
+    "\N{BRAILLE PATTERN DOTS-1235678}" => "\N{BRAILLE PATTERN DOTS-1234678}",
+    "\N{BRAILLE PATTERN DOTS-1234678}" => "\N{BRAILLE PATTERN DOTS-1234578}",
+    "\N{BRAILLE PATTERN DOTS-1234578}" => "\N{BRAILLE PATTERN DOTS-1234567}",
+    "\N{BRAILLE PATTERN DOTS-1234567}" => "\N{BRAILLE PATTERN DOTS-1234568}",
+    "\N{BRAILLE PATTERN DOTS-1234568}" => "\N{BRAILLE PATTERN DOTS-1245678}",
+    "\N{BRAILLE PATTERN DOTS-1245678}" => "\N{BRAILLE PATTERN DOTS-1345678}",
+    "\N{BRAILLE PATTERN DOTS-1345678}" => "\N{BRAILLE PATTERN DOTS-2345678}"
+  );
+  $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
+  print "\r\e[K"; # blank line
+  print YELLOW, "$i ", CYAN, $note, RESET;
+}
