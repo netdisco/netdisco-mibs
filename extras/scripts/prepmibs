@@ -14,6 +14,7 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
+use Cwd 'realpath';
 use List::Util 'max';
 use File::Temp;
 use File::Copy;
@@ -30,8 +31,11 @@ if (!defined $from or not -d $from) {
   exit(1);
 }
 
-my $vendor = (grep {m/\S/} splitdir($from))[-1];
+# allow running this on netdisco-mibs itself
+my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
+print "\N{BLACK FLAG} Running on netdisco-mibs, reporting only.\n";
 
+my $vendor = (grep {m/\S/} splitdir($from))[-1];
 my $to = catfile($ENV{MIBHOME}, $vendor);
 if (! -d $to) {
   print "error: no directory in MIBHOME named $vendor\n";
@@ -40,7 +44,7 @@ if (! -d $to) {
 
 # let net-snmp find MIBs in the new bundle
 # leaves a copy of the mib index file in $from/ignore/dotindex.txt
-my ($mib_for, $file_for) = build_index($from, 'keep');
+my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
 
 # load mib_index2.txt mapping all current known MIBs
 my ($vendor_for, $oldfile_for) = parse_index2();
@@ -107,15 +111,17 @@ foreach my $mib (sort keys %{$file_for}) {
 $res{ignore} = \%newfiles;
 status('Preparing to organise files...');
 
-foreach (qw(other ignore older same)) {
-  mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
+if (not $onself) {
+  foreach (qw(other ignore older same)) {
+    mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
+  }
+  if (scalar keys %{$res{other}}) {
+    mkdir(catfile($from, 'other', $_)) for values %{$res{other}};
+  }
+  if (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+    mkdir(catfile($from, 'error'));
+  }
 }
-if (scalar keys %{$res{other}}) {
-  mkdir(catfile($from, 'other', $_)) for values %{$res{other}};
-}
-mkdir(catfile($from, 'error')) if scalar keys %{$res{multi}}
-                                  or scalar keys %{$res{nover}};
-
 blank();
 
 foreach my $mib (sort keys %{$res{other}}) {
@@ -124,9 +130,8 @@ foreach my $mib (sort keys %{$res{other}}) {
   print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
     if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}))
-    or die $!;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}));
 }
 
 foreach my $mib (sort keys %{$res{older}}) {
@@ -134,17 +139,18 @@ foreach my $mib (sort keys %{$res{older}}) {
   print FAINT, "\N{LESS-THAN SIGN} ", uc($mib), " is older ($newv < $oldv)";
   print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'older', $oldfile_for->{$mib})) or die $!;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'older', $oldfile_for->{$mib}));
 }
 
-foreach my $mib (sort keys %{$res{same}}) {
-  print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
-  print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
-  print "\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'same', $oldfile_for->{$mib}))
-    or die $!;
+if (not $onself) {
+  foreach my $mib (sort keys %{$res{same}}) {
+    print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
+    print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
+    print "\n", RESET;
+    mymove(catfile($from, $file_for->{$mib}),
+         catfile($from, 'same', $oldfile_for->{$mib}));
+  }
 }
 
 foreach my $mib (sort keys %{$res{newer}}) {
@@ -154,9 +160,8 @@ foreach my $mib (sort keys %{$res{newer}}) {
   print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
     if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, $oldfile_for->{$mib}))
-    or die $!;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, $oldfile_for->{$mib}));
 }
 
 foreach my $mib (sort keys %{$res{new}}) {
@@ -171,28 +176,33 @@ foreach my $mib (sort keys %{$res{nover}}) {
   print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
     if uc($mib) ne $oldfile_for->{$mib};
   print "\n", RESET;
-  move(catfile($from, $file_for->{$mib}),
-       catfile($from, 'error', $oldfile_for->{$mib}))
-    or die $!;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'error', $oldfile_for->{$mib}));
 }
 
 foreach my $file (sort keys %{$res{multi}}) {
   print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file,
     CYAN, " defines multiple (", $res{multi}->{$file}, ") MIBs\n", RESET;
-  move(catfile($from, $file), catfile($from, 'error')) or die $!;
+  mymove(catfile($from, $file), catfile($from, 'error'));
 }
 
 foreach my $file (sort keys %{$res{ignore}}) {
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
     $file, CYAN, " is not a MIB\n", RESET;
-  move(catfile($from, $file), catfile($from, 'ignore')) or die $!;
+  mymove(catfile($from, $file), catfile($from, 'ignore'));
 }
 
-if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
+if (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
   print "\N{BLACK FLAG} MIBs inspected, with errors.\n";
   exit(1);
 }
 else {
   print "\N{HEAVY CHECK MARK} MIBs ready for import.\n";
   exit(0);
+}
+
+sub mymove {
+  my ($from, $to) = @_;
+  return if $onself;
+  move($from, $to) or die $!;
 }
