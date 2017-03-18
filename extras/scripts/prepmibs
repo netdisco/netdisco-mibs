@@ -31,16 +31,16 @@ if (!defined $from or not -d $from) {
   exit(1);
 }
 
-# allow running this on netdisco-mibs itself
-my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
-print "\N{BLACK FLAG} Running on netdisco-mibs, reporting only.\n";
-
 my $vendor = (grep {m/\S/} splitdir($from))[-1];
 my $to = catfile($ENV{MIBHOME}, $vendor);
 if (! -d $to) {
   print "error: no directory in MIBHOME named $vendor\n";
   exit(1);
 }
+
+# allow running this on netdisco-mibs itself
+my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
+print "\N{BLACK FLAG} Running on netdisco-mibs/$vendor, reporting only.\n";
 
 # let net-snmp find MIBs in the new bundle
 # leaves a copy of the mib index file in $from/ignore/dotindex.txt
@@ -102,7 +102,13 @@ foreach my $mib (sort keys %{$file_for}) {
       }
     }
     else {
-      $res{nover}->{$mib} = 1;
+      my $diff = qx(diff -q -b -B -w '$oldmibfile' '$mibfile' 2>/dev/null);
+      if ($diff =~ m/^\s*$/) {
+        $res{same}->{$mib} = 1;
+      }
+      else {
+        $res{nover}->{$mib} = 1;
+      }
     }
   }
 }
@@ -192,7 +198,11 @@ foreach my $file (sort keys %{$res{ignore}}) {
   mymove(catfile($from, $file), catfile($from, 'ignore'));
 }
 
-if (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+if ($onself) {
+  print "\N{BLACK FLAG} MIBs inspected.\n";
+  exit(0);
+}
+elsif (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
   print "\N{BLACK FLAG} MIBs inspected, with errors.\n";
   exit(1);
 }
