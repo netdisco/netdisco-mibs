@@ -1,0 +1,813 @@
+-- ===================================================== 
+--
+-- Meru Networks Enterprise MIB: MERU-WLAN-MIB 
+-- 
+-- Copyright (c) 2002-2005 Meru Networks, Inc.
+-- All rights reserved.
+--
+-- =====================================================
+
+MERU-WLAN-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	NOTIFICATION-TYPE, 
+	OBJECT-TYPE, 
+	MODULE-IDENTITY, 
+	OBJECT-IDENTITY, 
+	enterprises 
+		FROM SNMPv2-SMI
+	TEXTUAL-CONVENTION, 
+	DisplayString 
+		FROM SNMPv2-TC
+	mwWncVarsHostName
+		FROM MERU-CONFIG-CONTROLLER-MIB
+	mwTopoStaapApId, 
+	mwTopoStaapStaId
+		FROM MERU-TOPOLOGY-MIB
+	mwApNodeId 
+		FROM MERU-CONFIG-AP-MIB;
+
+meruWlanMibModule MODULE-IDENTITY
+	LAST-UPDATED "200511010000Z"
+	ORGANIZATION 
+		"Meru Networks"
+	CONTACT-INFO 
+		"Meru Networks
+		support@merunetworks.com"
+	DESCRIPTION 
+		"This MIB defines the traps from Meru WLAN infrastructure."
+       REVISION      "200511010000Z"
+       DESCRIPTION
+               "Made the following changes for release 3.2
+                - added wpa2 related trap objects
+                - added descriptions for multiple objects
+                - made meru-reqs obsolete
+                - revised contact information
+               "
+       REVISION      "200301281851Z"
+       DESCRIPTION
+               "Initial revision"
+::= { meru-wlan 1 }
+
+
+ActionStatus ::= TEXTUAL-CONVENTION
+	STATUS     current
+	DESCRIPTION 
+		""
+	SYNTAX  INTEGER {
+		actionStatusStart (1),
+		actionStatusStop (2),
+		actionStatusInProgress (3),
+		actionStatusInError (4),
+		actionStatusDone (5)
+	}
+
+UpgradeState ::= TEXTUAL-CONVENTION
+	STATUS     current
+	DESCRIPTION 
+		""
+	SYNTAX  INTEGER {
+		upgradeStateStart (1),
+		upgradeStateInProgress (2),
+		upgradeStateFailed (3),
+		upgradeStateDone (4)
+	}
+
+
+-- ======================================================================
+-- REGISTRATION
+-- ======================================================================
+
+meru  OBJECT-IDENTITY
+	STATUS     current
+	DESCRIPTION 
+		"OID assigned by the IANA. All Meru MIBs are located under this subtree."
+	::= { enterprises 15983 }
+meru-reg             OBJECT IDENTIFIER ::= { meru 1 }
+
+meru-wlan  OBJECT-IDENTITY
+	STATUS     current
+	DESCRIPTION 
+		""
+	::= { meru-reg 1 }
+
+-- This OBJECT IDENTIFIER is used to set sysObjectId
+
+mwlWncNodeReg        OBJECT IDENTIFIER ::= { meru-wlan 2 }
+meru-generic         OBJECT IDENTIFIER ::= { meru 2 }
+meru-products        OBJECT IDENTIFIER ::= { meru 3 }
+
+-- ======================================================================
+-- MERU WLAN MIB SUBTREE
+-- ======================================================================
+
+meru-wlan-MIB        OBJECT IDENTIFIER ::= { meru-products 1 }
+meru-wlan-conf       OBJECT IDENTIFIER ::= { meru-wlan-MIB 1 }
+meru-wlan-groups     OBJECT IDENTIFIER ::= { meru-wlan-conf 1 }
+meru-wlan-compls     OBJECT IDENTIFIER ::= { meru-wlan-conf 2 }
+meru-wlan-objs       OBJECT IDENTIFIER ::= { meru-wlan-MIB 2 }
+mwlGlobalObjects     OBJECT IDENTIFIER ::= { meru-wlan-objs 1 }
+meru-wlan-events     OBJECT IDENTIFIER ::= { meru-wlan-MIB 3 }
+meru-caps            OBJECT IDENTIFIER ::= { meru 4 }
+meru-expr            OBJECT IDENTIFIER ::= { meru 6 }
+
+-- ======================================================================
+-- Organized in a manner similar to the IOSCLI Configuration modes
+-- Naming scheme is meruWlanxxxObjects where Xxx is the IOSCLI 
+-- Configuration mode, initially capitalized. Submodes are in the 
+-- same classification as the main mode
+-- ======================================================================
+meruWlanApObjects 	OBJECT IDENTIFIER ::= { meru-wlan-conf 3 }
+
+-- This variable defines the polling period used between WNC-ASC and  ASC-ATS 
+-- to refresh the statistic caches
+
+mwlGlobalReboot  OBJECT-TYPE
+	SYNTAX     ActionStatus
+	MAX-ACCESS read-write
+	STATUS     current
+	DESCRIPTION 
+		"Setting this variable with the value 'start' triggers the 
+                 reboot of all the node in the WLAN."
+	::= { mwlGlobalObjects 6 }
+
+mwlTrapContent  OBJECT-TYPE
+	SYNTAX     DisplayString
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION 
+		"This object describes the details of a trap."
+	::= { mwlGlobalObjects 14 }
+
+mwlGlobalSave  OBJECT-TYPE
+	SYNTAX     ActionStatus
+	MAX-ACCESS read-write
+	STATUS     current
+	DESCRIPTION 
+		"Setting this variable with the value 'start' triggers the save of 
+		the running configuration to the startup configuration, so that
+		changes will persist across reboots. All changes made via SETs for
+		SNMP tables are applied to the running configuration only. You
+		should set this variable at the end of every group of updates 
+		if you want your configuration to persist."
+	::= { mwlGlobalObjects 16 }
+
+mwlTopoStaAtsAdd  NOTIFICATION-TYPE
+	OBJECTS { mwTopoStaapApId, 
+		mwTopoStaapStaId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlTopoStaAtsAdd trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a station entry
+               has been added to the station and AP topology table.
+
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 7 }
+
+mwlTopoStaAtsRemove  NOTIFICATION-TYPE
+	OBJECTS { mwTopoStaapApId, 
+		mwTopoStaapStaId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlTopoStaAtsAdd trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a station entry
+               has been removed from the station and AP topology table.
+
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 8 }
+
+mwlTopoStaAtsModify  NOTIFICATION-TYPE
+	OBJECTS { mwTopoStaapApId, 
+		mwTopoStaapStaId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlTopoStaAtsAdd trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a station entry
+               has been modified in the station and AP topology table.
+
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 9 }
+
+mwlRogueApDetected  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlRogueApDetected trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a rogue AP is
+               detected in the wireless network.
+
+               The AP id, mac address, and other information are described
+               in mwlTraContent."
+	::= { meru-wlan-events 13 }
+
+mwlRogueApRemoved  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlRogueApDetected trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a rogue AP is
+               removed from the wireless network.
+
+               The AP id, mac address, and other information are described
+               in mwlTraContent."
+	::= { meru-wlan-events 14 }
+
+mwlAtsDown  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsDown trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that one of the
+               AP (Ats) in the wireless network is to enter down state.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 18 }
+
+mwlAtsUp  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsUp trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that one of the
+               AP (Ats) in the wireless network is to enter up state.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 19 }
+
+mwlWatchdogFailure  NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlWatchdogFailure trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that WatchDog is down
+               in the controller.
+ 
+               The controller is identified by mwWncVarsHostName and the 
+               details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 22 }
+
+mwlWatchdogUp  NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName, 
+		mwlTrapContent } 
+	STATUS     current
+	DESCRIPTION 
+               "A mwlWatchdogUp trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that WatchDog is up
+               in the controller.
+ 
+               The controller is identified by mwWncVarsHostName and the 
+               details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 23 }
+
+mwlCertificateError  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlCertificateError trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that a SSL
+               certificate is corrupted or expired.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 24 }
+
+mwlCertificateInstalled  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlCertificateInstalled trap signifies that the SNMPv2 
+               entity acting in an agent role, has detected that a SSL
+               certificate is installed.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 25 }
+
+mwlApSoftwareVersionMismatch  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApSoftwareVersionMismatch trap signifies that the
+               SNMPv2 entity, acting in an agent role, has detected
+               that the software version in AP (Ats) does not match
+               that in the controller.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 26 }
+
+mwlApSoftwareVersionMatch  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApSoftwareVersionMatch trap signifies that the
+               SNMPv2 entity, acting in an agent role, has detected
+               that mwlApSoftwareVersionMismatch is cleared.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 27 }
+
+mwlApInitFailure  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApInitFailure trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected that
+               the AP initialization failed.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 28 }
+
+mwlApInitFailureCleared  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A  mwlApInitFailureCleared trap signifies that the
+               SNMPv2 entity, acting in an agent role, has detected
+               that mwlApInitFailureCleared is cleared.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 29 }
+
+mwlApRadioCardFailure  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApRadioCardFailure trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected
+               that a radio card in AP failed.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 30 }
+
+mwlApRadioCardFailureCleared  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApRadioCardFailure trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected
+               that mwlApRadioCardFailure was cleared.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 31 }
+
+mwlAuthFailure  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAuthFailure trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected that
+               an incoming supplicant's access request is rejected
+               due to an authtication failure.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 32 }
+
+mwlRadiusServerSwitchover  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlRadiusServerSwitchover trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected that
+               the controller switched from primary radius server to
+               secondary one.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 33 }
+
+mwlRadiusServerSwitchoverFailure  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlRadiusServerSwitchoverFailure trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected that
+               the controller failed in switching over from the primary
+               radius server to the secondary one.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 34 }
+
+mwlRadiusServerRestored  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlRadiusServerRestored trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected that the
+               controller etected the primary radius server back online
+               and reverted to the primary radius server.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 35 }
+
+mwlAcctRadiusServerSwitchover  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAcctRadiusServerSwitchover trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected that
+               the controller switched from primary accounting radius
+               server to the secondary one.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 36 }
+
+mwlAcctRadiusServerSwitchoverFailure  NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAcctRadiusServerSwitchoverFailure trap signifies
+               that the SNMPv2 entity, acting in an agent role, has 
+               detected that the controller failed in switching over from
+               the primary accounting radius server to the secondary one.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 37 }
+
+mwlMicFailure  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMicFailure trap signifies that the SNMPv2 entity, 
+               acting in an agent role, has detected that an AP detected 
+               message integrity code (MIC) failure.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 38 }
+
+mwlMicCounterMeasureActivated  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMicCounterMeasureActivated trap signifies that the 
+               SNMPv2 entity, acting in an agent role, has detected that
+               MIC countermeasures feature gets activated. This feature
+               gets activated if more than one MIC failure is detected
+               within a pre-defined time period.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 39 }
+
+mwlMasterDown  NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMasterDown trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that one of the
+               Master controllers in the N+1 network is to enter down state.
+ 
+               The Master controller is identified by mwWncVarsHostName and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 40 }
+
+mwlMasterUp  NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMasterUp trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that one of the
+               Master controllers in the N+1 network is to enter down state.
+ 
+               The Master controller is identified by mwWncVarsHostName and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 41 }
+
+mwlAtsNeighborLoss NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsNeighborLoss trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the ats neighbor
+			   loss."
+			  
+	::= { meru-wlan-events 42 }
+
+mwlAtsNeighborLossCleared NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsNeighborLossCleared trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the ats neighbor
+			   loss which was detected earlier has been cleared."
+			  
+	::= { meru-wlan-events 43 }
+
+mwlHandoffFail NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlHandoffFailure trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected failure in
+			   hand off."
+			  
+	::= { meru-wlan-events 44 }
+
+mwlHandoffFailCleared NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlHandoffFailureCleared trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected failure in
+			   hand off is cleared."
+			  
+	::= { meru-wlan-events 45 }
+
+mwlResourceThresholdExceed NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlResourceThresholdExceed trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the consumption of
+		       resources has exceeded the threshold.
+			   
+               The system is identified by mwWncVarsHostName."
+			  
+	::= { meru-wlan-events 46 }
+
+mwlResourceThresholdExceedCleared NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlResourceThresholdExceedCleared trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the consumption of
+		       resources which had exceeded the threshold is now cleared.
+			   
+               The system is identified by mwWncVarsHostName." 
+			  
+	::= { meru-wlan-events 47 }
+
+mwlSystemFailure NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlSystemFailure trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected failure in
+			   the system.
+			   
+               The system is identified by mwWncVarsHostName." 
+			  
+	::= { meru-wlan-events 48 }
+
+mwlSystemFailureCleared NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlSystemFailureCleared trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected that the system which
+			   had a failure previously is now cleared.
+			   
+               The system is identified by mwWncVarsHostName." 
+			  
+	::= { meru-wlan-events 49 }
+
+mwlApBootimageVersionMismatch  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApBootimageVersionMismatch trap signifies that the
+               SNMPv2 entity, acting in an agent role, has detected
+               that the bootimage version in AP (Ats) does not match
+               that in the controller.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 50 }
+
+mwlApBootimageVersionMatch NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApBootimageVersionMatch trap signifies that the
+               SNMPv2 entity, acting in an agent role, has detected
+               that the mwlApBootimageVersionMismatch is cleared.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 51 }
+
+mwlMacFilterDeny NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMacFilterDeny trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the station
+			   which is denied access.
+			   
+               Details of the trap is described by mwlTrapContent." 
+			  
+	::= { meru-wlan-events 52 }
+
+mwlMacFilterDenyCleared NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlMacFilterDeny trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected mwlMacFilterDeny
+			   is cleared.
+			   
+               Details of the trap is described by mwlTrapContent." 
+			  
+	::= { meru-wlan-events 53 }
+
+mwlSoftwareLicenseExpired NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlSoftwareLicenseExpired trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that the software license 
+			   has expired.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 54 }
+
+mwlSoftwareLicenseInstalled NOTIFICATION-TYPE
+	OBJECTS { mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlSoftwareLicenseInstalled trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that the software license 
+			   has been installed.
+ 
+               The details of the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 55 }
+
+mwlApTemperature NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApTemperature trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that the temperature on the
+			   ap has raised.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 56 }
+
+mwlApTemperatureCleared  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId,
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlApTemperatureCleared trap signifies that the SNMPv2 entity,
+               acting in an agent role, has detected that the temperature on the
+			   ap has come down to normal.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 57 }
+
+mwlHardwareDiagnostic NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlHardwareDiagnostic trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected hardware Diagnostics.
+			   
+               The system is identified by mwWncVarsHostName." 
+			  
+	::= { meru-wlan-events 58 }
+
+mwlHardwareDiagnosticCleared NOTIFICATION-TYPE
+	OBJECTS { mwWncVarsHostName }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlHardwareDiagnosticCleared trap signifies that the SNMPv2
+               entity, acting in an agent role, mwlHardwareDiagnostic trap is cleared.
+			   
+               The system is identified by mwWncVarsHostName." 
+			  
+	::= { meru-wlan-events 59 }
+
+mwlCacLimitReached NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlCacLimitReached trap signifies that the SNMPv2
+               entity, acting in an agent role, has detected the CAC limit
+               is reached.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 60 }
+
+mwlRadarDetected NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlRadarDetected trap signifies that the SNMPv2
+               entity, acting in an agent role, has received the RADAR detected 
+               notification.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 61 }
+
+mwlOperationalChannelChange NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlOperationalChannelChange trap signifies that the SNMPv2
+               entity, acting in an agent role, has received the Operational
+               channel change notification.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 62 }
+
+mwlLicensingServerDown NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlLicensingServerDown trap signifies that the SNMPv2
+               entity, acting in an agent role, has received the Licensing server is down.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 63 }
+
+mwlNUpgradeLicenseCheckoutFail NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlNUpgradeLicenseCheckoutFail trap signifies that the SNMPv2
+               entity, acting in an agent role, has received the 802.11 N Upgrade 
+               license checkout fail notification.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 64 }
+
+mwlNoLicenseEnforcementExpired NOTIFICATION-TYPE
+    OBJECTS { mwlTrapContent }
+    STATUS     current
+    DESCRIPTION
+               "A mwlNoLicenseEnforcementExpired trap signifies that the SNMPv2
+               entity, acting in an agent role, has received no license enforcement 
+               on avtive/slave of NPlus1 will be expired.
+
+               Details of the trap is described by mwlTrapContent."
+
+    ::= { meru-wlan-events 65 }
+
+mwlAtsRuntimeError  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsRuntimeError trap signifies that the SNMPv2 entity,
+               acting in an agent role, has received the notification indicating 
+               an internal error in AP configuration.  
+               This error is detected by AP itself and results in reboot of AP 
+               without affecting any service, to get correct configuration.
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 66 }
+
+mwlAtsRuntimeErrorCleared  NOTIFICATION-TYPE
+	OBJECTS { mwApNodeId, 
+		mwlTrapContent }
+	STATUS     current
+	DESCRIPTION 
+               "A mwlAtsRuntimeErrorCleared trap signifies that the SNMPv2 entity, 
+               acting in an agent role, has detected that the AP Runtime Error 
+               condition is cleared. 
+ 
+               The AP (Ats) is identified by mwApNodeId and details of
+               the trap is described by mwlTrapContent."
+	::= { meru-wlan-events 67 }
+
+meru-reqs  OBJECT-TYPE
+	SYNTAX     Integer32
+	MAX-ACCESS not-accessible
+	STATUS     obsolete
+	DESCRIPTION 
+        	""
+	::= { meru 5 }
+
+END
