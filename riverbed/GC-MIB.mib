@@ -1,0 +1,612 @@
+GC-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE, Unsigned32,
+                 TimeTicks, IpAddress, Counter64 FROM SNMPv2-SMI
+    DateAndTime FROM SNMPv2-TC
+    products FROM RBT-MIB;
+
+gc MODULE-IDENTITY
+        LAST-UPDATED        "201412090000Z"
+        ORGANIZATION        "Riverbed Technology, Inc."
+        CONTACT-INFO
+           "   Riverbed Technical Support
+               support@riverbed.com"
+        DESCRIPTION     "Riverbed Technology SteelFusion Core MIB"
+        REVISION        "201412090000Z"
+        DESCRIPTION     "Fixed SNMP traps"
+        ::= { products 100 }
+
+system OBJECT IDENTIFIER
+    ::= { gc 1 }
+
+status OBJECT IDENTIFIER
+    ::= { gc 2 }
+
+config OBJECT IDENTIFIER
+    ::= { gc 3 }
+
+alarms OBJECT IDENTIFIER
+    ::= { gc 4 }
+
+statistics OBJECT IDENTIFIER
+    ::= { gc 5 }
+
+--
+--
+-- SYSTEM
+--
+--
+
+model OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Appliance model"
+    ::= { system 1 }
+
+serialNumber OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Appliance serial number"
+    ::= { system 2 }
+
+systemVersion OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "System software version string"
+    ::= { system 3 }
+
+--
+--
+-- STATUS
+--
+--
+
+systemClock OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "System clock time"
+    ::= { status 1 }
+
+health OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Current health"
+    ::= { status 2 }
+
+systemHealth OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    healthy (10000),
+                    degraded (30000),
+                    critical (50000)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Current health of the system. This variable is identical to
+             health except that it is of integer datatype"
+    ::= { status 3 }
+
+systemTemperature OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION 
+            "The temperature of the system (C)"
+    ::= { status 4 }
+
+procTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ProcEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "List of managed processes"
+    ::= { status 11 }
+
+procEntry OBJECT-TYPE
+    SYNTAX      ProcEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "Entry for one process"
+    INDEX   { procIndex }
+    ::= { procTable 1 }
+
+ProcEntry ::=
+    SEQUENCE {
+        procIndex             Unsigned32,
+        procName              OCTET STRING,
+        procStatus            OCTET STRING,
+        procNumFailures       Unsigned32
+    }
+
+procIndex OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "Synthetic numeric unique ID of process"
+    ::= { procEntry 1 }
+
+procName OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Unique name of process"
+    ::= { procEntry 2 }
+
+procStatus OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Current state of process"
+    ::= { procEntry 3 }
+
+procNumFailures OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Number of times process has crashed or exited unexpectedly"
+    ::= { procEntry 4 }
+
+--
+--
+-- CONFIG
+--
+--
+
+activeConfig OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Current active configuration"
+    ::= { config 1 }
+
+--
+--
+-- ALARMS
+--
+--
+
+alarmsPrefix OBJECT IDENTIFIER
+    ::= { alarms 0 }
+
+procCrash NOTIFICATION-TYPE
+    OBJECTS { procName }
+    STATUS  current
+    DESCRIPTION
+            "A procCrash trap signifies that a process managed by PM
+            has crashed and left a core file.  The variable sent with
+            the notification indicates which process crashed."
+    ::= { alarmsPrefix 1 }
+
+procExit NOTIFICATION-TYPE
+    OBJECTS { procName }
+    STATUS  current
+    DESCRIPTION
+            "A procExit trap signifies that a process managed by PM
+            has exited unexpectedly, but not left a core file.
+            The variable sent with the notification indicates
+            which process exited."
+    ::= { alarmsPrefix 2 }
+
+configChange NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "A change has been made to the system's configuration"
+    ::= { alarmsPrefix 3 }
+
+cpuUtil NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The average CPU utilization in the past minute has gone
+            above the acceptable threshold"
+    ::= { alarmsPrefix 4 }
+
+pagingActivity NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The system has been paging excessively (thrashing)"
+    ::= { alarmsPrefix 5 }
+
+linkError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "An interface on the appliance has lost its link"
+    ::= { alarmsPrefix 6 }
+
+powerSupplyError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "A power supply on the appliance has failed" 
+    ::= { alarmsPrefix 7 }
+
+fanError NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "A fan has failed on this appliance"
+    ::= { alarmsPrefix 8 }
+
+memoryError NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "A memory error has been detected on the appliance" 
+    ::= { alarmsPrefix 9 }
+
+ipmi NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "An IPMI event has been detected on the appliance. Please check
+             the details in the alarm report on the web UI"  
+    ::= { alarmsPrefix 10 }
+
+localFSFull NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The appliance local filesystem is full."
+    ::= { alarmsPrefix 11 }
+
+temperatureCritical NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "The system temperature has reached a critical stage"
+    ::= { alarmsPrefix 12 }
+
+temperatureWarning NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "The system temperature has exceeded the threshold"
+    ::= { alarmsPrefix 13 }
+
+scheduledJobError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "A scheduled job has failed during execution"
+    ::= { alarmsPrefix 14 }
+
+confModeEnter NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "A user has entered configuration mode"
+    ::= { alarmsPrefix 15 }
+
+confModeExit NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "A user has exited configuration mode"
+    ::= { alarmsPrefix 16 }
+
+secureVaultLocked NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Secure vault is locked. The secure datastore cannot be used."
+    ::= { alarmsPrefix 17 }
+
+procRestart NOTIFICATION-TYPE
+    OBJECTS { procName }
+    STATUS  current
+    DESCRIPTION
+            "A procRestart trap signifies that a process managed by PM
+            has restarted. The variable sent with the notification
+            indicates which process restarted."
+    ::= { alarmsPrefix 18 }
+
+testTrap NOTIFICATION-TYPE
+    OBJECTS { procName }
+    STATUS  current
+    DESCRIPTION
+            "This is a test trap."
+    ::= { alarmsPrefix 19 }
+
+edgeError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Edge module encountered error."
+    ::= { alarmsPrefix 10500 }
+
+highAvailabilityError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "High Availability module encountered error."
+    ::= { alarmsPrefix 10501 }
+
+lunError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Lun module encountered error."
+    ::= { alarmsPrefix 10502 }
+
+iscsiError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "iSCSI module encountered error."
+    ::= { alarmsPrefix 10503 }
+
+-- 10504 was isnsError
+
+snapshotError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Snapshot module encountered error."
+    ::= { alarmsPrefix 10505 }
+
+applianceUnlicensedError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Appliance license expired/invalid."
+    ::= { alarmsPrefix 10506 }
+
+modelUnlicensedError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Model license expired/invalid."
+    ::= { alarmsPrefix 10507 }
+
+blkdiskError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Block-disk module encountered error."
+    ::= { alarmsPrefix 10508 }
+
+backupIntegrationError NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Backup-Integration module encountered error."
+    ::= { alarmsPrefix 10509 }
+
+otherHardwareError NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "Hardware Error detected."
+    ::= { alarmsPrefix 10510 }
+
+cpuUtilClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The average CPU utilization has fallen back
+             within the acceptable threshold"
+    ::= { alarmsPrefix 1004 }
+
+pagingActivityClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The system has stopped paging excessively (thrashing)"
+    ::= { alarmsPrefix 1005 }
+
+linkErrorClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "An interface on the appliance has regained its link"
+    ::= { alarmsPrefix 1006 }
+
+powerSupplyErrorClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "All power supplies are now functioning normally" 
+    ::= { alarmsPrefix 1007 }
+
+fanErrorClear NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "All system fans are now functioning normally" 
+    ::= { alarmsPrefix 1008 }
+
+memoryErrorClear NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "A memory error has been rectified on the appliance" 
+    ::= { alarmsPrefix 1009 }
+
+ipmiClear NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "An IPMI event has been rectified on the appliance"
+    ::= { alarmsPrefix 1010 }
+
+localFSFullClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "The appliance local filesystem usage is below threshold."
+    ::= { alarmsPrefix 1011 }
+
+temperatureNonCritical NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "The system temperature is no longer in a critical stage"
+    ::= { alarmsPrefix 1012 }
+
+temperatureNormal NOTIFICATION-TYPE
+    STATUS current
+    DESCRIPTION
+            "The system temperature is back within the threshold"
+    ::= { alarmsPrefix 1013 }
+
+secureVaultUnlocked NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Secure vault is unlocked. The secure data store can be used now."
+    ::= { alarmsPrefix 1017 }
+
+edgeClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Edge module error cleared."
+    ::= { alarmsPrefix 11500 }
+
+highAvailabilityClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "High Availability module error cleared."
+    ::= { alarmsPrefix 11501 }
+
+lunClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Lun module error cleared."
+    ::= { alarmsPrefix 11502 }
+
+iscsiClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "iSCSI module error cleared."
+    ::= { alarmsPrefix 11503 }
+
+-- 11504 was isnsClear
+
+snapshotClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Snapshot module error cleared."
+    ::= { alarmsPrefix 11505 }
+
+applianceUnlicensedClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Appliance license active."
+    ::= { alarmsPrefix 11506 }
+
+modelUnlicensedClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Model license active."
+    ::= { alarmsPrefix 11507 }
+
+blkdiskClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Block-disk module error cleared."
+    ::= { alarmsPrefix 11508 }
+
+backupIntegrationClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Backup-Integration module error cleared."
+    ::= { alarmsPrefix 11509 }
+
+otherHardwareClear NOTIFICATION-TYPE
+    STATUS  current
+    DESCRIPTION
+            "Hardware error cleared."
+    ::= { alarmsPrefix 11510 }
+--
+-- 
+-- STATISTICS
+--
+--
+
+cpuLoad OBJECT IDENTIFIER
+    ::= { statistics 1 }
+
+cpuLoad1 OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "One-minute CPU load in hundreths"
+    ::= { cpuLoad 1 }
+
+cpuLoad5 OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "One-minute CPU load in hundreths"
+    ::= { cpuLoad 2 }
+
+cpuLoad15 OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Fifteen-minute CPU load in hundreths"
+    ::= { cpuLoad 3 }
+
+cpuUtil1 OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Percentage CPU utilization, aggregated across all CPUs, rolling
+	average over the past minute"
+    ::= { cpuLoad 4 }
+
+cpuIndivUtilTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CPUIndivUtilEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "Details about the individual CPU utilization"
+    ::= { cpuLoad 5 }
+
+cpuIndivUtilEntry OBJECT-TYPE
+    SYNTAX      CPUIndivUtilEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "Entry for one cpu"
+    INDEX   { cpuIndivIndex }
+    ::= {cpuIndivUtilTable 1 }
+
+CPUIndivUtilEntry ::=
+    SEQUENCE {
+        cpuIndivIndex       Unsigned32,
+        cpuIndivId          Unsigned32,
+        cpuIndivIdleTime    Unsigned32,
+        cpuIndivSystemTime  Unsigned32,
+        cpuIndivUserTime    Unsigned32
+}
+
+cpuIndivIndex OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+            "A synthetic number numbering the cpus"
+    ::= { cpuIndivUtilEntry 1 }
+
+cpuIndivId OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Name of the cpu, also serves as the Index for the table"
+    ::= { cpuIndivUtilEntry 2 }
+
+cpuIndivIdleTime OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "Idle time for this CPU"
+    ::= { cpuIndivUtilEntry 3 }
+
+cpuIndivSystemTime OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "System time for this CPU"
+    ::= { cpuIndivUtilEntry 4 }
+
+cpuIndivUserTime OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "User time for this CPU"
+    ::= { cpuIndivUtilEntry 5 }
+END
