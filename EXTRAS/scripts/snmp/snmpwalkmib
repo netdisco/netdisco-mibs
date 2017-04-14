@@ -1,0 +1,191 @@
+#!/usr/bin/perl -w
+# snmpwalkmib - Max Baker
+# $Id$
+
+use SNMP;
+use Getopt::Std;
+$|=1;
+
+use vars qw/$ver $comm $dev $descr %seen $no_tree/;
+getopts('c:d:v:zhwn',\%args);
+$ver   = $args{v} || '2c';
+$comm  = $args{c} || 'public';
+$dev   = $args{d};
+$descr = $args{z} || 0;
+$no_tree = $args{w} || 0;
+$no_dev  = $args{n} || 0;
+$SNMP::save_descriptions = 1 if $descr;
+
+die &usage if (!(defined $dev or $no_dev) or $args{h} or !scalar(@ARGV));
+
+foreach my $mib (@ARGV) {
+    print "\n$mib\n";
+    
+    # File name, not MIB name
+    if ($mib =~ m/\.(my|txt|mib)$/) {
+        # Use .index if exists
+        if (-r '.index'){
+            open (I, "<.index") or die "Can't open .index. $!\n";
+            foreach my $line (<I>){    
+                my ($m,$file) = split(/\s+/,$line);
+                next unless defined $file;
+                next unless $file eq $mib;
+                $mib = $m;
+            }
+            close (I);
+        } else {
+            # else truncate and pray
+            $mib =~ s/\.(my|mib|txt)$//;
+        }
+    }
+
+    # Connect to Device
+    unless ($no_dev){
+        $sess = new SNMP::Session( 'UseEnums' => 1, RetryNoSuch => 1, DestHost => $dev, 
+                                   'Community' => $comm, 'Version' => $ver, 'UseSprintValue' => 1 );
+        my $sysdescr = $sess->get('sysDescr.0');
+        unless (defined $sysdescr){
+            die "Couldn't connect to $dev via snmp.\n";
+        }
+    }
+ 
+    SNMP::loadModules($mib);
+    build_tree($mib);
+}
+
+# build_tree(mib file name)
+#       go through all things loaded in %SNMP::MIB and find ones belonging to our MIB
+#       then find the root entries of those objects.
+#       not nice mibs can have more than one root in their mib
+#       then traverse these subtrees and do snmpwalks on the leaf nodes.
+sub build_tree {
+    $mib = shift;
+    %seen = ();
+    my %roots = ();
+    # Look at every mib entry
+    foreach my $k (keys %SNMP::MIB){
+        my $label = $SNMP::MIB{$k}{label};
+        # already walked through this one?
+        next if defined $seen{$label};
+
+        # ignore objects not in this mib
+        my $module = $SNMP::MIB{$k}{moduleID} || '';
+        next unless $module eq $mib;
+
+        # find all roots present in MIB
+        my $root = find_root($k);
+        $roots{$root}++;
+    }
+
+    # walk subtrees
+    $indent = -2;
+    foreach my $r (keys %roots){
+        walk_children($r); 
+    } 
+}
+
+# walk_children(object label)
+#       recursive call to go all the way to leafs of tree
+#       and do an snmpwalk on those leafs.
+sub walk_children {
+    my $me = shift;
+    $indent += 2;
+    unless ($no_tree){
+        print ' ' x $indent;
+        print "$me\n";
+    }
+
+    # print out object description
+    if ($descr){
+        my $d = $SNMP::MIB{$me}{description} || '';
+        my $i = ' ' x ($indent + 4);
+        $d =~ s/^\s*/$i/gm;
+        print $d if $d !~ /^\s*$/;
+        print "\n" if $d !~ /\n$/;
+    } 
+
+    # Recursively call children
+    my $children = $SNMP::MIB{$me}{children} || [];
+    my $label = $SNMP::MIB{$me}{label};
+    if (scalar @$children){
+        foreach my $c (@$children){
+            walk_children($c->{label});
+        }
+    } else {
+        # No children means we're at an edge leaf, get data!
+        snmpwalk($label);
+    }
+    $indent -= 2;
+}
+
+# find_root($mib node) - recursive call to traverse tree to root
+#       root is where the next parent is either missing or 
+#       not in this mib.
+sub find_root {
+    my $me = shift;
+    my $label  = $SNMP::MIB{$me}{label};
+    my $mib    = $SNMP::MIB{$me}{moduleID};
+    my $parent = $SNMP::MIB{$me}{parent} || undef;
+    my $parent_mib = defined $parent ?  $parent->{moduleID} : undef;
+
+    $seen{$label}++;
+    return $label unless defined $parent;
+    return $label unless defined $parent_mib;
+    return $label if $parent_mib ne $mib;
+    return find_root($parent->{label});
+}
+
+sub snmpwalk {
+        return unless defined $sess;
+        my $label = shift;
+        my $var = new SNMP::Varbind([$label]);
+        my $e = 0; my $last_iid = '';
+        my %seen = ();
+        while (!$e){
+            $sess->getnext($var);
+            $e = $sess->{ErrorNum};
+
+            return if $var->[0] ne $label;
+            my $iid = $var->[1];
+            my $val = $var->[2];
+            return unless defined $iid; 
+
+            # Check to see if we've already seen this IID (looping)
+            if (defined $seen{$iid} and $seen{$iid}){
+                warn "Looping on $label iid:$iid.  Skipped.\n";
+                return;
+            } else { $seen{$iid}++; }
+
+            # why is it looping?
+            return if $last_iid eq $iid;
+            $last_iid = $iid;
+
+            # indent and print
+            print  ' ' x ($indent + 2) unless $no_tree;
+            print "$label.$iid = $val\n";
+        }
+}
+sub usage {
+    return << "end_usage"
+snmpwalkmib - Dump the contents of a mib on a device.
+Max Baker
+
+This tool combines "snmpwalk" with "snmptranslate -Tp"
+
+Perl interface for Net-SNMP required.
+
+    Usage: $0 mib [mib ...]
+        -c [public]
+        -d [device]
+        -v [version]  [2c|1]
+    Tree Mode (default)
+        -z print descriptions of the objects (parsed from MIB)
+        -n No device (just print tree of MIB file)
+    Walk Mode 
+        -w no tree (just snmpwalk the mib contents)
+
+You probably shouldn't do too many mibs at a time, there are some
+buffer limits in the net-snmp libraries when it comes to mib parsing.
+
+end_usage
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/env perl
+# setmaxtc - build and use net-snmp with 16k MAXTC
+# I blame (& owe credit to) jeneric ;-).
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+$|++;
+
+use File::Temp;
+use File::Path ();
+use Time::HiRes 'sleep';
+use Term::ANSIColor qw(:constants);
+use File::Spec::Functions qw(splitdir catfile);
+use POSIX qw(:sys_wait_h);
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+if (!defined $ENV{MIBHOME}) {
+  print "error: must define \$MIBHOME (where the MIB dirs live)\n";
+  exit(1);
+}
+
+my $home = "$ENV{MIBHOME}/extras/net-snmp.local";
+my $localenv = "$home/bin/localenv";
+
+if (not (-e $localenv and -x $localenv)) {
+  File::Path::remove_tree($home);
+  mkdir $home;
+
+  my $err = File::Temp->new();
+  defined(my $pid = fork) or die "Couldn't fork: $!";
+  if (!$pid) { # Child
+    exec(qq{curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home}
+        . q{ App::cpanminus App::local::lib::helper PkgConfig }
+        . qq{ git\@github.com:ollyg/Alien-SNMP-MAXTC.git 2>$err >/dev/null })
+      or die "Couldn't exec: $!";
+  } else { # Parent
+    while (! waitpid($pid, WNOHANG)) {
+      status("Building net-snmp...");
+      sleep 0.05;
+    }
+  }
+
+  blank();
+  if (-s $err) {
+    print RED, "\N{HEAVY BALLOT X} ", CYAN,
+      "Errors from net-snmp build:\n", RESET;
+    while (<$err>) { print }
+    print "\n";
+  }
+  else {
+    print "\N{HEAVY CHECK MARK} Entering localenv...\n";
+  }
+}
+
+my $bindir = qx($localenv perl -MAlien::SNMP::MAXTC -e 'print Alien::SNMP::MAXTC->bin_dir');
+exec(qq{$localenv $ENV{SHELL} -c 'export PATH="$bindir:\$PATH";\$SHELL'});

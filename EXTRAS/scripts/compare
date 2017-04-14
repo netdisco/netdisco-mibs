@@ -1,0 +1,41 @@
+#!/usr/bin/env perl
+# compare new_mib_file
+# will run a diff against the version of the same MIB in netdisco-mibs
+
+use strict;
+use warnings;
+
+use File::Temp;
+use File::Basename;
+use File::Spec::Functions qw(splitdir catfile);
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+# make an index so that net-snmp tells us what MIB is in the file
+my $newmib = shift;
+if (!defined $newmib or not -f $newmib) {
+  print "usage: $0 new_mib_file\n";
+  exit(1);
+}
+
+# find the MIB name
+my ($newfile, $newdir) = fileparse($newmib);
+my ($mib_for, $file_for) = build_index($newdir);
+if (!exists $mib_for->{$newfile}) {
+  print "error: net-snmp unable to parse $newfile as a MIB\n";
+  exit(1);
+}
+
+# find the file in netdisco-mibs with the same MIB
+my $mib = $mib_for->{$newfile};
+my ($vendor_for, $oldfile_for) = parse_index2();
+if (!exists $vendor_for->{$mib} or !exists $oldfile_for->{$mib}) {
+  print "error: MIB $mib is unknown to netdisco-mibs (run mkindex?)\n";
+  exit(1);
+}
+
+# run a diff
+my $oldmib = catfile($ENV{MIBHOME}, $vendor_for->{$mib}, $oldfile_for->{$mib});
+exec(qq{diff -b -B -w $oldmib $newmib | less});

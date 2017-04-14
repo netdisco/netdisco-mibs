@@ -1,0 +1,219 @@
+#!/usr/bin/env perl
+# prepmibs new_dir
+# The script will rename and organise files to help you.
+# - Any items in "error" folder need manually inspecting
+# - Take a look at items in the "ignore" folder, just in case.
+# - Watch out for new entries that could be RFCs.
+# - MIBs belonging to other vendors will be moved to "other" folder.
+# - Run "prepmibs/importmibs" on each folder in "other" before continuing.
+# - Renames known MIB files to be the same as the equiv in netdisco-mibs.
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
+use Cwd 'realpath';
+use List::Util 'max';
+use File::Temp;
+use File::Copy;
+use File::Spec::Functions qw(splitdir catfile);
+use Term::ANSIColor qw(:constants);
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+my $from = shift;
+if (!defined $from or not -d $from) {
+  print "usage: $0 new_dir (named same as old_dir and containing new MIBs)\n";
+  exit(1);
+}
+
+my $vendor = (grep {m/\S/} splitdir($from))[-1];
+my $to = catfile($ENV{MIBHOME}, $vendor);
+if (! -d $to) {
+  print "error: no directory in MIBHOME named $vendor\n";
+  exit(1);
+}
+
+# allow running this on netdisco-mibs itself
+my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
+print "\N{BLACK FLAG} Running on netdisco-mibs/$vendor, reporting only.\n"
+  if $onself;
+
+# let net-snmp find MIBs in the new bundle
+# leaves a copy of the mib index file in $from/ignore/dotindex.txt
+my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
+
+# load mib_index2.txt mapping all current known MIBs
+my ($vendor_for, $oldfile_for) = parse_index2();
+
+my %res = ();
+my %newfiles = map  {($_ => 1)}
+               map  {(splitdir($_))[-1]}
+               map  {chmod(0644, $_); $_}
+               grep {-f} glob(catfile($from, '*'));
+
+foreach my $mib (sort keys %{$file_for}) {
+  my $mibfile = catfile($from, $file_for->{$mib});
+  delete $newfiles{ $file_for->{$mib} };
+  status($mib);
+
+  # check for multiple MIB defs within one file (net-snmp cannot detect)
+  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' $mibfile);
+  if (scalar @defs > 1) {
+    $res{multi}->{ $file_for->{$mib} } = scalar @defs;
+    next;
+  }
+
+  # check whether MIB is featured in another vendor's bundle
+  if (exists $vendor_for->{$mib} and $vendor_for->{$mib} ne $vendor) {
+    $res{other}->{$mib} = $vendor_for->{$mib};
+  }
+  elsif (!exists $oldfile_for->{$mib}) {
+      $res{new}->{$mib} = 1;
+  }
+  else {
+    my $oldmibfile = catfile($to, $oldfile_for->{$mib});
+
+    # Look for version numbers - https://tools.ietf.org/html/rfc2578
+    my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$oldmibfile')
+      =~ m/"(\d{10}|\d{12})Z?"/g);
+    my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
+      =~ m/"(\d{10}|\d{12})Z?"/g);
+
+    if ($oldv and $newv) {
+      if (length($oldv) == 10) {
+        $oldv = ($oldv =~ m/^[789]/) ? "19$oldv" : "20$oldv";
+      }
+      if (length($newv) == 10) {
+        $newv = ($newv =~ m/^[789]/) ? "19$newv" : "20$newv";
+      }
+
+      if ($oldv < $newv) {
+        $res{newer}->{$mib} = [$newv, $oldv];
+      }
+      elsif ($oldv > $newv) {
+        $res{older}->{$mib} = [$newv, $oldv];
+      }
+      else {
+        $res{same}->{$mib} = 1;
+      }
+    }
+    else {
+      my $diff = qx(diff -q -b -B -w '$oldmibfile' '$mibfile' 2>/dev/null);
+      if ($diff =~ m/^\s*$/) {
+        $res{same}->{$mib} = 1;
+      }
+      else {
+        $res{nover}->{$mib} = 1;
+      }
+    }
+  }
+}
+
+# show files being ignored by this script
+$res{ignore} = \%newfiles;
+status('Preparing to organise files...');
+
+if (not $onself) {
+  foreach (qw(other ignore older same)) {
+    mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
+  }
+  if (scalar keys %{$res{other}}) {
+    mkdir(catfile($from, 'other', $_)) for values %{$res{other}};
+  }
+  if (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+    mkdir(catfile($from, 'error'));
+  }
+}
+blank();
+
+foreach my $mib (sort keys %{$res{other}}) {
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
+    " is already featured within vendor ", MAGENTA, $res{other}->{$mib};
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
+  print "\n", RESET;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}));
+}
+
+foreach my $mib (sort keys %{$res{older}}) {
+  my ($newv, $oldv) = @{ $res{older}->{$mib} };
+  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib), " is older ($newv < $oldv)";
+  print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
+  print "\n", RESET;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'older', $oldfile_for->{$mib}));
+}
+
+if (not $onself) {
+  foreach my $mib (sort keys %{$res{same}}) {
+    print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
+    print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
+    print "\n", RESET;
+    mymove(catfile($from, $file_for->{$mib}),
+         catfile($from, 'same', $oldfile_for->{$mib}));
+  }
+}
+
+foreach my $mib (sort keys %{$res{newer}}) {
+  my ($newv, $oldv) = @{ $res{newer}->{$mib} };
+  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib),
+    CYAN, " is newer ($newv > $oldv)";
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
+  print "\n", RESET;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, $oldfile_for->{$mib}));
+}
+
+foreach my $mib (sort keys %{$res{new}}) {
+  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, uc($mib), CLEAR, FAINT;
+  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
+  print "\n", RESET;
+}
+
+foreach my $mib (sort keys %{$res{nover}}) {
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib),
+    CYAN, " has no parseable revision date";
+  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
+    if uc($mib) ne $oldfile_for->{$mib};
+  print "\n", RESET;
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'error', $oldfile_for->{$mib}));
+}
+
+foreach my $file (sort keys %{$res{multi}}) {
+  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file,
+    CYAN, " defines multiple (", $res{multi}->{$file}, ") MIBs\n", RESET;
+  mymove(catfile($from, $file), catfile($from, 'error'));
+}
+
+foreach my $file (sort keys %{$res{ignore}}) {
+  print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
+    $file, CYAN, " is not a MIB\n", RESET;
+  mymove(catfile($from, $file), catfile($from, 'ignore'));
+}
+
+if ($onself) {
+  print "\N{BLACK FLAG} MIBs inspected.\n";
+  exit(0);
+}
+elsif (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+  print "\N{BLACK FLAG} MIBs inspected, with errors.\n";
+  exit(1);
+}
+else {
+  print "\N{HEAVY CHECK MARK} MIBs ready for import.\n";
+  exit(0);
+}
+
+sub mymove {
+  my ($from, $to) = @_;
+  return if $onself;
+  move($from, $to) or die $!;
+}
