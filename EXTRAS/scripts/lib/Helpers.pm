@@ -20,7 +20,7 @@ if (!defined $ENV{MIBHOME}) {
 }
 
 $ENV{SNMPCONFPATH} = '';
-$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
 $ENV{MIBS} = 'SNMPv2-MIB';
 $ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc";
 
@@ -55,7 +55,7 @@ sub build_index {
   qx(snmptranslate -IR sysName 2>&1 >/dev/null);
   my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
   qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
-  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/extras/indexes";
+  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
 
   # read the MIBs that net-snmp likes (file '2' is the vendor)
   # TODO: make this work also for rfc:net-snmp
