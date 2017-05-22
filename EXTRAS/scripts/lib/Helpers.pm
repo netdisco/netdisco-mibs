@@ -20,7 +20,7 @@ if (!defined $ENV{MIBHOME}) {
 }
 
 # Force LC_COLLATE to ensure stable sorting routines during system calls
-$ENV{"LC_COLLATE"} = 'C';
+$ENV{LC_COLLATE} = 'C';
 
 $ENV{SNMPCONFPATH} = '';
 $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
