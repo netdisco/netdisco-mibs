@@ -49,19 +49,24 @@ sub status {
   print YELLOW, "$i ", CYAN, $note, RESET;
 }
 
+# Given a directory ($bundle) where some new/untested MIBs are waiting, run
+# snmptranslate over those MIBs and return maps of MIB<->file and file<->MIB.
+# TODO: make this work also for rfc:net-snmp MIBs.
 sub build_index {
   my ($bundle, $keep) = @_;
   my (%mib_for, %file_for);
 
+  # change net-snmp perisistent dir and establish index baseline
   my $tmpdir = File::Temp->newdir();
   $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
   qx(snmptranslate -IR sysName 2>&1 >/dev/null);
+  # now run snmptranslate to get the new index file
   my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
   qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
+  # restore persistent dir
   $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
 
-  # read the MIBs that net-snmp likes (file '2' is the vendor)
-  # TODO: make this work also for rfc:net-snmp
+  # read the index file ('2' is the new/untested MIBs over baseline)
   open(my $cache, '<', "$tmpdir/mib_indexes/2") or die $!;
   while (my $line = <$cache>) {
     next if $line =~ m/^DIR /;
@@ -82,6 +87,9 @@ sub build_index {
   return (\%mib_for, \%file_for);
 }
 
+# Read the netdisco-mibs mib_index2.txt file and return all the data within.
+# maps of: MIB<->file, MIB<->vendor, vendor<->[MIBs]
+#   also a list of all MIBs known to netdisco-mibs
 sub parse_index2 {
   my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
   if (! -f $indexfile) {
