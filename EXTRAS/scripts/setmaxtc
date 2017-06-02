@@ -14,6 +14,7 @@ use File::Path ();
 use Time::HiRes 'sleep';
 use Term::ANSIColor qw(:constants);
 use File::Spec::Functions qw(splitdir catfile);
+use Text::ParseWords 'shellwords';
 use POSIX qw(:sys_wait_h);
 
 use FindBin;
@@ -22,21 +23,48 @@ use Helpers;
 
 my $home = "$ENV{MIBHOME}/EXTRAS/net-snmp.local";
 my $localenv = "$home/bin/localenv";
+my $cpanm = 'cpanm --quiet --notest';
 
 if (not (-e $localenv and -x $localenv)) {
   File::Path::remove_tree($home);
   mkdir $home;
 
+  _build(
+    qq{ curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home }
+    .q{ App::cpanminus App::local::lib::helper PkgConfig Test::CChecker }
+    .q{ git@github.com:ollyg/Alien-zlib-Static.git }, 'zlib') or exit 1;
+
+  foreach my $key (shellwords( qx/$localenv zlib-env-perl KEYS/)) {
+    $ENV{$key} = qx/$localenv zlib-env-perl $key/;
+  }
+
+  _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-OpenSSL-Static.git },
+    'openssl') or exit 1;
+
+  foreach my $key (shellwords( qx/$localenv openssl-env-perl KEYS/)) {
+    $ENV{$key} = qx/$localenv openssl-env-perl $key/;
+  }
+
+  _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
+    'net-snmp') or exit 1;
+}
+
+print "\N{HEAVY CHECK MARK} Entering localenv...\n";
+my $bindir = qx($localenv perl -MAlien::SNMP::MAXTC -e 'print Alien::SNMP::MAXTC->bin_dir');
+exec(qq{$localenv $ENV{SHELL} -c 'export PATH="$bindir:\$PATH";\$SHELL'});
+
+sub _build {
+  my $target = shift || return;
+  my $alias  = shift || return;
   my $err = File::Temp->new();
+
   defined(my $pid = fork) or die "Couldn't fork: $!";
   if (!$pid) { # Child
-    exec(qq{curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home}
-        . q{ App::cpanminus App::local::lib::helper PkgConfig }
-        . qq{ git\@github.com:ollyg/Alien-SNMP-MAXTC.git 2>$err >/dev/null })
+    exec(${target}. qq{ 2>$err >/dev/null })
       or die "Couldn't exec: $!";
   } else { # Parent
     while (! waitpid($pid, WNOHANG)) {
-      status("Building net-snmp...");
+      status("Building $alias...");
       sleep 0.05;
     }
   }
@@ -44,14 +72,11 @@ if (not (-e $localenv and -x $localenv)) {
   blank();
   if (-s $err) {
     print RED, "\N{HEAVY BALLOT X} ", CYAN,
-      "Errors from net-snmp build:\n", RESET;
+      "Errors from $alias build:\n", RESET;
     while (<$err>) { print }
     print "\n";
+    return 0;
   }
-  else {
-    print "\N{HEAVY CHECK MARK} Entering localenv...\n";
-  }
-}
 
-my $bindir = qx($localenv perl -MAlien::SNMP::MAXTC -e 'print Alien::SNMP::MAXTC->bin_dir');
-exec(qq{$localenv $ENV{SHELL} -c 'export PATH="$bindir:\$PATH";\$SHELL'});
+  return 1;
+}
