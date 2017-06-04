@@ -24,17 +24,17 @@ use Helpers;
 my $home = "$ENV{MIBHOME}/EXTRAS/net-snmp.local";
 my $localenv = "$home/bin/localenv";
 my $cpanm = 'cpanm --quiet --notest';
+my $success = "$home/.success";
 my %envbak = (); # backup %ENV
 
-# TODO: should check a file touched on success
-if (not (-e $localenv and -x $localenv)) {
+if (not -e $success) {
   File::Path::remove_tree($home);
   mkdir $home;
 
   _build(
     qq{ curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home }
     .q{ App::cpanminus App::local::lib::helper PkgConfig Test::CChecker }
-    .q{ git@github.com:ollyg/Alien-zlib-Static.git }, 'net-snmp dependencies') or exit 1;
+    .q{ git@github.com:ollyg/Alien-zlib-Static.git }, 'net-snmp dependencies(1)') or exit 1;
 
   foreach my $key (shellwords( qx/$localenv zlib-env-perl KEYS/)) {
     $envbak{$key} ||= $ENV{$key};
@@ -42,7 +42,7 @@ if (not (-e $localenv and -x $localenv)) {
   }
 
   _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-OpenSSL-Static.git },
-    'net-snmp dependencies') or exit 1;
+    'net-snmp dependencies(2)') or exit 1;
 
   foreach my $key (shellwords( qx/$localenv openssl-env-perl KEYS/)) {
     $envbak{$key} ||= $ENV{$key};
@@ -50,7 +50,7 @@ if (not (-e $localenv and -x $localenv)) {
   }
 
   _build(qq{ $localenv $cpanm --installdeps git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
-    'net-snmp dependencies') or exit 1;
+    'net-snmp dependencies(3)') or exit 1;
 
   foreach my $key (shellwords( qx/$localenv zlib-env-perl KEYS/ ),
                      shellwords ( qx/$localenv openssl-env-perl KEYS/ )) {
@@ -60,6 +60,8 @@ if (not (-e $localenv and -x $localenv)) {
 
   _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
     'net-snmp') or exit 1;
+
+  open(my $ok, '>', $success) or die $!;  close $ok;
 }
 
 print "\N{HEAVY CHECK MARK} Entering localenv...\n";
