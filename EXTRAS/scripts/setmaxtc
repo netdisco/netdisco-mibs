@@ -15,6 +15,7 @@ use Time::HiRes 'sleep';
 use Term::ANSIColor qw(:constants);
 use File::Spec::Functions qw(splitdir catfile);
 use Text::ParseWords 'shellwords';
+use IPC::Open3 'open3';
 use POSIX qw(:sys_wait_h);
 
 use FindBin;
@@ -31,35 +32,39 @@ if (not -e $success) {
   File::Path::remove_tree($home);
   mkdir $home;
 
-  _build(
+  bld(
     qq{ curl -sL https://cpanmin.us/ | perl - --quiet --notest --local-lib $home }
     .q{ App::cpanminus App::local::lib::helper PkgConfig Test::CChecker }
-    .q{ git@github.com:ollyg/Alien-zlib-Static.git }, 'net-snmp dependencies(1)') or exit 1;
+    .q{ git@github.com:ollyg/Alien-zlib-Static.git }, 'net-snmp dependencies(1)');
 
-  foreach my $key (shellwords( qx/$localenv zlib-env-perl KEYS/)) {
-    $envbak{$key} ||= $ENV{$key};
+  # back up and update environment
+  foreach my $key (shellwords(bld(qq{ $localenv zlib-env-perl KEYS },
+                                  'env(1)'))) {
+    $envbak{$key} = $ENV{$key} if !exists $envbak{$key};
     $ENV{$key} = qx/$localenv zlib-env-perl $key/;
   }
 
-  _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-OpenSSL-Static.git },
-    'net-snmp dependencies(2)') or exit 1;
+  bld(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-OpenSSL-Static.git },
+    'net-snmp dependencies(2)');
 
-  foreach my $key (shellwords( qx/$localenv openssl-env-perl KEYS/)) {
-    $envbak{$key} ||= $ENV{$key};
+  # back up and update environment
+  foreach my $key (shellwords(bld(qq{ $localenv openssl-env-perl KEYS },
+                                  'env(2)'))) {
+    $envbak{$key} = $ENV{$key} if !exists $envbak{$key};
     $ENV{$key} = qx/$localenv openssl-env-perl $key/;
   }
 
-  _build(qq{ $localenv $cpanm --installdeps git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
-    'net-snmp dependencies(3)') or exit 1;
+  bld(qq{ $localenv $cpanm --installdeps git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
+    'net-snmp dependencies(3)');
 
-  foreach my $key (shellwords( qx/$localenv zlib-env-perl KEYS/ ),
-                     shellwords ( qx/$localenv openssl-env-perl KEYS/ )) {
+  # restore environment
+  foreach my $key (keys %envbak) {
     delete $ENV{$key};
+    $ENV{$key} = $envbak{$key} if $envbak{$key};
   }
-  $ENV{$_} = $envbak{$_} for (grep {$envbak{$_}} keys %envbak);
 
-  _build(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
-    'net-snmp') or exit 1;
+  bld(qq{ $localenv $cpanm git\@github.com:ollyg/Alien-SNMP-MAXTC.git },
+    'net-snmp');
 
   open(my $ok, '>', $success) or die $!;  close $ok;
 }
@@ -68,30 +73,30 @@ print "\N{HEAVY CHECK MARK} Entering localenv...\n";
 my $bindir = qx($localenv perl -MAlien::SNMP::MAXTC -e 'print Alien::SNMP::MAXTC->bin_dir');
 exec(qq{$localenv $ENV{SHELL} -c 'export PATH="$bindir:\$PATH";\$SHELL'});
 
-sub _build {
+sub bld {
   my $target = shift || return;
   my $alias  = shift || return;
+  my $out = File::Temp->new();
   my $err = File::Temp->new();
+  my $in  = '';
 
-  defined(my $pid = fork) or die "Couldn't fork: $!";
-  if (!$pid) { # Child
-    exec(${target}. qq{ 2>$err >/dev/null })
-      or die "Couldn't exec: $!";
-  } else { # Parent
-    while (! waitpid($pid, WNOHANG)) {
-      status("Building $alias...");
-      sleep 0.05;
-    }
+  my $pid = open3($in, $out, $err, $target);
+  while (! waitpid($pid, WNOHANG)) {
+    status("Building $alias...");
+    sleep 0.05;
   }
+  my $child_exit_status = $? >> 8;
+  seek($_, 0, 0) for ($out, $err);
+  ($out, $err) = (<$out>, <$err>);
 
   blank();
-  if (-s $err) {
+  if ($child_exit_status) {
     print RED, "\N{HEAVY BALLOT X} ", CYAN,
       "Errors from $alias build:\n", RESET;
-    while (<$err>) { print }
-    print "\n";
-    return 0;
+    print $out, "\n---\n" if $out;
+    print $err, "\n---\n" if $err;
+    exit 1;
   }
 
-  return 1;
+  return $out;
 }
