@@ -9,20 +9,21 @@ IMPORTS
     Integer32, Counter64                 FROM SNMPv2-SMI
     TEXTUAL-CONVENTION, DisplayString    FROM SNMPv2-TC
     aristaMibs                           FROM ARISTA-SMI-MIB
-    InterfaceIndex                       FROM IF-MIB;
+    InterfaceIndex                       FROM IF-MIB
+    PhysicalIndexOrZero                  FROM ENTITY-MIB;
 
 aristaQosMib MODULE-IDENTITY
-    LAST-UPDATED "201306010000Z"
+    LAST-UPDATED "201607220000Z"
     ORGANIZATION "Arista Networks, Inc."
     CONTACT-INFO
         "Arista Networks, Inc.
 
-         Postal: 5470 Great America Parkway
+         Postal: 5453 Great America Parkway
                  Santa Clara, CA 95054
 
          Tel: +1 408 547-5500
 
-         E-mail: snmp@aristanetworks.com"
+         E-mail: snmp@arista.com"
     DESCRIPTION
 	"**********************************
                     Overview
@@ -37,7 +38,7 @@ aristaQosMib MODULE-IDENTITY
   
          Statistics available through this MIB include dropped, sent and
          matched packet counters per traffic class after any configured
-         QoS policies are applied.  
+         QoS policies are applied and per chip ECN counters if supported.
 
 	 **********************************
                     Definitions
@@ -52,6 +53,18 @@ aristaQosMib MODULE-IDENTITY
 	 classified as belonging to a particular class. Actions may include
 	 modifying CoS or DSCP fields, assigning to traffic-class queues,
 	 shaping, or filtering."
+
+    REVISION      "201607220000Z"
+    DESCRIPTION   "Added aristaEcnCounterTable"
+
+    REVISION      "201603210000Z"
+    DESCRIPTION   "Added vlan to aristaClassMapMatchType"
+
+    REVISION      "201408150000Z"
+    DESCRIPTION   "Updated postal address."
+
+    REVISION      "201405220000Z"
+    DESCRIPTION   "Updated the upper limit for aristaPolicyMapClassIndex."
 
     REVISION      "201306010000Z"
     DESCRIPTION   "Initial version of this MIB module."
@@ -200,13 +213,16 @@ aristaClassMapMatchIndex  OBJECT-TYPE
 aristaClassMapMatchType  OBJECT-TYPE
     SYNTAX          INTEGER {
     	               ipv4AccessGroup(1),
-	               ipv6AccessGroup(2)
+	               ipv6AccessGroup(2),
+                       vlan(3)
 		    }
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-	"Indicates whether a match criterion of a class map is an IPv4 or an
-	 IPv6 access-control list."
+        "Indicates the type of a match criterion for a class map. 
+         ipv4AccessGroup(1) means that it is an IPv4 access-control list. 
+         ipv6AccessGroup(2) means that it is an IPv6 access-control list. 
+         vlan(3) means that it is a VLAN-based match criterion."
     ::= { aristaClassMapMatchEntry 2 }
 
 aristaClassMapMatchName  OBJECT-TYPE
@@ -214,7 +230,10 @@ aristaClassMapMatchName  OBJECT-TYPE
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "The name of the access-control list for a match criterion."
+        "Indicates the name of the access-control list if aristaClassMapMatchType
+         is ipv4AccessGroup(1) or ipv6AccessGroup(2). Otherwise, it indicates the
+         masked VLAN value or the comma-separated list of VLAN range values
+         contained in the match criterion."
     ::= { aristaClassMapMatchEntry 3 }
 
 -- Start of aristaPolicyMapTable
@@ -293,7 +312,7 @@ AristaPolicyMapClassEntry ::= SEQUENCE {
 }
 
 aristaPolicyMapClassIndex  OBJECT-TYPE
-    SYNTAX          Integer32 (1..512)
+    SYNTAX          Integer32 (1..2147483647)
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
@@ -505,6 +524,66 @@ aristaQosPktsMatched  OBJECT-TYPE
          Equal to the sum of aristaQosPktsDropped and aristaQosPktsSent."
     ::= { aristaQosStatsEntry 3 }
 
+-- Start of aristaEcnCounterTable
+
+aristaEcnCounterTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF AristaEcnCounterEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Lists the ECN Counter Value per unit as supported.
+         Since different Arista devices have different capabilities 
+         for ECN counters, the table would contain the counter information 
+         per entity. This includes both packets that were received with 
+         congestion marked (ECN bits set) as well as packets that this 
+         Arista device marked with ECN bits before transmission. In cases 
+         where the platform is unable to count the already marked packets,
+         the counter will only reflect the ones being marked by this specific
+         device on the transmit side."
+    ::= { aristaQosMibObjects 8 }
+
+aristaEcnCounterEntry  OBJECT-TYPE
+    SYNTAX          AristaEcnCounterEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "A conceptual row in the aristaEcnCounterTable."
+    INDEX           { aristaEcnCounterDescriptor }
+    ::= { aristaEcnCounterTable 1 }
+
+AristaEcnCounterEntry ::= SEQUENCE {
+    aristaEcnCounterDescriptor     DisplayString,
+    aristaEcnCounterValue          Counter64,
+    aristaEcnCounterEntity         PhysicalIndexOrZero
+}
+
+aristaEcnCounterDescriptor  OBJECT-TYPE
+    SYNTAX          DisplayString (SIZE (0..32))
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION     "Describes the entity that the counter corresponds to.
+                    For instance, devices supporting ECN counters per forwarding
+                    element (or per chip) will have descriptor containing information
+                    like <ChipName>"
+    ::= { aristaEcnCounterEntry 1 }
+
+aristaEcnCounterValue OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION     "The number of packets above average threshhold"
+    ::= { aristaEcnCounterEntry 2 }
+
+aristaEcnCounterEntity OBJECT-TYPE
+    SYNTAX          PhysicalIndexOrZero
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION     "The physical index corresponding to the entity which
+                    is a non zero value used to identify a physical entity. 
+                    This value will be zero if the entity does not have a 
+                    physical index"
+    ::= { aristaEcnCounterEntry 3 }
+
 -- Compliance, MIB groups
 
 aristaQosMibCompliances OBJECT IDENTIFIER
@@ -523,7 +602,8 @@ aristaQosMibCompliance  MODULE-COMPLIANCE
                          aristaClassMapGroup,
                          aristaPolicyMapGroup,
                          aristaPolicyMapActionGroup,
-                         aristaServicePolicyGroup
+                         aristaServicePolicyGroup,
+                         aristaEcnCounterGroup
                      }
     ::= { aristaQosMibCompliances 1 }
 
@@ -575,5 +655,15 @@ aristaServicePolicyGroup  OBJECT-GROUP
         "The collection of objects that represent QoS configuration
          information for service policies."
     ::= { aristaQosMibGroups 4 }
+
+aristaEcnCounterGroup OBJECT-GROUP
+   OBJECTS          {
+                        aristaEcnCounterValue,
+                        aristaEcnCounterEntity
+                    }
+   STATUS       current
+   DESCRIPTION
+        "The objects that represent ECN counter information"
+   ::= { aristaQosMibGroups 5 }
 
 END
