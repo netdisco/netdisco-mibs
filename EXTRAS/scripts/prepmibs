@@ -38,10 +38,25 @@ if (! -d $to) {
   exit(1);
 }
 
+my (%res, %newfiles) = ((), ());
+
 # allow running this on netdisco-mibs itself
 my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
 print "\N{BLACK FLAG} Running on netdisco-mibs/$vendor, reporting only.\n"
   if $onself;
+
+# change file mode to be cleaner before commit
+# remove spaces from filenames (it's just confusing in the output)
+# build lookup of all filenames
+foreach my $filepath (grep {-f} glob(catfile($from, '*'))) {
+  chmod(0644, $filepath);
+  my $fname = (splitdir($filepath))[-1];
+  (my $newname = $fname) =~ s/\s+/-/g;
+  if ($newname ne $fname) {
+    move( $filepath, catfile($from, $newname) ) or die $!;
+  }
+  ++$newfiles{$newname};
+}
 
 # let net-snmp find MIBs in the new bundle
 # leaves a copy of the mib index file in $from/ignore/dotindex.txt
@@ -49,12 +64,6 @@ my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
 
 # load mib_index2.txt mapping all current known MIBs
 my ($vendor_for, $oldfile_for) = parse_index2();
-
-my %res = ();
-my %newfiles = map  {($_ => 1)}
-               map  {(splitdir($_))[-1]}
-               map  {chmod(0644, $_); $_}
-               grep {-f} glob(catfile($from, '*'));
 
 foreach my $mib (sort keys %{$file_for}) {
   my $mibfile = catfile($from, $file_for->{$mib});
