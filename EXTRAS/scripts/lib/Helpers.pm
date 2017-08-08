@@ -70,7 +70,7 @@ sub build_index {
   open(my $cache, '<', "$tmpdir/mib_indexes/2") or die $!;
   while (my $line = <$cache>) {
     next if $line =~ m/^DIR /;
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+    my ($mib, $file) = ($line =~ m/^(\S+)\s+(.+)/);
 
     # store mib-file mapping
     $mib_for{$file} = $mib;
@@ -102,11 +102,11 @@ sub parse_index2 {
   open(my $index, '<', $indexfile) or die $!;
   while (my $line = <$index>) {
     next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
-    if ($line =~ m/^VENDOR\s+(\S+)/) {
+    if ($line =~ m/^VENDOR\s+(.+)/) {
       $currvendor = (grep {m/\S/} splitdir($1))[-1];
       next;
     }
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(\S+)$/);
+    my ($mib, $file) = ($line =~ m/^(\S+)\s+(.+)/);
 
     $oldfile_for{$mib} = $file;
     $vendor_for{$mib} = $currvendor;
