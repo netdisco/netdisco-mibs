@@ -80,8 +80,8 @@ sub build_index {
 
   # keep a copy of the mib index file to help the dev
   if ($keep) {
-    mkdir(catfile($bundle, 'ignore'));
-    copy("$tmpdir/mib_indexes/2", catfile($bundle, 'ignore', 'dotindex.txt'));
+    mkdir(catfile($bundle, 'skip'));
+    copy("$tmpdir/mib_indexes/2", catfile($bundle, 'skip', 'dotindex.txt'));
   }
 
   return (\%mib_for, \%file_for);
