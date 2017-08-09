@@ -8,7 +8,6 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
-use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
 
@@ -35,16 +34,27 @@ if (scalar grep {-f} glob(catfile($from, 'error', '*'))) {
   exit(1);
 }
 
-foreach my $src (grep {-f} glob(catfile($from, '*'))) {
-  my $name = (splitdir($src))[-1];
-  if (-e catfile($to, $name)) {
+foreach my $fromfile (grep {-f} glob(catfile($from, '*'))) {
+  my $name = (splitdir($fromfile))[-1];
+  my $tofile = catfile($to, $name);
+
+  if (-e $tofile) {
     print YELLOW, "\N{RIGHTWARDS WHITE ARROW FROM WALL} ";
   }
   else {
     print YELLOW, "\N{BLACK SMALL STAR} ";
   }
   print GREEN, "$name\n", RESET;
-  copy($src, $to) or die $!;
+
+  # copy, and change underscores to hyphens in descriptors/identifiers
+  open(my $mibfrom, '<', $fromfile) or die $!;
+  open(my $mibto,   '>', $tofile) or die $!;
+  while (my $line = <$mibfrom>) {
+    $line =~ s/(\w)_(\w+\(\d+\))/$1-$2/g;
+    print $mibto $line;
+  }
+  close $mibfrom;
+  close $mibto;
 }
 
 print "\N{HEAVY CHECK MARK} Imported MIBs.\n";
