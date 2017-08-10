@@ -2,7 +2,7 @@
 # prepmibs new_dir
 # The script will rename and organise files to help you.
 # - Any items in "error" folder need manually inspecting
-# - Take a look at items in the "ignore" folder, just in case.
+# - Take a look at items in the "skip" folder, just in case.
 # - Watch out for new entries that could be RFCs.
 # - MIBs belonging to other vendors will be moved to "other" folder.
 # - Run "prepmibs/importmibs" on each folder in "other" before continuing.
@@ -38,23 +38,32 @@ if (! -d $to) {
   exit(1);
 }
 
+my (%res, %newfiles) = ((), ());
+
 # allow running this on netdisco-mibs itself
 my $onself = ((index(realpath($from), realpath($ENV{MIBHOME})) == 0) ? 1 : 0);
 print "\N{BLACK FLAG} Running on netdisco-mibs/$vendor, reporting only.\n"
   if $onself;
 
+# change file mode to be cleaner before commit
+# remove spaces from filenames (it's just confusing in the output)
+# build lookup of all filenames
+foreach my $filepath (grep {-f} glob(catfile($from, '*'))) {
+  chmod(0644, $filepath);
+  my $fname = (splitdir($filepath))[-1];
+  (my $newname = $fname) =~ s/\s+/-/g;
+  if ($newname ne $fname) {
+    move( $filepath, catfile($from, $newname) ) or die $!;
+  }
+  ++$newfiles{$newname};
+}
+
 # let net-snmp find MIBs in the new bundle
-# leaves a copy of the mib index file in $from/ignore/dotindex.txt
+# leaves a copy of the mib index file in $from/skip/dotindex.txt
 my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
 
 # load mib_index2.txt mapping all current known MIBs
 my ($vendor_for, $oldfile_for) = parse_index2();
-
-my %res = ();
-my %newfiles = map  {($_ => 1)}
-               map  {(splitdir($_))[-1]}
-               map  {chmod(0644, $_); $_}
-               grep {-f} glob(catfile($from, '*'));
 
 foreach my $mib (sort keys %{$file_for}) {
   my $mibfile = catfile($from, $file_for->{$mib});
@@ -114,12 +123,12 @@ foreach my $mib (sort keys %{$file_for}) {
   }
 }
 
-# show files being ignored by this script
-$res{ignore} = \%newfiles;
+# show files being skipped by this script
+$res{skip} = \%newfiles;
 status('Preparing to organise files...');
 
 if (not $onself) {
-  foreach (qw(other ignore older same)) {
+  foreach (qw(other skip older same)) {
     mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
   }
   if (scalar keys %{$res{other}}) {
@@ -133,9 +142,10 @@ blank();
 
 foreach my $mib (sort keys %{$res{other}}) {
   print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
-    " is already featured within vendor ", MAGENTA, $res{other}->{$mib};
-  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
-    if uc($mib) ne $oldfile_for->{$mib};
+    " already known ";
+  print CLEAR, FAINT, "(in '", $res{other}->{$mib};
+  print "/", $oldfile_for->{$mib} if uc($mib) ne $oldfile_for->{$mib};
+  print "')";
   print "\n", RESET;
   mymove(catfile($from, $file_for->{$mib}),
        catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}));
@@ -193,10 +203,10 @@ foreach my $file (sort keys %{$res{multi}}) {
   mymove(catfile($from, $file), catfile($from, 'error'));
 }
 
-foreach my $file (sort keys %{$res{ignore}}) {
+foreach my $file (sort keys %{$res{skip}}) {
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
-    $file, CYAN, " is not a MIB\n", RESET;
-  mymove(catfile($from, $file), catfile($from, 'ignore'));
+    $file, CYAN, " was skipped by net-snmp\n", RESET;
+  mymove(catfile($from, $file), catfile($from, 'skip'));
 }
 
 if ($onself) {
