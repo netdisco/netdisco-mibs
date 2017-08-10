@@ -1,0 +1,807 @@
+--  *****************************************************************
+--  DLINKSW-IP-FILTER-MIB.mib : IP FILTER MIB
+--
+--  Copyright (c) 2016 D-Link Corporation, all rights reserved.
+--
+--  *****************************************************************
+DLINKSW-IP-FILTER-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        MODULE-IDENTITY,
+        OBJECT-TYPE,
+        Unsigned32,
+        Integer32
+            FROM SNMPv2-SMI
+        InetAddressType,
+        InetAddress,
+        InetAddressPrefixLength
+            FROM INET-ADDRESS-MIB
+        MODULE-COMPLIANCE,
+        OBJECT-GROUP
+		FROM SNMPv2-CONF 
+        DisplayString,
+        RowStatus
+            FROM SNMPv2-TC
+        dlink-common-mgmt
+            FROM DLINK-ID-REC-MIB;
+
+
+    dlinkSwIPFilterMIB MODULE-IDENTITY
+        LAST-UPDATED "201606210000Z"
+        ORGANIZATION "D-Link Corp."
+        CONTACT-INFO
+            "         D-Link Corporation
+             Postal: No. 289, Sinhu 3rd Rd., Neihu District,
+                     Taipei City 114, Taiwan, R.O.C
+             Tel:    +886-2-66000123
+             E-mail: tsd@dlink.com.tw
+            "
+        DESCRIPTION
+            "This MIB module defines objects for IP filter."
+
+        REVISION "201606080000Z"
+        DESCRIPTION "This is the first version of the MIB file for
+                     configuring IP filter."
+
+        REVISION "201606210000Z"
+        DESCRIPTION "Add dPrefixListTable, dPrefixListRuleTable and
+                     dPrefixListDescTable."
+
+      ::= { dlink-common-mgmt 117 }
+
+    dIPFilterNotifications   OBJECT IDENTIFIER ::= { dlinkSwIPFilterMIB 0 }
+    dIPFilterObjects         OBJECT IDENTIFIER ::= { dlinkSwIPFilterMIB 1 }
+    dIPFilterConform         OBJECT IDENTIFIER ::= { dlinkSwIPFilterMIB 2 }
+-- ------------------------------------------------------------------------
+
+--
+-- Create or delete route-map
+--
+    dRouteMapTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DRouteMapEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains route-map name."
+        ::= { dIPFilterObjects 1 }
+
+    dRouteMapEntry OBJECT-TYPE
+        SYNTAX          DRouteMapEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Each entry is a specific name of a route map."
+        INDEX
+            { dRouteMapName }
+    ::= { dRouteMapTable 1 }
+
+    DRouteMapEntry ::= SEQUENCE {
+        dRouteMapName           DisplayString,
+        dRouteMapRowStatus      RowStatus }
+
+    dRouteMapName OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE(1..16))
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "The name of the route map."
+        ::= { dRouteMapEntry 1 }
+
+    dRouteMapRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of the route-map.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dRouteMapEntry 99 }
+
+--
+-- Route map configuration
+--
+    dRouteMapSeqTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DRouteMapSeqEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains entries for route maps instances."
+        ::= { dIPFilterObjects 2 }
+
+    dRouteMapSeqEntry OBJECT-TYPE
+        SYNTAX          DRouteMapSeqEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Each entry is a specific sequence of a route map."
+        INDEX
+            {   dRouteMapName,
+                dRouteMapSeqNum }
+    ::= { dRouteMapSeqTable 1 }
+
+    DRouteMapSeqEntry ::= SEQUENCE {
+        dRouteMapSeqNum            Unsigned32,
+        dRouteMapSeqMatchAction    INTEGER,
+        dRouteMapSeqRowStatus      RowStatus }
+
+    dRouteMapSeqNum OBJECT-TYPE
+        SYNTAX          Unsigned32 (1..65535)
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Multiple entries of the same route map can be created by assigning a
+            different sequence number to it.  Each instance is identified by the
+            route map name and the sequence number.  The value of the sequence
+            number associated with the particular route map instance determines the
+            order in which the routing protocol evaluates routes; the instance of
+            having lowest sequence number is evaluated first.  If the routes pass
+            all the match conditions specified in the lowest-numbered instance, and
+            if all set clause elements are successfully configured, then no other
+            instance of the route map is considered.  However, any routes that do
+            not pass all the match conditions are evaluated against the next
+            instance of the route map."
+        ::= { dRouteMapSeqEntry 1 }
+
+    dRouteMapSeqMatchAction OBJECT-TYPE
+        SYNTAX          INTEGER  {
+            permit(1),
+            deny(2)
+        }
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "Indicates the action performed by this route map instance."
+        ::= { dRouteMapSeqEntry 2 }
+
+    dRouteMapSeqRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "Controls creation/deletion of entries in this table according to the
+            RowStatus textual convention. The writable columns in a row cannot
+            be changed if the row is active. In other words, once created,
+            dRouteMapMatchAction cannot be modified directly. It is required
+            to destroy the instance and then create it with the new value.
+            Before configure match or set a clause/element, it is required to
+            create the same route map instance.
+            Deletion of the route map instance will also delete all the clause
+            elements confgured which associate the deleted route map."
+        ::= { dRouteMapSeqEntry 99 }
+
+--
+-- The route-map clauses(match and set command) table
+--
+    dRouteMapClauseTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DRouteMapClauseEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains entries for instances of the route map clause
+            elements."
+        ::= { dIPFilterObjects 3 }
+
+    dRouteMapClauseEntry OBJECT-TYPE
+        SYNTAX          DRouteMapClauseEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Each entry describes the characteristics of one route map clause
+            element instance."
+        INDEX     {
+            dRouteMapName,
+            dRouteMapSeqNum,
+            dRouteMapClauseTypeId,
+            dRouteMapClauseSubId
+        }
+        ::= { dRouteMapClauseTable 1 }
+
+    DRouteMapClauseEntry ::= SEQUENCE {
+        dRouteMapClauseTypeId             INTEGER,
+        dRouteMapClauseSubId              Integer32,
+        dRouteMapClauseAddOption          INTEGER,
+        dRouteMapClauseElementValue       DisplayString,
+        dRouteMapClauseRowStatus          RowStatus
+    }
+
+    dRouteMapClauseTypeId OBJECT-TYPE
+        SYNTAX          INTEGER {
+            matchIpAccessList(1),
+            matchIpPrefixList(2),
+            matchIpv6AccessList(3),
+            matchAsPath(4),
+            matchCommunity(5),
+            macthIpNexthop(7),
+            matchIpNexthopPrefixList(8),
+            matchMetric(9),
+            matchInterface(10),
+            matchRouteType(11),
+            matchIpRouteSource(12),
+            matchIpv6Nexthop(13),
+            matchIpv6NexthopPrefixList(14),
+            matchIpv6PrefixList(15),
+            -- set clause element selection options
+            setIpNexthop(129),
+            setIpv6Nexthop(131),
+            setAsPath(136),
+            setCommunity(137), 
+            setMetric(139),
+            setLocalPreference(140),
+            setOrigin(141),
+            setWeight(142),
+            setDampening(143),
+            setMetricType(144)
+        }
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "The type of match or set command in this entry.
+            A route map entry can contain multiple match and set statements.
+            To match a route against a route map entry, all of the match
+            clause elements in a route map sequence must be satisfied.
+            When a route map entry is matched, all the set clause elements
+            in the sequence will be performed (if applicable) for a 'permit'
+            sequence.
+            The valid values and ranges of dRouteMapClauseAddOption
+            and dRouteMapClauseElementValue depends on this object.
+            Please refer to the dRouteMapClauseRowStatus object's
+            DESCRIPTION for details."
+        ::= { dRouteMapClauseEntry 1 }
+
+    dRouteMapClauseSubId OBJECT-TYPE
+        SYNTAX      Integer32 (1..2147483647)
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "Indicates the clause element sub ID.  Because for some clause
+            types (e.g. setIpNexthop), multiple instances can be created,
+            this object is used solely to distinguish specific instance
+            of the element. If the created instance has same
+            dRouteMapName, dRouteMapSeqNum, dRouteMapClauseTypeId
+            and dRouteMapClauseElementValue as the entry exists
+            in the dRouteMapClauseTable,the creation will be rejected.
+            This value is determined by choosing the next available by
+            walking the table and may change across system reboots."
+    ::= { dRouteMapClauseEntry 2 }
+
+    dRouteMapClauseAddOption OBJECT-TYPE
+        SYNTAX          INTEGER  {
+            notApplicable(0),
+            exact(1),
+            additive(2),
+            communityNone(3)
+        }
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This indicates the additional option selected along
+            with the main option (dRouteMapClauseTypeId) whenever it applies.
+            For more information on how to map this object value to each value,
+            refer to the route-map clauses table in the dRouteMapClauseRowStatus object's
+            DESCRIPTION."
+        DEFVAL    { notApplicable }
+        ::= { dRouteMapClauseEntry 3 }
+
+    dRouteMapClauseElementValue OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE(0..255))
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This represents match and set clauses' variable element
+            instance values in character string form.  Whatever may be the data
+            type of the attribute element instance value, it is always interpreted
+            as a set of characters for both configuration and display purposes.
+            It is up to the user to know the element's data type mapping in order
+            to input the correct value while configuring.  Refer to the route-map
+            clauses table in the dRouteMapClauseRowStatus object descrption for
+            detailed information."
+    ::= { dRouteMapClauseEntry 4 }
+
+     dRouteMapClauseRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "Controls creation/deletion of entries in this table according to the
+            RowStatus textual convention. The writable columns in a row cannot 
+            be changed if the row is active. In other words, the table entry 
+            elements may not be modified. 
+
+            To create/delete an entry in this table, the following entry objects
+            MUST be explicitly configured:
+                dRouteMapClauseRowStatus
+                dRouteMapClauseElementValue           
+
+            Make sure the corresponding route map(s) are created before
+            configuring their corresponding clause elements.
+
+            The table below explains how to determine the values and
+            ranges of dRouteMapClauseAddOption and dRouteMapClauseElementValue.
+                                                 
+                Clause element configuration table
+                ====================================================
+        Clause Type                Addtional Option            Element Value
+        dRouteMapClauseTypeId    dRouteMapClauseAddOption  dRouteMapClauseElementValue
+        =======================    ==========================  ==================        
+        matchIpAccessList          notApplicable               DisplayString (SIZE(1..32))
+        matchIpPrefixList          notApplicable               DisplayString (SIZE(1..32))
+        matchIpv6AccessList        notApplicable               DisplayString (SIZE(1..32))
+        matchIpv6PrefixList        notApplicable               DisplayString (SIZE(1..32))
+        matchAsPath                notApplicable               DisplayString (SIZE(1..32))
+        matchCommunity             exact/                      DisplayString (SIZE(1..32))
+                                   notApplicable               DisplayString (SIZE(1..32))
+		macthIpNexthop             notApplicable               DisplayString (SIZE(1..32))
+		matchIpNexthopPrefixList   notApplicable               DisplayString (SIZE(1..32))
+		matchIpv6Nexthop           notApplicable               DisplayString (SIZE(1..32))
+		matchIpv6NexthopPrefixList notApplicable               DisplayString (SIZE(1..32))
+		matchMetric                notApplicable               DisplayString (SIZE(1..32))
+		matchInterface             notApplicable               DisplayString (SIZE(1..32))
+ 		matchRouteType             notApplicable               DisplayString (SIZE(1..32))
+		matchIpRouteSource         notApplicable               DisplayString (SIZE(1..32))
+                                  
+        setIpNexthop               notApplicable               InetAddressIPv4 
+        setIpv6Nexthop             notApplicable               InetAddressIPv6         
+        setAsPath                  notApplicable               DisplayString (SIZE(1..32))                              
+        setCommunity(Note#1)       additive/                   DisplayString (SIZE(1..32)) 
+                                   communityNone               zero-length string
+                                   notApplicable               DisplayString (SIZE(1..32))
+        setMetric                  notApplicable               Unsigned32
+        setLocalPreference         notApplicable               Unsigned32
+        setOrigin                  notApplicable               { egp,   
+                                                                 igp,
+                                                                 incomplete }  (Note#2)         
+        setWeight                  notApplicable               Interger32 (0..65535)
+		setDampening               notApplicable               Interger32 (0..65535)
+		setMetricType              notApplicable               Interger32 (0..65535)
+        ========================================================================================        
+         Note#1: Given a {route map, sequence number}, setCommunity will have at most one instance,
+                i.e., all options and values will be aggregated into one dRouteMapClauseSubId. 
+                When 'additive' is chosen for dRouteMapClauseAddOption, the specified 
+                community list will be added to the existed community list. 
+                If 'communityNone' is chosen, the dRouteMapClauseElementValue should be a zeor-length 
+                string. When read dRouteMapClauseElementValue, the value 'additive' is never returned.    
+         Note#2: The element value needs choose the exact case-sensitive string to set the option.
+                 For example, for setOrigin, egp or igp or incomplete will be the valid options 
+                 to select."                                                                          
+    ::= { dRouteMapClauseEntry 99 }
+
+--
+-- IP standard access list name
+--
+    dAccessListTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DAccessListEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains name for IP access list."
+        ::= { dIPFilterObjects 4 }
+
+    dAccessListEntry OBJECT-TYPE
+        SYNTAX          DAccessListEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "An entry contains the information of IP access list."
+        INDEX
+            {   dAccessListName,
+                dAccessListAddrType }
+    ::= { dAccessListTable 1 }
+
+    DAccessListEntry ::= SEQUENCE {
+        dAccessListName           DisplayString,
+        dAccessListAddrType       InetAddressType,
+        dAccessListRowStatus      RowStatus }
+
+    dAccessListName OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE(1..16))
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "The name of the IP access list."
+        ::= { dAccessListEntry 1 }
+
+    dAccessListAddrType OBJECT-TYPE
+        SYNTAX          InetAddressType
+        MAX-ACCESS	      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the address type of the access list."
+        ::= { dAccessListEntry 2 }
+
+    dAccessListRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of this entry.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dAccessListEntry 99 }
+
+--
+-- IP access list rule table
+--
+    dAccessListRuleTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DAccessListRuleEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains rules for IP access list."
+        ::= { dIPFilterObjects 5 }
+
+    dAccessListRuleEntry OBJECT-TYPE
+        SYNTAX          DAccessListRuleEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "An entry contains one rule of the IP access list."
+        INDEX
+            {   dAccessListName,
+                dAccessListAddrType,
+                dAccessListRuleMatchAction,
+                dAccessListRuleNetAddr,
+                dAccessListRulePfxLen }
+    ::= { dAccessListRuleTable 1 }
+
+    DAccessListRuleEntry ::= SEQUENCE {
+        dAccessListRuleMatchAction    INTEGER,
+        dAccessListRuleNetAddr        InetAddress,
+        dAccessListRulePfxLen         INTEGER,
+        dAccessListRuleRowStatus      RowStatus }
+
+    dAccessListRuleMatchAction OBJECT-TYPE
+        SYNTAX          INTEGER  {
+            permit(1),
+            deny(2)
+        }
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Indicates the action performed for this IP access list."
+        ::= { dAccessListRuleEntry 1 }
+
+    dAccessListRuleNetAddr OBJECT-TYPE
+        SYNTAX          InetAddress
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Indicates the network address."
+        ::= { dAccessListRuleEntry 2 }
+
+    dAccessListRulePfxLen OBJECT-TYPE
+        SYNTAX          INTEGER
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "Indicates the prefix length of the network address."
+        ::= { dAccessListRuleEntry 3 }
+
+    dAccessListRuleRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of this entry.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dAccessListRuleEntry 99 }
+
+--
+-- IP prefix list name
+--
+    dPrefixListTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DPrefixListEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This table contains name for IP prefix list."
+        ::= { dIPFilterObjects 6 }
+
+    dPrefixListEntry OBJECT-TYPE
+        SYNTAX          DPrefixListEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "An entry contains the information of IP prefix list."
+        INDEX
+            {   dPrefixListName,
+                dPrefixListAddrType  }
+    ::= { dPrefixListTable 1 }
+
+    DPrefixListEntry ::= SEQUENCE {
+        dPrefixListName           DisplayString,
+        dPrefixListAddrType       InetAddressType,
+        dPrefixListRowStatus      RowStatus }
+
+    dPrefixListName OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE(1..16))
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "The name of the IP prefix list."
+        ::= { dPrefixListEntry 1 }
+
+    dPrefixListAddrType OBJECT-TYPE
+        SYNTAX            InetAddressType
+        MAX-ACCESS	        not-accessible
+        STATUS            current
+        DESCRIPTION
+           "This object indicates the address type of the prefix."
+        ::= { dPrefixListEntry 2 }
+
+    dPrefixListRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of this entry.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dPrefixListEntry 99 }
+
+--
+-- IP prefix list rule
+--
+	dPrefixListRuleTable  OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DPrefixListRuleEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "A table consists of a list of IP prefixes. 
+            The initial 2 index elements identify the prefix list that a prefix
+            belongs to.
+            "
+        ::= { dIPFilterObjects 7 }
+
+    dPrefixListRuleEntry OBJECT-TYPE
+        SYNTAX          DPrefixListRuleEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "An entry contains the information of an IP prefix."
+        INDEX {            
+            dPrefixListName,
+            dPrefixListAddrType,
+            dPrefixListRuleSeqNum
+        }
+        ::= { dPrefixListRuleTable 1 }
+
+    DPrefixListRuleEntry ::=        SEQUENCE {
+        dPrefixListRuleSeqNum          Unsigned32,
+        dPrefixListRuleAction          INTEGER,
+        dPrefixListRuleNetAddr         InetAddress, 
+        dPrefixListRulePrefixLen       InetAddressPrefixLength,
+        dPrefixListRuleGeValue         Unsigned32,
+        dPrefixListRuleLeValue         Unsigned32,
+        dPrefixListRuleHitCount        Unsigned32,
+        dPrefixListRuleRowStatus       RowStatus
+    }
+
+    dPrefixListRuleSeqNum OBJECT-TYPE
+        SYNTAX          Unsigned32 ( 0 | 1..65535)
+        MAX-ACCESS	      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "The checking sequence of the prefix within a prefix list.            
+           The lower the number is, the higher the precedence of the permit/deny rule.
+           The special value of 0 means the sequence number will be automatically 
+           determined by the agent.
+           "
+        ::= { dPrefixListRuleEntry 1 }
+
+    dPrefixListRuleAction OBJECT-TYPE
+        SYNTAX		    INTEGER {
+            permit(1),
+            deny(2)
+        }
+        MAX-ACCESS	      read-create
+        STATUS          current
+        DESCRIPTION
+           "This object indicates whether to permit or deny the matched route entry."
+        ::= { dPrefixListRuleEntry 2 }
+  
+    dPrefixListRuleNetAddr OBJECT-TYPE
+        SYNTAX          InetAddress
+        MAX-ACCESS	      read-create
+        STATUS          current
+        DESCRIPTION
+           "This object indicates the network address (prefix)."
+        ::= { dPrefixListRuleEntry 3 }
+
+    dPrefixListRulePrefixLen OBJECT-TYPE
+        SYNTAX          InetAddressPrefixLength
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+           "The length of network address (prefix)."
+        ::= { dPrefixListRuleEntry 4 }
+
+    dPrefixListRuleGeValue OBJECT-TYPE
+        SYNTAX          Unsigned32(0 | 1..128)
+        MAX-ACCESS	      read-create
+        STATUS          current
+        DESCRIPTION
+           "The minimum prefix length of the route that can be matched.
+           The special value of 0 indicates this object is not specified. 
+           "
+        DEFVAL { 0 }
+        ::= { dPrefixListRuleEntry 5 }
+
+    dPrefixListRuleLeValue  OBJECT-TYPE
+        SYNTAX          Unsigned32 (0 | 1..128)
+        MAX-ACCESS	      read-create
+        STATUS          current
+        DESCRIPTION
+           "The maximum prefix length of the route that can be matched.
+           The special value of 0 indicates this object is not specified.
+           "
+        DEFVAL { 0 }
+        ::= { dPrefixListRuleEntry 6 }  
+        
+    dPrefixListRuleHitCount  OBJECT-TYPE
+        SYNTAX          Unsigned32
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+           "Counter that the prefix list entry has been matched."
+        ::= { dPrefixListRuleEntry 7 }  
+        
+    dPrefixListRuleRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of this entry.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dPrefixListRuleEntry 99 }
+
+--
+-- IP prefix list description
+--
+	dPrefixListDescTable  OBJECT-TYPE
+        SYNTAX          SEQUENCE OF DPrefixListDescEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "A table consists of a list of descriptions for IP prefix lists."
+        ::= { dIPFilterObjects 8 }
+
+    dPrefixListDescEntry OBJECT-TYPE
+        SYNTAX          DPrefixListDescEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "An entry contains the description of an IP prefix list."
+        INDEX {            
+            dPrefixListName,
+            dPrefixListAddrType
+        }
+        ::= { dPrefixListDescTable 1 }
+
+    DPrefixListDescEntry ::=        SEQUENCE {
+        dPrefixListDescContent        DisplayString,
+        dPrefixListDescRowStatus      RowStatus
+    }
+
+    dPrefixListDescContent OBJECT-TYPE
+        SYNTAX          DisplayString 
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+           "Specify the description for prefix list."
+        ::= { dPrefixListDescEntry 1 }
+
+    dPrefixListDescRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+            "This object indicates the status of this entry.
+            Only createAndGo(4) and destroy(6) are supported."
+        ::= { dPrefixListDescEntry 99 } 
+
+    -- Conformance Information
+
+    dIPFilterMIBGroups      OBJECT IDENTIFIER ::= { dIPFilterConform 1 }
+    dIPFilterMIBCompliances	OBJECT IDENTIFIER ::= { dIPFilterConform 2 }
+
+    -- Compliance Statements
+
+    dIPFilterMIBFullCompliance MODULE-COMPLIANCE
+            STATUS          current
+            DESCRIPTION     "The compliance statement"
+            MODULE          -- this module
+            MANDATORY-GROUPS {
+                            dRouteMapGroup,
+                            dRouteMapSeqGroup,
+                            dRouteMapClauseGroup,
+                            dAccessListGroup,
+                            dAccessListRuleGroup,
+                            dPrefixListGroup,
+                            dPrefixListRuleGroup,
+                            dPrefixListDescGroup
+                            }
+             ::= { dIPFilterMIBCompliances 1 }
+
+    -- units of conformance
+
+    dRouteMapGroup OBJECT-GROUP
+            OBJECTS         {
+                            dRouteMapRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring route map configurations."
+            ::= { dIPFilterMIBGroups 1 }
+
+    dRouteMapSeqGroup OBJECT-GROUP
+            OBJECTS         {
+                            dRouteMapSeqMatchAction,
+                            dRouteMapSeqRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring route map sequence configurations."
+            ::= { dIPFilterMIBGroups 2 }
+
+    dRouteMapClauseGroup OBJECT-GROUP
+            OBJECTS         {
+                            dRouteMapClauseAddOption,
+                            dRouteMapClauseElementValue,
+                            dRouteMapClauseRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring route map clauses."
+            ::= { dIPFilterMIBGroups 3 }
+
+    dAccessListGroup OBJECT-GROUP
+            OBJECTS         {
+                            dAccessListRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring IP access list configuration."
+            ::= { dIPFilterMIBGroups 4 }
+
+    dAccessListRuleGroup OBJECT-GROUP
+            OBJECTS         {
+                            dAccessListRuleRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring IP access list rules configuration."
+            ::= { dIPFilterMIBGroups 5 }
+
+    dPrefixListGroup OBJECT-GROUP
+            OBJECTS         {
+                            dPrefixListRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring route map clauses."
+            ::= { dIPFilterMIBGroups 6 }
+
+    dPrefixListRuleGroup OBJECT-GROUP
+            OBJECTS         {
+                            dPrefixListRuleAction,
+                            dPrefixListRuleNetAddr,
+                            dPrefixListRulePrefixLen,
+                            dPrefixListRuleGeValue,
+                            dPrefixListRuleLeValue,
+                            dPrefixListRuleHitCount,
+                            dPrefixListRuleRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring IP access list configuration."
+            ::= { dIPFilterMIBGroups 7 }
+
+    dPrefixListDescGroup OBJECT-GROUP
+            OBJECTS         {
+                            dPrefixListDescContent,
+                            dPrefixListDescRowStatus
+                            }
+            STATUS          current
+            DESCRIPTION
+                "These objects are used for managing/monitoring IP access list rules configuration."
+            ::= { dIPFilterMIBGroups 8 }
+
+END
+

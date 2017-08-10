@@ -1,0 +1,977 @@
+-- -----------------------------------------------------------------------------
+-- MIB NAME : PTP-MIB
+-- FILE NAME: PTP.mib
+-- DATE     : 2010/8/25
+-- VERSION  : 1.00
+-- PURPOSE  : To construct the MIB structure of Precision Time Protocol
+--            function for proprietary enterprise
+-- -----------------------------------------------------------------------------
+-- MODIFICTION HISTORY:
+-- -----------------------------------------------------------------------------
+-- Version, Date, Author
+-- Description:
+--  [New Object]
+--  [Modification]
+-- Notes: (Requested by who and which project)
+--
+-- Version 1.00, 2010/8/25, Kelvin Tao
+-- This is the first formal version for universal MIB definition.
+-- -----------------------------------------------------------------------------
+
+
+PTP-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        MODULE-IDENTITY,OBJECT-TYPE       FROM SNMPv2-SMI
+        DisplayString                     FROM SNMPv2-TC
+        PortList			  FROM Q-BRIDGE-MIB
+	dlink-common-mgmt		  FROM DLINK-ID-REC-MIB;
+
+    	
+    swPTPMIB MODULE-IDENTITY
+          LAST-UPDATED "201008250000Z"
+          ORGANIZATION "D-Link Corp."
+          CONTACT-INFO
+                       "http://support.dlink.com"
+          DESCRIPTION
+		    "The structure of Precision Time Protocol for
+                    the proprietary enterprise."
+        ::= { dlink-common-mgmt 94 }
+
+    swPTPNotifications		OBJECT IDENTIFIER ::= { swPTPMIB 0 }
+    swPTPMIBObjects		OBJECT IDENTIFIER ::= { swPTPMIB 1 }
+    swPTPGeneralGroup		OBJECT IDENTIFIER ::= { swPTPMIBObjects 1 }
+
+    swPTPPortCFG                OBJECT IDENTIFIER ::= { swPTPMIBObjects 2 }
+    swPTPPortInfo               OBJECT IDENTIFIER ::= { swPTPMIBObjects 3 }
+    swPTPClock                  OBJECT IDENTIFIER ::= { swPTPMIBObjects 4 }
+    swPTPClockParent            OBJECT IDENTIFIER ::= { swPTPMIBObjects 5 }
+    swPTPForeignMaster          OBJECT IDENTIFIER ::= { swPTPMIBObjects 6 }
+
+-- -----------------------------------------------------------------------------
+-- PTPGeneralGroup
+-- -----------------------------------------------------------------------------
+
+     swPTPState  OBJECT-TYPE
+        SYNTAX  INTEGER
+                {
+                  enabled(1),
+                  disabled(2)
+                }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the global state of PTP."
+        DEFVAL {disabled}
+        ::={ swPTPGeneralGroup 1 }
+
+     swPTPMode  OBJECT-TYPE
+        SYNTAX  INTEGER
+                {
+                  boundary(1),
+                  p2p-transparent(2),
+                  e2e-transparent(3)
+                }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the switch's PTP device type."
+        DEFVAL {e2e-transparent}
+        ::={ swPTPGeneralGroup 2 }
+
+     swPTPTransportProtocol  OBJECT-TYPE
+        SYNTAX  INTEGER
+                {
+                  udp(1),
+                  ethernet(2)
+                }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the transport protocol that will be
+               used for the communication path."
+        DEFVAL {udp}
+        ::={ swPTPGeneralGroup 3 }
+
+     swPTPBoundaryPriority1  OBJECT-TYPE
+        SYNTAX  INTEGER (0..255)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP boundary clock attributes.
+               The priority 1 attribute is used in the execution of the
+               best master clock algorithm. Lower values take precedence."
+        DEFVAL {128}
+        ::={ swPTPGeneralGroup 4 }
+
+     swPTPBoundaryPriority2  OBJECT-TYPE
+        SYNTAX  INTEGER (0..255)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP boundary clock attributes.
+               The priority 2 attribute is used in the execution of the
+               best master clock algorithm. Lower values take precedence.
+
+               In the event that the operation of the BMC algorithm fails
+               to order the clocks based on the values of priority1,
+               the clock's class, and the clock's accuracy; the priority2
+               attribute will allow the creation of lower values compared
+               to the other devices."
+        DEFVAL {128}
+        ::={ swPTPGeneralGroup 5 }
+
+     swPTPClockDomainTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPClockDomainEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per unit domain of the PTP clock."
+        ::= { swPTPGeneralGroup 6 }
+
+     swPTPClockDomainEntry OBJECT-TYPE
+        SYNTAX  SwPTPClockDomainEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPClockDomainTable."
+        INDEX  { swPTPUnit }
+        ::= { swPTPClockDomainTable 1 }
+
+     SwPTPClockDomainEntry ::=
+        SEQUENCE {
+            swPTPUnit
+                INTEGER,
+            swPTPClockDomainNumber
+                INTEGER,
+            swPTPClockDomainName
+                DisplayString
+        }
+
+     swPTPUnit	OBJECT-TYPE
+    	SYNTAX      INTEGER
+    	MAX-ACCESS  not-accessible
+    	STATUS      current
+    	DESCRIPTION
+            "This indicates the PTP unit number."
+    	::= { swPTPClockDomainEntry 1  }
+    	
+     swPTPClockDomainNumber  OBJECT-TYPE
+        SYNTAX  INTEGER (0..127)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP clock common attribute of
+               the domain number."
+        DEFVAL {0}
+        ::={ swPTPClockDomainEntry 2 }
+
+     swPTPClockDomainName  OBJECT-TYPE
+        SYNTAX  DisplayString (SIZE (0..32))
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+               "This indicates the domain name of swPTPClockDomainNumber."
+        ::={ swPTPClockDomainEntry 3 }
+
+-- -----------------------------------------------------------------------------
+-- swPTPPortCFG
+-- -----------------------------------------------------------------------------
+
+     swPTPPortTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPPortEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port state of the PTP clock."
+        ::= { swPTPPortCFG 1 }
+
+     swPTPPortEntry OBJECT-TYPE
+        SYNTAX  SwPTPPortEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPPortTable 1 }
+
+     SwPTPPortEntry ::=
+        SEQUENCE {
+            swPTPPort
+                INTEGER,
+            swPTPPortState
+                INTEGER
+        }
+
+     swPTPPort	OBJECT-TYPE
+    	SYNTAX      INTEGER
+    	MAX-ACCESS  not-accessible
+    	STATUS      current
+    	DESCRIPTION
+            "This indicates the PTP port number."
+    	::= { swPTPPortEntry 1  }
+    	
+     swPTPPortState	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  enabled(1),
+                  disabled(2)
+                }
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the port state of the PTP clock."
+        ::= { swPTPPortEntry 2 }
+
+-- -----------------------------------------------------------------------------
+
+     swPTPBoundaryPortCFGTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPBoundaryPortCFGEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port attributes of the PTP
+            boundary clock.
+
+            These attributes takes effect when the PTP device type is boundary."
+        ::= { swPTPPortCFG 2 }
+
+     swPTPBoundaryPortCFGEntry OBJECT-TYPE
+        SYNTAX  SwPTPBoundaryPortCFGEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPBoundaryPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPBoundaryPortCFGTable 1 }
+
+     SwPTPBoundaryPortCFGEntry ::=
+        SEQUENCE {
+            swPTPBoundaryPortAnnounceInterval
+                INTEGER,
+            swPTPBoundaryPortAnnounceTimeout
+                INTEGER,
+            swPTPBoundaryPortSyncInterval
+                INTEGER,
+            swPTPBoundaryPortDelayReqInterval
+                INTEGER,
+            swPTPBoundaryPortPDelayReqInterval
+                INTEGER,
+            swPTPBoundaryPortDelayMechanism
+                INTEGER
+        }
+    	
+     swPTPBoundaryPortAnnounceInterval	OBJECT-TYPE
+	SYNTAX  INTEGER (1..16)
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            announce messages.
+
+            In line with the IEEE1588 protocol, the value of the announce
+            interval will be represented as the logarithm to base 2 of
+            this time measured in seconds. The range is 1-16, so the import
+            value must either be 1, 2, 4, 8, or 16. If the input is not allowed,
+            then the input should be automatically adjusted to allow the biggest
+            and closest value."
+        ::= { swPTPBoundaryPortCFGEntry 1 }
+
+     swPTPBoundaryPortAnnounceTimeout	OBJECT-TYPE
+	SYNTAX  INTEGER (2..10)
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the announce interval number that has to pass
+            without receipt of an Announce message before the occurrence
+            of the ANNOUNCE_RECEIPT_TIMEOUT_EXPIRES event.
+
+            This value multiplied by the announce interval value is equal
+            to the interval time of the announce receipt timeout."
+        ::= { swPTPBoundaryPortCFGEntry 2 }
+
+     swPTPBoundaryPortSyncInterval	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  half-second(1),
+                  one-second(2),
+                  two-second(3)
+                }
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            Sync messages.
+
+            In line with the IEEE1588 protocol, the value of the sync interval
+            shall be represented as the logarithm to base 2 of this time
+            measured in seconds. So the import value must either be 0.5, 1 or 2."
+        ::= { swPTPBoundaryPortCFGEntry 3 }
+
+     swPTPBoundaryPortDelayReqInterval	OBJECT-TYPE
+	SYNTAX  INTEGER (0..5)
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the permitted mean time interval between
+            successive delay request messages which are sent by a slave to
+            a specific port on the master.
+
+            In line with the IEEE1588 protocol, the value of delay req interval
+            shall be an exponent of 2. In addition, this interval shall be an
+            integer with the minimum value being sync interval, and the maximum
+            value being 32 times the sync interval value. The actual range of the
+            allowed exponent of the interval delay request is
+            [logSyncInterval+0, logSyncInterval+5].
+            If the sync interval is half a second and the delay req interval is 0,
+            then the permitted time interval between successive delay request
+            messages will be automatically adjusted to one second."
+        ::= { swPTPBoundaryPortCFGEntry 4 }
+
+     swPTPBoundaryPortPDelayReqInterval	OBJECT-TYPE
+	SYNTAX  INTEGER (1..32)
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the permitted mean time interval between
+            successive pdelay request messages.
+
+            In line with the IEEE1588 protocol, the value of pdelay req interval
+            shall be represented as the logarithm to base 2 of this time measured
+            in seconds. The range is 1-32, so the import value must be either
+            1, 2, 4, 8, 16 or 32. If the input is not allowed, then the input
+            will be automatically adjusted to allow for the bigger and closest value."
+        ::= { swPTPBoundaryPortCFGEntry 5 }
+
+     swPTPBoundaryPortDelayMechanism	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  e2e(1),
+                  p2p(2)
+                }
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mechanism for measuring the propagation
+            delay time of an event message.
+
+            e2e: End-to-End indicates that the port is configured to use the delay
+            request-response mechanism.
+            p2p: Peer-to-Peer is the peer delay mechanism"
+        ::= { swPTPBoundaryPortCFGEntry 6 }
+
+-- -----------------------------------------------------------------------------
+
+     swPTPp2pTransparentPortCFGTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPp2pTransparentPortCFGEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port attribute for the P2P
+            transparent clock."
+        ::= { swPTPPortCFG 3 }
+
+     swPTPp2pTransparentPortCFGEntry OBJECT-TYPE
+        SYNTAX  SwPTPp2pTransparentPortCFGEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPp2pTransparentPortCFGTable 1 }
+
+     SwPTPp2pTransparentPortCFGEntry ::=
+        SEQUENCE {
+            swPTPp2pTransparentPortPDelayReqInterval
+                INTEGER
+        }
+
+     swPTPp2pTransparentPortPDelayReqInterval	OBJECT-TYPE
+	SYNTAX  INTEGER (1..32)
+        MAX-ACCESS  read-write
+        STATUS  current
+        DESCRIPTION
+            "This indicates the permitted mean time interval between
+            successive pdelay request messages.
+
+            In line with the IEEE1588 protocol, the value of the pdelay req interval
+            shall be represented as the logarithm to base 2 of this time measured
+            in seconds. The range is 1-32, so the import value must be either
+            1, 2, 4, 8, 16 or 32. If the input is not allowed, then the input
+            will be automatically adjusted to allow the biggest and closest value."
+        ::= { swPTPp2pTransparentPortCFGEntry 1 }
+
+-- -----------------------------------------------------------------------------
+-- swPTPPortInfo
+-- -----------------------------------------------------------------------------
+
+     swPTPBoundaryPortInfoTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPBoundaryPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port active attributes of the PTP
+            boundary clock.
+
+            This table will display when the PTP device type is boundary."
+        ::= { swPTPPortInfo 1 }
+
+     swPTPBoundaryPortInfoEntry OBJECT-TYPE
+        SYNTAX  SwPTPBoundaryPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPBoundaryPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPBoundaryPortInfoTable 1 }
+
+     SwPTPBoundaryPortInfoEntry ::=
+        SEQUENCE {
+            swPTPBoundaryPortRole
+                INTEGER,
+            swPTPBoundaryPortDM
+                INTEGER,
+            swPTPBoundaryPortAI
+                INTEGER,
+            swPTPBoundaryPortART
+                INTEGER,
+            swPTPBoundaryPortSI
+                INTEGER,
+            swPTPBoundaryPortDRIM
+                INTEGER,
+            swPTPBoundaryPortDRIS
+                INTEGER,
+            swPTPBoundaryPortPDRI
+                INTEGER,
+            swPTPBoundaryPortPMPD
+                INTEGER,
+            swPTPBoundaryPortState
+                INTEGER
+        }
+    	
+     swPTPBoundaryPortRole	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  initializing(1),
+                  faulty(2),
+                  disabled(3),
+                  listening(4),
+                  pre-master(5),
+                  master(6),
+                  passive(7),
+                  uncalibrated(8),
+                  slave(9)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the port role."
+        ::= { swPTPBoundaryPortInfoEntry 1 }
+
+     swPTPBoundaryPortDM	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  e2e(1),
+                  p2p(2)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the propagation delay measuring mechanism."
+        ::= { swPTPBoundaryPortInfoEntry 2 }
+
+     swPTPBoundaryPortAI	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            announce messages."
+        ::= { swPTPBoundaryPortInfoEntry 3 }
+
+     swPTPBoundaryPortART	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the timeout that has to pass without the receipt
+            of an announce message."
+        ::= { swPTPBoundaryPortInfoEntry 4 }
+
+     swPTPBoundaryPortSI	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  half-second(1),
+                  one-second(2),
+                  two-second(3)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            synchronization messages."
+        ::= { swPTPBoundaryPortInfoEntry 5 }
+
+     swPTPBoundaryPortDRIM	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the master clock. This value is used by the slave clock to specify
+            the mean time interval between successive delay request messages."
+        ::= { swPTPBoundaryPortInfoEntry 6 }
+
+     swPTPBoundaryPortDRIS	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the slave clock. This value specifies the mean time
+             interval between successive delay request messages sent by a slave."
+        ::= { swPTPBoundaryPortInfoEntry 7 }
+
+     swPTPBoundaryPortPDRI	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            pdelay request messages."
+        ::= { swPTPBoundaryPortInfoEntry 8 }
+
+     swPTPBoundaryPortPMPD	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the estimate of the current one-way propagation
+            delays on the link."
+        ::= { swPTPBoundaryPortInfoEntry 9 }
+
+     swPTPBoundaryPortState	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  enabled(1),
+                  disabled(2)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the port active state."
+        ::= { swPTPBoundaryPortInfoEntry 10 }
+
+-- -----------------------------------------------------------------------------
+
+     swPTPp2pTransparentPortInfoTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPp2pTransparentPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port active attributes of PTP
+            p2p-transparent clock.
+
+            This table will display when the PTP device type is p2p-transparent."
+        ::= { swPTPPortInfo 2 }
+
+     swPTPp2pTransparentPortInfoEntry OBJECT-TYPE
+        SYNTAX  SwPTPp2pTransparentPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPp2pTransparentPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPp2pTransparentPortInfoTable 1 }
+
+     SwPTPp2pTransparentPortInfoEntry ::=
+        SEQUENCE {
+            swPTPp2pTransparentPortPDRI
+                INTEGER,
+            swPTPp2pTransparentPortPMPD
+                INTEGER,
+            swPTPp2pTransparentPortState
+                INTEGER
+        }
+    	
+     swPTPp2pTransparentPortPDRI	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the mean time interval between successive
+            pdelay request messages."
+        ::= { swPTPp2pTransparentPortInfoEntry 1 }
+
+     swPTPp2pTransparentPortPMPD	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the estimated number of current one-way propagation
+            delays on the link."
+        ::= { swPTPp2pTransparentPortInfoEntry 2 }
+
+     swPTPp2pTransparentPortState	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  enabled(1),
+                  disabled(2)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the port active state."
+        ::= { swPTPp2pTransparentPortInfoEntry 3 }
+
+-- -----------------------------------------------------------------------------
+
+     swPTPe2eTransparentPortInfoTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPe2eTransparentPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per port active attributes of the PTP
+            e2e-transparent clock.
+
+            This table will display when the PTP device type is e2e-transparent."
+        ::= { swPTPPortInfo 3 }
+
+     swPTPe2eTransparentPortInfoEntry OBJECT-TYPE
+        SYNTAX  SwPTPe2eTransparentPortInfoEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPe2eTransparentPortTable."
+        INDEX  { swPTPPort }
+        ::= { swPTPe2eTransparentPortInfoTable 1 }
+
+     SwPTPe2eTransparentPortInfoEntry ::=
+        SEQUENCE {
+            swPTPe2eTransparentPortState
+                INTEGER
+        }
+
+     swPTPe2eTransparentPortState	OBJECT-TYPE
+	SYNTAX  INTEGER
+	        {
+                  enabled(1),
+                  disabled(2)
+                }
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the port active state."
+        ::= { swPTPe2eTransparentPortInfoEntry 3 }
+
+-- -----------------------------------------------------------------------------
+-- swPTPClock
+-- -----------------------------------------------------------------------------
+
+     swPTPBoundaryClockTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPBoundaryClockEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per unit information of
+            PTP boundary clock."
+        ::= { swPTPClock 1 }
+
+     swPTPBoundaryClockEntry OBJECT-TYPE
+        SYNTAX  SwPTPBoundaryClockEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPBoundaryClockTable."
+        INDEX  { swPTPUnit }
+        ::= { swPTPBoundaryClockTable 1 }
+
+     SwPTPBoundaryClockEntry ::=
+        SEQUENCE {
+            swPTPBoundaryClockIdentity
+                OCTET STRING,
+            swPTPBoundaryClockClass
+                INTEGER,
+            swPTPBoundaryClockStepsRemoved
+                INTEGER,
+            swPTPBoundaryClockLastOffset
+                DisplayString,
+            swPTPBoundaryClockMeanPathDelay
+                DisplayString,
+            swPTPBoundaryClockEnabledPorts
+                PortList
+        }
+
+     swPTPBoundaryClockIdentity  OBJECT-TYPE
+        SYNTAX  OCTET STRING (SIZE (8))
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP boundary clock identity.
+
+               8-octet array, The first 3 octets of the MAC address are assigned
+               in order to the first 3 octets of the clockIdentity. Octets with
+               index 3 and 4 are respectively assigned hex values FF and FE.
+               The remaining 3 octets of the MAC address are assigned in order
+               to the last 3 octets of the clockIdentity."
+        ::={ swPTPBoundaryClockEntry 1 }
+
+     swPTPBoundaryClockClass  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP boundary clock class."
+        ::={ swPTPBoundaryClockEntry 2 }
+
+     swPTPBoundaryClockStepsRemoved  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the number of communication paths traversed
+               between the local clock and the grandmaster clock."
+        ::={ swPTPBoundaryClockEntry 3 }
+
+     swPTPBoundaryClockLastOffset  OBJECT-TYPE
+        SYNTAX  DisplayString
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the time offset between a master and a slave
+               as computed by the slave."
+        ::={ swPTPBoundaryClockEntry 4 }
+
+     swPTPBoundaryClockMeanPathDelay  OBJECT-TYPE
+        SYNTAX  DisplayString
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the mean propagation time between a master and
+               a slave clock as computed by the slave."
+        ::={ swPTPBoundaryClockEntry 5 }
+
+     swPTPBoundaryClockEnabledPorts  OBJECT-TYPE
+        SYNTAX  PortList
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP boundary clock enabled ports."
+        ::={ swPTPBoundaryClockEntry 6 }
+
+-- -----------------------------------------------------------------------------
+
+     swPTPTransparentClockTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPTransparentClockEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per unit information of
+            PTP transparent clock."
+        ::= { swPTPClock 2 }
+
+     swPTPTransparentClockEntry OBJECT-TYPE
+        SYNTAX  SwPTPTransparentClockEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPTransparentClockTable."
+        INDEX  { swPTPUnit }
+        ::= { swPTPTransparentClockTable 1 }
+
+     SwPTPTransparentClockEntry ::=
+        SEQUENCE {
+            swPTPTransparentClockDelayMechanism
+                INTEGER,
+            swPTPTransparentClockIdentity
+                OCTET STRING,
+            swPTPTransparentClockEnabledPorts
+                PortList
+        }
+
+     swPTPTransparentClockDelayMechanism  OBJECT-TYPE
+        SYNTAX  INTEGER
+                {
+                  e2e(1),
+                  p2p(2)
+                }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP transparent clock mode."
+        ::={ swPTPTransparentClockEntry 1 }
+
+     swPTPTransparentClockIdentity  OBJECT-TYPE
+        SYNTAX  OCTET STRING (SIZE (8))
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP clock identity.
+
+               8-octet array, The first 3 octets of the MAC address are assigned
+               in order to the first 3 octets of the clockIdentity. Octets with
+               index 3 and 4 are respectively assigned hex values FF and FE.
+               The remaining 3 octets of the MAC address are assigned in order
+               to the last 3 octets of the clockIdentity."
+        ::={ swPTPTransparentClockEntry 2 }
+
+     swPTPTransparentClockEnabledPorts  OBJECT-TYPE
+        SYNTAX  PortList
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP transparent clock enabled ports."
+        ::={ swPTPTransparentClockEntry 3 }
+
+-- -----------------------------------------------------------------------------
+-- swPTPClockParent
+-- -----------------------------------------------------------------------------
+
+     swPTPBoundaryClockParentTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPBoundaryClockParentEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the per unit information of
+            PTP boundary clock parent."
+        ::= { swPTPClockParent 1 }
+
+     swPTPBoundaryClockParentEntry OBJECT-TYPE
+        SYNTAX  SwPTPBoundaryClockParentEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPBoundaryClockParentTable."
+        INDEX  { swPTPUnit }
+        ::= { swPTPBoundaryClockParentTable 1 }
+
+     SwPTPBoundaryClockParentEntry ::=
+        SEQUENCE {
+            swPTPParentPortIdentity
+                OCTET STRING,
+            swPTPParentPortNumber
+                INTEGER,
+            swPTPGrandmasterIdentity
+                OCTET STRING,
+            swPTPGrandmasterClockClass
+                INTEGER,
+            swPTPGrandmasterClockAccuracy
+                INTEGER,
+            swPTPGrandmasterPriority1
+                INTEGER,
+            swPTPGrandmasterPriority2
+                INTEGER
+        }
+
+     swPTPParentPortIdentity  OBJECT-TYPE
+        SYNTAX  OCTET STRING (SIZE (8))
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP parent port identity."
+        ::={ swPTPBoundaryClockParentEntry 1 }
+
+     swPTPParentPortNumber  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP parent port number."
+        ::={ swPTPBoundaryClockParentEntry 2 }
+
+     swPTPGrandmasterIdentity  OBJECT-TYPE
+        SYNTAX  OCTET STRING (SIZE (8))
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP grandmaster identity."
+        ::={ swPTPBoundaryClockParentEntry 3 }
+
+     swPTPGrandmasterClockClass  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP grandmaster clock class."
+        ::={ swPTPBoundaryClockParentEntry 4 }
+
+     swPTPGrandmasterClockAccuracy  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP grandmaster clock accuracy."
+        ::={ swPTPBoundaryClockParentEntry 5 }
+
+     swPTPGrandmasterPriority1  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP grandmaster priority 1."
+        ::={ swPTPBoundaryClockParentEntry 6 }
+
+     swPTPGrandmasterPriority2  OBJECT-TYPE
+        SYNTAX  INTEGER
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+               "This indicates the PTP grandmaster priority 2."
+        ::={ swPTPBoundaryClockParentEntry 7 }
+
+-- -----------------------------------------------------------------------------
+-- swPTPForeignMaster
+-- -----------------------------------------------------------------------------
+
+     swPTPForeignMasterTable OBJECT-TYPE
+        SYNTAX  SEQUENCE OF SwPTPForeignMasterEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This table contains the current records of the foreign master
+            data set of the boundary clock's special ports."
+        ::= { swPTPForeignMaster 1 }
+
+     swPTPForeignMasterEntry OBJECT-TYPE
+        SYNTAX  SwPTPForeignMasterEntry
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This is an entry of the swPTPForeignMasterTable."
+        INDEX  { swPTPPort, swPTPFMPortIdentity, swPTPFMPortNumber }
+        ::= { swPTPForeignMasterTable 1 }
+
+     SwPTPForeignMasterEntry ::=
+        SEQUENCE {
+            swPTPFMPortIdentity
+                OCTET STRING,
+            swPTPFMPortNumber
+                INTEGER,
+            swPTPFMAnnounceMsg
+                INTEGER
+        }
+
+     swPTPFMPortIdentity	OBJECT-TYPE
+    	SYNTAX  OCTET STRING (SIZE (8))
+    	MAX-ACCESS  not-accessible
+    	STATUS  current
+    	DESCRIPTION
+            "This indicates the identity of the foreign master port."
+    	::= { swPTPForeignMasterEntry 1  }
+    	
+     swPTPFMPortNumber	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  not-accessible
+        STATUS  current
+        DESCRIPTION
+            "This indicates the number of the foreign master port."
+        ::= { swPTPForeignMasterEntry 2 }
+
+     swPTPFMAnnounceMsg	OBJECT-TYPE
+	SYNTAX  INTEGER
+        MAX-ACCESS  read-only
+        STATUS  current
+        DESCRIPTION
+            "This indicates the number of foreign master announce messages."
+        ::= { swPTPForeignMasterEntry 3 }
+
+END
+
