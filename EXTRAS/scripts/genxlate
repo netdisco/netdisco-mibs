@@ -33,23 +33,27 @@ if ($vendor and !exists $mibs_for->{$vendor} and $vendor ne '*') {
   exit(1);
 }
 my @vendors = (defined $vendor)
-  ? (($vendor eq '*') ? (sort keys %{$mibs_for}) : ($vendor))
+  ? (($vendor eq '*') ? (sort keys %{$mibs_for}) : ($vendor, 'all'))
   : ((sort keys %{$mibs_for}), 'all');
 
 foreach my $v (@vendors) {
   my $mibs = ($v eq 'all') ? 'ALL' : (join ':', sort @{$mibs_for->{$v}});
   my $out = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', $v);
   my $err = File::Temp->new();
+  status("Parsing $v");
 
   defined(my $pid = fork) or die "Couldn't fork: $!";
   if (!$pid) { # Child
     exec(qq{snmptranslate -Tt -Le -m '$mibs' 2>'$err' | perl -p -e 's/ tc=[0-9]+//g; s/anonymous#[0-9]*/anonymous/' 1>'$out'})
       or die "Couldn't exec: $!";
   } else { # Parent
+    my $slept = 0.5;
     while (! waitpid($pid, WNOHANG)) {
       status("Parsing $v");
       sleep 0.05;
+      $slept -= 0.05;
     }
+    sleep $slept if $slept > 0;
   }
 
   if (-s $err) {
