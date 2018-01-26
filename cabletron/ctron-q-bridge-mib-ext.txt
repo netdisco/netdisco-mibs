@@ -24,7 +24,7 @@ CTRON-Q-BRIDGE-MIB-EXT DEFINITIONS ::= BEGIN
 --  with the management of Enterasys and Cabletron products.
 --
 --  Copyright April 2001 Cabletron Systems
---  Copyright 2004-2007 Enterasys Networks, Inc.
+--  Copyright 2002-2012 Enterasys Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE
@@ -44,7 +44,7 @@ IMPORTS
         FROM CTRON-MIB-NAMES;
 
 ctQBridgeMibExt MODULE-IDENTITY
-    LAST-UPDATED "200702161744Z"  -- Fri Feb 16 17:44 UTC 2007
+    LAST-UPDATED "201202141442Z"  -- Tue Feb 14 14:42 UTC 2012
     ORGANIZATION "Enterasys Networks, Inc."
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -60,6 +60,20 @@ ctQBridgeMibExt MODULE-IDENTITY
              MIBs under the Cabletron enterprise OID pertaining to 
              the configuration of switches that support IEEE 802.1Q
              [802.1Q] and the Q-BRIDGE-MIB [RFC2674]."
+             
+    REVISION    "201202141442Z"  -- Tue Feb 14 14:42 UTC 2012
+    DESCRIPTION "Added the mvrp(8) enumeration to the
+                 ctDot1qPortVlanEgressStatus object."
+    
+    REVISION    "201201091349Z"  -- Mon Jan  9 13:49 UTC 2012
+    DESCRIPTION "Added the ctDot1qPortVlanStaticEgressTable to show
+                 egress information for static VLANs regardless of
+                 forwarding status."
+
+    REVISION    "201006301825Z"  -- Wed Jun 30 18:25 UTC 2010
+    DESCRIPTION "Added the ctDot1qVlanGvrpRestrictedTable to allow
+                 GVRP participation to be controlled on a per VLAN
+                 basis."
 
     REVISION    "200702161744Z"  -- Fri Feb 16 17:44 UTC 2007
     DESCRIPTION "Added the rfc3580VlanTunnelAttribute enumeration
@@ -373,7 +387,8 @@ ctDot1qPortVlanEgressStatus OBJECT-TYPE
                     ctDynamicEgress(4),
                     etsysPolicyProfile(5),
                     ctPortDefFwdMode(6),
-                    rfc3580VlanTunnelAttribute(7)
+                    rfc3580VlanTunnelAttribute(7),
+                    mvrp(8) 
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -407,7 +422,10 @@ ctDot1qPortVlanEgressStatus OBJECT-TYPE
             
             rfc3580VlanTunnelAttribute(7) - The VLAN is currently 
                 egressing on this port as a result of a specified
-                RFC2580 VLAN Tunnel Attribute."
+                RFC3580 VLAN Tunnel Attribute.
+
+            mvrp(8) - The VLAN is currently egressing on this port 
+                as a result of MVRP."
     ::= { ctDot1qPortVlanEgressEntry 1 }
 
 ctDot1qPortVlanEgressType OBJECT-TYPE
@@ -480,6 +498,128 @@ ctDot1qTpFdbRemoveAddress OBJECT-TYPE
     ::= { ctDot1qTpFdbExtEntry 1 }
 
 -- -------------------------------------------------------------
+-- The Cabletron GVRP VLAN Restriction Configuration Table
+-- -------------------------------------------------------------
+
+ctDot1qVlanGvrpRestrictedTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CtDot1qVlanGvrpRestrictedEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A table containing per VLAN control and status
+        information for GVRP VLAN configuration in the device."
+    ::= { ctQBridgeMIBObjects 6 }
+
+ctDot1qVlanGvrpRestrictedEntry OBJECT-TYPE
+    SYNTAX      CtDot1qVlanGvrpRestrictedEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Information controlling proprietary VLAN configuration 
+        for GVRP on a device."  
+    INDEX { ctDot1qVlanGvrpRestrictedIndex }
+    ::= { ctDot1qVlanGvrpRestrictedTable 1 }
+
+CtDot1qVlanGvrpRestrictedEntry ::=
+    SEQUENCE {
+        ctDot1qVlanGvrpRestrictedIndex
+            VlanIndex,
+        ctDot1qVlanGvrpRestrictedStatus
+            EnabledStatus
+    }
+
+ctDot1qVlanGvrpRestrictedIndex OBJECT-TYPE
+    SYNTAX      VlanIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The VLAN to which this entry's restricted GVRP status 
+        applies."
+    ::= { ctDot1qVlanGvrpRestrictedEntry 1 }
+
+ctDot1qVlanGvrpRestrictedStatus OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The state of restricted GVRP operation for this VLAN.  The 
+        value enabled(1) indicates that restricted GVRP operation is 
+	enabled for this VLAN.  This object affects GVRP Applicant 
+        and Registrar state machines for this VLAN on all ports.  
+        If restricted GVRP is enabled for a VLAN the following rules 
+        are applied:
+
+        1. If GVRP is globally enabled and 
+
+        2. If GVRP is enabled at the port level, then
+
+        3. Any ports that were members of the dot1qVlanCurrentEgressPorts 
+	   table due to GVRP will signal to remove this registration and no
+           further registration requests received in GVRP PDUs for this 
+           VLAN will be processed and
+
+        4. Any ports that were propagating registration information for 
+           this VLAN will cease propagation and all further GVRP PDUs 
+           transmitted after the initial withdrawal attempt will not
+           include event notifications for this VLAN."
+    DEFVAL      { disabled }
+    ::= { ctDot1qVlanGvrpRestrictedEntry 2 }
+
+
+-- -------------------------------------------------------------
+-- The Static VLAN Port Egress Information Configuration Table
+-- -------------------------------------------------------------
+ctDot1qPortVlanStaticEgressTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CtDot1qPortVlanStaticEgressEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A table containing per port, per VLAN egress information.
+        This table represents information contained in the 
+        dot1qVlanStaticTable, but indexed by port instead of by VLAN.
+        Only ports configured to static VLANs are represented in this table."
+    ::= { ctQBridgeMIBObjects 7 }
+
+ctDot1qPortVlanStaticEgressEntry OBJECT-TYPE
+    SYNTAX      CtDot1qPortVlanStaticEgressEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Information related to egress on a per port, per VLAN basis.
+         Only statically configured VLANs are shown."
+    INDEX { dot1dBasePort, dot1qVlanIndex }
+    ::= { ctDot1qPortVlanStaticEgressTable 1 }
+
+CtDot1qPortVlanStaticEgressEntry ::=
+    SEQUENCE {
+        ctDot1qPortVlanStaticEgressType
+            INTEGER
+    }
+
+ctDot1qPortVlanStaticEgressType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    tagged(1),
+                    untagged(2),
+                    forbidden(3)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object indicates the type of egress the statically configured
+	 VLAN has on this port.
+
+            tagged(1) - Frames for the specified VLAN egressing this port 
+                have an 802.1Q tag.
+            
+            untagged(2) - Frames for the specified VLAN egressing this port 
+                do not have an 802.1Q tag.
+            
+            forbidden(3) - Frames for the specified VLAN are not allowed
+                to egress this port under any circumstances."
+    ::= { ctDot1qPortVlanStaticEgressEntry 1 }
+
+
+-- -------------------------------------------------------------
 -- Conformance Information
 -- -------------------------------------------------------------
 
@@ -546,9 +686,11 @@ ctQBridgePortVlanEgressGroup OBJECT-GROUP
               ctDot1qPortVlanEgressStatus,
               ctDot1qPortVlanEgressType
             }
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
-        "Objects providing per port, per VLAN egress information."
+        "********* THIS GROUP IS DEPRECATED **********
+
+         Objects providing per port, per VLAN egress information."
     ::= { ctQBridgeGroups 6 }
     
 ctQBridgeTpFdbTableExtGroup OBJECT-GROUP
@@ -559,6 +701,26 @@ ctQBridgeTpFdbTableExtGroup OBJECT-GROUP
     DESCRIPTION
         "Objects providing per 802.1Q unicast MAC address configuration."
     ::= { ctQBridgeGroups 7 }
+
+ctQBridgeVlanGvrpGroup OBJECT-GROUP
+    OBJECTS { ctDot1qVlanGvrpRestrictedStatus }
+    STATUS      current
+    DESCRIPTION
+        "A collection of objects providing device level control over
+         the ability of GVRP to add and remove unconfigured ports to 
+         the egress list of particular VLANs."
+    ::= { ctQBridgeGroups 8 }
+
+ctQBridgePortVlanEgressGroup2 OBJECT-GROUP
+    OBJECTS {
+              ctDot1qPortVlanEgressStatus,
+              ctDot1qPortVlanEgressType,
+              ctDot1qPortVlanStaticEgressType
+            }
+    STATUS      current
+    DESCRIPTION
+        "Objects providing per port, per VLAN egress information."
+    ::= { ctQBridgeGroups 9 }
 
 -- -------------------------------------------------------------
 -- Compliance statements
@@ -580,9 +742,11 @@ ctDot1qVlan MODULE-COMPLIANCE
     ::= { ctQBridgeCompliances  1 }
 
 ctDot1qVlan2 MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
-        "The compliance statement for devices that support
+        "******** THIS COMPLIANCE IS DEPRECATED ********
+
+        The compliance statement for devices that support
         Cabletron extensions to Q-BRIDGE-MIB."
 
     MODULE
@@ -596,7 +760,6 @@ ctDot1qVlan2 MODULE-COMPLIANCE
             replacement."
     ::= { ctQBridgeCompliances  2 }
     
-
 ctDot1qVlanCurentCompliance MODULE-COMPLIANCE
     STATUS      current
     DESCRIPTION
@@ -613,9 +776,11 @@ ctDot1qVlanCurentCompliance MODULE-COMPLIANCE
     ::= { ctQBridgeCompliances  3 }
 
 ctDot1qPortVlanEgressCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
-        "The compliance statement for devices that support
+        "******** THIS COMPLIANCE IS DEPRECATED ********
+        
+        The compliance statement for devices that support
         reporting of VLAN egress on a per port, per VLAN basis."
 
     MODULE
@@ -639,5 +804,41 @@ ctDot1qTpFdbTableExtCompliance MODULE-COMPLIANCE
            mechanism of removing learned unicast MAC addresses from the 
            transparent filter database."
     ::= { ctQBridgeCompliances  5 }
+
+ctDot1qVlan3 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support
+        Cabletron extensions to Q-BRIDGE-MIB."
+
+    MODULE
+        MANDATORY-GROUPS {
+            ctQBridgeVlanGroup,
+            ctQBridgePortGroup2
+        }
+        GROUP       ctQBridgePortReplaceTCIGroup
+        DESCRIPTION
+            "This group is REQUIRED for devices supporting TCI
+            replacement."
+        GROUP       ctQBridgeVlanGvrpGroup
+        DESCRIPTION
+            "This group is REQUIRED for devices that support the ability
+            to include or exclude individual VLANs from participating in
+            GVRP."
+    ::= { ctQBridgeCompliances  6 }
+
+ctDot1qPortVlanEgressCompliance2 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support
+        reporting of VLAN egress on a per port, per VLAN basis."
+
+    MODULE
+        GROUP       ctQBridgePortVlanEgressGroup2
+        DESCRIPTION
+           "This group is mandatory for all devices that support a
+           mechanism of configuring egress beyond the
+           capabilities provided by Q-BRIDGE-MIB."
+    ::= { ctQBridgeCompliances  7 }
 
 END
