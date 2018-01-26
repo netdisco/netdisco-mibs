@@ -6,36 +6,36 @@ ENTERASYS-MAC-LOCKING-MIB DEFINITIONS ::= BEGIN
 --
 --
 
---  This module provides authoritative definitions for Enterasys
+--  This module provides authoritative definitions for Extreme
 --  Networks' MAC Locking MIB.
 
 --
 --  This module will be extended, as needed.
 
---  Enterasys Networks reserves the right to make changes in this
+--  Extreme Networks reserves the right to make changes in this
 --  specification and other information contained in this document
---  without prior notice.  The reader should consult Enterasys Networks
+--  without prior notice.  The reader should consult Extreme Networks
 --  to determine whether any such changes have been made.
 --
---  In no event shall Enterasys Networks be liable for any incidental,
+--  In no event shall Extreme Networks be liable for any incidental,
 --  indirect, special, or consequential damages whatsoever (including
 --  but not limited to lost profits) arising out of or related to this
---  document or the information contained in it, even if Enterasys
+--  document or the information contained in it, even if Extreme
 --  Networks has been advised of, known, or should have known, the
 --  possibility of such damages.
 --
---  Enterasys Networks grants vendors, end-users, and other interested
+--  Extreme Networks grants vendors, end-users, and other interested
 --  parties a non-exclusive license to use this Specification in
---  connection with the management of Enterasys Networks products.
+--  connection with the management of Extreme Networks products.
 
---  Copyright March, (2002-2011) Enterasys Networks, Inc.
+--  Copyright July, (2002-2014) Extreme Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, Unsigned32
         FROM SNMPv2-SMI
     MacAddress, RowStatus, TruthValue
         FROM SNMPv2-TC
-    MODULE-COMPLIANCE, OBJECT-GROUP
+    MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
         FROM SNMPv2-CONF
     InterfaceIndex
         FROM IF-MIB
@@ -45,16 +45,16 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysMACLockingMIB MODULE-IDENTITY
-    LAST-UPDATED "201103081947Z"  -- March 08, 2011,  7:47PM UTC
-    ORGANIZATION "Enterasys Networks, Inc"
+    LAST-UPDATED "201407071331Z"  -- Mon Jul  7 13:31 UTC 2014
+    ORGANIZATION "Extreme Networks, Inc."
     CONTACT-INFO
-        "Postal:  Enterasys Networks
-                  50 Minuteman Rd.
-                  Andover, MA 01810-1008
-                  USA
-         Phone:   +1 978 684 1000
-         E-mail:  support@enterasys.com
-         WWW:     http://www.enterasys.com"
+        "Postal:  Extreme Networks, Inc.
+                  145 Rio Robles
+                  San Jose, CA 95134 USA
+
+         Phone:   +1 408 579-2800
+         E-mail:  support@extremenetworks.com
+         WWW:     http://www.extremenetworks.com"
 
     DESCRIPTION
         "This MIB module defines the portion of the SNMP enterprise
@@ -63,6 +63,31 @@ etsysMACLockingMIB MODULE-IDENTITY
 
          This MIB is designed to provide configuration and status
          objects pertaining to per port MAC Locking."
+    
+    REVISION "201407071331Z"  -- Mon Jul  7 13:31 UTC 2014
+    DESCRIPTION
+        "Modified DESCRIPTION clause of etsysMACLockingThresholdShutdown 
+         to reflect correct behavior of disabling the port when the
+         threshold has been exceeded."
+
+    REVISION "201406021121Z"  -- Mon Jun  2 11:21 UTC 2014
+    DESCRIPTION
+        "Changed the default value of etsysMACLockingShutdownState (of 
+         type TruthValue) from disabled to false.  Updated the 
+         CONTACT-INFO clause with new corporate information and added 
+         a new MODULE-COMPLIANCE statement."
+
+    REVISION "201108031825Z"  -- Wed Aug  3 18:25 UTC 2011
+    DESCRIPTION
+        "Added the etsysMACLockingClearOnLink object."
+
+    REVISION "201106081238Z"  -- Wed Jun  8 12:38 UTC 2011
+    DESCRIPTION
+        "Added the etsMACLockingThresholdShutdown and
+         etsysMACLockingShutdownState leaves to facilitate the
+         shutdown of bridge ports when the MAC address table
+         threshold (etsysMACLockingFirstArrivialStationsAllocated)
+         has been exceeded."
 
     REVISION "201103081947Z"  -- March 08, 2011,  7:47PM UTC
     DESCRIPTION
@@ -210,7 +235,10 @@ EtsysMACLockingPortEntry::=
      etsysMACLockingFirstArrivalAging               TruthValue,
      etsysMACLockingViolationSyslogEnable           EnabledStatus,
      etsysMACLockingThresholdEnable                 EnabledStatus,
-     etsysMACLockingThresholdSyslogEnable           EnabledStatus
+     etsysMACLockingThresholdSyslogEnable           EnabledStatus,
+     etsysMACLockingThresholdShutdown               EnabledStatus,
+     etsysMACLockingShutdownState                   TruthValue,
+     etsysMACLockingClearOnLink                     TruthValue
     }
 
 etsysMACLockingPort OBJECT-TYPE
@@ -360,7 +388,7 @@ etsysMACLockingFirstArrivalAging OBJECT-TYPE
     DESCRIPTION
         "When set to true(1), firstArrival MACs that have aged
          out of the forwarding database will be removed for the
-         associated port lock"
+         associated port lock."
     ::= { etsysMACLockingPortEntry 12 }
 
 etsysMACLockingViolationSyslogEnable OBJECT-TYPE
@@ -416,6 +444,50 @@ etsysMACLockingThresholdSyslogEnable OBJECT-TYPE
          threshold being reached."
     DEFVAL { disabled }
     ::= { etsysMACLockingPortEntry 15 }
+
+etsysMACLockingThresholdShutdown OBJECT-TYPE
+    SYNTAX        EnabledStatus
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When set to enabled(1), the agent attempts to disable the
+         port when the MAC address threshold as defined in the
+         etsysMACLockingFirstArrivalStationsAllocated object has been
+         exceeded.
+
+         When set to disabled(2), the agent will not attempt to disable
+         the port."
+    DEFVAL { disabled }
+    ::= { etsysMACLockingPortEntry 16 }
+
+etsysMACLockingShutdownState OBJECT-TYPE
+    SYNTAX        TruthValue 
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When read as true(1), this value indicates that the port 
+         has been disabled due to a threshold being exceeded.
+
+         When read as false(2), this value indicates that the port
+         has not been disabled due to a threshold being exceeded.
+
+         Setting this leaf with a value of false(2) will clear 
+         the port disabled state.
+
+         Setting this leaf with a value of true(1) will be ignored."
+    DEFVAL { false }
+    ::= { etsysMACLockingPortEntry 17 }
+
+etsysMACLockingClearOnLink OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "When set to true(1), firstArrival MACs SHOULD be removed 
+         from the associated port on a link state change."
+    DEFVAL { true }
+    ::= { etsysMACLockingPortEntry 18 }
+
 
 -- -------------------------------------------------------------
 -- The Station Based Static MAC Locking Table
@@ -639,7 +711,7 @@ etsysMACLockingPortGroup OBJECT-GROUP
         etsysMACLockingMoveFirstArrivalToStatic,
         etsysMACLockingStaticStationsCount,
         etsysMACLockingClearStaticStations
-            }
+       }
     STATUS  current
     DESCRIPTION
         "A collection of objects providing port based
@@ -706,6 +778,25 @@ etsysMACLockingPortMessageGroup OBJECT-GROUP
          messages and notifications."
     ::= { etsysMACLockingGroups 8 }
 
+etsysMACLockingShutdownGroup OBJECT-GROUP
+    OBJECTS {
+                etsysMACLockingThresholdShutdown,
+                etsysMACLockingShutdownState
+            }
+    STATUS  current
+    DESCRIPTION
+        "A collection of objects providing port based
+         configuration and status for MAC Locking port shutdown."
+    ::= { etsysMACLockingGroups 9 }
+
+etsysMACLockingLinkGroup OBJECT-GROUP
+    OBJECTS { etsysMACLockingClearOnLink }
+    STATUS  current
+    DESCRIPTION
+        "A collection of objects providing port based
+         configuration of MAC Locking behavior based link state 
+         changes."
+    ::= { etsysMACLockingGroups 10 }
 
 -- -------------------------------------------------------------
 -- Compliance Statements
@@ -765,5 +856,44 @@ etsysMACLockingNotificationCompliance MODULE-COMPLIANCE
                 etsysMACLockingNotificationGroup,
                 etsysMACLockingPortMessageGroup
             }
-    ::= { etsysMACLockingCompliance 4 }
+    ::= { etsysMACLockingCompliances 4 }
+
+etsysMACLockingShutdownCompliance MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+        "The compliance statement for all devices that support
+         port shutdown for MAC Locking events."
+    MODULE
+        MANDATORY-GROUPS
+            {
+                etsysMACLockingShutdownGroup
+            }
+    ::= { etsysMACLockingCompliances 5 }
+
+etsysMACLockingLinkCompliance MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+        "The compliance statement for all devices that support
+         per port MAC locking behaviors based on the link state of 
+         the port."
+    MODULE
+        MANDATORY-GROUPS
+            {
+                etsysMACLockingLinkGroup
+            }
+    ::= { etsysMACLockingCompliances 6 }
+
+etsysMACLockingStaticStationCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for all devices that support
+         static mac lock entries on a per port basis."
+
+    MODULE
+        GROUP   etsysMACLockingStaticStationGroup
+        DESCRIPTION
+           "This group is mandatory for all devices that support
+            static mac lock entries on a per port basis."
+    ::= { etsysMACLockingCompliances 7 }
+
 END

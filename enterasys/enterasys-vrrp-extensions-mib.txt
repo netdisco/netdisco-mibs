@@ -26,7 +26,7 @@ ENTERASYS-VRRP-EXT-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in
 --  connection with the management of Enterasys Networks products.
 
---  Copyright August, 2000-2009 Enterasys Networks, Inc.
+--  Copyright October, 2000-2011 Enterasys Networks, Inc.
 
 
 IMPORTS
@@ -43,10 +43,12 @@ IMPORTS
     ifIndex
         FROM IF-MIB
     vrrpOperationsInetAddrType, VrId
-        FROM VRRP-MIB;
+        FROM VRRP-MIB
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB;
 
 etsysVrrpExtMIB MODULE-IDENTITY
-    LAST-UPDATED "200908101943Z"  -- Mon Aug 10 19:43 UTC 2009
+    LAST-UPDATED "201110271429Z"  -- Thu Oct 27 14:29 UTC 2011
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -64,6 +66,15 @@ etsysVrrpExtMIB MODULE-IDENTITY
          This MIB provides read-write access to configuration objects
          not provided in the standard VRRP MIB 
          (draft-ietf-vrrp-unified-spec-02.txt)."
+
+    REVISION    "201110271429Z"  -- Thu Oct 27 14:29 UTC 2011
+    DESCRIPTION "Added the following leaves:
+                    etsysVrrpExtOperFabricRouteMode,
+                    etsysVrrpExtCriticalIpAddrProbe, 
+                    etsysVrrpExtCriticalIpAddrProbeName,
+
+                 Changed the MAX-ACCESS etsysVrrpExtCriticalIpAddrState 
+                 from read-only to read-create."
 
     REVISION    "200908101943Z"  -- Mon Aug 10 19:43 UTC 2009
     DESCRIPTION "Initial version of this MIB module."
@@ -116,7 +127,9 @@ EtsysVrrpExtOperEntry ::=
         etsysVrrpExtOperPreemptModeDelay
             Integer32,
         etsysVrrpExtOperCriticalIpAddrCount
-            Integer32
+            Integer32,
+        etsysVrrpExtOperFabricRouteMode
+            INTEGER   
     }
 
  etsysVrrpExtOperVrId OBJECT-TYPE
@@ -197,6 +210,20 @@ etsysVrrpExtOperCriticalIpAddrCount OBJECT-TYPE
         IF index/VRID pair."
     ::= { etsysVrrpExtOperEntry  5 }
 
+etsysVrrpExtOperFabricRouteMode OBJECT-TYPE
+    SYNTAX        INTEGER {
+        enable(1),
+        disable(2)
+    }
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "Controls whether a virtual router in backup state
+         will accept packets to forward as if it was in master state.
+         Default is False."
+    DEFVAL { disable }
+    ::= { etsysVrrpExtOperEntry 6 }
+
  -- -------------------------------------------------------------
 -- VRRP Critical IP Address Table
 -- -------------------------------------------------------------
@@ -234,7 +261,11 @@ EtsysVrrpExtCriticalIpAddrEntry ::=
         etsysVrrpExtCriticalIpAddrState
             Integer32,
         etsysVrrpExtCriticalIpAddrRowStatus
-            RowStatus
+            RowStatus,
+        etsysVrrpExtCriticalIpAddrProbe 
+            Integer32,
+        etsysVrrpExtCriticalIpAddrProbeName
+            SnmpAdminString
     }
 
 etsysVrrpExtCriticalIpAddr OBJECT-TYPE
@@ -257,17 +288,17 @@ etsysVrrpExtCriticalIpAddrPriority OBJECT-TYPE
 
      DEFVAL { 10 }
      ::= { etsysVrrpExtCriticalIpAddrEntry 2 }
-     
+
 etsysVrrpExtCriticalIpAddrState OBJECT-TYPE
     SYNTAX        INTEGER {
         up(1),
         down(2)
     }
-    MAX-ACCESS    read-only
+    MAX-ACCESS    read-create
     STATUS        current
     DESCRIPTION       
-      "The current state of the critical IP address. This object has
-       two defined values
+        "The current state of the critical IP address. This object has
+         two defined values
            - `up', which indicates that critical IP is reachable.
 
            - `down', which indicates that critical IP is not reachable."         
@@ -279,13 +310,129 @@ etsysVrrpExtCriticalIpAddrRowStatus  OBJECT-TYPE
      STATUS       current
      DESCRIPTION
          "The row status variable, used according to installation
+          and removal conventions for conceptual rows. Setting this
+          object to createAndGo(4) or createAndWait(5) results in the
+          addition of an associated address for a virtual router.
+          Destroying(6) the entry or setting it to notInService(2)
+          removes the associated address from the virtual router.
+          The use of other values is implementation-dependent."
+     ::= { etsysVrrpExtCriticalIpAddrEntry 4 }
+
+etsysVrrpExtCriticalIpAddrProbe OBJECT-TYPE
+    SYNTAX        INTEGER {
+        enable(1),
+        disable(2)
+    }
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION       
+        "Use a probe to obtain status for critical IP. 
+   
+           - A value of enable(1) indicates an ICMP probe will be sent to check 
+              status.
+
+           - A value of disable(2) indicates the interface operational state will 
+             be used to check status."         
+    DEFVAL { disable } 
+    ::= { etsysVrrpExtCriticalIpAddrEntry 5 }
+
+etsysVrrpExtCriticalIpAddrProbeName OBJECT-TYPE
+    SYNTAX        SnmpAdminString (SIZE(1..32))
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION       
+        "A textual probe name use for the probe IP." 
+    DEFVAL { "$vrrp_default" } 
+    ::= { etsysVrrpExtCriticalIpAddrEntry 6 }
+
+-- -------------------------------------------------------------
+-- VRRP Tracked Object Table
+-- -------------------------------------------------------------
+
+etsysVrrpExtTrackedObjTable OBJECT-TYPE
+    SYNTAX       SEQUENCE OF EtsysVrrpExtTrackedObjEntry
+    MAX-ACCESS   not-accessible
+    STATUS       current
+    DESCRIPTION    
+        "The table of Tracked Object associated with a virtual router."
+    ::= { etsysVrrpExtOperations 3 }
+
+etsysVrrpExtTrackedObjEntry OBJECT-TYPE
+    SYNTAX      EtsysVrrpExtTrackedObjEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the table contains the name of the tracked 
+         object for detecting falures in network. If the tracked object resource 
+         goes down then the operational priority shall be decremented by the 
+         value of the tracked object priority. The operation priority
+         shall not be adjusted for virtual routers who own the
+         associated address"
+
+     INDEX    { ifIndex, etsysVrrpExtOperVrId , etsysVrrpExtTrackedObjName }     
+     ::= { etsysVrrpExtTrackedObjTable 1 }
+
+EtsysVrrpExtTrackedObjEntry ::=
+    SEQUENCE {
+        etsysVrrpExtTrackedObjName 
+            SnmpAdminString,
+        etsysVrrpExtTrackedObjPriority 
+            Integer32,
+        etsysVrrpExtTrackedObjState
+            Integer32,
+        etsysVrrpExtTrackedObjRowStatus
+            RowStatus
+      }
+
+etsysVrrpExtTrackedObjName OBJECT-TYPE
+     SYNTAX         SnmpAdminString (SIZE(1..32))
+     MAX-ACCESS     not-accessible
+     STATUS         current
+     DESCRIPTION
+         "The assigned name that represents a tracked object
+         interface."
+     ::= { etsysVrrpExtTrackedObjEntry 1 }
+
+etsysVrrpExtTrackedObjPriority OBJECT-TYPE
+     SYNTAX         Integer32 (1..254)
+     MAX-ACCESS     read-create
+     STATUS         current
+     DESCRIPTION
+         "This object specifies value the virtual routers operational 
+           priority should be decremented by when a tracked interface
+           goes down."
+
+     DEFVAL       { 10 }
+     ::= { etsysVrrpExtTrackedObjEntry 2 }
+    
+etsysVrrpExtTrackedObjState OBJECT-TYPE
+    SYNTAX          INTEGER {
+        up(1),
+        down(2)
+    }
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION       
+      "The current state of the critical IP address. This object has
+       two defined values
+           - `up', which indicates that critical IP is reachable.
+
+           - `down', which indicates that critical IP is not reachable."         
+     ::= { etsysVrrpExtTrackedObjEntry 3 }
+
+etsysVrrpExtTrackedObjRowStatus  OBJECT-TYPE
+     SYNTAX       RowStatus
+     MAX-ACCESS   read-create
+     STATUS       current
+     DESCRIPTION
+         "The row status variable, used according to installation
          and removal conventions for conceptual rows. Setting this
          object to createAndGo(4) or createAndWait(5) results in the
          addition of an associated address for a virtual router.
          Destroying(6) the entry or setting it to notInService(2)
          removes the associated address from the virtual router.
          The use of other values is implementation-dependent."
-     ::= { etsysVrrpExtCriticalIpAddrEntry 4 }
+     ::= { etsysVrrpExtTrackedObjEntry 4 }
 
 -- ------------------------------------
 -- Conformance information
@@ -302,7 +449,7 @@ etsysVrrpExtMIBGroups      OBJECT IDENTIFIER
 
 etsysVrrpExtMIBGroup  OBJECT-GROUP
     OBJECTS {
-    etsysVrrpExtOperState,
+        etsysVrrpExtOperState,
         etsysVrrpExtOperAcceptMode,
         etsysVrrpExtOperPreemptModeDelay,
         etsysVrrpExtOperCriticalIpAddrCount,
@@ -310,17 +457,54 @@ etsysVrrpExtMIBGroup  OBJECT-GROUP
         etsysVrrpExtCriticalIpAddrState,
         etsysVrrpExtCriticalIpAddrRowStatus
     }
-    STATUS    current
+    STATUS    deprecated
     DESCRIPTION
         "Conformance group for VRRP Extensions operations."
     ::= { etsysVrrpExtMIBGroups 1 }
+
+etsysVrrpExtOperGroup  OBJECT-GROUP
+    OBJECTS {
+        etsysVrrpExtOperState,
+        etsysVrrpExtOperAcceptMode,
+        etsysVrrpExtOperPreemptModeDelay,
+        etsysVrrpExtOperCriticalIpAddrCount,
+        etsysVrrpExtOperFabricRouteMode 
+    }
+    STATUS   current
+    DESCRIPTION
+        "Conformance group for general VRRP operations."
+    ::= { etsysVrrpExtMIBGroups 2 }
+
+etsysVrrpExtCriticalIpGroup  OBJECT-GROUP
+    OBJECTS {
+        etsysVrrpExtCriticalIpAddrPriority, 
+        etsysVrrpExtCriticalIpAddrState,
+        etsysVrrpExtCriticalIpAddrRowStatus,
+        etsysVrrpExtCriticalIpAddrProbe,
+        etsysVrrpExtCriticalIpAddrProbeName     
+    }
+    STATUS   current
+    DESCRIPTION
+        "Conformance group for VRRP critical ip operations."
+    ::= { etsysVrrpExtMIBGroups 3 }
+
+etsysVrrpExtTrackedObjectGroup  OBJECT-GROUP
+    OBJECTS {
+        etsysVrrpExtTrackedObjPriority, 
+        etsysVrrpExtTrackedObjState,
+        etsysVrrpExtTrackedObjRowStatus
+    }
+    STATUS   current
+    DESCRIPTION
+        "Conformance group for VRRP Tracked Objects operations."
+    ::= { etsysVrrpExtMIBGroups 4 }
 
 -- ------------------------------------
 -- Compliance statements
 -- ------------------------------------
 
  etsysVrrpExtMIBCompliance MODULE-COMPLIANCE
-     STATUS current
+     STATUS deprecated
      DESCRIPTION
         "The core compliance statement for all VRRP Extensions implementations."
      MODULE -- this module
@@ -329,4 +513,15 @@ etsysVrrpExtMIBGroup  OBJECT-GROUP
      }
      ::= { etsysVrrpExtMIBCompliances 1 }
 
-   END
+ etsysVrrpExtMIBv2Compliance MODULE-COMPLIANCE
+     STATUS current
+     DESCRIPTION
+        "The core compliance statement for all VRRP Extensions implementations."
+     MODULE -- this module
+     MANDATORY-GROUPS  {
+         etsysVrrpExtOperGroup,
+         etsysVrrpExtCriticalIpGroup,
+         etsysVrrpExtTrackedObjectGroup
+     }
+     ::= { etsysVrrpExtMIBCompliances 2 }
+END

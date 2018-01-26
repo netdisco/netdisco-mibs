@@ -28,12 +28,12 @@ ENTERASYS-MULTI-AUTH-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in 
 --  connection with the management of Enterasys Networks products.
 
---  Copyright February 2008 Enterasys Networks, Inc.
+--  Copyright August 2013 Enterasys Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE
         FROM SNMPv2-SMI
-    Unsigned32, Integer32, Gauge32
+    Unsigned32, Integer32, Gauge32, Counter64
         FROM SNMPv2-SMI
     TEXTUAL-CONVENTION, TruthValue, TimeStamp, DateAndTime
         FROM SNMPv2-TC
@@ -53,14 +53,14 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;    
 
 etsysMultiAuthMIB MODULE-IDENTITY
-    LAST-UPDATED "200802051840Z"  -- Tue Feb  5 18:40 UTC 2008
+    LAST-UPDATED "201308081515Z"  -- Thu Aug  8 15:15 UTC 2013
     ORGANIZATION "Enterasys Networks, Inc."
     CONTACT-INFO
         "Postal:  Enterasys Networks
-                  50 Minuteman Rd.
-                  Andover, MA 01810-1008
-                  USA
-         Phone:   +1 978 684 1000
+                  9 Northeastern Blvd.
+                  Salem, NH 03079 USA
+
+         Phone:   +1 603 952 5000
          E-mail:  support@enterasys.com
          WWW:     http://www.enterasys.com"
    
@@ -69,6 +69,29 @@ etsysMultiAuthMIB MODULE-IDENTITY
          the Enterasys Networks enterprise OID pertaining to 
          configuration of multiple authentication mechanisms
          to be run simultaneously on a device."
+
+    REVISION    "201308081515Z"  -- Thu Aug  8 15:15 UTC 2013
+    DESCRIPTION 
+        "Added the RADIUS timeout reauthentication action."  
+
+    REVISION    "201301071438Z"  -- Mon Jan 7 14:38 UTC 2013
+    DESCRIPTION 
+        "Added the etsysMultiAuthSessionsUniquePerPortOperStatus
+         object."
+
+    REVISION    "201209121537Z"  -- Wed Sep 12 15:37 UTC 2012
+    DESCRIPTION 
+        "Added a a method to clear multiauth sessions on a per 
+         agent basis."
+
+    REVISION    "201205311833Z"  -- Thu May  31 18:33 UTC 2012
+    DESCRIPTION 
+        "Added a new provisioning agent types autotracking and 
+         quarantine agent."     
+
+    REVISION    "201205091103Z"  -- Wed May  9 11:03 UTC 2012
+    DESCRIPTION
+        "Added user session counters."
 
     REVISION    "200802051840Z"  -- Tue Feb  5 18:40 UTC 2008
     DESCRIPTION 
@@ -126,7 +149,9 @@ EtsysMultiAuthTypes ::= TEXTUAL-CONVENTION
                    macAuth(3),   -- Enterasys Mac Authentication
                    cep(4),       -- Enterasys Convergence End Point  
                                  -- Detection
-                   radiusSnooping(5) -- Enterasys RADIUS Snooping
+                   radiusSnooping(5), -- Enterasys RADIUS Snooping
+                   autoTracking(6), -- Enterasys Auto Tracking
+                   quarantineAgent(7) -- Enterasys Quarantine Agent
                  }
 
 EtsysMultiAuthTypePrecedence ::= TEXTUAL-CONVENTION
@@ -141,8 +166,9 @@ EtsysMultiAuthTypePrecedence ::= TEXTUAL-CONVENTION
          first octet contains the authentication type with the highest
          precedence, the second octet contains the type of the next
          highest precedence, and so forth. For example, a precedence
-         from highest to lowest of ieee8021x(1), macAuth(3), pwa(2), cep(4),
-         radiusSnooping(5) would be represented as '0103020405'H."
+         from highest to lowest of quarantineAgent(7), ieee8021x(1), 
+         macAuth(3), pwa(2), cep(4), radiusSnooping(5), autoTracking(6),
+         would be represented as '07010302040506'H."
     SYNTAX       OCTET STRING (SIZE (0..32))
 
 EtsysMultiAuthStatus ::= TEXTUAL-CONVENTION
@@ -195,6 +221,9 @@ etsysMultiAuthSession      OBJECT IDENTIFIER
 etsysMultiAuthModule       OBJECT IDENTIFIER 
                            ::= { etsysMultiAuthObjects 5 }
 
+etsysMultiAuthCounters     OBJECT IDENTIFIER
+                           ::= { etsysMultiAuthObjects 6 }
+
 etsysMultiAuthNotification OBJECT IDENTIFIER 
                            ::= { etsysMultiAuthObjects 0 }
 
@@ -209,7 +238,9 @@ etsysMultiAuthSystemSupportedTypes OBJECT-TYPE
                    pwa(1),
                    macAuth(2),
                    cep(3),
-                   radiusSnooping(4)
+                   radiusSnooping(4),
+                   autoTracking(5),
+                   quarantineAgent(6)
                  }
     MAX-ACCESS   read-only
     STATUS       current
@@ -270,7 +301,7 @@ etsysMultiAuthSystemDefaultPrecedence OBJECT-TYPE
          to network traffic by default.  This object will have a size
          equal to the number of enumerations specified by the
          EtsysMultiAuthTypes textual convention."
-    DEFVAL       { '0102030405'h }
+    DEFVAL       { '07010203040506'h }
     ::= { etsysMultiAuthSystem 5 }
 
 etsysMultiAuthSystemAdminPrecedence OBJECT-TYPE
@@ -410,6 +441,53 @@ etsysMultiAuthSystemMaxNumUsersReachedTrapEnable OBJECT-TYPE
     DEFVAL       { disabled }
     ::= { etsysMultiAuthSystem 9 }    
     
+etsysMultiAuthSessionsUniquePerPort OBJECT-TYPE
+    SYNTAX       TruthValue
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "When this object is set to true(1) each multi-auth session
+         MAY be unique to the port it was created on.
+
+         The operational status of this variable can be found 
+         using etsysMultiAuthSessionsUniquePerPortOperStatus."
+    DEFVAL       { false }
+    ::= { etsysMultiAuthSystem 10 }    
+
+
+etsysMultiAuthSessionsUniquePerPortOperStatus OBJECT-TYPE
+    SYNTAX       TruthValue
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "If this object has a value of true(1) each multi-auth session
+         will be unique to the port it was created on. If this object 
+         has a value of false(2) each multi-auth session may exist on 
+         multiple ports."
+    ::= { etsysMultiAuthSystem 11 }    
+
+etsysMultiAuthSystemReAuthenticationTimeoutAction OBJECT-TYPE
+    SYNTAX       INTEGER {
+                   terminate(1),
+                   none(2)
+                 }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "When this object is set to terminate(1) re-authenticating
+         multiauth sessions will be terminated if the re-authentication
+         RADIUS transaction results in a complete timeout.
+         
+         When this object is set to none(2) re-authentication multiauth
+         sessions will be left as they were prior to the re-authentication
+         attempt if the re-authentication RADIUS transaction results in 
+         a complete timeout.
+
+         A complete timeout occurs when all RADIUS retries to all 
+         appropriate RADIUS servers have been exhausted."
+    DEFVAL       { terminate }
+    ::= { etsysMultiAuthSystem 12 }
+
 -- -------------------------------------------------------------
 -- The Multiple Authentication Port Group
 -- -------------------------------------------------------------
@@ -728,7 +806,9 @@ EtsysMultiAuthSessionStationEntry ::=
         etsysMultiAuthSessionIdleTime
             Gauge32,
         etsysMultiAuthSessionVlanTunnelAttribute
-            Integer32
+            Integer32,
+        etsysMultiAuthSessionClear
+            TruthValue    
     }
 
 etsysMultiAuthSessionAgentType OBJECT-TYPE
@@ -928,6 +1008,22 @@ etsysMultiAuthSessionVlanTunnelAttribute OBJECT-TYPE
          (RADIUS) Usage Guidelines', Section 3.31"
     ::= { etsysMultiAuthSessionStationEntry 14 }
 
+etsysMultiAuthSessionClear OBJECT-TYPE
+    SYNTAX       TruthValue
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "Setting this object to a value of true(1) will cause
+         the specified table entry with the specified station address, 
+         ifIndex and agent type that are currently authenticated or 
+         that have authentications in progress to become unauthenticated
+         and their authorization status changes to authTerminated(5).
+
+         Setting this object to a value of false(2) has no effect.  This
+         object will always return a value of false(2)."
+    DEFVAL       { false }
+    ::= { etsysMultiAuthSessionStationEntry 15 }
+
 etsysMultiAuthSessionPortTable OBJECT-TYPE
     SYNTAX       SEQUENCE OF EtsysMultiAuthSessionPortEntry
     MAX-ACCESS   not-accessible
@@ -1034,6 +1130,85 @@ etsysMultiAuthModuleMaxNumUsersReachedTrapEnable OBJECT-TYPE
          NOTIFICATION."
     DEFVAL       { disabled }
     ::= { etsysMultiAuthModule 2 }    
+
+-- -------------------------------------------------------------
+-- The Multiple Authentication Counters Group
+-- -------------------------------------------------------------
+
+etsysMultiAuthCounterTable OBJECT-TYPE
+	SYNTAX	     SEQUENCE OF EtsysMultiAuthCounterEntry
+	MAX-ACCESS   not-accessible
+	STATUS	     current
+	DESCRIPTION
+        "A table of per station and port user counter data."
+	::= { etsysMultiAuthCounters 1 }
+
+etsysMultiAuthCounterEntry OBJECT-TYPE
+    SYNTAX      EtsysMultiAuthCounterEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+	    "An entry containing user counter data."
+    INDEX { ifIndex,
+	        etsysMultiAuthStationAddrType,
+	        etsysMultiAuthStationAddr }
+	::= { etsysMultiAuthCounterTable 1 }
+
+
+
+EtsysMultiAuthCounterEntry ::=
+	SEQUENCE {
+		etsysMultiAuthCounterInboundBytes
+			Counter64,
+		etsysMultiAuthCounterInboundPackets
+			Counter64,
+		etsysMultiAuthCounterOutboundBytes
+			Counter64,
+		etsysMultiAuthCounterOutboundPackets
+			Counter64 
+    }	
+
+etsysMultiAuthCounterInboundBytes OBJECT-TYPE
+	SYNTAX  	Counter64
+	MAX-ACCESS	read-only
+	STATUS 	    current
+	DESCRIPTION
+		"The number of bytes of user data received on this interface."
+	::= { etsysMultiAuthCounterEntry 1 }
+
+etsysMultiAuthCounterInboundPackets OBJECT-TYPE
+	SYNTAX  	Counter64
+	MAX-ACCESS	read-only
+	STATUS 	    current
+	DESCRIPTION
+		"The number of packets of user data received on this interface."
+	::= { etsysMultiAuthCounterEntry 2 }
+
+etsysMultiAuthCounterOutboundBytes OBJECT-TYPE
+	SYNTAX  	Counter64
+	MAX-ACCESS	read-only
+	STATUS      current
+	DESCRIPTION
+		"The number of bytes of user data transmitted on this interface."
+	::= { etsysMultiAuthCounterEntry 3 }
+
+etsysMultiAuthCounterOutboundPackets OBJECT-TYPE
+	SYNTAX  	Counter64
+	MAX-ACCESS	read-only
+	STATUS      current
+	DESCRIPTION
+		"The number of packets of user data transmitted on this interface."
+	::= { etsysMultiAuthCounterEntry 4 }
+
+etsysMultiAuthCounterEnable OBJECT-TYPE
+	SYNTAX 	     EnabledStatus
+	MAX-ACCESS   read-write
+	STATUS 	     current
+	DESCRIPTION
+        "This object allows for the enabling or disabling of 
+         per-user counters."
+	DEFVAL	{ disabled }
+	::= { etsysMultiAuthCounters 2 }
 
 -- -------------------------------------------------------------
 -- The Multiple Authentication Notification Group
@@ -1152,7 +1327,7 @@ etsysMultiAuthSystemGroup OBJECT-GROUP
         etsysMultiAuthSystemAdminPrecedence,
         etsysMultiAuthSystemOperPrecedence
     }
-    STATUS     current
+    STATUS     deprecated
     DESCRIPTION
         "The system group for all devices supporting Multiple 
          Authentication."
@@ -1247,7 +1422,7 @@ etsysMultiAuthSessionGroup2 OBJECT-GROUP
         etsysMultiAuthSessionTerminationTime,
         etsysMultiAuthSessionPortAuthStatus
     }
-    STATUS     current
+    STATUS     deprecated
     DESCRIPTION
         "The session group for all devices supporting Multiple
          Authentication."
@@ -1319,7 +1494,93 @@ etsysMultiAuthTunnelAttributeGroup OBJECT-GROUP
         "The group of objects for all devices supporting 802.1X
          RADIUS tunnel attributes for 802.1Q VLANs." 
     ::= { etsysMultiAuthGroups 15 }
-    
+
+etsysMultiAuthCounterEnableGroup OBJECT-GROUP
+    OBJECTS { etsysMultiAuthCounterEnable }
+    STATUS current
+    DESCRIPTION
+        "The group of objects for all devices supporting
+         multiple authenticaiton counters."
+    ::= { etsysMultiAuthGroups 16 }
+
+etsysMultiAuthInboundCounterGroup OBJECT-GROUP
+    OBJECTS { 
+        etsysMultiAuthCounterInboundBytes, 
+        etsysMultiAuthCounterInboundPackets 
+    }
+    STATUS current
+    DESCRIPTION
+        "The group of objects for all devices which support
+         inbound counter collection."
+    ::= { etsysMultiAuthGroups 17 }
+
+etsysMultiAuthOutboundCounterGroup OBJECT-GROUP
+    OBJECTS { 
+        etsysMultiAuthCounterOutboundBytes, 
+        etsysMultiAuthCounterOutboundPackets 
+    }
+    STATUS current
+    DESCRIPTION
+        "The group of objects for all devices which support
+         outbound counter collection."
+    ::= { etsysMultiAuthGroups 18 }
+
+etsysMultiAuthSessionGroup3 OBJECT-GROUP
+    OBJECTS {
+        etsysMultiAuthSessionAgentType,
+        etsysMultiAuthSessionStationAuthStatus,
+        etsysMultiAuthSessionAuthAttemptTime,
+        etsysMultiAuthSessionAuthServerType,
+        etsysMultiAuthSessionAuthServerAddrType,
+        etsysMultiAuthSessionAuthServerAddr,
+        etsysMultiAuthSessionPolicyIndex,
+        etsysMultiAuthSessionIsApplied,
+        etsysMultiAuthSessionTerminationTime,
+        etsysMultiAuthSessionPortAuthStatus,
+        etsysMultiAuthSessionClear
+    }
+    STATUS     current
+    DESCRIPTION
+        "The session group for all devices supporting Multiple
+         Authentication."
+    ::= { etsysMultiAuthGroups 19 }
+   
+etsysMultiAuthSystemGroup2 OBJECT-GROUP
+    OBJECTS {
+        etsysMultiAuthSystemSupportedTypes,
+        etsysMultiAuthSystemMaxNumUsers,
+        etsysMultiAuthSystemCurrentNumUsers,
+        etsysMultiAuthSystemMode,
+        etsysMultiAuthSystemDefaultPrecedence,
+        etsysMultiAuthSystemAdminPrecedence,
+        etsysMultiAuthSystemOperPrecedence,
+        etsysMultiAuthSessionsUniquePerPort
+    }
+    STATUS     deprecated
+    DESCRIPTION
+        "The system group for all devices supporting Multiple
+         Authentication."
+    ::= { etsysMultiAuthGroups 20 }
+
+etsysMultiAuthSystemGroup3 OBJECT-GROUP
+    OBJECTS {
+        etsysMultiAuthSystemSupportedTypes,
+        etsysMultiAuthSystemMaxNumUsers,
+        etsysMultiAuthSystemCurrentNumUsers,
+        etsysMultiAuthSystemMode,
+        etsysMultiAuthSystemDefaultPrecedence,
+        etsysMultiAuthSystemAdminPrecedence,
+        etsysMultiAuthSystemOperPrecedence,
+        etsysMultiAuthSessionsUniquePerPort,
+        etsysMultiAuthSessionsUniquePerPortOperStatus,
+        etsysMultiAuthSystemReAuthenticationTimeoutAction
+    }
+    STATUS     current
+    DESCRIPTION
+        "The system group for all devices supporting Multiple
+         Authentication."
+    ::= { etsysMultiAuthGroups 21 }
+ 
 -- -------------------------------------------------------------
 -- Compliance statements
 -- -------------------------------------------------------------
@@ -1515,10 +1776,10 @@ etsysMultiAuthCurrentNumUserCompliance MODULE-COMPLIANCE
     ::= { etsysMultiAuthCompliances 5 }
   
 etsysMultiAuthCompliance4 MODULE-COMPLIANCE
-    STATUS     current
+    STATUS     deprecated
     DESCRIPTION
-        "The compliance statement for devices that support Multiple
-         Authentication."
+        "This compliance statement has been deprecated in favor of
+         the expanded group defined by etsysMultiAuthCompliance5."
 
     MODULE
         MANDATORY-GROUPS {
@@ -1599,5 +1860,185 @@ etsysMultiTunnelAttributeCompliance MODULE-COMPLIANCE
             support 802.1X RADIUS Tunnel Attributes."
 
     ::= { etsysMultiAuthCompliances 7 }
+
+etsysMultiAuthCounterCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for all devices that support 
+         multiple authentication counter collection."
+
+    MODULE
+        GROUP     etsysMultiAuthCounterEnableGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support
+             multiple authentication counter collection."
+        
+        GROUP     etsysMultiAuthInboundCounterGroup
+        DESCRIPTION
+            "Support for this group is optional and only applies
+             to objects that wish to support inbound 
+             multiple authentication counter collection."
+             
+        GROUP     etsysMultiAuthOutboundCounterGroup
+        DESCRIPTION
+            "Support for this group is optional and only applies
+             to objects that wish to support outbound
+             multiple authentication counter collection."
+
+    ::= { etsysMultiAuthCompliances 8 } 
+
+etsysMultiAuthCompliance5 MODULE-COMPLIANCE
+    STATUS     deprecated
+    DESCRIPTION
+        "The compliance statement for devices that support Multiple
+         Authentication."
+
+    MODULE
+        MANDATORY-GROUPS {
+            etsysMultiAuthSystemGroup2,
+            etsysMultiAuthPortBaseGroup,
+            etsysMultiAuthStationGroup,
+            etsysMultiAuthSessionGroup3
+        }
+
+        GROUP       etsysMultiAuthPortTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             interface notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationPortGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             interface notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthModuleGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support
+             module authentication resources that are not shared
+             between modules."
+
+        OBJECT      etsysMultiAuthSystemAdminPrecedence
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthPortNumUsersAllowed
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthPortClearUsers
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthStationClearUsers
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+            
+        GROUP       etsysMultiAuthModuleTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             module notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationModuleGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             module notifications for Multiple Authentication."
+             
+        GROUP       etsysMultiAuthSystemTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             system notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationSystemGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             system notifications for Multiple Authentication."                 
+
+        OBJECT      etsysMultiAuthSessionsUniquePerPort
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+    ::= { etsysMultiAuthCompliances 9 } 
+
+etsysMultiAuthCompliance6 MODULE-COMPLIANCE
+    STATUS     current
+    DESCRIPTION
+        "The compliance statement for devices that support Multiple
+         Authentication."
+
+    MODULE
+        MANDATORY-GROUPS {
+            etsysMultiAuthSystemGroup3,
+            etsysMultiAuthPortBaseGroup,
+            etsysMultiAuthStationGroup,
+            etsysMultiAuthSessionGroup3
+        }
+
+        GROUP       etsysMultiAuthPortTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             interface notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationPortGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             interface notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthModuleGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support
+             module authentication resources that are not shared
+             between modules."
+
+        OBJECT      etsysMultiAuthSystemAdminPrecedence
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthPortNumUsersAllowed
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthPortClearUsers
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        OBJECT      etsysMultiAuthStationClearUsers
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+            
+        OBJECT      etsysMultiAuthSessionsUniquePerPortOperStatus
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+
+        GROUP       etsysMultiAuthModuleTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             module notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationModuleGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             module notifications for Multiple Authentication."
+             
+        GROUP       etsysMultiAuthSystemTrapGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             system notifications for Multiple Authentication."
+
+        GROUP       etsysMultiAuthNotificationSystemGroup
+        DESCRIPTION
+            "This group is mandatory for all devices that support per
+             system notifications for Multiple Authentication."
+
+      ::= { etsysMultiAuthCompliances 10 }
 
 END

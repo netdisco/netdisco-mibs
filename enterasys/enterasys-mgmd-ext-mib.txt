@@ -28,7 +28,7 @@ ENTERASYS-MGMD-EXT-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in 
 --  connection with the management of Enterasys Networks products.
 
---  Copyright <February, 2010> Enterasys Networks, Inc.
+--  Copyright August, 2010-2013 Enterasys Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, Integer32, Counter32, TimeTicks
@@ -41,7 +41,7 @@ IMPORTS
         FROM SNMP-FRAMEWORK-MIB
     InetAddressType, InetAddress 
         FROM INET-ADDRESS-MIB
-    InterfaceIndex, ifIndex
+    ifIndex
         FROM IF-MIB
     dot1dBasePort
         FROM BRIDGE-MIB
@@ -53,14 +53,14 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysMgmdExtMIB MODULE-IDENTITY
-    LAST-UPDATED "201002081408Z"  -- Mon Feb  8 14:08 UTC 2010
+    LAST-UPDATED "201308081728Z"  -- Thu Aug  8 17:28 UTC 2013
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
-                  50 Minuteman Rd.
-                  Andover, MA 01810-1008
-                  USA
-         Phone:   +1 978 684 1000
+                  9 Northeastern Blvd.
+                  Salem, NH 03079 USA
+
+         Phone:   +1 603 952 5000
          E-mail:  support@enterasys.com
          WWW:     http://www.enterasys.com"
    
@@ -72,6 +72,17 @@ etsysMgmdExtMIB MODULE-IDENTITY
          This MIB contains Enterasys proprietary MGMD information that
          goes above and beyond any IETF multicast MIBs. It is intended 
          to cover any Enterasys value added features and configurations."
+
+    REVISION    "201308081728Z"  -- Thu Aug  8 17:28 UTC 2013
+    DESCRIPTION "Added etsysMgmdExtConfigFlowWaitEnable and
+                 etsysMgmdExtConfigFlowWaitTime leafs to
+                 the config area."
+
+    REVISION    "201304241250Z"  -- Wed Apr 24 12:50 UTC 2013
+    DESCRIPTION "Added new counters to the StatsCntrs table."
+
+    REVISION    "201204251332Z"  -- Wed April 25 1:32 UTC 2012
+    DESCRIPTION "Added Input Filter table."
 
     REVISION    "201002081408Z"  -- Mon Feb  8 14:08 UTC 2010
     DESCRIPTION "The initial version of this MIB module"
@@ -395,6 +406,29 @@ etsysMgmdExtMIB MODULE-IDENTITY
             ipProto255 (255)  -- Reserved                             [IANA]
         }
 
+    MGMDInputFilterFlowActionsTc ::=  TEXTUAL-CONVENTION
+        STATUS  current
+        DESCRIPTION
+            " This textual convention describes the possible actions
+              an IGMP/MLD input filter may take for flows.  Please see the users
+              manual for your device to see what these values mean."
+        SYNTAX  INTEGER  {
+                            drop(1),
+                            flood(2),
+                            allow(3)
+                          }
+
+    MGMDInputFilterProtocolActionsTc ::= TEXTUAL-CONVENTION
+        STATUS current
+        DESCRIPTION
+             " This textual convention describes the possible actions
+             an IGMP/MLD input filter may take for protocols. Please see the users
+             manual for your device to see what these values mean."
+        SYNTAX  INTEGER  {
+                           allow(1),
+                           deny(2)
+                         }
+
 -- -------------------------------------------------------------
 -- MIB Objects
 -- -------------------------------------------------------------
@@ -408,6 +442,7 @@ etsysMgmdExtPortGroup                   OBJECT IDENTIFIER ::= { etsysMgmdExtObje
 etsysMgmdExtPortFastLeaveGroup          OBJECT IDENTIFIER ::= { etsysMgmdExtObjects 7 }
 etsysMgmdExtStatsCntrsGroup             OBJECT IDENTIFIER ::= { etsysMgmdExtObjects 8 }
 etsysMgmdExtProtocolClassificationGroup OBJECT IDENTIFIER ::= { etsysMgmdExtObjects 9 }
+etsysMgmdExtInputFilterGroup            OBJECT IDENTIFIER ::= { etsysMgmdExtObjects 10 }
 
 -- -------------------------------------------------------------
 -- etsysMgmdExtConfigGroup
@@ -472,6 +507,43 @@ etsysMgmdExtConfigNumberOfGroups OBJECT-TYPE
     DEFVAL { default }
     ::= { etsysMgmdExtConfigGroup 6 }
 
+etsysMgmdExtConfigUnknownInputAction OBJECT-TYPE
+    SYNTAX    INTEGER {
+                routers(1),
+                flood(2),
+                discard(3)
+                      }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+          "This object defines the behavior of the first 'x' frames of an
+          unknown multicast flow when no clients are present. The user may
+          choose to follow the IGMP/MLD specification and discard the frames,
+          send these frame to multicast routers, or flood these frames
+          to the vlan."
+    DEFVAL { flood }
+    ::= { etsysMgmdExtConfigGroup 7 }
+
+etsysMgmdExtConfigFlowWaitEnable OBJECT-TYPE
+    SYNTAX       EnabledStatus
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+         "This object enables or disables a feature whereby any flow received
+         will be delayed in hardware programming for the number of 10ms intervals
+         defined in etsysMgmdExtConfigFlowWaitTime."
+    DEFVAL { disabled }
+    ::= { etsysMgmdExtConfigGroup 8 }
+
+etsysMgmdExtConfigFlowWaitTime OBJECT-TYPE
+    SYNTAX      Integer32 (2..100)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+         "The number of 10ms blocks to wait before allowing hardware flow setup."
+    DEFVAL { 2 }
+    ::= { etsysMgmdExtConfigGroup 9 }
+
 -- -------------------------------------------------------------
 -- etsysMgmdExtInterfaceGroup
 -- -------------------------------------------------------------
@@ -499,7 +571,9 @@ EtsysMgmdExtInterfaceEntry      ::= SEQUENCE {
      etsysMgmdExtInterfaceQueryEnableState    EnabledStatus,
      etsysMgmdExtInterfaceFastLeaveState      EnabledStatus,
      etsysMgmdExtInterfaceClearGroups         TruthValue,
-     etsysMgmdExtRtrAlertRequired             TruthValue
+     etsysMgmdExtRtrAlertRequired             TruthValue,
+     etsysMgmdExtInterfaceFilterId            Integer32,
+     etsysMgmdExtInterfaceFilterIdEnable      EnabledStatus
      }
 
 etsysMgmdExtInterfaceApplication OBJECT-TYPE
@@ -554,6 +628,25 @@ etsysMgmdExtRtrAlertRequired OBJECT-TYPE
      REFERENCE "RFC 2236, sections 2 and 10.  RFC 3376, sections 4 and 9."
 	 DEFVAL { true }
      ::= { etsysMgmdExtInterfaceEntry 5 }
+
+etsysMgmdExtInterfaceFilterId OBJECT-TYPE
+     SYNTAX    Integer32
+     MAX-ACCESS read-write
+     STATUS     current
+     DESCRIPTION
+           " The IGMP/MLD input filter from etsysMgmdExtInputFilterGroup, to 
+            apply to this interface. This will apply the given input filter
+            to all input on this interface."
+     ::= { etsysMgmdExtInterfaceEntry 6 }
+
+etsysMgmdExtInterfaceFilterIdEnable OBJECT-TYPE
+     SYNTAX   EnabledStatus
+     MAX-ACCESS read-write
+     STATUS     current
+     DESCRIPTION
+          " Enable or disable the filter id set in etsysMgmdExtInterfaceFilterId."
+     DEFVAL { disabled }
+     ::= { etsysMgmdExtInterfaceEntry 7 }
 
 -- -------------------------------------------------------------
 -- etsysMgmdExtStaticCacheGroup
@@ -974,7 +1067,26 @@ EtsysMgmdExtStatsCntrsEntry ::= SEQUENCE {
         etsysMgmdExtStatsCntrsNumV3ReportsRcvd           Counter32,
         etsysMgmdExtStatsCntrsNumLeavesRcvd              Counter32,
         etsysMgmdExtStatsCntrsNumBadFramesRcvd           Counter32,
-        etsysMgmdExtStatsCntrsClear                      TruthValue
+        etsysMgmdExtStatsCntrsClear                      TruthValue,
+        etsysMgmdExtStatsCntrsNumCurrentStateRecRcvd     Counter32,
+        etsysMgmdExtStatsCntrsNumFilterModeChangeRecRcvd Counter32,
+        etsysMgmdExtStatsCntrsNumSrcListChgRecRcvd       Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToInvalidSrcIP     Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBeingDisabled    Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBadHdrLength     Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBadIPHdrChksm    Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBadIGMPHdrChksm  Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToMissingRtrAlert  Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToOffNetworkSrcIP  Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToZeroSipIPQuery   Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBadGrpAddressInQuery   Counter32,
+        etsysMgmdExtStatsCntrsDropDueToBadGrpAddressInLeave    Counter32,
+        etsysMgmdExtStatsCntrsDropDueToTooManySrcsInQuery      Counter32,
+        etsysMgmdExtStatsCntrsDropDueToMLDQueryFromNonLinkLocal Counter32,
+        etsysMgmdExtStatsCntrsDroppedLeaveWeAreInV1Mode         Counter32,
+        etsysMgmdExtStatsCntrsDropsDueToBeingInSSMRange         Counter32,
+        etsysMgmdExtStatsCntrsDropsProtocolTTLNot1              Counter32,
+        etsysMgmdExtStatsCntrsDropReportsDueToTooManySrcs       Counter32
      }
 
 etsysMgmdExtStatsCntrsApplication OBJECT-TYPE
@@ -1131,7 +1243,7 @@ etsysMgmdExtStatsCntrsNumBadFramesRcvd OBJECT-TYPE
     ::= {etsysMgmdExtStatsCntrsEntry 18 }
 
 etsysMgmdExtStatsCntrsClear OBJECT-TYPE
-     SYNTAX    TruthValue 
+     SYNTAX    TruthValue
      MAX-ACCESS read-write
      STATUS     current
      DESCRIPTION
@@ -1140,6 +1252,177 @@ etsysMgmdExtStatsCntrsClear OBJECT-TYPE
            counters.  Setting the value to false will have no effect.  This
            value will always read false"
     ::= {etsysMgmdExtStatsCntrsEntry 19 }
+
+etsysMgmdExtStatsCntrsNumCurrentStateRecRcvd OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of current state records this device
+           has received."    
+    ::= { etsysMgmdExtStatsCntrsEntry 20 }
+
+etsysMgmdExtStatsCntrsNumFilterModeChangeRecRcvd OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of filter mode change records this device
+           has received."    
+    ::= { etsysMgmdExtStatsCntrsEntry 21 }
+
+etsysMgmdExtStatsCntrsNumSrcListChgRecRcvd OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of source list change records this device
+           has received."    
+    ::= { etsysMgmdExtStatsCntrsEntry 22 }
+
+etsysMgmdExtStatsCntrsDropsDueToInvalidSrcIP OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+           an invalid src IP in a frame."
+    ::= { etsysMgmdExtStatsCntrsEntry 23 }
+  
+etsysMgmdExtStatsCntrsDropsDueToBeingDisabled OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to IGMP/MLD
+         protocol being disabled."
+    ::= { etsysMgmdExtStatsCntrsEntry 24 }
+
+etsysMgmdExtStatsCntrsDropsDueToBadHdrLength OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+         a bad header length."
+    ::= { etsysMgmdExtStatsCntrsEntry 25 }
+
+etsysMgmdExtStatsCntrsDropsDueToBadIPHdrChksm OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+         a bad IP header checksum."
+    ::= { etsysMgmdExtStatsCntrsEntry 26 }
+
+etsysMgmdExtStatsCntrsDropsDueToBadIGMPHdrChksm OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+         a bad IGMP/MLD header checksum."
+    ::= { etsysMgmdExtStatsCntrsEntry 27 }
+
+etsysMgmdExtStatsCntrsDropsDueToMissingRtrAlert OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+         an IGMP/MLD protocol packet missing the router-alert
+         option."
+    ::= { etsysMgmdExtStatsCntrsEntry 28 }
+
+etsysMgmdExtStatsCntrsDropsDueToOffNetworkSrcIP OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of packets dropped due to receiving
+           an off network source IP address."
+    ::= { etsysMgmdExtStatsCntrsEntry 29 }
+
+etsysMgmdExtStatsCntrsDropsDueToZeroSipIPQuery OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of query packets dropped due to having 
+           a 0.0.0.0 or 0::0 source IP address."
+    ::= { etsysMgmdExtStatsCntrsEntry 30 }
+
+etsysMgmdExtStatsCntrsDropsDueToBadGrpAddressInQuery OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of queries dropped due to bad group address."
+    ::= { etsysMgmdExtStatsCntrsEntry 31 }
+
+etsysMgmdExtStatsCntrsDropDueToBadGrpAddressInLeave OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " The number of leaves/dones dropped due to bad group address."
+    ::= { etsysMgmdExtStatsCntrsEntry 32 }
+
+etsysMgmdExtStatsCntrsDropDueToTooManySrcsInQuery OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of received queries that have greater than 64
+           sources. All sources greater than 64 will not be processed."
+    ::= { etsysMgmdExtStatsCntrsEntry 33 }
+
+etsysMgmdExtStatsCntrsDropDueToMLDQueryFromNonLinkLocal OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of MLD queries dropped due to not having a link local
+           source address."
+    ::= { etsysMgmdExtStatsCntrsEntry 34 }
+
+etsysMgmdExtStatsCntrsDroppedLeaveWeAreInV1Mode OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of IGMP leaves dropped due to interface being in
+           IGMPv1 mode."
+    ::= { etsysMgmdExtStatsCntrsEntry 35 }
+
+etsysMgmdExtStatsCntrsDropsDueToBeingInSSMRange OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of packets dropped due to addresses being in SSM
+           range."
+    ::= { etsysMgmdExtStatsCntrsEntry 36 }
+
+etsysMgmdExtStatsCntrsDropsProtocolTTLNot1 OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of protocol packets dropped due to having a TTL
+           not equal to 1"
+    ::= { etsysMgmdExtStatsCntrsEntry 37 }
+
+etsysMgmdExtStatsCntrsDropReportsDueToTooManySrcs OBJECT-TYPE
+    SYNTAX        Counter32
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION
+         " Number of IGMPv3/MLDv2 reports dropped due to having 
+           greater than 64 source addresses. All sources after 64
+           are dropped."
+    ::= { etsysMgmdExtStatsCntrsEntry 38 }
 
 -- -------------------------------------------------------------
 -- etsysMgmdExtProtocolClassificationGroup
@@ -1199,7 +1482,126 @@ etsysMgmdExtProtocolIdentifier OBJECT-TYPE
           'routing protocol' then IGMP would treat received frames with
           these ids as routing protocols, etc. "
     ::= { etsysMgmdExtProtocolClassificationEntry 2}
-    
+
+-- -------------------------------------------------------------
+-- etsysMgmdExtInputFilterGroup
+-- -------------------------------------------------------------
+etsysMgmdExtInputFilterTable OBJECT-TYPE
+    SYNTAX        SEQUENCE OF EtsysMgmdExtInputFilterEntry
+    MAX-ACCESS    not-accessible
+    STATUS        current
+    DESCRIPTION
+         "This table contains paramaters that specify what IGMP/MLD
+          will do with received frames, either flows or protocol."
+    ::= { etsysMgmdExtInputFilterGroup 1 }
+
+    etsysMgmdExtInputFilterEntry OBJECT-TYPE
+     SYNTAX     EtsysMgmdExtInputFilterEntry
+     MAX-ACCESS not-accessible
+     STATUS     current
+     DESCRIPTION
+        "An entry (conceptual row) representing a filter entry that
+          IGMP/MLD will act upon."
+     INDEX { etsysMgmdExtInputFilterApplication,
+             etsysMgmdExtInputFilterId,
+             etsysMgmdExtInputFilterRuleId }
+     ::= { etsysMgmdExtInputFilterTable 1 }
+
+EtsysMgmdExtInputFilterEntry      ::= SEQUENCE {
+     etsysMgmdExtInputFilterApplication       InetAddressType,
+     etsysMgmdExtInputFilterId                Integer32,
+     etsysMgmdExtInputFilterRuleId            Integer32,
+     etsysMgmdExtInputFilterStartIPAddress    InetAddress,
+     etsysMgmdExtInputFilterEndIPAddress      InetAddress,
+     etsysMgmdExtInputFilterProtocolAction    MGMDInputFilterProtocolActionsTc,
+     etsysMgmdExtInputFilterFlowAction        MGMDInputFilterFlowActionsTc,
+     etsysMgmdExtInputFilterRuleHitCounter    Integer32,
+     etsysMgmdExtInputFilterRowStatus         RowStatus
+     }
+
+etsysMgmdExtInputFilterApplication OBJECT-TYPE
+    SYNTAX     InetAddressType
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+         "The multicast application this object refers to.
+          ipv4(1) refers to IGMP, ipv6(2) refers to MLD."
+    ::= {etsysMgmdExtInputFilterEntry 1 }
+
+etsysMgmdExtInputFilterId OBJECT-TYPE
+    SYNTAX     Integer32 (1..16)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+         "The input filter index to modify."
+    ::= {etsysMgmdExtInputFilterEntry 2}
+
+etsysMgmdExtInputFilterRuleId OBJECT-TYPE
+    SYNTAX     Integer32 (1..8)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+         "The the rule index to modify for the given
+          filter id."
+    ::= {etsysMgmdExtInputFilterEntry 3}
+
+etsysMgmdExtInputFilterStartIPAddress OBJECT-TYPE
+    SYNTAX     InetAddress
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+         "The staring IP address for this input filter."
+    ::= {etsysMgmdExtInputFilterEntry 4}
+
+etsysMgmdExtInputFilterEndIPAddress OBJECT-TYPE
+    SYNTAX     InetAddress
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+         "The ending IP address for this input filter."
+    ::= {etsysMgmdExtInputFilterEntry 5}
+
+etsysMgmdExtInputFilterProtocolAction OBJECT-TYPE
+    SYNTAX     MGMDInputFilterProtocolActionsTc
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+         "The action to perform for any protocol frame with 
+          destination IP falling in the range of startIP to
+          end IP. Refer to the MGMDInputFilterProtocolActionsTc
+          textual convention."
+    ::= {etsysMgmdExtInputFilterEntry 6}
+
+etsysMgmdExtInputFilterFlowAction OBJECT-TYPE
+    SYNTAX     MGMDInputFilterFlowActionsTc
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+         "The action to perfom for any multicast flow with
+          a destination IP falling in the range of startIP to
+          endIP. Refer to the MGMDInputFilterFlowActionsTc
+          textual convention."
+    ::= {etsysMgmdExtInputFilterEntry 7}
+
+etsysMgmdExtInputFilterRuleHitCounter OBJECT-TYPE
+    SYNTAX     Integer32
+    MAX-ACCESS read-only
+    STATUS     current
+    DESCRIPTION
+         "The counter representing the number of times this 
+          rule has be hit."
+    ::= {etsysMgmdExtInputFilterEntry 8}
+
+etsysMgmdExtInputFilterRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION
+         "active(1) creates a filter entry.
+          destroy(6) clears a filter entry."
+    ::= { etsysMgmdExtInputFilterEntry 9 }
+
+
 -- -------------------------------------------------------------
 -- Conformance Information
 -- -------------------------------------------------------------
@@ -1222,7 +1624,7 @@ etsysMgmdExtConfigGroups OBJECT-GROUP
                 etsysMgmdExtConfigNumberOfGroups
              }
 
-    STATUS   current
+    STATUS   deprecated
     DESCRIPTION
         "Global object controlling this feature."
     ::= { etsysMgmdExtGroups 1 }
@@ -1231,7 +1633,7 @@ etsysMgmdExtInterfaceGroups OBJECT-GROUP
     OBJECTS {
                 etsysMgmdExtInterfaceFastLeaveState
             }
-    STATUS current
+    STATUS deprecated
     DESCRIPTION
         "Global object controlling this feature."
     ::= { etsysMgmdExtGroups 2 }
@@ -1273,8 +1675,6 @@ etsysMgmdExtCacheGroups OBJECT-GROUP
 
  etsysMgmdExtPortGroups OBJECT-GROUP
      OBJECTS{
-                etsysMgmdExtPortTableGroupIPAddress,
-                etsysMgmdExtPortTableSourceIPAddress,
                 etsysMgmdExtPortTableExpireTime
             }
      STATUS current
@@ -1293,7 +1693,6 @@ etsysMgmdExtCacheGroups OBJECT-GROUP
 
  etsysMgmdExtStatsCntsGroups OBJECT-GROUP
      OBJECTS {
-                etsysMgmdExtStatsCntrsApplication,
                 etsysMgmdExtStatsCntrsGroupFull,
                 etsysMgmdExtStatsCntrsNumV1QueriesSent,
                 etsysMgmdExtStatsCntrsNumV2QueriesSent,
@@ -1312,14 +1711,13 @@ etsysMgmdExtCacheGroups OBJECT-GROUP
                 etsysMgmdExtStatsCntrsNumLeavesRcvd,
                 etsysMgmdExtStatsCntrsNumBadFramesRcvd
              }
-     STATUS current
+     STATUS deprecated
      DESCRIPTION
          "Global object controlling this feature."
      ::= { etsysMgmdExtGroups 8 }
 
 etsysMgmdExtProtocolClassificationGroups OBJECT-GROUP
     OBJECTS {
-                etsysMgmdExtProtocolClassification,
                 etsysMgmdExtProtocolIdentifier
             }
     STATUS current
@@ -1366,7 +1764,7 @@ etsysMgmdExtReadBaseGroup OBJECT-GROUP
                 etsysMgmdExtStatsCntrsNumLeavesRcvd,
                 etsysMgmdExtStatsCntrsNumBadFramesRcvd
     }
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         " The read MGMD data that must be supported."
     ::= { etsysMgmdExtGroups 10 }
@@ -1383,17 +1781,185 @@ etsysMgmdExtWriteBaseGroup OBJECT-GROUP
                 etsysMgmdExtPortFastLeaveState,
                 etsysMgmdExtProtocolIdentifier
             }
-    STATUS      current        
+    STATUS      deprecated        
     DESCRIPTION
         " The write MGMD data that must be supported."
     ::= { etsysMgmdExtGroups 11 }
+
+etsysMgmdExtConfigGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtConfigRevString,
+                etsysMgmdExtConfigFullAction,
+                etsysMgmdExtConfigMinNumberOfGroups,
+                etsysMgmdExtConfigDefaultNumberOfGroups,
+                etsysMgmdExtConfigMaxNumberOfGroups,
+                etsysMgmdExtConfigNumberOfGroups,
+                etsysMgmdExtConfigUnknownInputAction,
+                etsysMgmdExtConfigFlowWaitEnable,
+                etsysMgmdExtConfigFlowWaitTime
+             }
+
+    STATUS   current
+    DESCRIPTION
+        "Global object controlling this feature."
+    ::= { etsysMgmdExtGroups 12 }
+
+etsysMgmdExtInterfaceGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtInterfaceQueryEnableState,
+                etsysMgmdExtInterfaceClearGroups,
+                etsysMgmdExtRtrAlertRequired,
+                etsysMgmdExtInterfaceFastLeaveState
+            }
+    STATUS current
+    DESCRIPTION
+        "Global object controlling this feature."
+    ::= { etsysMgmdExtGroups 13 }
+
+etsysMgmdExtStatsCntsGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtStatsCntrsGroupFull,
+                etsysMgmdExtStatsCntrsNumV1QueriesSent,
+                etsysMgmdExtStatsCntrsNumV2QueriesSent,
+                etsysMgmdExtStatsCntrsNumV3QueriesSent,
+                etsysMgmdExtStatsCntrsNumGSQueriesSent,
+                etsysMgmdExtStatsCntrsNumGAndSQueriesSent,
+                etsysMgmdExtStatsCntrsNumV1QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV2QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV3QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumGSQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumGAndSQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumWrongVersionQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV1ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumV2ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumV3ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumLeavesRcvd,
+                etsysMgmdExtStatsCntrsNumCurrentStateRecRcvd,
+                etsysMgmdExtStatsCntrsNumFilterModeChangeRecRcvd,
+                etsysMgmdExtStatsCntrsNumSrcListChgRecRcvd,
+                etsysMgmdExtStatsCntrsDropsDueToInvalidSrcIP,
+                etsysMgmdExtStatsCntrsDropsDueToBeingDisabled,
+                etsysMgmdExtStatsCntrsDropsDueToBadHdrLength,
+                etsysMgmdExtStatsCntrsDropsDueToBadIPHdrChksm,
+                etsysMgmdExtStatsCntrsDropsDueToBadIGMPHdrChksm,
+                etsysMgmdExtStatsCntrsDropsDueToMissingRtrAlert,
+                etsysMgmdExtStatsCntrsDropsDueToOffNetworkSrcIP,
+                etsysMgmdExtStatsCntrsDropsDueToZeroSipIPQuery,
+                etsysMgmdExtStatsCntrsDropsDueToBadGrpAddressInQuery,
+                etsysMgmdExtStatsCntrsDropDueToBadGrpAddressInLeave,
+                etsysMgmdExtStatsCntrsDropDueToTooManySrcsInQuery,
+                etsysMgmdExtStatsCntrsDropDueToMLDQueryFromNonLinkLocal,
+                etsysMgmdExtStatsCntrsDroppedLeaveWeAreInV1Mode,
+                etsysMgmdExtStatsCntrsDropsDueToBeingInSSMRange,
+                etsysMgmdExtStatsCntrsDropsProtocolTTLNot1,
+                etsysMgmdExtStatsCntrsDropReportsDueToTooManySrcs,
+                etsysMgmdExtStatsCntrsNumBadFramesRcvd,
+                etsysMgmdExtStatsCntrsClear
+             }
+    STATUS current
+    DESCRIPTION
+        "Global object controlling this feature."
+    ::= { etsysMgmdExtGroups 14 }
+
+etsysMgmdExtInputFilterGroups OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtInputFilterStartIPAddress,
+                etsysMgmdExtInputFilterEndIPAddress,
+                etsysMgmdExtInputFilterProtocolAction,
+                etsysMgmdExtInputFilterFlowAction,
+                etsysMgmdExtInputFilterRuleHitCounter,
+                etsysMgmdExtInputFilterRowStatus
+            }
+    STATUS  current
+    DESCRIPTION
+        "Global object controlling this feature."
+    ::= {etsysMgmdExtGroups 15 }
+
+etsysMgmdExtReadBaseGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtConfigRevString,
+                etsysMgmdExtConfigFullAction,
+                etsysMgmdExtConfigMinNumberOfGroups,
+                etsysMgmdExtConfigDefaultNumberOfGroups,
+                etsysMgmdExtConfigMaxNumberOfGroups,
+                etsysMgmdExtConfigNumberOfGroups,
+                etsysMgmdExtConfigUnknownInputAction,
+                etsysMgmdExtInterfaceFastLeaveState,
+                etsysMgmdExtInterfaceClearGroups,
+                etsysMgmdExtInterfaceFilterId,
+                etsysMgmdExtInterfaceFilterIdEnable,
+                etsysMgmdExtStaticCacheIncludeList,
+                etsysMgmdExtStaticCacheExcludeList,
+                etsysMgmdExtStaticCacheRowStatus,
+                etsysMgmdExtCacheExpiryTime,
+                etsysMgmdExtCacheIncludePortList,
+                etsysMgmdExtCacheExcludePortList,
+                etsysMgmdExtCacheSrcPort,
+                etsysMgmdExtDiscoveredRouterLearnedMethod,
+                etsysMgmdExtDiscoveredRouterEgressing,
+                etsysMgmdExtDiscoveredRouterStaticPortList,
+                etsysMgmdExtDiscoveredRouterBridgePortAgeTime,
+                etsysMgmdExtPortFastLeaveState,
+                etsysMgmdExtStatsCntrsGroupFull,
+                etsysMgmdExtStatsCntrsNumV1QueriesSent,
+                etsysMgmdExtStatsCntrsNumV2QueriesSent,
+                etsysMgmdExtStatsCntrsNumV3QueriesSent,
+                etsysMgmdExtStatsCntrsNumGSQueriesSent,
+                etsysMgmdExtStatsCntrsNumGAndSQueriesSent,
+                etsysMgmdExtStatsCntrsNumV1QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV2QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV3QueriesRcvd,
+                etsysMgmdExtStatsCntrsNumGSQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumGAndSQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumWrongVersionQueriesRcvd,
+                etsysMgmdExtStatsCntrsNumV1ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumV2ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumV3ReportsRcvd,
+                etsysMgmdExtStatsCntrsNumLeavesRcvd,
+                etsysMgmdExtStatsCntrsNumBadFramesRcvd,
+                etsysMgmdExtInputFilterStartIPAddress,
+                etsysMgmdExtInputFilterEndIPAddress,
+                etsysMgmdExtInputFilterProtocolAction,
+                etsysMgmdExtInputFilterFlowAction,
+                etsysMgmdExtInputFilterRuleHitCounter,
+                etsysMgmdExtInputFilterRowStatus
+    }
+    STATUS      current
+    DESCRIPTION
+        " The read MGMD data that must be supported."
+    ::= { etsysMgmdExtGroups 16 }
+
+etsysMgmdExtWriteBaseGroup2 OBJECT-GROUP
+    OBJECTS {
+                etsysMgmdExtConfigFullAction,
+                etsysMgmdExtConfigNumberOfGroups,
+                etsysMgmdExtInterfaceFastLeaveState,
+                etsysMgmdExtInterfaceClearGroups,
+                etsysMgmdExtInterfaceFilterId,
+                etsysMgmdExtInterfaceFilterIdEnable,
+                etsysMgmdExtStaticCacheIncludeList,
+                etsysMgmdExtStaticCacheExcludeList,
+                etsysMgmdExtStaticCacheRowStatus,
+                etsysMgmdExtDiscoveredRouterStaticPortList,
+                etsysMgmdExtPortFastLeaveState,
+                etsysMgmdExtProtocolIdentifier,
+                etsysMgmdExtInputFilterStartIPAddress,
+                etsysMgmdExtInputFilterEndIPAddress,
+                etsysMgmdExtInputFilterProtocolAction,
+                etsysMgmdExtInputFilterFlowAction,
+                etsysMgmdExtInputFilterRowStatus
+            }
+    STATUS      current        
+    DESCRIPTION
+        " The write MGMD data that must be supported."
+    ::= { etsysMgmdExtGroups 17 }
 
 -- -------------------------------------------------------------
 -- Compliance statements
 -- -------------------------------------------------------------
 
 etsysMgmdExtReadCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "The compliance statement for devices that support reads from 
          the etsysMgmdExt MIB."
@@ -1404,7 +1970,7 @@ etsysMgmdExtReadCompliance MODULE-COMPLIANCE
     ::= { etsysMgmdExtCompliances 1 }
 
 etsysMgmdExtWriteCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "The compliance statement for device that support writes to the 
          etsysMgmdExt MIB."
@@ -1412,5 +1978,46 @@ etsysMgmdExtWriteCompliance MODULE-COMPLIANCE
         MANDATORY-GROUPS { etsysMgmdExtWriteBaseGroup }
 
     ::= { etsysMgmdExtCompliances 2 }
+
+etsysMgmdExtReadCompliance2 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support reads from
+         the etsysMgmdExt MIB."
+    
+    MODULE
+        MANDATORY-GROUPS { etsysMgmdExtReadBaseGroup2 }
+
+    ::= { etsysMgmdExtCompliances 3 }
+
+etsysMgmdExtWriteCompliance2 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for device that support writes to the
+         etsysMgmdExt MIB."
+    MODULE
+        MANDATORY-GROUPS { etsysMgmdExtWriteBaseGroup2 }
+
+    ::= { etsysMgmdExtCompliances 4 }
+
+etsysMgmdExtiBaseCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for device that support etsysMgmdExt MIB."
+    MODULE
+        MANDATORY-GROUPS { 
+            etsysMgmdExtStaticCacheGroups,
+            etsysMgmdExtCacheGroups, 
+            etsysMgmdExtDiscoveredRouterGroups,
+            etsysMgmdExtPortGroups,
+            etsysMgmdExtPortFastLeaveGroups,
+            etsysMgmdExtProtocolClassificationGroups,
+            etsysMgmdExtConfigGroup2,
+            etsysMgmdExtInterfaceGroup2,
+            etsysMgmdExtStatsCntsGroup2,
+            etsysMgmdExtInputFilterGroups
+         }
+
+    ::= { etsysMgmdExtCompliances 5 }
 
 END

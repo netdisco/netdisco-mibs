@@ -28,12 +28,12 @@ ENTERASYS-MIRROR-CONFIG-MIB DEFINITIONS ::= BEGIN
 --  parties a non-exclusive license to use this Specification in 
 --  connection with the management of Enterasys Networks products.
 
---  Copyright <August, 2009> Enterasys Networks, Inc.
+--  Copyright <August, 2012> Enterasys Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, Unsigned32
         FROM SNMPv2-SMI
-    TEXTUAL-CONVENTION, RowStatus, StorageType
+    RowStatus, StorageType
         FROM SNMPv2-TC
     MODULE-COMPLIANCE, OBJECT-GROUP
         FROM SNMPv2-CONF
@@ -45,7 +45,7 @@ IMPORTS
         FROM ENTERASYS-MIB-NAMES;
 
 etsysMirrorConfigMIB MODULE-IDENTITY
-    LAST-UPDATED "200908101856Z"  -- Mon Aug 10 18:56 UTC 2009
+    LAST-UPDATED "201208221216Z"  -- Wed Aug 22 12:16 UTC 2012
     ORGANIZATION "Enterasys Networks, Inc"
     CONTACT-INFO
         "Postal:  Enterasys Networks
@@ -59,8 +59,20 @@ etsysMirrorConfigMIB MODULE-IDENTITY
     DESCRIPTION
         "This MIB module defines a portion of the SNMP MIB under
          the Enterasys Networks enterprise OID pertaining to 
-         Network Mirroring configuration on a device."
+         Network Mirroring configuration on a device.
 
+        Terminology used
+
+        Flow
+        A flow is defined as an unidirectional sequence of
+        packets between a given source and destination
+        endpoints."
+
+
+    REVISION    "201208221216Z"  -- Wed Aug 22 12:16 UTC 2012
+    DESCRIPTION "Added the etsysMirrorSystemMaxMirrorFirstN
+                 and etsysMirrorDestinationControlMirrorFirstN
+                 objects for Mirror First N support."
 
     REVISION    "200908101856Z"  -- Mon Aug 10 18:56 UTC 2009
     DESCRIPTION "The initial version of this MIB module."
@@ -120,6 +132,17 @@ etsysMirrorSystemMaxMirrorDestinationControlGroups OBJECT-TYPE
          rows in the etsysMirrorDestinationControlTable."
     ::= { etsysMirrorSystem 4 }
 
+etsysMirrorSystemMaxMirrorFirstN OBJECT-TYPE
+    SYNTAX       Unsigned32
+    MAX-ACCESS   read-only
+    STATUS       current
+    DESCRIPTION
+        "This value represents the maximum configurable number 
+        of initial packets of a flow that can be mirrored. 
+        If this value is 0 this feature is not supported."
+    ::= { etsysMirrorSystem 5 }
+
+
 -- -------------------------------------------------------------
 -- The Mirror Table 
 -- -------------------------------------------------------------
@@ -174,15 +197,19 @@ EtsysMirrorDestinationControlEntry ::=
         etsysMirrorDestinationControlStorageType
             StorageType,
         etsysMirrorDestinationControlRowStatus
-            RowStatus
+            RowStatus,
+        etsysMirrorDestinationControlMirrorFirstN
+            Unsigned32
     }
 
 etsysMirrorDestinationControlIndex OBJECT-TYPE
-    SYNTAX      Unsigned32 (1..etsysMirrorSystemMaxMirrorDestinationControlGroups)
+    SYNTAX      Unsigned32
     MAX-ACCESS  not-accessible 
     STATUS      current
     DESCRIPTION
-        "A unique arbitrary index for this etsysMirrorDestinationControlEntry."
+        "A unique arbitrary index for this etsysMirrorDestinationControlEntry.
+         This object MUST have a value between 1 and
+         etsysMirrorSystemMaxMirrorDestinationControlGroups."
     ::= { etsysMirrorDestinationControlEntry 1 }
 
 
@@ -240,6 +267,22 @@ etsysMirrorDestinationControlRowStatus OBJECT-TYPE
                              EtsysMirrorDestinationEntry rows. "
     ::= { etsysMirrorDestinationControlEntry 4 }
 
+etsysMirrorDestinationControlMirrorFirstN OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-create 
+    STATUS      current
+    DESCRIPTION
+        "When this object is set to a nonzero value, 
+         only the first N packets for a particular flow
+         assigned to this index will be mirrored. Otherwise
+         all packets from the flow are to be mirrored.
+
+         The maximum value for this object is specified
+         by the etsysMirrorSystemMaxMirrorFirstN
+         object."
+    DEFVAL { 0 }
+
+    ::= { etsysMirrorDestinationControlEntry 5 }
 
 etsysMirrorDestinationPortTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF EtsysMirrorDestinationPortEntry
@@ -329,7 +372,7 @@ etsysMirrorSystemGroup OBJECT-GROUP
         etsysMirrorSystemMaxLocalMirrorDestinationPorts,
         etsysMirrorSystemMaxMirrorDestinationControlGroups 
     }
-    STATUS current
+    STATUS deprecated
     DESCRIPTION
         "A collection of objects providing basic mirroring system
          information."
@@ -343,17 +386,46 @@ etsysMirrorConfigGroup OBJECT-GROUP
         etsysMirrorDestinationPortStorageType,
         etsysMirrorDestinationPortRowStatus
     }
-    STATUS current
+    STATUS deprecated
     DESCRIPTION
         "A collection of objects relating to mirror configuration."
     ::= { etsysMirrorGroups 2 }
+
+etsysMirrorSystemGroup2 OBJECT-GROUP
+    OBJECTS {
+        etsysMirrorSystemMaxLocalMirrors,
+        etsysMirrorSystemMaxRemoteMirrors, 
+        etsysMirrorSystemMaxLocalMirrorDestinationPorts,
+        etsysMirrorSystemMaxMirrorDestinationControlGroups,
+        etsysMirrorSystemMaxMirrorFirstN
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects providing basic mirroring system
+         information."
+    ::= { etsysMirrorGroups 3 }
+
+etsysMirrorConfigGroup2 OBJECT-GROUP
+    OBJECTS {
+        etsysMirrorDestinationNextAvailableIndex,
+        etsysMirrorDestinationControlOwner,
+        etsysMirrorDestinationControlStorageType,
+        etsysMirrorDestinationControlRowStatus,
+        etsysMirrorDestinationControlMirrorFirstN,
+        etsysMirrorDestinationPortStorageType,
+        etsysMirrorDestinationPortRowStatus
+    }
+    STATUS current
+    DESCRIPTION
+        "A collection of objects relating to mirror configuration."
+    ::= { etsysMirrorGroups 4 }
 
 -- -------------------------------------------------------------
 -- Compliance statements
 -- -------------------------------------------------------------
 
 etsysMirrorCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "The compliance statement for devices that support the Enterasys
          Mirror MIB."
@@ -363,5 +435,17 @@ etsysMirrorCompliance MODULE-COMPLIANCE
                            etsysMirrorConfigGroup }
 
     ::= { etsysMirrorCompliances 1 }
+
+etsysMirrorCompliance2 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support the Enterasys
+         Mirror MIB."
+
+    MODULE
+        MANDATORY-GROUPS { etsysMirrorSystemGroup2,
+                           etsysMirrorConfigGroup2 }
+
+    ::= { etsysMirrorCompliances 2 }
 
 END

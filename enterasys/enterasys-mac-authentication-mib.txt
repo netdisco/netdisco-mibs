@@ -6,34 +6,34 @@ ENTERASYS-MAC-AUTHENTICATION-MIB DEFINITIONS ::= BEGIN
 --
 --
 
---  This module provides authoritative definitions for Enterasys
+--  This module provides authoritative definitions for Extreme
 --  Networks' MAC-Authentication.
 
 --
 --  This module will be extended, as needed.
 
---  Enterasys Networks reserves the right to make changes in this
+--  Extreme Networks reserves the right to make changes in this
 --  specification and other information contained in this document
---  without prior notice.  The reader should consult Enterasys Networks
+--  without prior notice.  The reader should consult Extreme Networks
 --  to determine whether any such changes have been made.
 --
---  In no event shall Enterasys Networks be liable for any incidental,
+--  In no event shall Extreme Networks be liable for any incidental,
 --  indirect, special, or consequential damages whatsoever (including
 --  but not limited to lost profits) arising out of or related to this
---  document or the information contained in it, even if Enterasys
+--  document or the information contained in it, even if Extreme
 --  Networks has been advised of, known, or should have known, the
 --  possibility of such damages.
 --
---  Enterasys Networks grants vendors, end-users, and other interested
+--  Extreme Networks grants vendors, end-users, and other interested
 --  parties a non-exclusive license to use this Specification in
---  connection with the management of Enterasys Networks products.
+--  connection with the management of Extreme Networks products.
 
---  Copyright May, 2002 Enterasys Networks, Inc.
+--  Copyright December, 2014 Extreme Networks, Inc.
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE, Unsigned32
         FROM SNMPv2-SMI
-    MacAddress, TruthValue
+    MacAddress, TruthValue, RowStatus
         FROM SNMPv2-TC
     MODULE-COMPLIANCE, OBJECT-GROUP
         FROM SNMPv2-CONF
@@ -43,21 +43,23 @@ IMPORTS
         FROM IF-MIB
     EnabledStatus
         FROM P-BRIDGE-MIB
+    PortList
+        FROM Q-BRIDGE-MIB
     etsysModules
         FROM ENTERASYS-MIB-NAMES;
 
 etsysMACAuthenticationMIB MODULE-IDENTITY
-    LAST-UPDATED "200207181812Z"  -- Thu Jul 18 18:12 GMT 2002
-    ORGANIZATION "Enterasys Networks, Inc"
-    CONTACT-INFO
-    "Postal: Enterasys Networks
-             35 Industrial Way
-             P.O. Box 5005
-             Rochester, NH 03867-5005
+    LAST-UPDATED "201501192051Z"  -- Mon Jan 19 20:51 UTC 2015
 
-     Phone:  +1 603 603 332 9400
-     E-mail: support@enterasys.com
-     WWW:    http://www.enterasys.com"
+    ORGANIZATION "Extreme Networks, Inc"
+    CONTACT-INFO
+        "Postal:  Extreme Networks, Inc.
+                  145 Rio Robles
+                  San Jose, CA 95134 USA
+
+         Phone:   +1 408 579-2800
+         E-mail:  support@extremenetworks.com
+         WWW:     http://www.extremenetworks.com"
 
     DESCRIPTION
         "This MIB module defines a portion of the SNMP enterprise
@@ -78,6 +80,19 @@ etsysMACAuthenticationMIB MODULE-IDENTITY
          backend mechanism is used to allow the MAC onto the network,
          as well as provide authorization information to the switch."
 
+    REVISION    "201501192051Z"  -- Mon Jan 19 20:51 UTC 2015
+    DESCRIPTION "Added MAC List configuration.
+                 Added macList mode to etsysMACAuthenticationMode.
+                 Added etsysMACAuthenticationSystemUserNameFormat.
+                 Deprecated etsysMACAuthenticationMACUserPassword and 
+                 etsysMACAuthenticationPortUserNameSignificantBits."
+
+    REVISION    "201305171510Z"  -- Fri May 17 15:10 UTC 2013
+    DESCRIPTION "Added account enable and disable."
+
+    REVISION    "201301311334Z"  -- Thu Jan 31 13:34 UTC 2013
+    DESCRIPTION "Added the etsysMACAuthenticationMode object."
+
     REVISION    "200207181812Z"  -- Thu Jul 18 18:12 GMT 2002
     DESCRIPTION "The initial version of this MIB module"
 
@@ -91,7 +106,7 @@ etsysMACAuthenticationObjects
 -- -------------------------------------------------------------
 
 -- -------------------------------------------------------------
--- Branches of the Enterasys MAC Authentication MIB
+-- Branches of the Extreme MAC Authentication MIB
 -- -------------------------------------------------------------
 
 etsysMACAuthenticationSystem
@@ -105,6 +120,10 @@ etsysMACAuthenticationMACConfig
 
 etsysMACAuthenticationMACSession
         OBJECT IDENTIFIER ::= { etsysMACAuthenticationObjects 4 }
+
+etsysMACAuthenticationMACListConfig
+        OBJECT IDENTIFIER ::= { etsysMACAuthenticationObjects 5 }
+
 
 -- -------------------------------------------------------------
 -- etsysMACAuthenticationSystemGroup
@@ -124,29 +143,93 @@ etsysMACAuthenticationSystemEnable OBJECT-TYPE
 etsysMACAuthenticationMACUserPassword OBJECT-TYPE
     SYNTAX      SnmpAdminString
     MAX-ACCESS  read-write
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
-        "This is the string to be used as a password credential
-         when authenticating a MAC address."
+        "*** This object is deprecated in favor of     *** 
+         *** the functionality provided by the         ***
+         *** etsysMACAuthenticationMACListConfig group *** 
+
+         This is the string to be used as a password credential
+         when authenticating a MAC address when 
+         etsysMACAuthenticationMode is set to password(1)."
     DEFVAL { "NOPASSWORD" }
     ::= { etsysMACAuthenticationSystem 2 }
 
 etsysMACAuthenticationPortUserNameSignificantBits OBJECT-TYPE
     SYNTAX      INTEGER (1..48)
     MAX-ACCESS  read-write
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
-        "This object represents the number of significant bits in the
+        "*** This object is deprecated in favor of     *** 
+         *** the functionality provided by the         ***
+         *** etsysMACAuthenticationMACListConfig group *** 
+
+         This object represents the number of significant bits in the
          MAC addresses to be used starting with the left-most bit of
          the vendor portion of the MAC address. The significant portion
          of the MAC address is sent as a user-name credential when the
          primary attempt to authenticate the full MAC address fails.
          Any other failure to authenticate the full address, (i.e.
          authentication server timeout) causes the the next attempt to
-         start once again with a full MAC authentication."
+         start once again with a full MAC authentication.  This value is
+         only applicable when the etsysMACAuthenticationMode is set 
+         to a value of password(1) or radiusUsername(2)."
     DEFVAL { 48 }
     ::= { etsysMACAuthenticationSystem 3 }
 
+etsysMACAuthenticationMode OBJECT-TYPE
+    SYNTAX      INTEGER {
+                  password(1),
+                  radiusUsername(2),
+                  macList(3)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object selects the credentials to use when authenticating 
+         a MAC address.
+
+         password(1)       - Attempt to authenticate a user with the 
+                           password credential provided by 
+                           etsysMACAuthenticationMACUserPassword.
+
+         radiusUsername(2) - Attempt to authenticate a user with a password
+                           credential that is the same as the radius 
+                           username credential.     
+
+         macList(3)        - Attempt to authenticate a user with credentials 
+                           provided by mac-list configuration." 
+    DEFVAL { macList }
+    ::= { etsysMACAuthenticationSystem 4 }
+
+etsysMACAuthenticationSystemAccountEnable OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "When enabled(1), RADIUS accounting start, interim and 
+         stop frames are sent to the configured RADIUS server(s).
+         
+         When disabled(2), accounting packets are not sent to 
+         the RADIUS server."
+    DEFVAL { enabled }
+    ::= { etsysMACAuthenticationSystem 5 }
+
+etsysMACAuthenticationSystemUserNameFormat OBJECT-TYPE
+    SYNTAX      INTEGER {
+                  hyphen(1),
+                  none(2)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+         "When hyphen(1), the user-name credential is the 
+         MAC address formatted as 'xx-xx-xx-xx-xx-xx'.
+         
+         When set to none(2), the user-name credential is the 
+         MAC address formatted as 'xxxxxxxxxxxx'."
+    DEFVAL { none }
+    ::= { etsysMACAuthenticationSystem 6 }
 
 -- -------------------------------------------------------------
 -- etsysMACAuthenticationPortConfigGroup
@@ -469,6 +552,148 @@ etsysMACAuthenticationDuration OBJECT-TYPE
          of this session."
     ::= { etsysMACAuthenticationSessionEntry 2 }
 
+-- -------------------------------------------------------------
+-- etsysMACAuthenticationMACListConfig
+-- -------------------------------------------------------------
+
+etsysMACAuthenticationMaxMACListEntries OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Maximum number of entries allowed in the 
+         etsysMACAuthenticationMACListTable."
+    ::= { etsysMACAuthenticationMACListConfig 1 }
+
+etsysMACAuthenticationCurrentMACListEntries OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The current number of entries in the 
+         etsysMACAuthenticationMACListTable."
+    ::= { etsysMACAuthenticationMACListConfig 2 }
+
+etsysMACAuthenticationMACListTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF EtsysMACAuthenticationMACListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table provides configuration objects for the
+         MAC List functionality.
+
+         When an unauthenticated MAC address is received a
+         longest prefix search is performed. If more than  
+         one match is made -- the one with the longest 
+         mask length -- is called the longest prefix match. 
+
+         Authentication is blocked when no match is found,
+         or the matching entry's etsysMACAuthenticationMACListPorts 
+         value is not the empty string and the ingress port is not 
+         set in the list.
+
+         To create a default entry that matches any MAC address,
+         configure a row with a MAC address of all FFs. 
+         
+         The user-name credential will be the portion 
+         of the MAC address specified by 
+         etsysMACAuthenticationMACListMaskLen.
+
+         If the etsysMACAuthenticationMACListPassword is set,
+         it will be used as the password credential for authentication.
+         Otherwise, the user-name credential will be used as the 
+         password credential."
+    ::= { etsysMACAuthenticationMACListConfig 3 }
+
+etsysMACAuthenticationMACListEntry OBJECT-TYPE
+    SYNTAX      EtsysMACAuthenticationMACListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row represents an entry in the MAC List."
+    INDEX { etsysMACAuthenticationMACListAddress, 
+            etsysMACAuthenticationMACListMaskLen }
+    ::= { etsysMACAuthenticationMACListTable 1 }
+
+EtsysMACAuthenticationMACListEntry::=
+    SEQUENCE {
+        etsysMACAuthenticationMACListAddress       MacAddress,
+        etsysMACAuthenticationMACListMaskLen       Unsigned32,
+        etsysMACAuthenticationMACListPassword      SnmpAdminString,
+        etsysMACAuthenticationMACListPasswordValid TruthValue, 
+        etsysMACAuthenticationMACListPorts         PortList,
+        etsysMACAuthenticationMACListRowStatus     RowStatus
+    }
+
+etsysMACAuthenticationMACListAddress OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The MAC address to match."
+    ::= { etsysMACAuthenticationMACListEntry 1 }
+
+etsysMACAuthenticationMACListMaskLen OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..48)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This object represents the number of significant bits in the
+         MAC address to match starting with the left-most bit of
+         the vendor portion of the MAC address. The significant portion
+         of the MAC address is sent as a user-name credential." 
+    ::= { etsysMACAuthenticationMACListEntry 2 }
+
+etsysMACAuthenticationMACListPassword OBJECT-TYPE
+    SYNTAX      SnmpAdminString (SIZE(0..48))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The password to use to authenticate the MAC address.
+         On a read this object will always return an empty string."
+    DEFVAL { "" }
+    ::= { etsysMACAuthenticationMACListEntry 3 }
+
+etsysMACAuthenticationMACListPasswordValid OBJECT-TYPE
+    SYNTAX      TruthValue 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "true(1)  - indicates that etsysMACAuthenticationMACListPassword 
+         was last set with some value other than the empty string.
+
+         false(2) - indicates that etsysMACAuthenticationMACListPassword 
+         has never been set, or was last set to the empty string. 
+         In this case, the password used to authenticate will be the same 
+         as the user-name credential."
+    ::= { etsysMACAuthenticationMACListEntry 4 }
+
+etsysMACAuthenticationMACListPorts OBJECT-TYPE
+    SYNTAX      PortList
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The set of ports to allow authentication on. If this object is  
+         the empty string then authentication is allowed on all ports."
+    DEFVAL { ''H }    -- the empty string
+    ::= { etsysMACAuthenticationMACListEntry 5 }
+
+etsysMACAuthenticationMACListRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The status of this row.  
+
+         active(1)        -- Indicates that this entry is available
+                             for use by the managed device. 
+                             
+         createAndGo(4)   -- A new entry will be created in this table
+                             and the new entry will transition to the 
+                             active state. 
+
+         destroy(6)       -- Deletes this row. "
+    ::= { etsysMACAuthenticationMACListEntry 6 }
 
 -- -------------------------------------------------------------
 -- Conformance Information
@@ -494,7 +719,7 @@ etsysMACAuthenticationSystemGroup OBJECT-GROUP
         etsysMACAuthenticationMACUserPassword,
         etsysMACAuthenticationPortUserNameSignificantBits
     }
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "Global object controlling this feature.
          Global objects that affect how the credentials are
@@ -543,13 +768,55 @@ etsysMACAuthenticationMACSessionGroup OBJECT-GROUP
         "Objects associated with a MAC Session"
     ::= { etsysMACAuthenticationGroups 4 }
 
+etsysMACAuthenticationSystemGroup2 OBJECT-GROUP
+    OBJECTS {
+        etsysMACAuthenticationSystemEnable,
+        etsysMACAuthenticationMACUserPassword,
+        etsysMACAuthenticationPortUserNameSignificantBits,
+        etsysMACAuthenticationMode,
+        etsysMACAuthenticationSystemAccountEnable
+    }
+    STATUS      deprecated
+    DESCRIPTION
+        "Global object controlling this feature. 
+         Global objects that affect how the credentials are
+         presented to the authentication server."
+    ::= { etsysMACAuthenticationGroups 5 }
+
+etsysMACAuthenticationSystemGroup3 OBJECT-GROUP
+    OBJECTS {
+        etsysMACAuthenticationSystemEnable,
+        etsysMACAuthenticationMode,
+        etsysMACAuthenticationSystemAccountEnable,
+        etsysMACAuthenticationSystemUserNameFormat 
+    }
+    STATUS      current
+    DESCRIPTION
+        "Global object controlling this feature. 
+         Global objects that affect how the credentials are
+         presented to the authentication server."
+    ::= { etsysMACAuthenticationGroups 6 }
+
+etsysMACAuthenticationMACListGroup OBJECT-GROUP
+    OBJECTS {
+        etsysMACAuthenticationMaxMACListEntries,
+        etsysMACAuthenticationCurrentMACListEntries,
+        etsysMACAuthenticationMACListPassword,
+        etsysMACAuthenticationMACListPasswordValid,
+        etsysMACAuthenticationMACListPorts,
+        etsysMACAuthenticationMACListRowStatus 
+    }
+    STATUS      current
+    DESCRIPTION
+        "Objects associated with MAC-List configuration."
+    ::= { etsysMACAuthenticationGroups 7 }
 
 -- -------------------------------------------------------------
 -- Compliance statements
 -- -------------------------------------------------------------
 
 etsysMACAuthenticationCompliance MODULE-COMPLIANCE
-    STATUS      current
+    STATUS      deprecated
     DESCRIPTION
         "The compliance statement for devices that support MAC-Authentication."
 
@@ -583,5 +850,101 @@ etsysMACAuthenticationCompliance MODULE-COMPLIANCE
             it attempts to authenticate the masked MAC address if the
             full MAC address fails to authenticate."
     ::= { etsysMACAuthenticationCompliances 1 }
+
+etsysMACAuthenticationCompliance2 MODULE-COMPLIANCE
+    STATUS      deprecated
+    DESCRIPTION
+        "The compliance statement for devices that support
+         MAC-Authentication."
+
+    MODULE
+        MANDATORY-GROUPS {
+            etsysMACAuthenticationSystemGroup2,
+            etsysMACAuthenticationPortConfigGroup,
+            etsysMACAuthenticationMACConfigGroup
+            }
+
+        GROUP etsysMACAuthenticationMACSessionGroup
+        DESCRIPTION
+            "Implementation of the etsysMACAuthenticationMACSessionGroup
+             is optional for all agents.  If the agent impelments session
+             functionality, then this table should be supported."
+
+       OBJECT      etsysMACAuthenticationSystemEnable
+       SYNTAX      EnabledStatus
+       MIN-ACCESS  read-only
+       DESCRIPTION
+           "Write access is not required. If read-only is selected,
+            then the default value must be enabled(1)."
+
+       OBJECT      etsysMACAuthenticationPortUserNameSignificantBits
+       SYNTAX      INTEGER(1..48)
+       MIN-ACCESS  read-only
+       DESCRIPTION
+           "Write access is not required. If read-only is selected,
+            then the default value must be 48. If this object is read-write,
+            then the agent performs a two stage authentication where the
+            it attempts to authenticate the masked MAC address if the
+            full MAC address fails to authenticate."
+    ::= { etsysMACAuthenticationCompliances 2 }
+
+etsysMACAuthenticationCompliance3 MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for devices that support
+         MAC-Authentication."
+
+    MODULE
+        MANDATORY-GROUPS {
+            etsysMACAuthenticationSystemGroup3,
+            etsysMACAuthenticationPortConfigGroup,
+            etsysMACAuthenticationMACConfigGroup
+            }
+
+        GROUP etsysMACAuthenticationMACSessionGroup
+        DESCRIPTION
+            "Implementation of the etsysMACAuthenticationMACSessionGroup
+             is optional for all agents.  If the agent implements session
+             functionality, then this table should be supported."
+
+        GROUP etsysMACAuthenticationMACListGroup
+        DESCRIPTION
+            "Implementation of the etysMACAuthenticationMACListGroup is
+             optional for all agents. If the agent implements MAC-List
+             functionality, then this table should be supported."
+
+        OBJECT      etsysMACAuthenticationSystemEnable
+        SYNTAX      EnabledStatus
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required. If read-only is selected,
+             then the default value must be enabled(1)."
+
+        OBJECT      etsysMACAuthenticationSystemUserNameFormat
+        SYNTAX      INTEGER {
+                      hyphen(1),
+                      none(2)
+                    }
+        MIN-ACCESS  read-only
+        DESCRIPTION
+            "Write access is not required."
+ 
+        OBJECT     etsysMACAuthenticationMode
+        SYNTAX     INTEGER {
+ 		    password(1),
+ 	    	    radiusUsername(2),
+ 		    macList(3)
+       	          }
+        MIN-ACCESS read-only
+        DESCRIPTION
+            "Write access is not required."
+ 
+ 	OBJECT etsysMACAuthenticationMACListRowStatus 
+ 	WRITE-SYNTAX RowStatus { active(1), createAndGo(4), destroy(6) }
+	DESCRIPTION
+ 	    "The states createAndWait, notInService and notReady are not
+	     supported for writing."
+
+       ::= { etsysMACAuthenticationCompliances 3 }
 
 END
