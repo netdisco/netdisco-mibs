@@ -1,0 +1,191 @@
+--**MOD+***********************************************************************
+--* Module:    hpicfprivatevlan.mib
+--*
+--* Copyright (C) 2015 Hewlett-Packard Development Company, L.P.
+--* All Rights Reserved.
+--*
+--* Purpose: This file contains MIB definition of HP-ICF-BRIDGE  MIB
+--*
+--**MOD-***********************************************************************
+
+HP-ICF-PRIVATEVLAN-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        OBJECT-TYPE, MODULE-IDENTITY, Integer32
+            FROM SNMPv2-SMI
+        TEXTUAL-CONVENTION, RowStatus
+            FROM SNMPv2-TC
+        MODULE-COMPLIANCE, OBJECT-GROUP
+            FROM SNMPv2-CONF
+        VlanId,dot1qVlanStaticEntry
+            FROM Q-BRIDGE-MIB
+        hpSwitch
+            FROM HP-ICF-OID
+        VidList
+            FROM HP-ICF-TC;
+
+    hpicfPrivateVlan MODULE-IDENTITY
+        LAST-UPDATED "201504220000Z"  -- April 22, 2015
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO "Hewlett-Packard Company
+                      8000 Foothills Blvd.
+                      Roseville, CA 95747"
+        DESCRIPTION  "This MIB module contains HP proprietary
+                      definition of Private Vlan."
+        REVISION     "201504220000Z"  -- April 22, 2015
+        DESCRIPTION  "Initial revision."
+        ::= { hpSwitch 114 }
+
+    PrivateVlanType ::= TEXTUAL-CONVENTION
+        STATUS        current
+        DESCRIPTION   "The VLAN types defined are
+                      'notAPrivateVLAN'  This is a regular VLAN.
+                      'primary' This a VLAN which is partitioned into independent
+                       broadcast domains.
+                      'isolated' This is a VLAN carved out from the primary VLAN and
+                       having strict traffic isolation between member ports.
+                      'community' This is a VLAN carved out from the primary VLAN
+                       and with traffic allowed between member ports."
+        SYNTAX        INTEGER
+                      { notAPrivateVLAN(1),
+                        primary(2),
+                        isolated(3),
+                        community(4)
+                      }
+
+    hpicfPrivateVlanObjects  OBJECT IDENTIFIER ::= { hpicfPrivateVlan 1 }
+    hpicfPrivateVlanConfig   OBJECT IDENTIFIER ::= { hpicfPrivateVlanObjects  1 }
+
+hpicfPrivateVlanTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF HpicfPrivateVlanEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION  "An HP proprietary extension to the dot1qVlanStaticTable
+                      to contain Private VLAN type."
+        ::= { hpicfPrivateVlanConfig 1 }
+
+    hpicfPrivateVlanEntry OBJECT-TYPE
+        SYNTAX      HpicfPrivateVlanEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION  "An entry for HP Specific extension to
+                      the dot1qVlanStaticTable to contain
+                      Private VLAN type."
+        AUGMENTS   { dot1qVlanStaticEntry }
+        ::= { hpicfPrivateVlanTable 1 }
+
+    HpicfPrivateVlanEntry ::=
+        SEQUENCE {
+            hpicfPrivateVlanType    PrivateVlanType
+        }
+
+    hpicfPrivateVlanType OBJECT-TYPE
+        SYNTAX       PrivateVlanType
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "This object refers to the type of a Private VLAN which
+                      can be a primary, isolated or a community VLAN."
+        DEFVAL       { notAPrivateVLAN }
+        ::= { hpicfPrivateVlanEntry 1 }
+hpicfPrivateVlanMappingTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF HpicfPrivateVlanMappingEntry
+        MAX-ACCESS         not-accessible
+        STATUS             current
+        DESCRIPTION        "A table containing the mapping of a primary to
+                            secondary VLANs."
+        ::= { hpicfPrivateVlanConfig 2 }
+
+    hpicfPrivateVlanMappingEntry OBJECT-TYPE
+        SYNTAX          HpicfPrivateVlanMappingEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "An entry which containing the configuration of
+                         Primary to Secondary VLANs."
+        INDEX           { hpicfPrivateVlanPrimary }
+        ::= { hpicfPrivateVlanMappingTable 1 }
+
+    HpicfPrivateVlanMappingEntry ::= SEQUENCE {
+        hpicfPrivateVlanPrimary              VlanId,
+        hpicfPrivateVlanIsolated             Integer32,
+        hpicfPrivateVlanCommunity            VidList,
+        hpicfPrivateVlanMappingRowStatus     RowStatus
+    }
+
+    hpicfPrivateVlanPrimary OBJECT-TYPE
+        SYNTAX       VlanId
+        MAX-ACCESS   not-accessible
+        STATUS       current
+        DESCRIPTION  "This object is the Primary VLAN."
+        ::= { hpicfPrivateVlanMappingEntry 1 }
+
+    hpicfPrivateVlanIsolated OBJECT-TYPE
+        SYNTAX       Integer32 (0..4094)
+        MAX-ACCESS   read-create
+        STATUS       current
+        DESCRIPTION  "This object refers to an Isolated VLAN ID associated to
+                      the Primary VLAN."
+        ::= { hpicfPrivateVlanMappingEntry 2 }
+
+    hpicfPrivateVlanCommunity OBJECT-TYPE
+        SYNTAX       VidList
+        MAX-ACCESS   read-create
+        STATUS       current
+        DESCRIPTION  "This object refers to the list of Community VLANs
+                      which are associated to the Primary VLAN."
+        ::= { hpicfPrivateVlanMappingEntry 3 }
+
+    hpicfPrivateVlanMappingRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION    "The Row status for the Primary VLAN entry."
+        ::= { hpicfPrivateVlanMappingEntry 4 }
+hpicfPrivateVlanConformance OBJECT IDENTIFIER ::= { hpicfPrivateVlan 2 }
+
+    hpicfPrivateVlanCompliances OBJECT IDENTIFIER ::= { hpicfPrivateVlanConformance 1 }
+    hpicfPrivateVlanGroup OBJECT IDENTIFIER ::= { hpicfPrivateVlanConformance 2}
+
+-- compliance statements
+
+    hpicfPVlanTableCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION
+                    "A compliance statement for HP Routing switches which
+                     hpicfPrviateVlan MIB."
+        MODULE -- this module
+        MANDATORY-GROUPS {  hpicfPrivateVlanTableGroup }
+        GROUP            hpicfPrivateVlanTableGroup
+        DESCRIPTION "A Collection of Object(s) that represents
+                     the Private VLAN Type"
+        ::= { hpicfPrivateVlanCompliances 1 }
+
+    hpicfPVlanMappingTblCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION
+                    "The compliance statement for SNMP entities which implement
+                     the hpicfPrviateVlan MIB."
+        MODULE -- this module
+        MANDATORY-GROUPS { hpicfPVlanMappingTableGroup }
+        GROUP            hpicfPVlanMappingTableGroup
+        DESCRIPTION      "A Collection of Object(s) that allow
+                          configuration of Private VLANs"
+        ::= {hpicfPrivateVlanCompliances 2}
+
+    hpicfPrivateVlanTableGroup OBJECT-GROUP
+        OBJECTS      { hpicfPrivateVlanType }
+        STATUS       current
+        DESCRIPTION  "The collection of object(s) represent the
+                      Private VLAN Type."
+        ::= { hpicfPrivateVlanGroup 1 }
+
+    hpicfPVlanMappingTableGroup OBJECT-GROUP
+        OBJECTS     {
+                        hpicfPrivateVlanIsolated,
+                        hpicfPrivateVlanCommunity,
+                        hpicfPrivateVlanMappingRowStatus
+                    }
+        STATUS      current
+        DESCRIPTION "The collection of objects which are used to represent the
+                     Primary and associated Secondary VLANs."
+        ::= {hpicfPrivateVlanGroup 2}
+END

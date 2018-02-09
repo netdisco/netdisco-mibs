@@ -1,0 +1,2396 @@
+--**MOD+***********************************************************************
+--* Module: hpicfPim6.mib
+--*
+--* Copyright (C) 2015,2017 Hewlett Packard Enterprise Development Company LP
+--* All Right Reserved.
+--*
+--* The contents of this software are proprietary and confidential
+--* to the Hewlett Packard Enterprise Development Company LP.  No part of this
+--* program may be photocopied, reproduced, or translated into another
+--* programming language without prior written consent of the
+--* Hewlett Packard Enterprise Development Company LP.
+--*
+--*Purpose: This file contains MIB definition of HP-ICF-PIM6-MIB
+--*
+--**MOD-**************************************************************************
+
+HP-ICF-PIM6 DEFINITIONS ::= BEGIN
+
+IMPORTS
+        OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE, Integer32, 
+	    Unsigned32, Counter32, Counter64, TimeTicks FROM SNMPv2-SMI
+	MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+            FROM SNMPv2-CONF
+        TimeStamp, TruthValue, RowStatus
+	    FROM SNMPv2-TC
+        hpSwitch
+            FROM HP-ICF-OID 
+	InterfaceIndex, InterfaceIndexOrZero
+	    FROM IF-MIB
+        InetAddressType, InetAddress, InetAddressPrefixLength
+            FROM INET-ADDRESS-MIB
+        pimRPSetComponent
+            FROM PIM-MIB
+        IANAipRouteProtocol,
+        IANAipMRouteProtocol  FROM IANA-RTPROTO-MIB;
+
+
+
+    hpicfPim6MIB MODULE-IDENTITY
+        LAST-UPDATED "201710100000Z"  -- Oct 10, 2017
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO "Hewlett-Packard Company
+                      8000 Foothills Blvd.
+                      Roseville, CA 95747"
+        DESCRIPTION  "This MIB module contains HP proprietary
+                     extensions to the standard PIM MIB (RFC 5060)."
+
+        REVISION     "201710100000Z"  -- Oct 10, 2017
+        DESCRIPTION  "Extended PIMv6 Trap, State refresh max range."
+
+        REVISION     "201707030000Z"  -- Jul 03, 2017
+        DESCRIPTION  "Added PIMv6 SM specific objects."
+
+        REVISION     "201204120000Z"  -- May 22, 2015
+        DESCRIPTION  "Extended hpicfPim6IfTable to provide more detail on PIM 
+                     enabled interfaces."
+
+        ::= { hpSwitch 122 }
+
+-- **********************************************************************
+-- The PIM MIB Groups
+-- **********************************************************************
+
+    hpicfPim6Objects     OBJECT IDENTIFIER ::= { hpicfPim6MIB 1 }
+    hpicfPim6Traps       OBJECT IDENTIFIER ::= { hpicfPim6Objects 0 }
+    hpicfPim6            OBJECT IDENTIFIER ::= { hpicfPim6Objects 1 }
+
+    hpicfPim6Conformance OBJECT IDENTIFIER ::= { hpicfPim6MIB 2 }
+    hpicfPim6Groups      OBJECT IDENTIFIER ::= { hpicfPim6Conformance 1 }
+    hpicfPim6Compliances OBJECT IDENTIFIER ::= { hpicfPim6Conformance 2 }
+
+-- **********************************************************************
+-- Start of MIB objects
+-- **********************************************************************
+
+    hpicfPim6AdminStatus OBJECT-TYPE
+        SYNTAX      INTEGER{
+                        enable(1),
+                        disable(2)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "The operational status of the PIMv6 routing protocol
+                    on this router. Default is disabled."
+        DEFVAL      { disable }
+        ::= { hpicfPim6 1 }
+
+    hpicfPim6StateRefreshInterval OBJECT-TYPE
+        SYNTAX      Integer32 (10..100)
+        UNITS       "seconds"
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "The interval between successive State Refresh
+                    messages originated by this router. 
+                    Default is 60 seconds. The maximum value allowed
+                    in PIMv6 for State Refresh interval will be 100."
+        DEFVAL { 60 } 
+        ::= { hpicfPim6 2 } 
+
+    hpicfPim6TrapControl OBJECT-TYPE
+        SYNTAX       BITS {
+                         neighborLoss(0),
+                         hardMrtFull(1),
+                         softMrtFull(2)
+                     }
+        MAX-ACCESS   read-write
+        STATUS       current
+        DESCRIPTION  "Indicates whether the PIMv6-enabled router will generate
+                     SNMP traps for PIMv6 events. The set bit means 'enabled'.
+
+                     - neighborLoss(0)
+                       This bit controls whether the notification trap is
+                       allowed to be sent when the neighbor timer expires
+                       and the router has no other neighbors on the same
+                       interface with a lower IP address than itself.
+
+                     - hardMrtFull(1)
+                       This bit controls whether the notification trap is
+                       allowed to be sent when the MRT table is full and
+                       the error has been originated by hardware.
+
+                     - softMrtFull(2)
+                       This bit controls whether the notification trap is
+                       allowed to be sent when the MRT table is full and
+                       the error has been originated by software."
+        ::= { hpicfPim6 3 }
+
+-- **********************************************************************
+-- The Extensions to the PIM Interface Table (RFC 5060 and RFC 2934)
+-- **********************************************************************
+
+    hpicfPim6IfTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfPim6IfEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "HP extensions to the pimInterfaceTable."
+        ::= { hpicfPim6 4 }
+
+    hpicfPim6IfEntry OBJECT-TYPE
+        SYNTAX      HpicfPim6IfEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "HP extensions for an entry in the pimInterfaceTable."
+    	INDEX      { hpicfPim6IfIndex }
+        ::= { hpicfPim6IfTable 1 }
+
+    HpicfPim6IfEntry ::=
+        SEQUENCE {
+            hpicfPim6IfIndex                        InterfaceIndex,
+	    hpicfPim6IfAddressType                  InetAddressType,
+	    hpicfPim6IfAddress 	                    InetAddress,
+            hpicfPim6IfMode                         INTEGER,
+            hpicfPim6IfTrigHelloInterval            Unsigned32,
+            hpicfPim6IfHelloHoldtime                Unsigned32,
+            hpicfPim6IfLanPruneDelay                TruthValue,
+            hpicfPim6IfPropagationDelay             Unsigned32,
+            hpicfPim6IfOverrideInterval             Unsigned32,
+            hpicfPim6IfGenerationID                 TruthValue,
+            hpicfPim6IfJoinPruneHoldtime            Unsigned32,
+            hpicfPim6IfGraftRetryInterval           Unsigned32,
+            hpicfPim6IfMaxGraftRetries              Integer32,
+            hpicfPim6IfSRTTLThreshold               Unsigned32,
+            hpicfPim6IfLanDelayEnabled              TruthValue,
+            hpicfPim6IfSRCapable                    TruthValue,
+            hpicfPim6IfNBRTimeout                   Integer32,
+            hpicfPim6IfNBRCount                     Counter32,
+            hpicfPim6IfNegotiatedPropagationDelay   TimeTicks,
+            hpicfPim6IfNegotiatedOverrideInterval   TimeTicks,
+            hpicfPim6IfAssertHoldInterval           Counter32,
+            hpicfPim6IfNumRoutersNotUsingLanDelay   Counter32,
+            hpicfPim6IfHelloInterval                Unsigned32,
+            hpicfPim6IfStatus                       RowStatus,
+            hpicfPim6IfDRPriority                   Unsigned32,
+            hpicfPim6IfDRType                       InetAddressType,
+            hpicfPim6IfDR                           InetAddress
+        }
+
+    hpicfPim6IfIndex OBJECT-TYPE
+        SYNTAX      InterfaceIndex
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The ifindex value of this PIMv6 interface."
+        ::= { hpicfPim6IfEntry 1 }
+
+    hpicfPim6IfAddressType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The address type of this PIMv6 interface."
+        ::= { hpicfPim6IfEntry 2 }
+
+    hpicfPim6IfAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The primary IP address of this router on this PIMv6
+            interface.  The InetAddressType is given by the
+            pimInterfaceAddressType object."
+        REFERENCE "RFC 4601 sections 4.1.6, 4.3.1-4.3.4, and 4.5.1"
+        ::= { hpicfPim6IfEntry 3 }
+
+    hpicfPim6IfMode OBJECT-TYPE
+        SYNTAX     INTEGER { dense(1), sparse(2)}
+        MAX-ACCESS read-create
+    	STATUS     current
+    	DESCRIPTION
+            "The configured mode of this PIMv6 interface."
+   	DEFVAL     { dense }
+   	 ::= { hpicfPim6IfEntry 4 }
+    
+    hpicfPim6IfTrigHelloInterval OBJECT-TYPE 
+        SYNTAX      Unsigned32 (0..5)
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The maximum time before this router sends a triggered 
+		     PIMv6 Hello message on this interface.  This object 
+		     corresponds to the 'Trigered_Hello_Delay' timer value 
+	             defined in the PIM-SM specification. A value of zero 
+	    	     has no special meaning and indicates that triggered PIMv6 
+	             Hello messages should always be sent immediately."
+	REFERENCE "RFC 4601 section 4.11"
+        DEFVAL { 5 } 
+        ::= { hpicfPim6IfEntry 5 } 
+
+    hpicfPim6IfHelloHoldtime OBJECT-TYPE 
+        SYNTAX      Unsigned32 (0..65535) 
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The value set in the Holdtime field of PIMv6 Hello 
+		     messages transmitted on this interface.  A value of 
+		     65535 represents an 'infinite' holdtime.  Implementations 
+		     are recommended to use a holdtime that is 3.5 times 
+		     the value of hpicfPim6InterfaceHelloInterval,or 65535 if 
+	      	     hpicfPim6InterfaceHelloInterval is set to zero."
+        REFERENCE "RFC 4601 sections 4.3.2 and 4.9.2"
+        DEFVAL { 105 } 
+        ::= { hpicfPim6IfEntry 6 } 
+
+    hpicfPim6IfLanPruneDelay OBJECT-TYPE 
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "Turns the LAN Prune Delay options ON and OFF, on this
+                     interface. Default is true."
+        DEFVAL { true }
+        ::= { hpicfPim6IfEntry 7 }
+
+    hpicfPim6IfPropagationDelay OBJECT-TYPE 
+        SYNTAX      Unsigned32 (250..2000)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The expected propagation delay between PIMv6 routers on 
+		     this network or link.This router inserts this value into 
+		     the Propagation_Delay  messages sent on this interface.  
+		     Implementations SHOULD enforce a lower bound on the permitted 
+		     values for this object to allow for scheduling and processing 
+		     delays within local router."
+        DEFVAL { 500 }
+        ::= { hpicfPim6IfEntry 8 }
+
+    hpicfPim6IfOverrideInterval OBJECT-TYPE 
+        SYNTAX      Unsigned32 (500..6000)
+        UNITS       "milliseconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "  The value this router inserts into the Override_Interval
+                     field of the LAN Prune Delay option in the PIMv6 Hello 
+		     messages it sends on this interface. 
+		       When overriding a prune, PIMv6 routers pick a random timer  
+		     up to the value of this object. The more PIMv6 routers that 
+		     are active on a network,the more likely it is that the prune 
+		     will be overridden after a small proportion of this time has elapsed. 
+			The more PIMv6 routers are active on this network, the larger 
+		     this object should be to obtain an optimal spread of prune 
+		     override latencies."
+        REFERENCE "RFC 4601 section 4.3.3"
+	DEFVAL { 2500 } 
+        ::= { hpicfPim6IfEntry 9 } 
+
+    hpicfPim6IfGenerationID OBJECT-TYPE 
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "Turns the Generation ID option ON and OFF, on this
+                      interface. Default is false."
+        DEFVAL { false } 
+        ::= { hpicfPim6IfEntry 10 }
+
+    hpicfPim6IfJoinPruneHoldtime OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..65535)
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The value inserted into the Holdtime field of a PIMv6 
+		     Join/Prune message sent on this interface.  A value of 
+		     65535 represents an 'infinite' holdtime.  Implementations 
+		     are recommended to use a holdtime that is 3.5 times the 
+		     value of hpicfPim6JoinPruneInterval, or 65535 if 
+		     hpicfpiPim6JoinPruneInterval is set to zero.  PIMv6-DM 
+		     implementations are recommended to use the value of hpicfPim6IfPruneLimitInterval."
+        REFERENCE "RFC 4601 sections 4.5.3 and 4.9.5"
+        DEFVAL { 210 }
+        ::= { hpicfPim6IfEntry 11 }
+
+    hpicfPim6IfGraftRetryInterval OBJECT-TYPE 
+        SYNTAX      Unsigned32 (1..10)
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The minimum interval that must transpire between two 
+		     successive Grafts sent by a router.  This object corresponds 
+		     to the 'Graft_Retry_Period' timer value defined in the PIMv6-DM 
+		     specification.  This object is used only by PIMv6-DM."
+        REFERENCE "RFC 3973 section 4.8"
+        DEFVAL { 3 }
+        ::= { hpicfPim6IfEntry 12 } 
+
+    hpicfPim6IfMaxGraftRetries OBJECT-TYPE 
+        SYNTAX      Integer32 (1..10)
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The maximum number of times this router will re-send a 
+                     Graft on this interface. Default is 2."
+        DEFVAL { 2 }
+        ::= { hpicfPim6IfEntry 13 }
+
+    hpicfPim6IfSRTTLThreshold OBJECT-TYPE 
+        SYNTAX      Unsigned32 
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The Time To Live in a PIMv6-DM State Refresh message at
+                    which it is not forwarded on this interface. Default is 0."
+        DEFVAL { 0 }
+        ::= { hpicfPim6IfEntry 14 }
+
+    hpicfPim6IfLanDelayEnabled OBJECT-TYPE 
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Evaluates to TRUE if all routers on this interface are
+                    using the LAN Prune Delay Option."
+        ::= { hpicfPim6IfEntry 15 }
+
+    hpicfPim6IfSRCapable OBJECT-TYPE 
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Evaluates to TRUE if all routers on this interface are
+                    using the State Refresh Capable Option."
+        ::= { hpicfPim6IfEntry 16 }
+
+    hpicfPim6IfNBRTimeout OBJECT-TYPE
+        SYNTAX      Integer32 (60..8000)
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "Time interval after which the router will consider a 
+                    neighbor to not be present, if no PIM Hello messages
+                    arrived on the interface. Default is 180 seconds."
+        DEFVAL { 180 }
+        ::= { hpicfPim6IfEntry 17 }
+
+    hpicfPim6IfNBRCount OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "PIMv6 Neighbor Count."
+        ::= { hpicfPim6IfEntry 18 }
+
+    hpicfPim6IfNegotiatedPropagationDelay OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Negotiated PIMv6 LAN/Propagation Delay (ms)."
+        ::= { hpicfPim6IfEntry 19 }
+
+    hpicfPim6IfNegotiatedOverrideInterval OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Negotiated PIMv6 Override Interval (ms)."
+        ::= { hpicfPim6IfEntry 20 }
+
+    hpicfPim6IfAssertHoldInterval OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "PIMv6 Assert Hold Interval (s)."
+        ::= { hpicfPim6IfEntry 21 }
+
+    hpicfPim6IfNumRoutersNotUsingLanDelay OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Number of routers on network not using LAN Delay."
+        ::= { hpicfPim6IfEntry 22 }
+
+    hpicfPim6IfHelloInterval OBJECT-TYPE
+        SYNTAX     Unsigned32 (5..300)
+   	UNITS      "seconds"
+    	MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The frequency at which PIMv6 Hello messages are transmitted
+            on this interface.  This object corresponds to the
+            'Hello_Period' timer value defined in the PIM-SM
+            specification.  A value of zero represents an 'infinite'
+            interval, and indicates that periodic PIM Hello messages
+            should not be sent on this interface."
+   	DEFVAL { 30 }
+    	::= { hpicfPim6IfEntry 23 }
+
+    hpicfPim6IfStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The status of this entry.  Creating the entry enables PIMv6
+            on the interface; destroying the entry disables PIMv6 on the
+            interface.
+
+            This status object can be set to active(1) without setting
+            any other columnar objects in this entry.
+
+            All writeable objects in this entry can be modified when the
+            status of this entry is active(1)."
+        ::= { hpicfPim6IfEntry 24 }
+
+    hpicfPim6IfDRPriority OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The Designated Router Priority inserted into the DR
+                    priority option on this interface. Default is 1."
+        DEFVAL { 1 }
+        ::= { hpicfPim6IfEntry 25 }
+
+    hpicfPim6IfDRType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The address type of Designated Router on this PIM interface."
+        ::= { hpicfPim6IfEntry 26 }
+
+    hpicfPim6IfDR OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                  "The primary IP address of the Designated Router on this PIM
+                   interface.  The InetAddressType is given by the
+                   hpicfPim6InterfaceAddressType object."
+        REFERENCE "RFC 4601 section 4.3"
+        ::= { hpicfPim6IfEntry 27 }
+
+    hpicfPim6RemoveConfig OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "PIMv6 is halted.  This objects clears all existing PIMv6
+                    configuration, intializes the pim config to the default
+                    state.  SnmpGet on this will always return false.
+                    An SnmpSet of false has no effect."
+        DEFVAL      { false }
+        ::= { hpicfPim6 5 }
+
+
+-- **********************************************************************
+-- Sum total of entries in hpicfPim6StaticRpfTable
+-- **********************************************************************
+
+    hpicfPim6NumStaticRpfEntries OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Total number of Static RPF entries."
+        ::= { hpicfPim6 6 }
+
+    hpicfPim6Version OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Currently running PIM Version."
+        ::= { hpicfPim6 7}
+
+    hpicfPim6StarGEntries OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Total number of entries in the (*,G) table"
+        ::= { hpicfPim6 8 }
+
+    hpicfPim6SGEntries OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Total number of entries in the (S,G) table."
+        ::= { hpicfPim6 9 }
+
+-- **********************************************************************
+-- Sum total of the entries in hpicfPim6NeighborTable
+-- **********************************************************************
+
+    hpicfPim6TotalNeighborCount OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "PIMv6 Neighbor Count."
+        ::= { hpicfPim6 10 }
+
+    hpicfPim6JoinPruneInterval OBJECT-TYPE
+    	SYNTAX     Integer32
+    	UNITS      "seconds"
+    	MAX-ACCESS read-write
+    	STATUS     current
+    	DESCRIPTION
+            "The default interval at which periodic PIMv6-SM Join/Prune
+            messages are to be sent."
+   	::= { hpicfPim6 11 }
+
+-- **********************************************************************
+-- The PIM6 Static RP-Set Table
+-- **********************************************************************
+
+    hpicfPim6StaticRPSetTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfPim6StaticRPSetEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The (conceptual) table containing statically
+                    configured Rendezvous Points (RPs) for IPv6 multicast
+                    group mappings. This information is being used
+                    in the PIMv6 Sparse mode only."
+        ::= { hpicfPim6 12 }
+
+    hpicfPim6StaticRPSetEntry OBJECT-TYPE
+        SYNTAX      HpicfPim6StaticRPSetEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "An entry (row) in the hpicfPim6StaticRPSetTable.
+                    NOTE: the pimRPSetComponent is an index that uniquely
+                    identifies the component. Each protocol instance
+                    connected to a separate domain should have a different
+                    index value."
+        INDEX      { pimRPSetComponent,
+                     hpicfPim6StaticRPSetGrpAddrType,
+                     hpicfPim6StaticRPSetGroupAddress,
+                     hpicfPim6StaticRPSetGrpMskType,
+                     hpicfPim6StaticRPSetGroupMask,
+                     hpicfPim6StaticRPSetAddressType,
+                     hpicfPim6StaticRPSetAddress }
+        ::= { hpicfPim6StaticRPSetTable 1 }
+
+    HpicfPim6StaticRPSetEntry ::=
+        SEQUENCE {
+            hpicfPim6StaticRPSetGrpAddrType       InetAddressType,
+            hpicfPim6StaticRPSetGroupAddress      InetAddress,
+            hpicfPim6StaticRPSetGrpMskType        InetAddressType,
+            hpicfPim6StaticRPSetGroupMask         InetAddress,
+            hpicfPim6StaticRPSetAddressType       InetAddressType,
+            hpicfPim6StaticRPSetAddress           InetAddress,
+            hpicfPim6StaticRPSetOverride          TruthValue,
+            hpicfPim6StaticRPSetRowStatus         RowStatus
+    }
+
+    hpicfPim6StaticRPSetGrpAddrType  OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The address type of this RP-set Group address."
+        ::= { hpicfPim6StaticRPSetEntry 1 }
+
+    hpicfPim6StaticRPSetGroupAddress OBJECT-TYPE
+        SYNTAX      InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The IPv6 multicast group address which, when combined
+                    with hpicfPim6StaticRPSetGroupMask, gives the group
+                    prefix for which this entry contains information
+                    about the statically configured RP."
+        ::= { hpicfPim6StaticRPSetEntry 2 }
+
+    hpicfPim6StaticRPSetGrpMskType    OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The address type of this RP-set Group mask."
+        ::= { hpicfPim6StaticRPSetEntry 3 }
+
+    hpicfPim6StaticRPSetGroupMask OBJECT-TYPE
+        SYNTAX      InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The multicast group address mask which, when combined
+                    with hpicfPim6StaticRPSetGroupAddress, gives the group
+                    prefix for which this entry contains information about
+                    the statically configured RP."
+        ::= { hpicfPim6StaticRPSetEntry 4 }
+
+    hpicfPim6StaticRPSetAddressType       OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The address type of this RP-set Address."
+        ::= { hpicfPim6StaticRPSetEntry 5 }
+
+    hpicfPim6StaticRPSetAddress OBJECT-TYPE
+        SYNTAX      InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The IPv6 address of statically configured RP for the
+                    given IPv6 multicast group(s)."
+        ::= { hpicfPim6StaticRPSetEntry 6 }
+
+    hpicfPim6StaticRPSetOverride OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "If true, indicates that the router should ignore the
+                    information learned by a BSR if there is a conflict
+                    between the information this static entry contains and
+                    the information that is learned by the BSR.
+                    Default is false."
+        DEFVAL { false }
+        ::= { hpicfPim6StaticRPSetEntry 7 }
+
+    hpicfPim6StaticRPSetRowStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION "The status of this row, by which new entries may be
+                    created, or old entries deleted from this table."
+        ::= { hpicfPim6StaticRPSetEntry 8 }
+
+
+-- **********************************************************************
+-- The PIM6 Candidate-RP Table
+-- **********************************************************************
+
+    hpicfPim6CandidateRPTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF Pim6CandidateRPEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION "The (conceptual) table listing the IPv6 multicast groups for
+                    which the local router is to advertise itself as a
+                    Candidate-RP when the value of hpicfPim6ComponentCRPHoldTime is
+                    non-zero.  If this table is empty, then the local router
+                    will advertise itself as a Candidate-RP for all groups
+                    (providing the value of hpicfPim6ComponentCRPHoldTime is non-
+                    zero)."
+        ::= { hpicfPim6 13 }
+
+    hpicfPim6CandidateRPEntry OBJECT-TYPE
+        SYNTAX     Pim6CandidateRPEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION "An entry (conceptual row) in the hpicfPim6CandidateRPTable."
+        INDEX      { hpicfPim6CandidateRPGrpAddrType,
+                     hpicfPim6CandidateRPGroupAddress,
+                     hpicfPim6CandidateRPGrpMskType,
+                     hpicfPim6CandidateRPGroupMask }
+        ::= { hpicfPim6CandidateRPTable 1 }
+
+    Pim6CandidateRPEntry ::= SEQUENCE {
+        hpicfPim6CandidateRPGrpAddrType         InetAddressType,
+        hpicfPim6CandidateRPGroupAddress        InetAddress,
+        hpicfPim6CandidateRPGrpMskType          InetAddressType,
+        hpicfPim6CandidateRPGroupMask           InetAddress,
+        hpicfPim6CandidateRPAddressType         InetAddressType,
+        hpicfPim6CandidateRPAddress             InetAddress,
+        hpicfPim6CandidateRPRowStatus           RowStatus
+        }
+
+    hpicfPim6CandidateRPGrpAddrType OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The IP address type of hpicfPim6CandidateRPGroupAddress."
+        ::= { hpicfPim6CandidateRPEntry 1}
+
+    hpicfPim6CandidateRPGroupAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION "The IPv6 multicast group address which, when combined with
+                     hpicfPim6CandidateRPGroupMask, identifies a group prefix for which
+                     the local router will advertise itself as a Candidate-RP."
+        ::= { hpicfPim6CandidateRPEntry 2 }
+
+    hpicfPim6CandidateRPGrpMskType OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "The IP address type of hpicfPim6CandidateRPGroupMask."
+        ::= { hpicfPim6CandidateRPEntry 3}
+
+    hpicfPim6CandidateRPGroupMask OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION "The multicast group address mask which, when combined with
+                     hpicfPim6CandidateRPGroupMask, identifies a group prefix for which
+                     the local router will advertise itself as a Candidate-RP."
+        ::= { hpicfPim6CandidateRPEntry 4 }
+
+    hpicfPim6CandidateRPAddressType OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The IP address type of hpicfPim6CandidateRPAddress."
+        ::= { hpicfPim6CandidateRPEntry 5}
+
+    hpicfPim6CandidateRPAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION "The (unicast) address of the interface which will be
+                     advertised as a Candidate-RP."
+        ::= { hpicfPim6CandidateRPEntry 6 }
+
+    hpicfPim6CandidateRPRowStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION "The status of this row, by which new entries may be
+                     created, or old entries deleted from this table."
+        ::= { hpicfPim6CandidateRPEntry 7 }
+
+-- **********************************************************************
+-- The PIM6 Component Table
+-- **********************************************************************
+
+    hpicfPim6ComponentTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF Pim6ComponentEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The (conceptual) table containing objects specific to a PIMv6
+               domain.  One row exists for each domain to which the router
+               is connected.  A PIMv6-SM domain is defined as an area of the
+               network over which Bootstrap messages are forwarded.
+               Typically, a PIMv6-SM router will be a member of exactly one
+               domain.  This table also supports, however, routers which
+               may form a border between two PIMv6-SM domains and do not
+               forward Bootstrap messages between them."
+        ::= { hpicfPim6 14 }
+
+    hpicfPim6ComponentEntry OBJECT-TYPE
+        SYNTAX     Pim6ComponentEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+               "An entry (conceptual row) in the hpicfPim6ComponentTable."
+        INDEX      { hpicfPim6ComponentIndex }
+        ::= { hpicfPim6ComponentTable 1 }
+
+    Pim6ComponentEntry ::= SEQUENCE {
+        hpicfPim6ComponentIndex              Integer32,
+        hpicfPim6ComponentBSRAddrType        InetAddressType,
+        hpicfPim6ComponentBSRAddress         InetAddress,
+        hpicfPim6ComponentBSRExpiryTime      TimeTicks,
+        hpicfPim6ComponentCRPHoldTime        Integer32,
+        hpicfPim6ComponentStatus             RowStatus,
+
+        hpicfPim6ComponentCBSRAdmStatus          INTEGER,
+        hpicfPim6ComponentCBSRAddrType           InetAddressType,
+        hpicfPim6ComponentCBSRAddress            InetAddress,
+        hpicfPim6ComponentCBSRPriority           Integer32,
+        hpicfPim6ComponentCBSRHashMskLen         Integer32,
+        hpicfPim6ComponentCBSRMsgInt             Integer32,
+        hpicfPim6ComponentCRPPriority            Integer32,
+    -- ------------------
+    -- read-only objects
+    -- ------------------
+        hpicfPim6ComponentCRPAdvInterval         Unsigned32,
+        hpicfPim6ComponentBSRPriority            Unsigned32,
+        hpicfPim6ComponentBSRHashMskLen          Unsigned32,
+        hpicfPim6ComponentBSRUpTime              TimeTicks,
+        hpicfPim6ComponentBSRNextMessage         TimeTicks,
+        hpicfPim6ComponentCRPAdvTimer            TimeTicks
+        }
+
+    hpicfPim6ComponentIndex OBJECT-TYPE
+        SYNTAX     Integer32 (1..255)
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "A number uniquely identifying the component.  Each protocol
+              instance connected to a separate domain should have a
+              different index value.  Routers that only support membership
+              in a single PIMv6-SM domain should use a hpicfPim6ComponentIndex
+              value of 1."
+        ::= { hpicfPim6ComponentEntry 1 }
+
+    hpicfPim6ComponentBSRAddrType OBJECT-TYPE
+        SYNTAX    InetAddressType
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The IP address type of the bootstrap router (BSR) for the local
+               PIMv6 region."
+        ::= { hpicfPim6ComponentEntry 2 }
+
+    hpicfPim6ComponentBSRAddress OBJECT-TYPE
+        SYNTAX    InetAddress
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The IPv6 address of the bootstrap router (BSR) for the local
+               PIMv6 region."
+        ::= { hpicfPim6ComponentEntry 3 }
+
+    hpicfPim6ComponentBSRExpiryTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The minimum time remaining before the bootstrap router in
+               the local domain will be declared down.  For candidate BSRs,
+               this is the time until the component sends an RP-Set
+               message.  For other routers, this is the time until it may
+               accept an RP-Set message from a lower candidate BSR."
+        ::= { hpicfPim6ComponentEntry 4 }
+
+    hpicfPim6ComponentCRPHoldTime OBJECT-TYPE
+        SYNTAX     Integer32 (0..255)
+        UNITS      "seconds"
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+             "The holdtime of the component when it is a candidate RP in
+              the local domain.  The value of 0 is used to indicate that
+              the local system is not a Candidate-RP."
+        DEFVAL     { 0 }
+        ::= { hpicfPim6ComponentEntry 5 }
+
+    hpicfPim6ComponentStatus OBJECT-TYPE
+        SYNTAX     RowStatus
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+              "The status of this entry.  Creating the entry creates
+               another protocol instance; destroying the entry disables a
+               protocol instance."
+        ::= { hpicfPim6ComponentEntry 6 }
+
+    hpicfPim6ComponentCBSRAdmStatus OBJECT-TYPE
+        SYNTAX      INTEGER{
+                        enable(1),
+                        disable(2)
+                    }
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "This objects specifies whether or not the router
+                    configured to be a Candidate BSR for the local
+                    PIMv6 region. Default is disabled."
+        DEFVAL      { disable }
+        ::= { hpicfPim6ComponentEntry 7 }
+
+    hpicfPim6ComponentCBSRAddrType OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The IPv6 address type of the Candidate BSR router will 
+                     advertise for the local PIMv6 region."
+        ::= { hpicfPim6ComponentEntry 8 }
+
+    hpicfPim6ComponentCBSRAddress OBJECT-TYPE
+        SYNTAX     InetAddress
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The IPv6 address the Candidate BSR router will advertise
+                    for the local PIMv6 region."
+        ::= { hpicfPim6ComponentEntry 9 }
+
+    hpicfPim6ComponentCBSRPriority OBJECT-TYPE
+        SYNTAX      Integer32 (0..255)
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The priority for Candidate BSR router. In BSR election
+                    process the candidate BSR with the highest (numerically
+                    bigger) priority becomes the BSR. If the priority values
+                    are the same, the router with the larger IPv6 address is
+                    the BSR. Default is 0."
+        DEFVAL { 0 }
+        ::= { hpicfPim6ComponentEntry 10 }
+
+    hpicfPim6ComponentCBSRHashMskLen OBJECT-TYPE
+        SYNTAX      Integer32 (1..128)
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "Specifies the length (in bits) of a multicast group
+                    address to use when mapping a group to one of the
+                    candidate RPs from the RP-Set whose group-prefix
+                    includes the group. Default is 126."
+        DEFVAL { 126 }
+        ::= { hpicfPim6ComponentEntry 11 }
+
+    hpicfPim6ComponentCBSRMsgInt OBJECT-TYPE
+        SYNTAX      Integer32 (5..300)
+        UNITS       "seconds"
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "If this router is the elected BSR, then this is the
+                    interval for sending (multicast out) periodic Bootstrap
+                    (RP-Set) messages on all PIMv6 SM interfaces.
+                    Default is 60 seconds."
+        DEFVAL { 60 }
+        ::= { hpicfPim6ComponentEntry 12 }
+
+    hpicfPim6ComponentCRPPriority OBJECT-TYPE
+        SYNTAX      Integer32 (0..255)
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The priority for the Candidate RP for the local PIMv6
+                    domain. Determines which Candidate RPs get selected by
+                    the BSR to be in the RP Set. The smaller value means
+                    the higher priority (a value of zero is the highest
+                    possible priority). Default is 192."
+        DEFVAL { 192 }
+        ::= { hpicfPim6ComponentEntry 13 }
+
+    hpicfPim6ComponentCRPAdvInterval OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The interval at which the Candidate RP transmits
+                    (unicast to the elected BSR) advertise messages in
+                    the local PIMv6 domain."
+        ::= { hpicfPim6ComponentEntry 14 }
+
+    hpicfPim6ComponentBSRPriority OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The priority of the Bootstrap Router (BSR) elected
+                    for the local PIMv6 region."
+        ::= { hpicfPim6ComponentEntry 15 }
+
+    hpicfPim6ComponentBSRHashMskLen OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The hash mask length of the elected Bootstrap
+                    Router (BSR)."
+        ::= { hpicfPim6ComponentEntry 16 }
+
+    hpicfPim6ComponentBSRUpTime OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Length of time that the elected Bootstrap Router (BSR)
+                    has been up."
+        ::= { hpicfPim6ComponentEntry 17 }
+
+    hpicfPim6ComponentBSRNextMessage OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Time in which the next bootstrap message is due from
+                    the elected Bootstrap Router (BSR)."
+        ::= { hpicfPim6ComponentEntry 18 }
+
+    hpicfPim6ComponentCRPAdvTimer OBJECT-TYPE
+        SYNTAX      TimeTicks
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Next scheduled Candidate RP Advertisement."
+        ::= { hpicfPim6ComponentEntry 19 }
+
+
+-- SPT threshold
+    hpicfPim6SPTThreshold OBJECT-TYPE
+        SYNTAX      Integer32
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Specifies a threshold for switching to the Shortest
+                    Path Tree (SPT) on this router. If the object has
+                    the special value of -1, the Shared Tree rooted to the
+                    Rendezvous Point (RP) will be used indefinitely on the
+                    router. Default is -1."
+        DEFVAL { -1 }
+        ::= { hpicfPim6 15 }
+--
+-- The PIM Neighbor Table
+--
+
+    hpicfPim6NeighborTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF Pim6NeighborEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The (conceptual) table listing the router's PIMv6 neighbors."
+        ::= { hpicfPim6 16 }
+
+    hpicfPim6NeighborEntry OBJECT-TYPE
+        SYNTAX     Pim6NeighborEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "An entry (conceptual row) in the hpicfPim6NeighborTable."
+        INDEX      { hpicfPim6NeighborIfIndex,
+                     hpicfPim6NeighborAddressType,
+                     hpicfPim6NeighborAddress }
+        ::= { hpicfPim6NeighborTable 1 }
+
+    Pim6NeighborEntry ::= SEQUENCE {
+        hpicfPim6NeighborIfIndex              InterfaceIndex,
+        hpicfPim6NeighborAddressType          InetAddressType,
+        hpicfPim6NeighborAddress              InetAddress,
+        hpicfPim6NeighborGenIDPresent         TruthValue,
+        hpicfPim6NeighborGenIDValue           Unsigned32,
+        hpicfPim6NeighborUpTime               TimeTicks,
+        hpicfPim6NeighborExpiryTime           TimeTicks,
+        hpicfPim6NeighborDRPrioPresent        TruthValue,
+        hpicfPim6NeighborDRPriority           Unsigned32,
+        hpicfPim6NeighborLanPruneDlyPres      TruthValue
+    }
+
+    hpicfPim6NeighborIfIndex OBJECT-TYPE
+        SYNTAX     InterfaceIndex
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The value of ifIndex for the interface used to reach this
+               PIMv6 neighbor."
+        ::= { hpicfPim6NeighborEntry 1 }
+
+    hpicfPim6NeighborAddressType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The address type of this PIM neighbor."
+        ::= { hpicfPim6NeighborEntry 2 }
+
+    hpicfPim6NeighborAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The primary IP address of this PIM neighbor.  The
+               InetAddressType is given by the hpicfPim6NeighborAddressType
+               object."
+        ::= { hpicfPim6NeighborEntry 3 }
+
+    hpicfPim6NeighborGenIDPresent OBJECT-TYPE
+        SYNTAX     TruthValue
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+             "Evaluates to TRUE if this neighbor is using the Generation
+              ID option."
+        REFERENCE "RFC 4601 section 4.3.1"
+        ::= { hpicfPim6NeighborEntry 4 }
+
+    hpicfPim6NeighborGenIDValue OBJECT-TYPE
+        SYNTAX     Unsigned32
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The value of the Generation ID from the last PIM Hello
+               message received from this neighbor.  This object is always
+               zero if hpicfPim6NeighborGenIDPresent is FALSE."
+        REFERENCE "RFC 4601 section 4.3.1"
+        ::= { hpicfPim6NeighborEntry 5 }
+
+    hpicfPim6NeighborUpTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The time since this PIMv6 neighbor (last) became a neighbor
+               of the local router."
+        ::= { hpicfPim6NeighborEntry 6 }
+
+    hpicfPim6NeighborExpiryTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The minimum time remaining before this PIMv6 neighbor will
+               time out.  The value zero indicates that this PIMv6 neighbor
+               will never time out."
+        ::= { hpicfPim6NeighborEntry 7 }
+
+    hpicfPim6NeighborDRPrioPresent OBJECT-TYPE
+        SYNTAX     TruthValue
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+             "Evaluates to TRUE if this neighbor is using the DR Priority
+              option."
+        REFERENCE "RFC 4601 section 4.3.2"
+        ::= { hpicfPim6NeighborEntry 8 }
+
+    hpicfPim6NeighborDRPriority OBJECT-TYPE
+        SYNTAX     Unsigned32
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The value of the Designated Router Priority from the last
+               PIM Hello message received from this neighbor.  This object
+               is always zero if hpicfPim6NeighborDRPrioPresent is FALSE."
+        REFERENCE "RFC 4601 section 4.3.2"
+        ::= { hpicfPim6NeighborEntry 9 }
+
+    hpicfPim6NeighborLanPruneDlyPres OBJECT-TYPE
+        SYNTAX     TruthValue
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "Evaluates to TRUE if this neighbor is using the LAN Prune
+               Delay option."
+        REFERENCE "RFC 4601 section 4.3.3"
+        ::= { hpicfPim6NeighborEntry 10 }
+
+
+-- **********************************************************************
+-- The PIM6 Dynamic-RP-Set Table
+-- **********************************************************************
+
+    hpicfPim6RPSetTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF Pim6RPSetEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The (conceptual) table listing PIM information for
+               candidate Rendezvous Points (RPs) for IP multicast groups.
+               When the local router is the BSR, this information is
+               obtained from received Candidate-RP-Advertisements.  When
+               the local router is not the BSR, this information is
+               obtained from received RP-Set messages."
+        ::= { hpicfPim6 17 }
+
+    hpicfPim6RPSetEntry OBJECT-TYPE
+        SYNTAX     Pim6RPSetEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+             "An entry (conceptual row) in the hpicfPim6RPSetTable."
+
+        INDEX      {    pimRPSetComponent,
+                        hpicfPim6RPSetGroupAddressType,
+                        hpicfPim6RPSetGroupAddress,
+                        hpicfPim6RPSetGroupMaskType,
+                        hpicfPim6RPSetGroupMask,
+                        hpicfPim6RPSetAddressType,
+                        hpicfPim6RPSetAddress
+                   }
+        ::= { hpicfPim6RPSetTable 1 }
+
+    Pim6RPSetEntry ::= SEQUENCE {
+
+        hpicfPim6RPSetGroupAddressType   InetAddressType,
+        hpicfPim6RPSetGroupAddress       InetAddress,
+        hpicfPim6RPSetGroupMaskType      InetAddressType,
+        hpicfPim6RPSetGroupMask          InetAddress,
+        hpicfPim6RPSetAddressType        InetAddressType,
+        hpicfPim6RPSetAddress            InetAddress,
+        hpicfPim6RPSetHoldTime           Integer32,
+        hpicfPim6RPSetExpiryTime         TimeTicks
+    }
+
+
+    hpicfPim6RPSetGroupAddressType  OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The address type of this RP-set Group address."
+        ::= { hpicfPim6RPSetEntry 1 }
+
+    hpicfPim6RPSetGroupAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The IP multicast group address which, when combined with
+              hpicfPim6RPSetGroupMask, gives the group prefix for which this
+              entry contains information about the Candidate-RP."
+        ::= { hpicfPim6RPSetEntry 2 }
+
+    hpicfPim6RPSetGroupMaskType  OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The address type of this RP-set Mask address."
+        ::= { hpicfPim6RPSetEntry 3 }
+
+    hpicfPim6RPSetGroupMask OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The multicast group address mask which, when combined with
+               hpicfPim6RPSetGroupAddress, gives the group prefix for which this
+               entry contains information about the Candidate-RP."
+        ::= { hpicfPim6RPSetEntry 4 }
+
+    hpicfPim6RPSetAddressType  OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The address type of this RP-set address."
+        ::= { hpicfPim6RPSetEntry 5 }
+
+    hpicfPim6RPSetAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+              "The IP address of the Candidate-RP."
+        ::= { hpicfPim6RPSetEntry 6 }
+
+    hpicfPim6RPSetHoldTime OBJECT-TYPE
+        SYNTAX     Integer32 (0..255)
+        UNITS      "seconds"
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The holdtime of a Candidate-RP.  If the local router is not
+               the BSR, this value is 0."
+        ::= { hpicfPim6RPSetEntry 7 }
+
+    hpicfPim6RPSetExpiryTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+              "The minimum time remaining before the Candidate-RP will be
+               declared down.  If the local router is not the BSR, this
+               value is 0."
+        ::= { hpicfPim6RPSetEntry 8 }
+
+     -- the IPv6 Multicast Routing MIB-Group
+     -- 
+     -- a collection of objects providing information about
+     -- IPv6 Multicast Groups
+
+    hpicfPim6IpMcastEnabled OBJECT-TYPE
+        SYNTAX     INTEGER { enabled(1), disabled(2) }
+        MAX-ACCESS read-write
+        STATUS     current
+        DESCRIPTION
+                "The enabled status of IPv6 Multicast routing on this router."
+        ::= { hpicfPim6 18 }
+
+    hpicfPim6IpMcastRouteEntryCount OBJECT-TYPE
+        SYNTAX     Counter32
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                "The number of rows in the ipMRouteTable.  This can be used
+                 to monitor the multicast routing table size."
+        ::= { hpicfPim6  19}
+
+    hpicfPim6IpMRouteTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF IpMcastRouteEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                  "The (conceptual) table containing multicast routing
+                  information for IPv6 datagrams sent by particular sources to
+                  the IPv6 multicast groups known to this router."
+        ::= { hpicfPim6 20 }
+
+    hpicfPim6IpMRouteEntry OBJECT-TYPE
+        SYNTAX     IpMcastRouteEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                  "An entry (conceptual row) containing the multicast routing
+                  information for IPv6 datagrams from a particular source and
+                  addressed to a particular IPv6 multicast group address.
+                  
+                  OIDs are limited to 128 sub-identifiers, but this limit
+                  is not enforced by the syntax of this entry.  In practice,
+                  this does not present a problem, because IP address types
+                  allowed by conformance statements do not exceed this limit."
+        INDEX     { hpicfPim6IpMRouteGrpAddrType,
+                    hpicfPim6IpMRouteGroup,
+                    hpicfPim6IpMRouteGrpPrefixLen,
+                    hpicfPim6IpMRouteSrcAddrType,
+                    hpicfPim6IpMRouteSource,
+                    hpicfPim6IpMRouteSrcPrefixLen }
+        
+        ::= { hpicfPim6IpMRouteTable 1 }
+
+    IpMcastRouteEntry ::= SEQUENCE {
+        hpicfPim6IpMRouteGrpAddrType           InetAddressType,
+        hpicfPim6IpMRouteGroup                 InetAddress,
+        hpicfPim6IpMRouteGrpPrefixLen          InetAddressPrefixLength,
+        hpicfPim6IpMRouteSrcAddrType           InetAddressType,
+        hpicfPim6IpMRouteSource                InetAddress,
+        hpicfPim6IpMRouteSrcPrefixLen          InetAddressPrefixLength,
+        hpicfPim6IpMRouteUpstrNbrType          InetAddressType,
+        hpicfPim6IpMRouteUpstrNbr              InetAddress,
+        hpicfPim6IpMRouteInIfIndex             InterfaceIndexOrZero,
+        hpicfPim6IpMRouteTimeStamp             TimeStamp,
+        hpicfPim6IpMRouteExpiryTime            TimeTicks,
+        hpicfPim6IpMRouteProtocol              IANAipMRouteProtocol,
+        hpicfPim6IpMRouteRtProtocol            IANAipRouteProtocol,
+        hpicfPim6IpMRouteRtAddrType            InetAddressType,
+        hpicfPim6IpMRouteRtAddress             InetAddress,
+        hpicfPim6IpMRouteRtPrefixLen           InetAddressPrefixLength,
+        hpicfPim6IpMRouteRtType                INTEGER,
+        hpicfPim6IpMRouteOctets                Counter64,
+        hpicfPim6IpMRoutePkts                  Counter64,
+        hpicfPim6IpMRouteTtlDropOct            Counter64,
+        hpicfPim6IpMRouteTtlDropPkts           Counter64,
+        hpicfPim6IpMRouteDiffInIfOct           Counter64,
+        hpicfPim6IpMRouteDiffInIfPkts          Counter64,
+        hpicfPim6IpMRouteBps                   Counter64
+    }
+
+    hpicfPim6IpMRouteGrpAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+           "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteGroup.  Legal values correspond to
+            the subset of address families for which multicast
+            forwarding is supported."
+        ::= { hpicfPim6IpMRouteEntry 1 }
+
+    hpicfPim6IpMRouteGroup OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+           "The IP multicast group address which, when combined with
+            the corresponding value specified in
+            hpicfPim6IpMRouteGroupPrefixLength, identifies the groups for
+            which this entry contains multicast routing information.
+
+            This address object is only significant up to
+            hpicfPim6IpMRouteGroupPrefixLength bits.  The remaining address
+            bits are set to zero.  This is especially important for this
+            index field, which is part of the index of this entry.  Any
+            non-zero bits would signify an entirely different entry.
+
+            For addresses of type ipv4z or ipv6z, the appended zone
+            index is significant even though it lies beyond the prefix
+            length.  The use of these address types indicate that this
+            forwarding state applies only within the given zone.  Zone
+            index zero is not valid in this table."
+        ::= { hpicfPim6IpMRouteEntry 2 }
+
+    hpicfPim6IpMRouteGrpPrefixLen OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The length in bits of the mask which, when combined with
+            the corresponding value of hpicfPim6IpMRouteGroup, identifies
+            the groups for which this entry contains multicast routing
+            information.
+
+            The InetAddressType is given by
+            hpicfPim6IpMRouteGroupAddressType.  For values 'ipv4' and
+            'ipv4z', this object must be in the range 4..32.  For values
+            'ipv6' and 'ipv6z', this object must be in the range
+            8..128."
+        ::= { hpicfPim6IpMRouteEntry 3 }
+
+    hpicfPim6IpMRouteSrcAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteSource.
+
+            A value of unknown(0) indicates a non-source-specific entry,
+            corresponding to all sources in the group.  Otherwise, the
+            value MUST be the same as the value of
+            hpicfPim6IpMRouteGroupType."
+        ::= { hpicfPim6IpMRouteEntry 4 }
+
+    hpicfPim6IpMRouteSource OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The network address which, when combined with the
+            corresponding value of hpicfPim6IpMRouteSourcePrefixLength,
+            identifies the sources for which this entry contains
+            multicast routing information.
+
+            This address object is only significant up to
+            hpicfPim6IpMRouteSourcePrefixLength bits.  The remaining address
+            bits are set to zero.  This is especially important for this
+            index field, which is part of the index of this entry.  Any
+            non-zero bits would signify an entirely different entry.
+
+            For addresses of type ipv4z or ipv6z, the appended zone
+            index is significant even though it lies beyond the prefix
+            length.  The use of these address types indicate that this
+            source address applies only within the given zone.  Zone
+            index zero is not valid in this table."
+        ::= { hpicfPim6IpMRouteEntry 5 }
+
+    hpicfPim6IpMRouteSrcPrefixLen OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+
+            "The length in bits of the mask which, when combined with
+            the corresponding value of hpicfPim6IpMRouteSource, identifies
+            the sources for which this entry contains multicast routing
+            information.
+
+            The InetAddressType is given by
+            hpicfPim6IpMRouteSourceAddressType.  For the value 'unknown',
+            this object must be zero.  For values 'ipv4' and 'ipv4z',
+            this object must be in the range 4..32.  For values 'ipv6'
+            and 'ipv6z', this object must be in the range 8..128."
+        ::= { hpicfPim6IpMRouteEntry 6 }
+
+    hpicfPim6IpMRouteUpstrNbrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteUpstreamNbr.
+
+            An address type of unknown(0) indicates that the upstream
+            neighbor is unknown, for example in BIDIR-PIM."
+        REFERENCE "RFC 5015"
+        ::= { hpicfPim6IpMRouteEntry 7 }
+
+    hpicfPim6IpMRouteUpstrNbr OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The address of the upstream neighbor (for example, RPF
+            neighbor) from which IP datagrams from these sources to
+            this multicast address are received."
+        ::= { hpicfPim6IpMRouteEntry 8 }
+
+    hpicfPim6IpMRouteInIfIndex OBJECT-TYPE
+        SYNTAX     InterfaceIndexOrZero
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The value of ifIndex for the interface on which IP
+            datagrams sent by these sources to this multicast address
+            are received.  A value of 0 indicates that datagrams are not
+            subject to an incoming interface check, but may be accepted
+            on multiple interfaces (for example, in BIDIR-PIM)."
+       REFERENCE "RFC 5015"
+       ::= { hpicfPim6IpMRouteEntry 9 }
+
+    hpicfPim6IpMRouteTimeStamp OBJECT-TYPE
+        SYNTAX     TimeStamp
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The value of sysUpTime at which the multicast routing
+            information represented by this entry was learned by the
+            router.
+
+            If this information was present at the most recent re-
+            initialization of the local management subsystem, then this
+            object contains a zero value."
+        ::= { hpicfPim6IpMRouteEntry 10 }
+
+    hpicfPim6IpMRouteExpiryTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The minimum amount of time remaining before this entry will
+            be aged out.  The value 0 indicates that the entry is not
+            subject to aging.  If hpicfPim6IpMRouteNHopState is 
+            pruned(1),this object represents the remaining time until the prune
+            expires.  If this timer expires, state reverts to
+            forwarding(2).  Otherwise, this object represents the time
+            until this entry is removed from the table."
+        ::= { hpicfPim6IpMRouteEntry 11 }
+
+    hpicfPim6IpMRouteProtocol OBJECT-TYPE
+        SYNTAX     IANAipMRouteProtocol
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The multicast routing protocol via which this multicast
+            forwarding entry was learned."
+        ::= { hpicfPim6IpMRouteEntry 12 }
+
+    hpicfPim6IpMRouteRtProtocol OBJECT-TYPE
+        SYNTAX     IANAipRouteProtocol
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The routing mechanism via which the route used to find the
+            upstream or parent interface for this multicast forwarding
+            entry was learned."
+        ::= { hpicfPim6IpMRouteEntry 13 }
+
+    hpicfPim6IpMRouteRtAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteRtAddress."
+        ::= { hpicfPim6IpMRouteEntry 14 }
+
+    hpicfPim6IpMRouteRtAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The address portion of the route used to find the upstream
+            or parent interface for this multicast forwarding entry.
+
+            This address object is only significant up to
+            hpicfPim6IpMRouteRtPrefixLength bits.  The remaining address
+            bits are set to zero.
+
+            For addresses of type ipv4z or ipv6z, the appended zone
+            index is significant even though it lies beyond the prefix
+            length.  The use of these address types indicate that this
+            forwarding state applies only within the given zone.  Zone
+            index zero is not valid in this table."
+        ::= { hpicfPim6IpMRouteEntry 15 }
+
+    hpicfPim6IpMRouteRtPrefixLen OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The length in bits of the mask associated with the route
+            used to find the upstream or parent interface for this
+            multicast forwarding entry.
+
+            The InetAddressType is given by hpicfPim6IpMRouteRtAddressType.
+            For values 'ipv4' and 'ipv4z', this object must be in the
+            range 4..32.  For values 'ipv6' and 'ipv6z', this object
+            must be in the range 8..128."
+        ::= { hpicfPim6IpMRouteEntry 16 }
+
+    hpicfPim6IpMRouteRtType OBJECT-TYPE
+        SYNTAX     INTEGER {
+                   unicast (1),  -- Unicast route used in multicast RIB
+                   multicast (2) -- Multicast route
+                   }
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The reason the given route was placed in the (logical)
+            multicast Routing Information Base (RIB).  A value of
+            unicast means that the route would normally be placed only
+            in the unicast RIB, but was placed in the multicast RIB
+            due (instead or in addition) to local configuration, such as
+            when running PIM over RIP.  A value of multicast means that
+            the route was explicitly added to the multicast RIB by the
+            routing protocol, such as the Distance Vector Multicast
+            Routing Protocol (DVMRP) or Multiprotocol BGP."
+        ::= { hpicfPim6IpMRouteEntry 17 }
+
+    hpicfPim6IpMRouteOctets OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of octets contained in IP datagrams that were
+            received from these sources and addressed to this multicast
+            group address, and which were forwarded by this router.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        ::= { hpicfPim6IpMRouteEntry 18 }
+
+    hpicfPim6IpMRoutePkts OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of packets routed using this multicast route
+            entry.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        ::= { hpicfPim6IpMRouteEntry 19 }
+
+    hpicfPim6IpMRouteTtlDropOct OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of octets contained in IP datagrams that this
+            router has received from these sources and addressed to this
+            multicast group address, which were dropped because the TTL
+            (IPv4) or Hop Limit (IPv6) was decremented to zero, or to a
+            value less than hpicfPim6IpMcastInterfaceTtl for all next hops.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        ::= { hpicfPim6IpMRouteEntry 20 }
+
+    hpicfPim6IpMRouteTtlDropPkts OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of packets that this router has received from
+            these sources and addressed to this multicast group address,
+            which were dropped because the TTL (IPv4) or Hop Limit
+            (IPv6) was decremented to zero, or to a value less than
+            hpicfPim6IpMcastInterfaceTtl for all next hops.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        ::= { hpicfPim6IpMRouteEntry 21 }
+
+    hpicfPim6IpMRouteDiffInIfOct OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of octets contained in IP datagrams that this
+            router has received from these sources and addressed to this
+            multicast group address, which were dropped because they
+            were received on an unexpected interface.
+
+            For RPF checking protocols (such as PIM-SM), these packets
+            arrived on interfaces other than hpicfPim6IpMRouteInIfIndex, and
+            were dropped because of this failed RPF check.  (RPF paths
+            are 'Reverse Path Forwarding' paths; the unicast routes to
+            the expected origin of multicast data flows).
+
+            Other protocols may drop packets on an incoming interface
+            check for different reasons (for example, BIDIR-PIM performs
+            a DF check on receipt of packets).  All packets dropped as a
+            result of an incoming interface check are counted here.
+
+            If this counter increases rapidly, this indicates a problem.
+            A significant quantity of multicast data is arriving at this
+            router on unexpected interfaces, and is not being forwarded.
+
+            For guidance, if the rate of increase of this counter
+            exceeds 1% of the rate of increase of hpicfPim6IpMRouteOctets,
+            then there are multicast routing problems that require
+            investigation.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        REFERENCE "RFC 4601 and RFC 5015"
+        ::= { hpicfPim6IpMRouteEntry 22 }
+
+    hpicfPim6IpMRouteDiffInIfPkts OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of packets which this router has received from
+            these sources and addressed to this multicast group address,
+            which were dropped because they were received on an
+            unexpected interface.
+
+            For RPF checking protocols (such as PIM-SM), these packets
+            arrived on interfaces other than hpicfPim6IpMRouteInIfIndex, and
+            were dropped because of this failed RPF check.  (RPF paths
+            are 'Reverse Path Forwarding' path; the unicast routes to
+            the expected origin of multicast data flows).
+
+            Other protocols may drop packets on an incoming interface
+            check for different reasons (for example, BIDIR-PIM performs
+            a DF check on receipt of packets).  All packets dropped as a
+            result of an incoming interface check are counted here.
+
+            If this counter increases rapidly, this indicates a problem.
+            A significant quantity of multicast data is arriving at this
+            router on unexpected interfaces, and is not being forwarded.
+
+            For guidance, if the rate of increase of this counter
+
+            exceeds 1% of the rate of increase of hpicfPim6IpMRoutePkts,then
+            there are multicast routing problems that require
+            investigation.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteTimeStamp."
+        REFERENCE "RFC 4601 and RFC 5015"
+        ::= { hpicfPim6IpMRouteEntry 23 }
+
+    hpicfPim6IpMRouteBps OBJECT-TYPE
+        SYNTAX     Counter64
+        UNITS      "bits per second"
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "Bits per second forwarded by this router using this
+            multicast routing entry.
+
+            This value is a sample; it is the number of bits forwarded
+            during the last whole 1 second sampling period.  The value
+            during the current 1 second sampling period is not made
+            available until the period is completed.
+
+            The quantity being sampled is the same as that measured by
+            hpicfPim6IpMRouteOctets.  The units and the sampling method are
+            different."
+        ::= { hpicfPim6IpMRouteEntry 24 }
+
+
+      --
+      --  The IPv6 Multicast Routing Next Hop Table
+      --
+    hpicfPim6IpMRouteNHopTable OBJECT-TYPE
+        SYNTAX     SEQUENCE OF IpMcastRouteNHopEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The (conceptual) table containing information on the
+            next-hops on outgoing interfaces for routing IP multicast
+            datagrams.  Each entry is one of a list of next-hops on
+            outgoing interfaces for particular sources sending to a
+            particular multicast group address."
+        ::= { hpicfPim6 21 }
+
+    hpicfPim6IpMRouteNHopEntry OBJECT-TYPE
+        SYNTAX     IpMcastRouteNHopEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "An entry (conceptual row) in the list of next-hops on
+            outgoing interfaces to which IP multicast datagrams from
+            particular sources to an IP multicast group address are
+            routed.
+
+            OIDs are limited to 128 sub-identifiers, but this limit
+            is not enforced by the syntax of this entry.  In practice,
+            this does not present a problem, because IP address types
+            allowed by conformance statements do not exceed this limit."
+        INDEX      { hpicfPim6IpMRouteNHopGrpAddrType,
+                     hpicfPim6IpMRouteNHopGroup,
+                     hpicfPim6IpMRouteNHopGrpPLen,
+                     hpicfPim6IpMRouteNHopSrcAddrType,
+                     hpicfPim6IpMRouteNHopSource,
+                     hpicfPim6IpMRouteNHopSrcPLen,
+                     hpicfPim6IpMRouteNHopIfIndex,
+                     hpicfPim6IpMRouteNHopAddrType,
+                     hpicfPim6IpMRouteNHopAddress }
+        ::= { hpicfPim6IpMRouteNHopTable 1 }
+
+    IpMcastRouteNHopEntry ::= SEQUENCE {
+        hpicfPim6IpMRouteNHopGrpAddrType         InetAddressType,
+        hpicfPim6IpMRouteNHopGroup               InetAddress,
+        hpicfPim6IpMRouteNHopGrpPLen             InetAddressPrefixLength,
+        hpicfPim6IpMRouteNHopSrcAddrType         InetAddressType,
+        hpicfPim6IpMRouteNHopSource              InetAddress,
+        hpicfPim6IpMRouteNHopSrcPLen             InetAddressPrefixLength,
+        hpicfPim6IpMRouteNHopIfIndex             InterfaceIndex,
+        hpicfPim6IpMRouteNHopAddrType            InetAddressType,
+        hpicfPim6IpMRouteNHopAddress             InetAddress,
+        hpicfPim6IpMRouteNHopState               INTEGER,
+        hpicfPim6IpMRouteNHopTStamp              TimeStamp,
+        hpicfPim6IpMRouteNHopExpTime             TimeTicks,
+        hpicfPim6IpMRouteNHopClsMHops            Unsigned32,
+        hpicfPim6IpMRouteNHopProtocol            IANAipMRouteProtocol,
+        hpicfPim6IpMRouteNHopOctets              Counter64,
+        hpicfPim6IpMRouteNHopPkts                Counter64
+      }
+
+    hpicfPim6IpMRouteNHopGrpAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteNHopGroup.  Legal values
+            correspond to the subset of address families for which
+            multicast forwarding is supported."
+        ::= { hpicfPim6IpMRouteNHopEntry 1 }
+
+    hpicfPim6IpMRouteNHopGroup OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The IP multicast group address which, when combined with
+            the corresponding value specified in
+            hpicfPim6IpMRouteNHopGrpPLen, identifies the groups
+            for which this entry contains multicast forwarding
+            information.
+
+            This address object is only significant up to
+            hpicfPim6IpMRouteNHopGrpPLen bits.  The remaining
+            address bits are set to zero.  This is especially important
+            for this index field, which is part of the index of this
+            entry.  Any non-zero bits would signify an entirely
+            different entry.
+
+            For addresses of type ipv4z or ipv6z, the appended zone
+            index is significant even though it lies beyond the prefix
+            length.  The use of these address types indicate that this
+            forwarding state applies only within the given zone.  Zone
+            index zero is not valid in this table."
+        ::= { hpicfPim6IpMRouteNHopEntry 2 }
+
+    hpicfPim6IpMRouteNHopGrpPLen OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The length in bits of the mask which, when combined with
+            the corresponding value of hpicfPim6IpMRouteGroup, identifies
+            the groups for which this entry contains multicast routing
+            information.
+
+            The InetAddressType is given by
+            hpicfPim6IpMRouteNHopGrpAddrType.  For values 'ipv4' and
+            'ipv4z', this object must be in the range 4..32.  For values
+            'ipv6' and 'ipv6z', this object must be in the range
+            8..128."
+        ::= { hpicfPim6IpMRouteNHopEntry 3 }
+
+    hpicfPim6IpMRouteNHopSrcAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteNHopSource.
+
+            A value of unknown(0) indicates a non-source-specific entry,
+            corresponding to all sources in the group.  Otherwise, the
+            value MUST be the same as the value of
+            hpicfPim6IpMRouteNHopGroupType."
+        ::= { hpicfPim6IpMRouteNHopEntry 4 }
+
+    hpicfPim6IpMRouteNHopSource OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The network address which, when combined with the
+            corresponding value of the mask specified in
+            hpicfPim6IpMRouteNHopSrcPLen, identifies the
+            sources for which this entry specifies a next-hop on an
+            outgoing interface.
+
+            This address object is only significant up to
+            hpicfPim6IpMRouteNHopSrcPLen bits.  The remaining
+            address bits are set to zero.  This is especially important
+            for this index field, which is part of the index of this
+            entry.  Any non-zero bits would signify an entirely
+            different entry.
+
+            For addresses of type ipv4z or ipv6z, the appended zone
+            index is significant even though it lies beyond the prefix
+            length.  The use of these address types indicate that this
+            source address applies only within the given zone.  Zone
+            index zero is not valid in this table."
+        ::= { hpicfPim6IpMRouteNHopEntry 5 }
+
+    hpicfPim6IpMRouteNHopSrcPLen OBJECT-TYPE
+        SYNTAX     InetAddressPrefixLength
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The length in bits of the mask which, when combined with
+            the corresponding value specified in
+            hpicfPim6IpMRouteNHopSource, identifies the sources for which
+            this entry specifies a next-hop on an outgoing interface.
+            
+            The InetAddressType is given by
+            hpicfPim6IpMRouteNHopSrcAddrType.  For the value
+            'unknown', this object must be zero.  For values 'ipv4' and
+            'ipv4z', this object must be in the range 4..32.  For values
+            'ipv6' and 'ipv6z', this object must be in the range
+            8..128."
+         ::= { hpicfPim6IpMRouteNHopEntry 6 }
+
+    hpicfPim6IpMRouteNHopIfIndex OBJECT-TYPE
+        SYNTAX     InterfaceIndex
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The ifIndex value of the interface for the outgoing
+            interface for this next-hop."
+        ::= { hpicfPim6IpMRouteNHopEntry 7 }
+
+    hpicfPim6IpMRouteNHopAddrType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "A value indicating the address family of the address
+            contained in hpicfPim6IpMRouteNHopAddress."
+        ::= { hpicfPim6IpMRouteNHopEntry 8 }
+
+    hpicfPim6IpMRouteNHopAddress OBJECT-TYPE
+        SYNTAX     InetAddress (SIZE (0|4|8|16|20))
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "The address of the next-hop specific to this entry.  For
+            most interfaces, this is identical to
+            hpicfPim6IpMRouteNHopGroup.  Non-Broadcast Multi-Access
+            (NBMA) interfaces, however, may
+            have multiple next-hop addresses out a single outgoing
+            interface."
+        ::= { hpicfPim6IpMRouteNHopEntry 9 }
+
+    hpicfPim6IpMRouteNHopState OBJECT-TYPE
+        SYNTAX     INTEGER { pruned(1), forwarding(2) }
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "An indication of whether the outgoing interface and next-
+            hop represented by this entry is currently being used to
+            forward IP datagrams.  The value 'forwarding' indicates it
+            is currently being used; the value 'pruned' indicates it is
+            not."
+        ::= { hpicfPim6IpMRouteNHopEntry 10 }
+
+    hpicfPim6IpMRouteNHopTStamp OBJECT-TYPE
+        SYNTAX     TimeStamp
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The value of sysUpTime at which the multicast routing
+            information represented by this entry was learned by the
+            router.
+
+            If this information was present at the most recent re-
+            initialization of the local management subsystem, then this
+            object contains a zero value."
+        ::= { hpicfPim6IpMRouteNHopEntry 11 }
+
+    hpicfPim6IpMRouteNHopExpTime OBJECT-TYPE
+        SYNTAX     TimeTicks
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The minimum amount of time remaining before this entry will
+            be aged out.  If hpicfPim6IpMRouteNHopState is pruned(1), the
+            remaining time until the prune expires and the state reverts
+            to forwarding(2).  Otherwise, the remaining time until this
+            entry is removed from the table.  The time remaining may be
+            copied from hpicfPim6IpMRouteExpiryTime if the protocol in use
+            for this entry does not specify next-hop timers.  The value
+            0 indicates that the entry is not subject to aging."
+        ::= { hpicfPim6IpMRouteNHopEntry 12 }
+
+    hpicfPim6IpMRouteNHopClsMHops OBJECT-TYPE
+        SYNTAX     Unsigned32 (0..256)
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The minimum number of hops between this router and any
+            member of this IP multicast group reached via this next-hop
+            on this outgoing interface.  Any IP multicast datagrams for
+            the group that have a TTL (IPv4) or Hop Count (IPv6) less
+            than this number of hops will not be forwarded to this
+            next-hop.
+
+            A value of 0 means all multicast datagrams are forwarded out
+            the interface.  A value of 256 means that no multicast
+            datagrams are forwarded out the interface.
+            This is an optimization applied by multicast routing
+            protocols that explicitly track hop counts to downstream
+            listeners.  Multicast protocols that are not aware of hop
+            counts to downstream listeners set this object to 0."
+        ::= { hpicfPim6IpMRouteNHopEntry 13 }
+
+    hpicfPim6IpMRouteNHopProtocol OBJECT-TYPE
+        SYNTAX     IANAipMRouteProtocol
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The routing mechanism via which this next-hop was learned."
+        ::= { hpicfPim6IpMRouteNHopEntry 14 }
+
+    hpicfPim6IpMRouteNHopOctets OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of octets of multicast packets that have been
+            forwarded using this route.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteNHopTStamp."
+        ::= { hpicfPim6IpMRouteNHopEntry 15 }
+
+    hpicfPim6IpMRouteNHopPkts OBJECT-TYPE
+        SYNTAX     Counter64
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+            "The number of packets which have been forwarded using this
+            route.
+
+            Discontinuities in this monotonically increasing value
+            occur at re-initialization of the management system.
+            Discontinuities can also occur as a result of routes being
+            removed and replaced, which can be detected by observing
+            the value of hpicfPim6IpMRouteNHopTStamp."
+       ::= { hpicfPim6IpMRouteNHopEntry 16 }
+
+-- **********************************************************************
+-- PIMv6 Notifications Trap Definitions
+-- **********************************************************************
+
+    hpicfPim6NeighborLoss NOTIFICATION-TYPE
+        STATUS      current
+        DESCRIPTION "This notification trap signifies the loss of an adjacency
+                     with a neighbor. This trap will be generated when the
+                     neighbor timer expires, and the router has no other
+                     neighbors on the same interface with a lower IP address than
+                     itself."
+        ::= { hpicfPim6Traps 1 }
+
+    hpicfPim6HardMRTFull NOTIFICATION-TYPE
+        STATUS      current
+        DESCRIPTION "This notification signifies that the MRT table is
+                     full and the error has been originated by hardware.
+                     This trap will be generated whenever a multicast
+                     flow or MRT  entry cannot be added."
+        ::= { hpicfPim6Traps 2 }
+
+    hpicfPim6SoftMRTFull NOTIFICATION-TYPE
+        STATUS      current
+        DESCRIPTION "This notification signifies that the MRT table is
+                     full and the error has been originated by software.
+                     This trap will be generated whenever a multicast
+                     flow or MRT entry cannot be added."
+        ::= { hpicfPim6Traps 3 }
+
+
+
+-- **********************************************************************
+-- Conformance Information
+-- **********************************************************************
+
+    hpicfPim6DenseMIBCompliance MODULE-COMPLIANCE
+        STATUS      deprecated
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 Dense Mode and implementing the HP-ICF-PIM6 MIB."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6BaseGroup,
+                               hpicfPim6DenseIfGroup }
+        ::= { hpicfPim6Compliances 1 }
+
+    hpicfPim6UcastRoutingCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 and related Unicast routing info."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6StaticRpfExtensionsGroup
+			     }
+        ::= { hpicfPim6Compliances 2 }
+
+    hpicfPim6GlobalCountersCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 and related global statistics data."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6GlobalCounterGroup }
+        ::= { hpicfPim6Compliances 3 }
+
+    hpicfPim6InterfaceInfoCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 and related interface and neighbor info."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6InterfaceExtensionsGroup }
+        ::= { hpicfPim6Compliances 4 }
+
+    hpicfPim6NotificationCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The collection of notifications used for signalling
+                     important PIMv6 events."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6NotificationGroup}
+        ::= { hpicfPim6Compliances 5 }
+
+    hpicfPim6SparseModeMIBCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 Sparse Mode and implementing the HP-ICF-PIM6 MIB."
+        MODULE  -- this module
+            MANDATORY-GROUPS {
+                              hpicfPim6CommonGroup,
+                              hpicfPim6StaticRPSetGroup,
+                              hpicfPim6SparseIfGroup,
+                              hpicfPim6CandidateRPGroup,
+                              hpicfPim6ComponentGroup,
+                              hpicfPim6NeighborGroup,
+                              hpicfPim6RPSetGroup,
+                              hpicfPim6MRouteGroup,
+                              hpicfPim6MRouteNHopGroup
+                             }
+
+        ::= { hpicfPim6Compliances 6 }
+
+    hpicfPim6DenseModeMIBCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP routers running
+                    PIMv6 Dense Mode and implementing the HP-ICF-PIM6 MIB."
+        MODULE  -- this module
+            MANDATORY-GROUPS { hpicfPim6CommonGroup,
+                               hpicfPim6DenseIfGroup,
+                               hpicfPim6MRouteGroup,
+                               hpicfPim6MRouteNHopGroup }
+        ::= { hpicfPim6Compliances 7 }
+
+    hpicfPim6BaseGroup OBJECT-GROUP
+        OBJECTS     { hpicfPim6AdminStatus,
+                      hpicfPim6StateRefreshInterval,
+                      hpicfPim6TrapControl,
+                      hpicfPim6JoinPruneInterval,
+                      hpicfPim6RemoveConfig
+		    }
+        STATUS      deprecated
+        DESCRIPTION "A collection of objects to support basic PIM v6
+                    configuration information on HP routers."
+        ::= { hpicfPim6Groups 1 }
+
+    hpicfPim6DenseIfGroup OBJECT-GROUP
+        OBJECTS     { 
+		      hpicfPim6IfAddressType,
+		      hpicfPim6IfAddress,
+		      hpicfPim6IfMode,
+		      hpicfPim6IfStatus,
+                      hpicfPim6IfTrigHelloInterval,
+		      hpicfPim6IfHelloInterval,
+                      hpicfPim6IfHelloHoldtime,
+                      hpicfPim6IfLanPruneDelay,
+                      hpicfPim6IfPropagationDelay,
+                      hpicfPim6IfOverrideInterval,
+                      hpicfPim6IfGenerationID,
+                      hpicfPim6IfJoinPruneHoldtime,
+                      hpicfPim6IfGraftRetryInterval,
+                      hpicfPim6IfMaxGraftRetries,
+                      hpicfPim6IfSRTTLThreshold,
+                      hpicfPim6IfLanDelayEnabled,
+                      hpicfPim6IfSRCapable,
+		      hpicfPim6IfNBRTimeout
+		    }
+        STATUS      current
+        DESCRIPTION "A collection of objects that extends objects defined
+                    in pimInterfaceTable and used to support management of 
+                    interfaces operating in PIMv6 Dense Mode."
+        ::= { hpicfPim6Groups 2 }
+
+    hpicfPim6InterfaceExtensionsGroup OBJECT-GROUP
+        OBJECTS     { 
+		      hpicfPim6Version,
+                      hpicfPim6IfNBRCount,
+                      hpicfPim6IfNegotiatedPropagationDelay,
+                      hpicfPim6IfNegotiatedOverrideInterval,
+                      hpicfPim6IfAssertHoldInterval,
+                      hpicfPim6IfNumRoutersNotUsingLanDelay
+		    }
+        STATUS      current
+        DESCRIPTION "A collection of objects that extends objects defined
+                    in pimInterfaceTable."
+        ::= { hpicfPim6Groups 3 }
+
+    hpicfPim6StaticRpfExtensionsGroup OBJECT-GROUP
+        OBJECTS     {
+                      hpicfPim6NumStaticRpfEntries
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects that
+                    extend hpicfPim6StaticRpfTable."
+        ::= { hpicfPim6Groups 4 }
+
+    hpicfPim6GlobalCounterGroup OBJECT-GROUP
+        OBJECTS     { hpicfPim6StarGEntries,
+		      hpicfPim6SGEntries,
+                      hpicfPim6TotalNeighborCount 
+	            }
+        STATUS      current
+        DESCRIPTION "A collection of global 
+                     PIMv6 counter objects."
+        ::= { hpicfPim6Groups 5 }
+
+    hpicfPim6NotificationGroup NOTIFICATION-GROUP
+        NOTIFICATIONS
+                    { hpicfPim6NeighborLoss,
+                      hpicfPim6HardMRTFull,
+                      hpicfPim6SoftMRTFull }
+        STATUS      current
+        DESCRIPTION "A collection of notifications used for signaling 
+                     important PIMv6 events."
+        ::= { hpicfPim6Groups 6 }
+
+--PIMv6 SM Groups conformance
+
+    hpicfPim6StaticRPSetGroup  OBJECT-GROUP
+        OBJECTS
+            {
+             hpicfPim6StaticRPSetOverride,
+             hpicfPim6StaticRPSetRowStatus
+            }
+
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6StaticRPSetTable"
+        ::= { hpicfPim6Groups 7 }
+
+    hpicfPim6CandidateRPGroup OBJECT-GROUP
+        OBJECTS
+            {
+              hpicfPim6CandidateRPAddressType,
+              hpicfPim6CandidateRPAddress,
+              hpicfPim6CandidateRPRowStatus
+            }
+
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6CandidateRPTable"
+        ::= { hpicfPim6Groups 8 }
+
+    hpicfPim6ComponentGroup OBJECT-GROUP
+        OBJECTS
+            {
+             hpicfPim6ComponentBSRAddrType,
+             hpicfPim6ComponentBSRAddress,
+             hpicfPim6ComponentBSRExpiryTime,
+             hpicfPim6ComponentCRPHoldTime,
+             hpicfPim6ComponentStatus,
+             hpicfPim6ComponentCBSRAdmStatus,
+             hpicfPim6ComponentCBSRAddrType,
+             hpicfPim6ComponentCBSRAddress,
+             hpicfPim6ComponentCBSRPriority,
+             hpicfPim6ComponentCBSRHashMskLen,
+             hpicfPim6ComponentCBSRMsgInt,
+             hpicfPim6ComponentCRPPriority,
+             hpicfPim6ComponentCRPAdvInterval,
+             hpicfPim6ComponentBSRPriority,
+             hpicfPim6ComponentBSRHashMskLen,
+             hpicfPim6ComponentBSRUpTime,
+             hpicfPim6ComponentBSRNextMessage,
+             hpicfPim6ComponentCRPAdvTimer
+            }
+
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6ComponentTable"
+        ::= { hpicfPim6Groups 9 }
+
+    hpicfPim6CommonGroup OBJECT-GROUP
+        OBJECTS     { hpicfPim6AdminStatus,
+                      hpicfPim6StateRefreshInterval,
+                      hpicfPim6TrapControl,
+                      hpicfPim6JoinPruneInterval,
+                      hpicfPim6RemoveConfig,
+                      hpicfPim6SPTThreshold,
+                      hpicfPim6IpMcastEnabled,
+                      hpicfPim6IpMcastRouteEntryCount
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects to support basic PIM v6
+                    configuration information on HP routers."
+        ::= { hpicfPim6Groups 10 }
+
+    hpicfPim6SparseIfGroup OBJECT-GROUP
+        OBJECTS     {
+                      hpicfPim6IfAddressType,
+                      hpicfPim6IfAddress,
+                      hpicfPim6IfTrigHelloInterval,
+                      hpicfPim6IfHelloHoldtime,
+                      hpicfPim6IfLanPruneDelay,
+                      hpicfPim6IfPropagationDelay,
+                      hpicfPim6IfOverrideInterval,
+                      hpicfPim6IfGenerationID,
+                      hpicfPim6IfJoinPruneHoldtime,
+                      hpicfPim6IfLanDelayEnabled,
+                      hpicfPim6IfDRPriority,
+                      hpicfPim6IfNBRTimeout,
+                      hpicfPim6IfDRType,
+                      hpicfPim6IfDR
+                    }
+        STATUS      current
+        DESCRIPTION "A collection of objects that extends objects defined
+                    in pimInterfaceTable and used to support management of
+                    interfaces operating in PIMv6 Sparse Mode."
+        ::= { hpicfPim6Groups 11 }
+
+    hpicfPim6NeighborGroup OBJECT-GROUP
+        OBJECTS
+            {
+             hpicfPim6NeighborGenIDPresent,
+             hpicfPim6NeighborGenIDValue,
+             hpicfPim6NeighborUpTime,
+             hpicfPim6NeighborExpiryTime,
+             hpicfPim6NeighborDRPrioPresent,
+             hpicfPim6NeighborDRPriority,
+             hpicfPim6NeighborLanPruneDlyPres
+            }
+
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                    hpicfPim6NeighborTable"
+        ::= { hpicfPim6Groups 12 }
+
+    hpicfPim6RPSetGroup  OBJECT-GROUP
+        OBJECTS
+             {
+              hpicfPim6RPSetHoldTime,
+              hpicfPim6RPSetExpiryTime
+             }
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6RPSetTable"
+        ::= { hpicfPim6Groups 13 }
+
+   hpicfPim6MRouteGroup OBJECT-GROUP
+        OBJECTS
+             {
+              hpicfPim6IpMRouteUpstrNbrType,
+              hpicfPim6IpMRouteUpstrNbr,
+              hpicfPim6IpMRouteInIfIndex,
+              hpicfPim6IpMRouteTimeStamp,
+              hpicfPim6IpMRouteExpiryTime,
+              hpicfPim6IpMRouteProtocol,
+              hpicfPim6IpMRouteRtProtocol,
+              hpicfPim6IpMRouteRtAddrType,
+              hpicfPim6IpMRouteRtAddress,
+              hpicfPim6IpMRouteRtPrefixLen,
+              hpicfPim6IpMRouteRtType,
+              hpicfPim6IpMRouteOctets,
+              hpicfPim6IpMRoutePkts,
+              hpicfPim6IpMRouteTtlDropOct,
+              hpicfPim6IpMRouteTtlDropPkts,
+              hpicfPim6IpMRouteDiffInIfOct,
+              hpicfPim6IpMRouteDiffInIfPkts,
+              hpicfPim6IpMRouteBps
+             }
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6IpMRouteTable"
+        ::= { hpicfPim6Groups 14 }
+
+    hpicfPim6MRouteNHopGroup OBJECT-GROUP
+        OBJECTS
+        {
+         hpicfPim6IpMRouteNHopState,
+         hpicfPim6IpMRouteNHopTStamp,
+         hpicfPim6IpMRouteNHopExpTime,
+         hpicfPim6IpMRouteNHopClsMHops,
+         hpicfPim6IpMRouteNHopProtocol,
+         hpicfPim6IpMRouteNHopOctets,
+         hpicfPim6IpMRouteNHopPkts
+        }
+        STATUS      current
+        DESCRIPTION "A collection of objects that represents
+                     hpicfPim6IpMRouteNHopTable"
+        ::= { hpicfPim6Groups 15 }
+
+
+END

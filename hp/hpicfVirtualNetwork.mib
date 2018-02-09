@@ -1,0 +1,555 @@
+--**MOD+***********************************************************************
+-- * Module:    hpicfiVirtualNetwork.mib
+-- *
+-- * Copyright (C) 2014 Hewlett Packard Enterprise Development LP
+-- * All Rights Reserved.
+-- * 
+-- * The contents of this software are proprietary and confidential
+-- * to the Hewlett Packard Enterprise Development LP.  No part of this
+-- * program may be photocopied, reproduced, or translated into another
+-- * programming language without prior written consent of the
+-- * Hewlett Packard Enterprise Development LP.
+-- *
+-- * Purpose:   Contains MIB Objects for Virtual Networks
+-- *
+-- **MOD-***********************************************************************/
+-- HP Enterprise Virtual Network MIB
+
+HP-ICF-VIRTUAL-NETWORK-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, 
+    Unsigned32, Integer32, Counter32, Counter64
+        FROM SNMPv2-SMI            -- [RFC2578]
+    OBJECT-GROUP, MODULE-COMPLIANCE, NOTIFICATION-GROUP
+        FROM SNMPv2-CONF
+    InetAddress, InetAddressType 
+        FROM INET-ADDRESS-MIB    -- [RFC4001]
+    RowStatus, TruthValue, DisplayString
+        FROM SNMPv2-TC             -- [RFC2579]
+    VlanIndex
+        FROM Q-BRIDGE-MIB
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
+    tunnelIfEntry, tunnelIfAddressType,
+    tunnelIfLocalInetAddress, tunnelIfRemoteInetAddress
+        FROM TUNNEL-MIB
+    InterfaceIndex
+            FROM IF-MIB
+    hpSwitch
+        FROM HP-ICF-OID;
+
+hpicfVirtualNetwork MODULE-IDENTITY
+        LAST-UPDATED "201403190000Z"
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO 
+                     "Hewlett-Packard Company
+                      8000 Foothills Blvd.
+                      Roseville, CA 95747"
+        DESCRIPTION 
+                     "This MIB module contains HP proprietary objects 
+                      for managing Virtual Networks."
+        REVISION     "201403190000Z"       -- Mar 19, 2014 at 00:00 GMT
+        DESCRIPTION  "Initial Revision."
+        ::= { hpSwitch 107 }    
+
+--
+--- MIB objects
+--
+    hpicfVirtualNetworkNotifications       OBJECT IDENTIFIER ::= 
+                                           { hpicfVirtualNetwork 0 }
+
+
+    hpicfVirtualNetworkObjects             OBJECT IDENTIFIER ::= 
+                                           {hpicfVirtualNetwork 1}
+
+    hpicfVirtualNetworkScalars             OBJECT IDENTIFIER ::= 
+                                           {hpicfVirtualNetworkObjects 1}
+
+    hpicfVirtualNetworkNotifyScalars       OBJECT IDENTIFIER ::= 
+                                           {hpicfVirtualNetworkObjects 3}
+
+    hpicfTunnelObjects                     OBJECT IDENTIFIER ::= 
+                                           {hpicfVirtualNetwork 2}
+
+    hpicfVXLANTunnelObjects                OBJECT IDENTIFIER ::= 
+                                           {hpicfTunnelObjects 1}
+
+    hpicfVXLANTunnelConfigObjects          OBJECT IDENTIFIER ::= 
+                                           { hpicfVXLANTunnelObjects 1}
+
+    hpicfVXLANTunnelScalars                OBJECT IDENTIFIER ::= 
+                                           { hpicfVXLANTunnelObjects 2}
+
+    hpicfVirtualNetworkConformance         OBJECT IDENTIFIER ::= 
+                                           { hpicfVirtualNetwork 3}                   
+
+--
+--- Virtual Network Configuration - Scalars
+--
+
+hpicfMaxVirtualNetworks OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Maximum number of Virtual Networks supported on the 
+                 device."
+    ::= { hpicfVirtualNetworkScalars 1 }
+
+hpicfTotalVirtualNetworks OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Total number of Virtual Networks configured on the 
+                 device."
+    ::= { hpicfVirtualNetworkScalars 2 }
+
+--
+--- Virtual Network Configuration - Table
+--
+
+hpicfVirtualNetworkTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF HpicfVirtualNetworkEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "Table containing information about virtual networks."
+   ::= { hpicfVirtualNetworkObjects 2 }
+
+hpicfVirtualNetworkEntry OBJECT-TYPE
+   SYNTAX      HpicfVirtualNetworkEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "An entry containing the information about a virtual network
+                and the associated VLAN."
+   INDEX       {hpicfVirtualNetworkID }
+   ::= { hpicfVirtualNetworkTable 1 }
+
+HpicfVirtualNetworkEntry::=
+   SEQUENCE {
+             hpicfVirtualNetworkID          Integer32,
+             hpicfVirtualNetworkName        SnmpAdminString,
+             hpicfVirtualNetworkVLANID      VlanIndex,
+             hpicfVirtualNetworkRowStatus   RowStatus
+            }
+
+hpicfVirtualNetworkID OBJECT-TYPE
+    SYNTAX      Integer32 (1..16777215)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "This is a unique 24-bit segment ID referred to as a VXLAN 
+                 Network Identifier (VNI). It is included as a part of the VXLAN
+                 encapsulation."
+    ::= { hpicfVirtualNetworkEntry 1 }
+
+hpicfVirtualNetworkName OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION "This object refers to the virtual network name. If the name is
+                 not configured for a virtual network, the system will generate
+                 a default name for the virtual network."
+    ::= { hpicfVirtualNetworkEntry 2 }
+
+hpicfVirtualNetworkVLANID OBJECT-TYPE
+    SYNTAX      VlanIndex
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION "This object refers to the VLAN ID mapped to this virtual
+                 network. A VLAN associated with a virtual network is known as 
+                 an overlay VLAN. Only one VLAN can be associated with a virtual
+                 network and that VLAN should be an existing VLAN."
+    ::= { hpicfVirtualNetworkEntry 3 }
+
+hpicfVirtualNetworkRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION "The status of a row for a virtual network entry."
+   ::= { hpicfVirtualNetworkEntry  4 }
+
+
+--
+--- VXLAN Tunnel Interface - Table
+--
+
+hpicfVXLANTunnelIfTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF HpicfVXLANTunnelIfEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "Table containing additional information about VXLAN tunnels"
+   ::= { hpicfVXLANTunnelConfigObjects 1 }
+
+hpicfVXLANTunnelIfEntry OBJECT-TYPE
+   SYNTAX      HpicfVXLANTunnelIfEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION "An entry containing additional information about a VXLAN tunnel."                      
+   AUGMENTS    { tunnelIfEntry }
+   ::= { hpicfVXLANTunnelIfTable 1 }
+
+HpicfVXLANTunnelIfEntry ::=
+   SEQUENCE {
+             hpicfVXLANTunnelIfDownReason        INTEGER,
+             hpicfVXLANTunnelIfNextHopIpType     InetAddressType,        
+             hpicfVXLANTunnelIfNextHopIp         InetAddress,
+             hpicfVXLANTunnelIfNextHopInterface  DisplayString,
+             hpicfVXLANTunnelIfNextHopPortName   DisplayString,
+             hpicfVXLANTunnelStatsRxPackets      Counter64,
+             hpicfVXLANTunnelStatsTxPackets      Counter32,
+             hpicfVXLANTunnelStatsClear          TruthValue
+            }
+  
+hpicfVXLANTunnelIfDownReason OBJECT-TYPE   
+   SYNTAX       INTEGER {
+                     none                       (0),
+                     ifAdminDown                (1),
+                     tepNotReachable            (2),
+                     resourceUnavailable        (3)
+                     }
+   MAX-ACCESS   read-only
+   STATUS       current
+   DESCRIPTION "This object provides the information about the operational
+                status of a tunnel.
+                A value of none (0) indicates that the operational status is up.
+                A value of ifAdminDown(1) indicates that the interface is 
+                  administratively down.
+                A value of tepNotReachable(2) indicates that the tunnel endpoint
+                  is not reachable.
+                A value of resourceUnavailable (3) indicates that the hardware  
+                  resource is not available."
+::= { hpicfVXLANTunnelIfEntry 1}   
+
+hpicfVXLANTunnelIfNextHopIpType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   read-only
+   STATUS       current
+   DESCRIPTION  "This object provides the address type for resolved next hop IP 
+                 address to reach the tunnel end point."
+   ::= { hpicfVXLANTunnelIfEntry 2 }
+
+hpicfVXLANTunnelIfNextHopIp OBJECT-TYPE
+   SYNTAX       InetAddress
+   MAX-ACCESS   read-only
+   STATUS       current
+   DESCRIPTION  "This object provides the resolved next hop IPv4 address to
+                 reach the tunnel end point. A NULL address indicates that the
+                 next hop IPv4 address is not resolved."
+   ::= { hpicfVXLANTunnelIfEntry 3}
+
+hpicfVXLANTunnelIfNextHopInterface OBJECT-TYPE
+   SYNTAX       DisplayString
+   MAX-ACCESS   read-only
+   STATUS       current
+   DESCRIPTION  "This object provides next hop interface to reach the tunnel 
+                end point. An empty string indicates that the next hop interface
+                is not resolved"
+   ::= { hpicfVXLANTunnelIfEntry 4}
+
+hpicfVXLANTunnelIfNextHopPortName OBJECT-TYPE
+   SYNTAX       DisplayString
+   MAX-ACCESS   read-only
+   STATUS       current
+   DESCRIPTION  "This object provides the resolved port name to reach the tunnel
+                end point. An empty string indicates that the next hop port
+                name is not resolved."
+   ::= { hpicfVXLANTunnelIfEntry 5}
+
+hpicfVXLANTunnelStatsRxPackets OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides the number of packets received on a tunnel 
+                interface."
+   ::= { hpicfVXLANTunnelIfEntry 6}
+
+hpicfVXLANTunnelStatsTxPackets OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides the number of packets transmitted on a 
+                tunnel interface."
+   ::= { hpicfVXLANTunnelIfEntry 7 }
+
+hpicfVXLANTunnelStatsClear    OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "This object clears tunnel interface statistics when set 
+                 to TRUE. A GET request for this object always returns 
+                 FALSE."
+   ::= { hpicfVXLANTunnelIfEntry 9 }
+
+--
+--- VXlan Tunnel Configuration - Scalars
+--
+
+hpicfMaxVXLANTunnels OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Maximum number of VXLAN tunnels supported on the 
+                 device."
+    ::= { hpicfVXLANTunnelScalars 1 }
+
+hpicfTotalVXLANTunnels OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Total number of VXLAN tunnels configured on the 
+                 device."
+    ::= { hpicfVXLANTunnelScalars 2 }
+
+hpicfVXLANTunnelStatsTxMTUViolation OBJECT-TYPE 
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides the number of packets which were not
+                transmitted from the tunnel interface because of MTU violations.
+                This counter is  global for all VXLAN tunnels"
+   ::= { hpicfVXLANTunnelScalars 3 }  
+
+hpicfVXLANTunnelGlobalStatsDropCount OBJECT-TYPE
+   SYNTAX      Counter64
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION "This object provides the number of packets dropped for the 
+                following reasons:
+                1. When a VXLAN packet is received from unknown sources.
+                2. When a VXLAN packet received has IP options."
+   ::= { hpicfVXLANTunnelScalars 4 }
+
+hpicfVXLANTunnelGlobalStatsClear    OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "This object clears global tunnel interface statistics when set
+                 to TRUE. A GET request for this object always returns FALSE."
+   ::= { hpicfVXLANTunnelScalars 5 }
+
+hpicfVXLANTunnelEnable    OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "This object, when set to TRUE, allows VXLAN tunnels to be 
+                 created."
+    DEFVAL { false }             
+   ::= { hpicfVXLANTunnelScalars 6 }
+
+hpicfVXLANTunnelUDPPort    OBJECT-TYPE
+    SYNTAX      Integer32 (1..65535)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION "This object sets the UDP destination port of teh VXLAN tunnel."           DEFVAL {4789}
+   ::= { hpicfVXLANTunnelScalars 7 }
+
+-- =============================================================
+-- hpicfVirtualNetworkNotifyScalars & hpicfVirtualNetworkNotifications
+-- =============================================================
+hpicfMTUDropRouterAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "Address type of the router that sent the
+                 ICMP destination unreachable message."
+   ::= { hpicfVirtualNetworkNotifyScalars 1 }
+
+hpicfMTUDropRouterAddr OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "IP address of the router that sent 
+                      the ICMP destination unreachable message."
+     ::= { hpicfVirtualNetworkNotifyScalars 2 }
+
+hpicfMTUDropRouterMTU OBJECT-TYPE
+     SYNTAX          Integer32
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "The MTU of the router interface  that sent 
+                     the ICMP destination unreachable message."
+     ::= { hpicfVirtualNetworkNotifyScalars 3 }
+
+hpicfMTUDropVTEPSrcAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "Address type of the source IP address
+                 of the inner packet that was sent through
+                 the VXLAN tunnel interface."
+   ::= { hpicfVirtualNetworkNotifyScalars 4 }
+
+hpicfMTUDropVTEPSource OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "Source IP address of the inner packet 
+                      that was sent through the VXLAN tunnel."
+     ::= { hpicfVirtualNetworkNotifyScalars 5 }
+
+hpicfMTUDropVTEPDstAddrType OBJECT-TYPE        
+   SYNTAX       InetAddressType
+   MAX-ACCESS   accessible-for-notify
+   STATUS       current
+   DESCRIPTION  "Address type of the destination IP address 
+                 of the inner packet that was sent through
+                 the VXLAN tunnel."
+   ::= { hpicfVirtualNetworkNotifyScalars 6 }
+
+
+hpicfMTUDropVTEPDest OBJECT-TYPE
+     SYNTAX          InetAddress
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "Destination IP address of the inner packet 
+                      that was sent through the VXLAN tunnel."
+     ::= { hpicfVirtualNetworkNotifyScalars 7 }
+
+
+hpicfMTUDropInIfIndex OBJECT-TYPE
+     SYNTAX          InterfaceIndex
+     MAX-ACCESS      accessible-for-notify
+     STATUS          current
+     DESCRIPTION     "Interface index of the inbound VLAN of 
+                      the ICMP destination unreachable packet."
+     ::= { hpicfVirtualNetworkNotifyScalars 8 }
+
+hpicfMTUDropNotifyEnable   OBJECT-TYPE 
+         SYNTAX      INTEGER {
+                          enable (1),
+                          disable (2)
+                     }
+         MAX-ACCESS  read-write 
+         STATUS      current
+         DESCRIPTION 
+               " This enables or disables the virtual network
+                 notifications."
+         DEFVAL { disable }
+    ::= { hpicfVirtualNetworkNotifyScalars 9 }
+ 
+hpicfVirtualNetworkIcmpErrorRcvd  NOTIFICATION-TYPE
+      OBJECTS {
+                  hpicfMTUDropRouterAddrType,
+                  hpicfMTUDropRouterAddr,
+                  hpicfMTUDropRouterMTU,
+                  hpicfMTUDropVTEPSrcAddrType,
+                  hpicfMTUDropVTEPSource,
+                  hpicfMTUDropVTEPDstAddrType,
+                  hpicfMTUDropVTEPDest,
+                  hpicfMTUDropInIfIndex,
+                  tunnelIfAddressType,
+                  tunnelIfLocalInetAddress, 
+                  tunnelIfRemoteInetAddress
+              }
+        STATUS  current
+        DESCRIPTION
+                "This notification is generated when the tunnel
+                 source recevied an ICMP destination unreachable 
+                 error message from one of teh underlay networks 
+                 due to MTU violation."
+        ::= { hpicfVirtualNetworkNotifications 1 }
+
+
+-- =============================================================
+-- VXLAN Tunnel - Conformance Information
+-- =============================================================
+hpicfVirtualNetworkCompliances
+   OBJECT IDENTIFIER ::= { hpicfVirtualNetworkConformance   1 }
+hpicfVirtualNetworkGroups
+   OBJECT IDENTIFIER ::= { hpicfVirtualNetworkConformance   2 }
+
+
+hpicfVirtualNetworkCompliance MODULE-COMPLIANCE
+   STATUS      current
+   DESCRIPTION "The compliance statement for the Virtual Network MIB."
+   MODULE  -- this module
+   MANDATORY-GROUPS { hpicfVirtualNetworkGroup,
+                      hpicfVirtualNetworkScalarGroup,
+                      hpicfVXLANTunnelStatsGroup,
+                      hpicfVXLANTunnelScalarGroup,
+                      hpicfVirtualNetworkNotifyScalarsGroup,
+                      hpicfVirtualNetworkNotificationsGroup }
+   ::= { hpicfVirtualNetworkCompliances 1 }
+
+-- =============================================================
+-- Virtual Network - units of conformance
+-- =============================================================
+hpicfVirtualNetworkGroup OBJECT-GROUP
+   OBJECTS  { 
+            hpicfVirtualNetworkName,
+            hpicfVirtualNetworkVLANID,
+            hpicfVirtualNetworkRowStatus
+            }
+   STATUS      current
+   DESCRIPTION "The collection of objects providing information about 
+                the Virtual Network."
+   ::= { hpicfVirtualNetworkGroups 1 }
+
+hpicfVirtualNetworkScalarGroup OBJECT-GROUP
+   OBJECTS  {
+            hpicfMaxVirtualNetworks,
+            hpicfTotalVirtualNetworks
+            }
+   STATUS      current
+   DESCRIPTION "The collection of objects providing information about 
+                the Virtual Network scalar objects."
+   ::= { hpicfVirtualNetworkGroups 2 }
+
+hpicfVXLANTunnelStatsGroup OBJECT-GROUP
+   OBJECTS  {  
+             hpicfVXLANTunnelIfDownReason,
+             hpicfVXLANTunnelIfNextHopIpType,
+             hpicfVXLANTunnelIfNextHopIp,
+             hpicfVXLANTunnelIfNextHopInterface,
+             hpicfVXLANTunnelIfNextHopPortName,
+             hpicfVXLANTunnelStatsRxPackets,
+             hpicfVXLANTunnelStatsTxPackets,             
+             hpicfVXLANTunnelStatsClear       
+            }
+   STATUS      current
+   DESCRIPTION "The collection of objects providing information about 
+                the VXLAN tunnel statistics."
+   ::= { hpicfVirtualNetworkGroups 3 }
+
+hpicfVXLANTunnelScalarGroup OBJECT-GROUP
+   OBJECTS  {
+            hpicfMaxVXLANTunnels,
+            hpicfTotalVXLANTunnels,
+            hpicfVXLANTunnelStatsTxMTUViolation,
+            hpicfVXLANTunnelGlobalStatsDropCount,
+            hpicfVXLANTunnelGlobalStatsClear,
+            hpicfVXLANTunnelEnable,
+            hpicfVXLANTunnelUDPPort
+            }
+   STATUS      current
+   DESCRIPTION "The collection of objects providing information about 
+                the Virtual Network scalar objects."
+   ::= { hpicfVirtualNetworkGroups 4 }
+
+hpicfVirtualNetworkNotifyScalarsGroup   OBJECT-GROUP
+         OBJECTS { 
+                  hpicfMTUDropRouterAddrType,
+                  hpicfMTUDropRouterAddr,
+                  hpicfMTUDropRouterMTU,
+                  hpicfMTUDropVTEPSrcAddrType,
+                  hpicfMTUDropVTEPSource,
+                  hpicfMTUDropVTEPDstAddrType,
+                  hpicfMTUDropVTEPDest,
+                  hpicfMTUDropInIfIndex,
+                  hpicfMTUDropNotifyEnable
+                 }
+        STATUS          current
+        DESCRIPTION   "Group of objects required for
+                       notifications."
+        ::= { hpicfVirtualNetworkGroups 5 }
+
+hpicfVirtualNetworkNotificationsGroup NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                      hpicfVirtualNetworkIcmpErrorRcvd
+                      }
+        STATUS      current
+        DESCRIPTION "Notifications for the VXLAN tunnels."
+        ::= { hpicfVirtualNetworkGroups 6 }
+
+
+END
+

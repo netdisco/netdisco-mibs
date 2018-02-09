@@ -1,3 +1,15 @@
+-- Copyright (C) 2004-2005, 2007, 2009-2010, 2012-2013, 2015-2017
+-- Hewlett Packard Enterprise Development LP
+
+-- **************************************************************************
+-- The contents of this software are proprietary and confidential to the
+-- Hewlett Packard Enterprise Development LP.  No part of this program may be 
+-- photocopied, reproduced, or translated into another programming language
+-- without prior written consent of the 
+-- Hewlett-Packard Enterprise Development LP. 
+-- Purpose: This file contains MIB definition of HP-ICF-POE-MIB
+-- **************************************************************************
+
 HP-ICF-POE-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
@@ -17,7 +29,7 @@ IMPORTS
             FROM POWER-ETHERNET-MIB;
 
 hpicfPoe MODULE-IDENTITY
-   LAST-UPDATED "201306160000Z"  -- June 16, 2013
+   LAST-UPDATED "201701300000Z"  -- January 30, 2017
    ORGANIZATION "HP Networking"
    CONTACT-INFO " Hewlett Packard Company
                   8000 Foothills Blvd.
@@ -25,6 +37,28 @@ hpicfPoe MODULE-IDENTITY
    DESCRIPTION
           "This MIB module describes management objects
            that manage Power Source Equipment (PSE)."
+
+   REVISION     "201701300000Z"  -- January 30, 2017
+   DESCRIPTION  "Added a default type in hpicfPoePethPsePortPoePlusPowerValue." 
+
+   REVISION     "201609120000Z"  -- September 12, 2016
+   DESCRIPTION  "Added a field in hpicfPoePethPsePortPoePlusPowerValue 
+                 and modified the description."
+
+   REVISION     "201605020000Z"  -- May 02, 2016
+   DESCRIPTION  "Added following object,group and compliance.
+                 hpicfPoePethMainPsePdPowerDraw
+                 hpicfPoePethPseOperStateTableGroup1
+                 hpicfPoeCompliance8
+                 and deprecated hpicfPoePethPseOperStateTableGroup and
+                 hpicfPoeCompliance4."
+
+   REVISION     "201602120000Z"  -- February 12, 2016
+   DESCRIPTION  "Added hpicfPseCurrentPowerDraw,
+                 hpicfPoePethPsePortPowerType."
+
+   REVISION     "201507140000Z"  -- July 14, 2015
+   DESCRIPTION  "Added hpicfPoePethPsePortResetState."  
 
    REVISION     "201306160000Z"  -- June 16, 2013
    DESCRIPTION  "Added hpicfPoePowerSupplyAuxCapacity,
@@ -116,7 +150,9 @@ HpicfPoePethPsePortEntry ::=
          hpicfPoePethPsePortAveragePower           Integer32,
          hpicfPoePethPsePortPeakPower              Integer32,
          hpicfPoePethPsePortPreStdDetect           INTEGER,
-         hpicfPoePethPsePortLowPriority            INTEGER
+         hpicfPoePethPsePortLowPriority            INTEGER,
+         hpicfPoePethPsePortResetState             INTEGER,
+	 hpicfPoePethPsePortPowerType              INTEGER
      }
 
 hpicfPoePethPsePortCurrent OBJECT-TYPE
@@ -182,12 +218,16 @@ hpicfPoePethPsePortLLDPDetect OBJECT-TYPE
 
 hpicfPoePethPsePortPoePlusPowerValue OBJECT-TYPE
      SYNTAX      Integer32 (0..255)
+     UNITS       "Watts"
      MAX-ACCESS  read-write
      STATUS      current
-     DESCRIPTION "This field specifies the power allocation defined for this port.
-                  Use this object for equipment supporting high power, that is greater
-                  than 15 Watts. This value is specified in Watts (W). 
-                  Maximum supported is 33W"
+     DESCRIPTION "This field specifies the power allocation defined
+                  for this port. Use this object for equipment
+                  supporting high power, that is greater than 15  
+                  Watts. This value is specified in Watts (W). This 
+                  object may only be read or written when               
+                  hpicfPoePethPsePortPowerAllocateBy is set to  
+                  value(3)."
      DEFVAL     { 17 } 
 ::= { hpicfPoePethPsePortEntry 7 }
 
@@ -280,6 +320,32 @@ hpicfPoePethPsePortLowPriority OBJECT-TYPE
       DEFVAL     { 2 }
 ::= { hpicfPoePethPsePortEntry 14}
 
+hpicfPoePethPsePortResetState OBJECT-TYPE
+     SYNTAX      INTEGER {
+                 noreset (0),
+                 reset   (1)
+     }
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "This object is used to reset the
+                  PoE controller HW to which the
+                  port is associated."
+      DEFVAL     { noreset }
+::= { hpicfPoePethPsePortEntry 15}
+
+hpicfPoePethPsePortPowerType OBJECT-TYPE
+     SYNTAX      INTEGER {
+                 type0(-1),
+                 type1(1),
+                 type2(2)
+     }
+     MAX-ACCESS  read-only
+     STATUS      current
+     DESCRIPTION "This field specifies the PD type determined
+                  during physical layer classification. The default value is -1."                                  
+     ::= { hpicfPoePethPsePortEntry 16}
+
+
 -- ------------------------------------------------------------
 -- Power Over Ethernet (POE) Global information - applies to
 -- the entire chassis. These global values have been
@@ -367,7 +433,8 @@ hpicfPoeExtPwrSupplyCount  OBJECT-TYPE
          hpicfPseAvailablePower      Integer32,
          hpicfPseUsedPower           Integer32,
          hpicfPseFailoverPower       Integer32,
-         hpicfPseRedundantPower      Integer32
+         hpicfPseRedundantPower      Integer32,
+         hpicfPseCurrentPowerDraw    Integer32
       }
 
    hpicfPseAllowPreStdDetect   OBJECT-TYPE
@@ -449,6 +516,15 @@ hpicfPoeExtPwrSupplyCount  OBJECT-TYPE
       DESCRIPTION "This field specifies the redundancy POE power available
                   to the Power Source Equipment."
       ::= { hpicfPseFeaturesEntry 7 }
+
+   hpicfPseCurrentPowerDraw OBJECT-TYPE
+      SYNTAX      Integer32 (0..2147483647)
+      UNITS       "Watts"
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION "This field specifies the redundancy POE power available
+                  to the Power Source Equipment."
+      ::= { hpicfPseFeaturesEntry 8 }
 
 
 -- ------------------------------------------------------------
@@ -557,7 +633,8 @@ hpicfPoePethPseOperStateEntry OBJECT-TYPE
 HpicfPoePethPseOperStateEntry ::=
      SEQUENCE {
          hpicfPoePethPseOperState        INTEGER,
-         hpicfPoePethPsePortNum          Integer32
+         hpicfPoePethPsePortNum          Integer32,
+         hpicfPoePethMainPsePdPowerDraw  Integer32
      }
 
 hpicfPoePethPseOperState OBJECT-TYPE
@@ -581,6 +658,15 @@ hpicfPoePethPsePortNum OBJECT-TYPE
      DESCRIPTION "This field specifies the port number."
      DEFVAL     { 0 }
 ::= { hpicfPoePethPseOperStateEntry 2 }
+
+hpicfPoePethMainPsePdPowerDraw OBJECT-TYPE
+         SYNTAX                  Integer32 (0..2147483647)
+         UNITS                   "Watts"
+         MAX-ACCESS              read-only
+         STATUS                  current
+         DESCRIPTION             "This field specifies the total actual power that is 
+                                 used by all the ports on this slot or member."
+         ::= { hpicfPoePethPseOperStateEntry 3 }
 
 
 hpicfPoeMaxGuaranteedPower  OBJECT-TYPE
@@ -734,7 +820,7 @@ hpicfPoeCompliance2 MODULE-COMPLIANCE
         ::= { hpicfPoeCompliances 3 }
 	
 hpicfPoeCompliance3 MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "
                 A compliance statement for HP Routing switches with PoE
                 capability"
@@ -763,7 +849,7 @@ hpicfPoeCompliance3 MODULE-COMPLIANCE
         ::= { hpicfPoeCompliances 4 }
 
 hpicfPoeCompliance4 MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "
                 A compliance statement for HP Routing switches with PoE
                 capability"
@@ -816,6 +902,85 @@ hpicfPoeCompliance5 MODULE-COMPLIANCE
                      about low priority ports."
         ::= { hpicfPoeCompliances 6 }
 
+hpicfPoeCompliance6 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with PoE
+                capability"
+        MODULE
+        MANDATORY-GROUPS { hpicfPoePethPsePortPowerGroup
+                         }
+
+        GROUP       hpicfPoePethPsePortPowerGroup
+        DESCRIPTION "A collection of Object(s) providing information
+                     about port power."
+        ::= { hpicfPoeCompliances 7 }
+
+hpicfPoeCompliance7 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with PoE
+                capability"
+        MODULE
+        MANDATORY-GROUPS {  hpicfPoePethPsePortTableGroup,
+                            hpicfPseParamsGroup1,
+                            hpicfPoePowerSupplyGroup,
+                            hpicfPoePethPsePortPreStdDetectGroup
+                         }
+
+        GROUP       hpicfPoePethPsePortTableGroup
+        DESCRIPTION "A Collection of Object(s) that display
+                     the current poe port status information."
+
+        GROUP       hpicfPseParamsGroup1
+        DESCRIPTION "A Collection of Object(s) that provide information
+                     about each power source equipment instance."
+
+        GROUP       hpicfPoePowerSupplyGroup
+        DESCRIPTION "A collection of Object(s) related to power supplies."
+
+        GROUP       hpicfPoePethPsePortPreStdDetectGroup
+        DESCRIPTION "A collection of Object(s) related to port pre standard
+                     detect status."
+
+        ::= { hpicfPoeCompliances 8 }
+
+
+hpicfPoeCompliance8 MODULE-COMPLIANCE
+        STATUS  current
+        DESCRIPTION "
+                A compliance statement for HP Routing switches with PoE
+                capability"
+        MODULE
+        MANDATORY-GROUPS {  hpicfPoePethPsePortTableGroup,
+                            hpicfPseFeaturesGroup,
+                            hpicfPoePowerSupplyGroup,
+                            hpicfPoePethPsePowerTableGroup,
+                            hpicfPoePowerUsageGlobalGroup,
+                            hpicfPoePethPseOperStateTableGroup1
+                         }
+
+        GROUP       hpicfPoePethPsePortTableGroup
+        DESCRIPTION "A Collection of Object(s) that display
+                     the current poe port status information."
+
+        GROUP       hpicfPseFeaturesGroup
+        DESCRIPTION "A Collection of Object(s) that provide information
+                     about each power source equipment instance."
+
+        GROUP       hpicfPoePowerSupplyGroup
+        DESCRIPTION "A collection of Object(s) related to power supplies."
+
+        GROUP       hpicfPoePethPsePowerTableGroup
+        DESCRIPTION "A collection of Object(s) related to poe usage parameters"
+
+        GROUP       hpicfPoePowerUsageGlobalGroup
+        DESCRIPTION "A collection of objects(s) related to poe power usage parameters globally"
+       
+        GROUP       hpicfPoePethPseOperStateTableGroup1
+        DESCRIPTION "A collection of Object(s) related to poe state"
+
+        ::= { hpicfPoeCompliances 9 }
 
 hpicfPoePethPsePortTableGroup OBJECT-GROUP
         OBJECTS     { 
@@ -874,9 +1039,9 @@ hpicfPoePowerSupplyGroup OBJECT-GROUP
 
 hpicfPoePethPseOperStateTableGroup OBJECT-GROUP
         OBJECTS         {
-                        hpicfPoePethPseOperState,        
-                        hpicfPoePethPsePortNum }                    
-        STATUS          current
+                        hpicfPoePethPseOperState, 
+                        hpicfPoePethPsePortNum }
+        STATUS          deprecated
         DESCRIPTION     " A collection of objects related to Power Supply. "
         ::= { hpicfPoeGroups 5 }
 
@@ -907,7 +1072,7 @@ hpicfPseParamsGroup OBJECT-GROUP
                       hpicfPseFailoverPower,
                       hpicfPseRedundantPower
                     }
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "A Collection of Object(s) that provide information
                      about each power source equipment instance."
         ::= { hpicfPoeGroups 8 }
@@ -937,6 +1102,36 @@ hpicfPoeLowPowerPortGroup OBJECT-GROUP
                          about low priority ports. "
         ::= { hpicfPoeGroups 11 }
 
+hpicfPseParamsGroup1 OBJECT-GROUP
+        OBJECTS     {
+                      hpicfPsePowerRedundancy,
+                      hpicfPseExtPwrSupplyCount,
+                      hpicfPseAvailablePower,
+                      hpicfPseUsedPower,
+                      hpicfPseFailoverPower,
+                      hpicfPseRedundantPower,
+                      hpicfPseCurrentPowerDraw
+                    }
+        STATUS      current
+        DESCRIPTION "A Collection of Object(s) that provide information
+                     about each power source equipment instance."
+        ::= { hpicfPoeGroups 12 }
 
+hpicfPoePethPsePortPowerGroup OBJECT-GROUP
+        OBJECTS         {hpicfPoePethPsePortPowerType 
+                        }
+        STATUS          current
+        DESCRIPTION     "A collection of objects providing information
+                         about port power type. "
+        ::= { hpicfPoeGroups 13 }
+
+hpicfPoePethPseOperStateTableGroup1 OBJECT-GROUP
+        OBJECTS         {
+                        hpicfPoePethPseOperState,
+                        hpicfPoePethPsePortNum,
+                        hpicfPoePethMainPsePdPowerDraw }
+        STATUS          current
+        DESCRIPTION     " A collection of objects related to Power Supply. "
+        ::= { hpicfPoeGroups 14 }
 END
 

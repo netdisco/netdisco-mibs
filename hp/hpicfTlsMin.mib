@@ -1,0 +1,331 @@
+ --**MOD+***********************************************************************
+ -- Module:   hpicfTlsMin.mib
+ --
+ -- Copyright (C) 2017 Hewlett Packard Enterprise Development LP
+ -- All Rights Reserved.
+ --
+ -- The contents of this software are proprietary and confidential
+ -- to the Hewlett Packard Enterprise Development LP.  No part of this
+ -- program may be photocopied, reproduced, or translated into another
+ -- programming language without prior written consent of the
+ -- Hewlett Packard Enterprise Development LP.
+ --
+ -- Purpose:  Defining proprietary MIB objects for TLS.
+ --
+ --MOD-***********************************************************************/
+
+HP-ICF-TLS-MIN-MIB DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        hpSwitch
+            FROM HP-ICF-OID
+        OBJECT-GROUP, MODULE-COMPLIANCE
+            FROM SNMPv2-CONF 
+        OBJECT-TYPE, MODULE-IDENTITY
+            FROM SNMPv2-SMI
+        TruthValue, RowStatus
+            FROM SNMPv2-TC;
+ 
+    hpicfTlsMinMIB MODULE-IDENTITY
+ 
+        LAST-UPDATED "201705110900Z"     --May 11, 2017
+        ORGANIZATION "HP Networking"
+        CONTACT-INFO "Hewlett-Packard Enterprise Company
+                      8000 Foothills Blvd.
+                      Roseville, CA 95747"
+	DESCRIPTION
+	   "This MIB module describes objects for enforcing TLS minimum
+           version enforcement and ciphersuire enforcement in the HP
+           Integrated Communication Facility product line."
+
+        REVISION     "201705110900Z"     -- May 11, 2017
+        DESCRIPTION
+           "Modified cipher names listed for hpicfTlsMinCipher."
+
+	REVISION     "201704050900Z"     -- April 05, 2017
+        DESCRIPTION
+           "Added new mib object hpicfTlsMinCipherConfig in hpicfTlsMinCipherTable
+           to enforce or disable cipher. Modified index values allowed for
+           hpicfTlsMinCipher."
+
+	REVISION     "201606220900Z"     -- June 22, 2016 
+        DESCRIPTION
+           "Added new app type cloud to hpicfTlsMinApp."
+
+	REVISION     "201410010900Z"     -- Oct 1, 2014 
+        DESCRIPTION
+           "Initial version of TLS Minimum MIB module."
+
+        ::= { hpSwitch 112 }
+
+ 
+    ---
+    --- Node definitions
+    ---
+
+    hpicfTlsMinObjects       OBJECT IDENTIFIER ::= { hpicfTlsMinMIB 0 }
+    hpicfTlsMinConformance   OBJECT IDENTIFIER ::= { hpicfTlsMinMIB 1 }
+   
+
+    hpicfTlsMinConfigObjects OBJECT IDENTIFIER ::= { hpicfTlsMinObjects 1 }
+
+
+    ---
+    --- tls-minimum table
+    ---
+    hpicfTlsMinTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF HpicfTlsMinEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION 
+	    "A table of minimum TLS version objects"
+        ::= { hpicfTlsMinConfigObjects 1 }
+
+    hpicfTlsMinEntry OBJECT-TYPE
+        SYNTAX          HpicfTlsMinEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION 
+	    "An entry in the hpicfTlsMinTable."
+        INDEX           { hpicfTlsMinApp }
+        ::= { hpicfTlsMinTable 1 }
+
+    HpicfTlsMinEntry ::= SEQUENCE {
+        hpicfTlsMinApp           INTEGER, 
+        hpicfTlsMinVersion       INTEGER,
+        hpicfTlsMinCloseSSLSess  TruthValue,
+        hpicfTlsMinRowStatus     RowStatus
+    }
+
+    hpicfTlsMinApp OBJECT-TYPE
+        SYNTAX          INTEGER {
+                            webSsl(1),
+                            openflow(2),
+                            syslog(3),
+                            tr69(4),
+                            cloud(5)
+                        }
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION 
+            "This object specifies the application for which the minimum 
+             TLS version and cipher suite is enforced."
+        ::= { hpicfTlsMinEntry 1 }
+
+    hpicfTlsMinVersion OBJECT-TYPE
+        SYNTAX          INTEGER {
+                            tls1dot0(1),
+                            tls1dot1(2),
+                            tls1dot2(3)
+                        }
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION 
+            "This object specifies the minimum TLS version enforced. The 
+             default value for this attribute will be TLS1.1"
+        ::= { hpicfTlsMinEntry 2 }
+
+    hpicfTlsMinCloseSSLSess OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION 
+            "This object specifies whether or not to close existing 
+             SSL sessions. Setting this attribute to TRUE will close all
+             existing SSL sessions. Setting this attribute to FALSE will
+             not have any effect."
+        ::= { hpicfTlsMinEntry 3 } 
+
+    hpicfTlsMinRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION 
+        "Status of this row, by which new entries may be created
+         or existing entries deleted from this table."
+
+        ::= { hpicfTlsMinEntry 4 } 
+
+    ---
+    --- Cipher suites table
+    ---
+
+    hpicfTlsMinCipherTable OBJECT-TYPE
+        SYNTAX             SEQUENCE OF HpicfTlsMinCipherEntry
+        MAX-ACCESS         not-accessible
+        STATUS             current
+        DESCRIPTION
+           "A table that contains a list of cipher suites that
+            can be enforced or disabled for various applications."
+
+        ::= { hpicfTlsMinConfigObjects 2 }
+
+    hpicfTlsMinCipherEntry OBJECT-TYPE
+        SYNTAX          HpicfTlsMinCipherEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+           "An entry in the hpicfTlsMinTable that lists the lowest 
+            TLS version and cipher suites enforced or disabled
+            for each application."
+
+        INDEX           {hpicfTlsMinApp, hpicfTlsMinCipher }
+        ::= { hpicfTlsMinCipherTable 1 }
+
+    HpicfTlsMinCipherEntry ::= SEQUENCE {
+        hpicfTlsMinCipher              INTEGER,
+        hpicfTlsMinCipherRowStatus     RowStatus,
+        hpicfTlsMinCipherConfig        INTEGER
+    }
+
+    hpicfTlsMinCipher OBJECT-TYPE
+        SYNTAX          INTEGER {
+                            aes256Sha256(1),
+                            aes256Sha(2),
+                            aes128Sha256(3),
+                            aes128Sha(4),
+                            des3CbcSha(5),
+                            aes256GcmSha384(6),
+                            aes128GcmSha256(7),
+                            ecdhEcdsaAes256GcmSha384(8),
+                            ecdhRsaAaes256GcmSha384(9),
+                            ecdhEcdsaAes128GcmSha256(10),
+                            ecdhRsaAes128GcmSha256(11),
+                            ecdhEcdsaAes256Sha384(12),
+                            ecdhRsaAes256Sha384(13),
+                            ecdhEcdsaAes256Sha(14),
+                            ecdhRsaAes256Sha(15),
+                            ecdhEcdsaAes128Sha256(16),
+                            ecdhRsaAes128Sha256(17),
+                            ecdhEcdsaAes128Sha(18),
+                            ecdhRsaAes128Sha(19),
+                            ecdhEcdsaDesCbc3Sha(20),
+                            ecdhRsaDesCbc3Sha(21),
+                            ecdheEcdsaAes128GcmSha256(22),
+                            ecdheRsaAes128GcmSha256(23),
+                            ecdheEcdsaAes128Sha256(24),
+                            ecdheRsaAes128Sha256(25),
+                            ecdheEcdsaAes128Sha(26),
+                            ecdheRsaAes128Sha(27),
+                            ecdheEcdsaAes256GcmSha384(28),
+                            ecdheRsaAes256GcmSha384(29),
+                            ecdheEcdsaAes256Sha384(30),
+                            ecdheRsaAes256Sha384(31),
+                            ecdheEcdsaAes256Sha(32),
+                            ecdheRsaAes256Sha(33),
+                            ecdheEcdsaDesCbc3Sha(34),
+                            ecdheRsaDesCbc3Sha(35),
+                            all(36)
+
+                        }
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION
+            "This object specifies the cipher suite enforced for applications."
+        ::= { hpicfTlsMinCipherEntry 1 }
+
+    hpicfTlsMinCipherRowStatus OBJECT-TYPE
+        SYNTAX          RowStatus
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+        "Status of this row, by which new entries may be created
+         or existing entries deleted from this table."
+        ::= { hpicfTlsMinCipherEntry 2 }
+
+    hpicfTlsMinCipherConfig OBJECT-TYPE
+        SYNTAX          INTEGER {
+                            enforce(1),
+                            disable(2)
+                        }
+        MAX-ACCESS      read-create
+        STATUS          current
+        DESCRIPTION
+        "This object has to be configured to enforce or disable  cipher
+         suite for applications."
+        ::= { hpicfTlsMinCipherEntry 3 }
+
+
+    --- ------------------------------------------------------------
+    --- Conformance
+    --- ------------------------------------------------------------
+
+    hpicfTlsMinCompliances OBJECT IDENTIFIER ::= { hpicfTlsMinConformance 1 }
+    hpicfTlsMinGroups OBJECT IDENTIFIER ::= { hpicfTlsMinConformance 2 }
+
+    hpicfTlsMinCompliance1 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION     "The compliance statement"
+        MODULE          -- this module
+        MANDATORY-GROUPS {
+            hpicfTlsMinConfigGroup
+        }
+        ::= { hpicfTlsMinCompliances 1 }
+
+    --- units of conformance
+
+    hpicfTlsMinConfigGroup OBJECT-GROUP
+        OBJECTS    {
+            hpicfTlsMinVersion,
+            hpicfTlsMinCloseSSLSess,
+            hpicfTlsMinRowStatus,
+            hpicfTlsMinCipherRowStatus
+        }
+        STATUS deprecated
+        DESCRIPTION
+            "A collection of objects providing configuration for
+             TLS minimum version and cipher suite enforcement for an app."            
+        ::= { hpicfTlsMinGroups 1 }
+
+    hpicfTlsMinCompliance2 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION     "The compliance statement"
+        MODULE          -- this module
+        MANDATORY-GROUPS {
+            hpicfTlsMinConfigGroup1
+        }
+        ::= { hpicfTlsMinCompliances 2 }
+
+    --- units of conformance
+
+    hpicfTlsMinConfigGroup1 OBJECT-GROUP
+        OBJECTS    {
+            hpicfTlsMinVersion,
+            hpicfTlsMinCloseSSLSess,
+            hpicfTlsMinRowStatus,
+            hpicfTlsMinCipherRowStatus,
+            hpicfTlsMinCipherConfig
+        }
+        STATUS deprecated
+        DESCRIPTION
+            "A collection of objects providing configuration for
+             TLS minimum version and cipher suite enforcement for an app."
+        ::= { hpicfTlsMinGroups 2 }
+
+    hpicfTlsMinCompliance3 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION     "The compliance statement"
+        MODULE          -- this module
+        MANDATORY-GROUPS {
+            hpicfTlsMinConfigGroup2
+        }
+        ::= { hpicfTlsMinCompliances 3 }
+
+    --- units of conformance
+
+    hpicfTlsMinConfigGroup2 OBJECT-GROUP
+        OBJECTS    {
+            hpicfTlsMinVersion,
+            hpicfTlsMinCloseSSLSess,
+            hpicfTlsMinRowStatus,
+            hpicfTlsMinCipherRowStatus,
+            hpicfTlsMinCipherConfig
+        }
+        STATUS current
+        DESCRIPTION
+            "A collection of objects providing configuration for
+             TLS minimum version and cipher suite enforcement for an app."
+        ::= { hpicfTlsMinGroups 3 }
+
+
+END 

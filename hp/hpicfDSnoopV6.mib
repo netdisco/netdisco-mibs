@@ -1,0 +1,863 @@
+--**MOD+***********************************************************************
+--* Module:    hpicfDSnoopV6.mib
+--*
+-- Copyright (C) 2017 Hewlett-Packard Development Company, L.P.
+--* All Rights Reserved.
+--* 
+--* The contents of this software are proprietary and confidential
+--* to the Hewlett Packard Enterprise Development LP.  No part of this
+--* program may be photocopied, reproduced, or translated into another
+--* programming language without prior written consent of the
+--* Hewlett Packard Enterprise Development LP.
+--*
+--* Purpose: This file contains MIB definition of HP-ICF-DHCPv6-SNOOP-MIB
+--*
+--**MOD-*********************************************************************** 
+
+HP-ICF-DHCPv6-SNOOP-MIB DEFINITIONS ::= BEGIN
+ 
+    IMPORTS
+        hpSwitch
+            FROM HP-ICF-OID           
+        InetAddressType, InetAddress           
+            FROM INET-ADDRESS-MIB           
+        VlanIndex           
+            FROM Q-BRIDGE-MIB           
+        SnmpAdminString           
+            FROM SNMP-FRAMEWORK-MIB   
+        InterfaceIndex
+            FROM IF-MIB       
+        VidList
+            FROM HP-ICF-TC
+        OBJECT-GROUP, MODULE-COMPLIANCE, NOTIFICATION-GROUP            
+            FROM SNMPv2-CONF           
+        Unsigned32, Counter32, OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE        
+            FROM SNMPv2-SMI           
+        TruthValue, RowStatus, MacAddress, DateAndTime           
+            FROM SNMPv2-TC
+        hpicfSaviObjectsPortEntry, hpicfSaviObjectsBindingEntry
+            FROM HPICF-SAVI-MIB;
+
+    hpicfDSnoopV6 MODULE-IDENTITY
+       LAST-UPDATED "201711080000Z"    -- Nov 08, 2017
+       ORGANIZATION "HP Networking"
+       CONTACT-INFO 
+            "Hewlett-Packard Company
+            8000 Foothills Blvd.
+            Roseville, CA 95747"
+        DESCRIPTION 
+            "This MIB module contains HP proprietary
+            objects for managing DHCPV6 Snooping."
+        REVISION "201711080000Z"
+        DESCRIPTION
+            "Importing hpicfSaviObjectsBindingEntry and hpicfSaviObjectsPortEntry from HPICF-SAVI-MIB
+             and augmenting them instead of saviObjectsBindingEntry and saviObjectsPortEntry.
+             Updated hpicfDSnoopV6AuthorizedServerStatus mib to specify not supported row status states."
+        REVISION "201501280000Z"
+        DESCRIPTION 
+             "Added hpicfDsnoopV6DatabaseFTPort, hpicfDSnoopV6DatabaseSFTPUsername,
+              hpicfDSnoopV6DatabaseSFTPPassword, hpicfDSnoopV6DatabaseValidateSFTPServer"
+
+        REVISION "201310060000Z" 
+        DESCRIPTION
+            "Changed syntax type for hpicfDSnoopV6VlanEnable
+             from OctetString to Vidlist."
+        REVISION "201304300000Z"      
+        DESCRIPTION 
+            "Initial Version."
+        ::= { hpSwitch 102}
+ 
+--
+-- Node definitions
+--
+ 
+  
+    hpicfDSnoopV6Notifications OBJECT IDENTIFIER ::= { hpicfDSnoopV6 0 }
+ 
+    hpicfDSnoopV6Objects OBJECT IDENTIFIER ::= { hpicfDSnoopV6 1 }
+    hpicfDSnoopV6Config OBJECT IDENTIFIER ::= { hpicfDSnoopV6Objects 1 }
+ 
+   
+    hpicfDSnoopV6GlobalCfg OBJECT IDENTIFIER ::= { hpicfDSnoopV6Config 1 }
+ 
+   
+    hpicfDSnoopV6Enable OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This object provides the administrative status of the
+             DHCPv6 Snooping feature.  This status must be enabled for
+             DHCPv6 snooping to work."
+        ::= { hpicfDSnoopV6GlobalCfg 1 }
+ 
+   
+    hpicfDSnoopV6VlanEnable OBJECT-TYPE
+        SYNTAX      VidList
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This object contains vid map for vlans on which DHCPV6 
+             Snooping is enabled. A bit that is on (equal to 1) 
+             indicates that DHCPV6 snooping is enabled on corresponding
+             vlan ."
+        ::= { hpicfDSnoopV6GlobalCfg 2 }
+  
+  
+    
+    hpicfDSnoopV6DatabaseFile OBJECT-TYPE
+        SYNTAX SnmpAdminString
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A location to store the lease database or
+            to retrieve it after a reboot.  The location
+            must be given in the form of a Uniform
+            Resource Locator (URL) as defined in RFC
+            2396.  The permissible character sets and the
+            encoding rules defined in RFC 2396 section 2
+            apply."
+        ::= { hpicfDSnoopV6GlobalCfg 3 }
+   
+ 
+    hpicfDSnoopV6DatabaseWriteDelay OBJECT-TYPE
+        SYNTAX Unsigned32 (15..86400)
+        UNITS  "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            " The number of seconds to delay writing the
+            DHCPv6 lease database file after a database
+            change.  This allows grouping
+            multiple database changes into a single
+            write.  The default value is 300 seconds."
+        ::= { hpicfDSnoopV6GlobalCfg 4 }
+ 
+   
+    hpicfDSnoopV6DatabaseWriteTimeout OBJECT-TYPE
+        SYNTAX Unsigned32 (0..86400)
+        UNITS  "seconds"
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+          "The number of seconds to wait for the database file transfer
+           to finish. If file transfer is not over within this period,
+           a file transfer failure message is displayed. To continue trying
+           indefinitely, specify a value of 0.
+           The default value is 300 seconds."
+        ::= { hpicfDSnoopV6GlobalCfg 5 }
+ 
+    hpicfDSnoopV6OutOfResourcesTrapCtrl OBJECT-TYPE
+        SYNTAX INTEGER
+        {
+            enabled(1),
+            disabled(2)  
+        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            " This object provides the operational status of DSNOOPv6 out of 
+            resource control trap. The default value is enabled. This 
+            notification trap is sent when the number of bindings exceed 
+            the maximum limit of 8192 bindings. Configuration of this object 
+            requires SNMPv3 authentication."
+        DEFVAL{1}
+        ::= { hpicfDSnoopV6GlobalCfg 6 }
+ 
+    hpicfDSnoopV6ErrantReplyTrapCtrl OBJECT-TYPE
+        SYNTAX INTEGER
+        {           
+            enabled(1),
+            disabled(2)
+        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This object provides the operational status of DSNOOPv6 errant 
+             repy control trap. The default value is enabled. This 
+             notification trap is sent when a DHCPv6 reply packet is received 
+             on an untrusted port or from an un-authorized server. 
+             Configuration of this object requires SNMPv3 authentication."
+        DEFVAL{enabled}
+        ::= { hpicfDSnoopV6GlobalCfg 7 }
+
+    hpicfDSnoopV6DatabaseFTPort OBJECT-TYPE
+        SYNTAX Unsigned32 (0..65535)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A location to store the port value of the FT Server. The 
+             default port value will be 69 for TFTP and 22 for SFTP."
+        ::= { hpicfDSnoopV6GlobalCfg 8 }
+
+   hpicfDSnoopV6DatabaseSFTPUsername OBJECT-TYPE
+        SYNTAX SnmpAdminString
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A location to store the Username of the SFTP Server. 
+             The default value of username is root."
+        ::= { hpicfDSnoopV6GlobalCfg 9 }
+   
+    hpicfDSnoopV6DatabaseSFTPPassword OBJECT-TYPE
+        SYNTAX SnmpAdminString
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A location to store the Password of the SFTP Server."
+        ::= { hpicfDSnoopV6GlobalCfg 10 }
+
+    hpicfDSnoopV6DatabaseValidateSFTPServer OBJECT-TYPE
+        SYNTAX INTEGER
+        {           
+            enabled(1),
+            disabled(2)
+        }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This object sets the validate-sftp-server flag. When enabled, 
+            the user must login to the SFTP server to verify and accept 
+            the public key of the server. When disabled, the public key 
+	     is accepted automatically."
+        ::= { hpicfDSnoopV6GlobalCfg 11 }
+
+
+    hpicfDSnoopV6AuthorizedServerTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF HpicfDSnoopV6AuthorizedServerEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "Table of authorized DHCP server addresses."
+        ::= { hpicfDSnoopV6Config 2 }
+ 
+   
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.34.1.1.3.1
+    hpicfDSnoopV6AuthorizedServerEntry OBJECT-TYPE
+        SYNTAX HpicfDSnoopV6AuthorizedServerEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "A row in the table, containing the address of a
+            single authorized DHCP server."
+        INDEX { hpicfDSnoopV6AuthorizedServerAddrType,
+                hpicfDSnoopV6AuthorizedServerAddress }
+        ::= { hpicfDSnoopV6AuthorizedServerTable 1 }
+ 
+    HpicfDSnoopV6AuthorizedServerEntry ::=
+        SEQUENCE {
+            hpicfDSnoopV6AuthorizedServerAddrType
+                InetAddressType,
+            hpicfDSnoopV6AuthorizedServerAddress
+                InetAddress,
+            hpicfDSnoopV6AuthorizedServerStatus
+                RowStatus
+         }
+ 
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.34.1.1.3.1.1
+    hpicfDSnoopV6AuthorizedServerAddrType OBJECT-TYPE
+        SYNTAX InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The IP address type of authorized DHCPv6 server."
+        ::= { hpicfDSnoopV6AuthorizedServerEntry 1 }
+ 
+   
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.34.1.1.3.1.2
+    hpicfDSnoopV6AuthorizedServerAddress OBJECT-TYPE
+        SYNTAX InetAddress  (SIZE(16 |20))
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The address of a known valid DHCP server.  The type of address
+            contained in this object is indicated by 
+            hpicfDSnoopV6AuthorizedServerAddrType. To allow a server packet
+            to be forwarded to a client, it must be received on a trusted port
+            from a server address in this table.  If this table is empty, all
+            addresses are trusted.
+           
+            Note that this feature compares the source address of the received
+            DHCPv6 server packet against the addresses in this table.
+            Therefore, this table must contain trusted server addresses and 
+            trusted DHCPv6 relays that a server packet may be relayed through."
+        ::= { hpicfDSnoopV6AuthorizedServerEntry 2 }
+ 
+   
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.34.1.1.3.1.3
+    hpicfDSnoopV6AuthorizedServerStatus OBJECT-TYPE
+         SYNTAX RowStatus
+         MAX-ACCESS read-create
+         STATUS current
+         DESCRIPTION
+             "The status of this DHCP server address entry.
+             Only 'active' entries are used when validating
+             DHCP server packets. Row statuses createAndWait(5), 
+             notReady(3) and notInService(2) are not supported."
+         ::= {hpicfDSnoopV6AuthorizedServerEntry 3 }
+ 
+    hpicfDSnoopV6GlobalStats OBJECT IDENTIFIER ::= { hpicfDSnoopV6Objects 2 }
+   
+    hpicfDSnoopV6CSForwards OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 packets that were successfully
+            forwarded from untrusted client ports towards trusted
+            DHCPv6 server ports."
+        ::= { hpicfDSnoopV6GlobalStats 1 }
+ 
+    hpicfDSnoopV6CSMACMismatches OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 client packets that were
+            discarded due to MAC verification check failure."
+        ::= { hpicfDSnoopV6GlobalStats 2 }
+ 
+    hpicfDSnoopV6CSBadReleases OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 client packets that were
+            discarded because they were RELEASE packets received
+            on a port different from the port that
+            the address was leased to."
+        ::= { hpicfDSnoopV6GlobalStats 3 }
+ 
+    hpicfDSnoopV6CSUntrustedDestPorts OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 client unicast packets that
+            were discarded because they were destined to untrusted
+            ports."
+        ::= { hpicfDSnoopV6GlobalStats 4 }
+   
+    hpicfDSnoopV6SCForwards OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 packets that were successfully
+            forwarded from trusted DHCPv6 server ports to untrusted
+            client ports."
+        ::= { hpicfDSnoopV6GlobalStats 5 }
+ 
+    hpicfDSnoopV6SCUntrustedPorts OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 server packets that were
+            dropped because they were received on untrusted
+            ports."
+        ::= { hpicfDSnoopV6GlobalStats 6 }
+ 
+    hpicfDSnoopV6SCRelayReplyUntrustedPorts OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of relay reply packets that were dropped by the
+             switch because they were received on untrusted ports."
+        ::= { hpicfDSnoopV6GlobalStats 7 }
+   
+    hpicfDSnoopV6SCUnauthorizedServers OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of snooped DHCPv6 server packets that were
+            discarded because they were received from unauthorized
+            DHCPv6 server"
+        ::= { hpicfDSnoopV6GlobalStats 8 }
+   
+    hpicfDSnoopV6DBFileWriteAttempts OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of attempts that have been made to
+            write the DHCPv6 lease database to a configured
+            file location."
+        ::= { hpicfDSnoopV6GlobalStats 9 }
+   
+    hpicfDSnoopV6DBFileWriteFailures OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "Number of times that an attempt to write the
+            DHCPv6 lease database to a configured file location
+            has failed."
+        ::= { hpicfDSnoopV6GlobalStats 10 }
+   
+    hpicfDSnoopV6DBFileReadStatus OBJECT-TYPE
+        SYNTAX INTEGER
+        {
+            notConfigured(1),
+            inProgress(2),
+            succeeded(3),
+            failed(4)
+        }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            " This object indicates whether the DHCPv6 lease database
+            from configured location is loaded successfully after the last
+            reboot."
+        ::= { hpicfDSnoopV6GlobalStats 11 }
+ 
+    hpicfDSnoopV6DBFileWriteStatus OBJECT-TYPE
+        SYNTAX INTEGER
+        {
+            notConfigured(1),
+            delaying(2),
+            inProgress(3),
+            succeeded(4),
+            failed(5)
+        }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This object indicates whether the DHCPv6 lease
+            database is currently synchronized with the
+            the configured file server.  'notConfigured'
+            means that the switch is not configured with
+            a server location.  'delaying' means the switch
+            is waiting for the write delay to expire
+            before writing the current database.
+            'inProgress' means that a lease database
+            transfer is active.  'succeeded' means that
+            all leases in our database have been written
+            to the server.  'failed' means that the last
+            attempt to write our lease database failed."
+        ::= { hpicfDSnoopV6GlobalStats 12 }
+ 
+    hpicfDSnoopV6DBFileLastWriteTime OBJECT-TYPE
+        SYNTAX DateAndTime
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            " Time at which the switch last successfully wrote
+            the lease database to the server.  This object
+            contains a value of all zeroes if lease database is
+            not written since the last reboot."
+        ::= { hpicfDSnoopV6GlobalStats 13 }
+ 
+    hpicfDSnoopV6MaxbindPktsDropped OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This object provides the total number of DHCPv6 snooping packets 
+             dropped by the switch. A switch drops the DHCPv6 snooping packets
+             on a port when the port exceeds maximum binding limit configured 
+             on it."
+           ::= { hpicfDSnoopV6GlobalStats 14 }
+ 
+    hpicfDSnoopV6ClearStatsOptions OBJECT IDENTIFIER ::= {hpicfDSnoopV6Objects 3}
+ 
+    hpicfDSnoopV6ClearStats OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write 
+        STATUS      current
+        DESCRIPTION
+            "This object clears the DSNOOPv6 statistics when set to TRUE.
+             A write operation of FALSE leads to a no operation and a get
+             request for this object always returns FALSE."
+        ::= { hpicfDSnoopV6ClearStatsOptions 1 }
+ 
+    -- AUGMENT hpicfSaviObjectsPortTable for max_bindings
+
+    hpicfDSnoopV6PortMaxBindingTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfDSnoopV6PortMaxBindingEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "This table contains the maximum binding information of port."
+        ::= { hpicfDSnoopV6Config 3}
+ 
+ 
+    hpicfDSnoopV6PortMaxBindingEntry OBJECT-TYPE
+        SYNTAX      HpicfDSnoopV6PortMaxBindingEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "The maximum number of bindings on the Port."
+        AUGMENTS { hpicfSaviObjectsPortEntry }
+        ::= { hpicfDSnoopV6PortMaxBindingTable 1 }
+ 
+    HpicfDSnoopV6PortMaxBindingEntry ::=
+        SEQUENCE 
+        {
+            hpicfDSnoopV6PortStaticBinding Unsigned32,
+            hpicfDSnoopV6PortDynamicBinding Unsigned32
+        }
+ 
+    hpicfDSnoopV6PortStaticBinding OBJECT-TYPE
+        SYNTAX Unsigned32 (0..8192)
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This object indicates the static bindings configured on this port."
+        ::= { hpicfDSnoopV6PortMaxBindingEntry 2 }
+ 
+    hpicfDSnoopV6PortDynamicBinding OBJECT-TYPE
+        SYNTAX Unsigned32 (0..8192)
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This object indicates the number of dynamic bindings on this port."
+        ::= { hpicfDSnoopV6PortMaxBindingEntry 3 }
+ 
+-- AUGMENTS hpicfSaviObjectsBindingEntry for VlanID
+
+    hpicfDSnoopV6StaticBindingTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfDSnoopV6StaticBindingEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION 
+            "This table contains the VLAN ID for binding entry."
+        ::= { hpicfDSnoopV6Config 4 }
+ 
+    hpicfDSnoopV6StaticBindingEntry OBJECT-TYPE
+        SYNTAX     HpicfDSnoopV6StaticBindingEntry
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+            "Extension of VLAN ID in hpicfSaviObjectsBindingTable."
+        AUGMENTS { hpicfSaviObjectsBindingEntry }
+        ::= { hpicfDSnoopV6StaticBindingTable 1 }
+ 
+    HpicfDSnoopV6StaticBindingEntry ::=
+        SEQUENCE {
+                hpicfDSnoopV6BindingVlanId VlanIndex,
+                hpicfDSnoopV6BindingLLAddress InetAddress,
+                hpicfDSnoopV6BindingSecVlan Unsigned32
+        }
+ 
+    hpicfDSnoopV6BindingVlanId OBJECT-TYPE
+        SYNTAX VlanIndex (1..4094)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "The VLAN on which this client is discovered."
+        ::= { hpicfDSnoopV6StaticBindingEntry 1 }
+
+    hpicfDSnoopV6BindingLLAddress OBJECT-TYPE
+        SYNTAX InetAddress ( SIZE (4|16) ) 
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "The VLAN on which this client is discovered."
+        ::= { hpicfDSnoopV6StaticBindingEntry 2 }
+
+    hpicfDSnoopV6BindingSecVlan OBJECT-TYPE
+        SYNTAX Unsigned32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The secondary VLAN on which this client is discovered.
+             if binding is learned on primary or normal VLAN, this object
+             will be zero.
+            "
+        ::= { hpicfDSnoopV6StaticBindingEntry 3 }
+
+    hpicfDSnoopV6SourceBindingOutOfResources NOTIFICATION-TYPE
+        OBJECTS     { hpicfDsnoopV6SourceBindingPort,
+                      hpicfDsnoopV6SourceBindingMacAddress,
+                      hpicfDsnoopV6SourceBindingIpAddressType,
+                      hpicfDsnoopV6SourceBindingIpAddress,
+                      hpicfDsnoopV6SourceBindingVlan}
+        STATUS      current
+        DESCRIPTION "This trap indicates that the number of bindings
+                     exceeded the maximum limit of 8192 bindings.
+                     This notification trap is controlled by the
+                     state of ' hpicfDSnoopV6OutOfResourcesTrapCtrl' object.
+                     Implementation of this trap is optional."
+        ::= { hpicfDSnoopV6Notifications 1 }
+   
+    hpicfDsnoopV6SourceBindingOutOfResourcesObjects
+                     OBJECT IDENTIFIER ::= { hpicfDSnoopV6Notifications 2}
+ 
+    hpicfDsnoopV6SourceBindingPort  OBJECT-TYPE
+        SYNTAX      InterfaceIndex
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "The port of failed binding entry. Maximum binding 
+                     limit is reached."
+        ::= { hpicfDsnoopV6SourceBindingOutOfResourcesObjects 1 }
+ 
+    hpicfDsnoopV6SourceBindingMacAddress  OBJECT-TYPE
+        SYNTAX      MacAddress
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "The MAC address of failed binding entry. Maximum binding 
+                     limit is reached."
+        ::= { hpicfDsnoopV6SourceBindingOutOfResourcesObjects 2 }
+ 
+   hpicfDsnoopV6SourceBindingIpAddressType  OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "The IPv6 address type of failed binding entry. Maximum 
+                     binding limit is reached."
+        ::= { hpicfDsnoopV6SourceBindingOutOfResourcesObjects 3 }
+ 
+   hpicfDsnoopV6SourceBindingIpAddress  OBJECT-TYPE
+        SYNTAX      InetAddress
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "The IPv6 address of failed binding entry. Maximum binding 
+                     limit is reached."
+        ::= { hpicfDsnoopV6SourceBindingOutOfResourcesObjects 4 }
+ 
+   hpicfDsnoopV6SourceBindingVlan  OBJECT-TYPE
+        SYNTAX      VlanIndex
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The VLAN of failed binding entry. Maximum binding 
+                    limit is reached."
+        ::= { hpicfDsnoopV6SourceBindingOutOfResourcesObjects 5 }
+ 
+  
+   hpicfDSnoopV6SourceBindingErrantReply NOTIFICATION-TYPE
+        OBJECTS {hpicfDSnoopV6SourceBindingNotifyCount,
+                 hpicfDSnoopV6SourceBindingErrantSrcMAC,
+                 hpicfDSnoopV6SourceBindingErrantSrcIPType,                 
+                 hpicfDSnoopV6SourceBindingErrantSrcIP}
+        STATUS current
+        DESCRIPTION
+            "An hpicfDSnoopV6SourceBindingErrantReply notification signifies 
+             that the DHCPV6 snooping entity has detected and dropped an
+             errant DHCPv6 reply packet. This notification trap is controlled 
+             by the state of 'hpicfDSnoopV6ErrantReplyTrapCtrl' object "
+        ::= { hpicfDSnoopV6Notifications 3 }
+ 
+    hpicfDSnoopV6SourceBindingNotifyObjects OBJECT IDENTIFIER ::=
+                                               { hpicfDSnoopV6Notifications 4 }
+   
+    hpicfDSnoopV6SourceBindingNotifyCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "A count of the DHCPV6 snooping notification sent from the DHCPv6
+            snooping entity to the SNMP entity.  This count may be greater
+            than the count of notifications actually transmitted by the SNMP
+            entity due to rate limiting or configuration."
+        ::= { hpicfDSnoopV6SourceBindingNotifyObjects 1 }
+ 
+    hpicfDSnoopV6SourceBindingErrantSrcMAC OBJECT-TYPE
+        SYNTAX MacAddress
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The MAC address received in the errant DHCPv6 reply packet."
+        ::= { hpicfDSnoopV6SourceBindingNotifyObjects 2 }
+ 
+   hpicfDSnoopV6SourceBindingErrantSrcIPType OBJECT-TYPE
+        SYNTAX InetAddressType
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The type of address reported in hpicfDhcpSnoopSourceBindingErrantSrcIP."
+        ::= { hpicfDSnoopV6SourceBindingNotifyObjects 3 }
+ 
+    hpicfDSnoopV6SourceBindingErrantSrcIP OBJECT-TYPE
+        SYNTAX InetAddress
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "The IPv6 address received in the errant DHCPv6 reply packet."
+        ::= { hpicfDSnoopV6SourceBindingNotifyObjects 4 }
+ 
+ 
+    hpicfDSnoopV6Conformance OBJECT IDENTIFIER ::= { hpicfDSnoopV6 2 }   
+    hpicfDSnoopV6Groups OBJECT IDENTIFIER ::= { hpicfDSnoopV6Conformance 1 }
+ 
+   
+    hpicfDSnoopV6BaseGroup OBJECT-GROUP
+        OBJECTS {hpicfDSnoopV6Enable, hpicfDSnoopV6VlanEnable,
+         hpicfDSnoopV6CSForwards, hpicfDSnoopV6CSBadReleases,
+         hpicfDSnoopV6CSUntrustedDestPorts, hpicfDSnoopV6CSMACMismatches,
+         hpicfDSnoopV6SCForwards, hpicfDSnoopV6SCUnauthorizedServers,
+         hpicfDSnoopV6SCUntrustedPorts,hpicfDSnoopV6SCRelayReplyUntrustedPorts}
+        STATUS current
+        DESCRIPTION
+            "A collection of objects for configuring and
+            monitoring the base DHCPv6 snooping functionality."
+        ::= { hpicfDSnoopV6Groups 1 }
+ 
+    hpicfDSnoopV6ServersGroup OBJECT-GROUP
+        OBJECTS {hpicfDSnoopV6AuthorizedServerStatus}
+        STATUS current
+        DESCRIPTION
+            "A collection of objects for configuring and
+            monitoring DHCP snooping trusted servers."
+        ::= { hpicfDSnoopV6Groups 2 }
+ 
+    hpicfDSnoopV6DbaseFileGroup OBJECT-GROUP
+        OBJECTS {hpicfDSnoopV6DatabaseFile, hpicfDSnoopV6DatabaseWriteDelay,
+        hpicfDSnoopV6DatabaseWriteTimeout, hpicfDSnoopV6DBFileWriteAttempts,
+        hpicfDSnoopV6DBFileWriteFailures, hpicfDSnoopV6DBFileReadStatus,
+        hpicfDSnoopV6DBFileWriteStatus, hpicfDSnoopV6DBFileLastWriteTime}
+        STATUS deprecated
+        DESCRIPTION
+            "A collection of objects for configuring and
+            monitoring DHCP snooping database file
+            management."
+        ::= { hpicfDSnoopV6Groups 3 }
+ 
+   
+    hpicfDSnoopV6MaxBindingsGroup OBJECT-GROUP
+        OBJECTS
+        { hpicfDSnoopV6MaxbindPktsDropped,hpicfDSnoopV6PortStaticBinding,
+          hpicfDSnoopV6PortDynamicBinding}
+        STATUS current
+        DESCRIPTION
+             "A collection of objects for monitoring the binding limits
+              on a port."
+       ::={hpicfDSnoopV6Groups 4}
+ 
+    hpicfDSnoopV6StaticBindingsGroup OBJECT-GROUP
+        OBJECTS
+        {hpicfDSnoopV6BindingVlanId,hpicfDSnoopV6BindingLLAddress,
+          hpicfDSnoopV6BindingSecVlan}
+        STATUS current
+        DESCRIPTION
+        "A collection of objects used to configure static binding for a VLAN."
+        ::={hpicfDSnoopV6Groups 5}
+
+    hpicfDSnoopV6ClearStatsOptionsGroup OBJECT-GROUP
+        OBJECTS {
+                   hpicfDSnoopV6ClearStats
+                }
+        STATUS     current
+        DESCRIPTION
+            "A collection of objects used to clear DSNOOPv6 statistics."
+        ::= { hpicfDSnoopV6Groups 6}
+ 
+    hpicfDSnoopV6TrapObjectsGroup OBJECT-GROUP
+        OBJECTS {hpicfDSnoopV6SourceBindingNotifyCount,
+                 hpicfDSnoopV6SourceBindingErrantSrcMAC,
+                 hpicfDSnoopV6SourceBindingErrantSrcIPType,                 
+                 hpicfDSnoopV6SourceBindingErrantSrcIP,
+                 hpicfDsnoopV6SourceBindingPort,
+                 hpicfDsnoopV6SourceBindingMacAddress,
+                 hpicfDsnoopV6SourceBindingIpAddressType,
+                 hpicfDsnoopV6SourceBindingIpAddress,
+                 hpicfDsnoopV6SourceBindingVlan,
+                 hpicfDSnoopV6OutOfResourcesTrapCtrl,
+                 hpicfDSnoopV6ErrantReplyTrapCtrl}
+        STATUS current
+        DESCRIPTION
+           "A collection of objects used in the DSNOOPv6 notification."
+        ::= { hpicfDSnoopV6Groups 7 }
+ 
+    hpicfDSnoopV6TrapsGroup NOTIFICATION-GROUP
+        NOTIFICATIONS {hpicfDSnoopV6SourceBindingOutOfResources,
+                       hpicfDSnoopV6SourceBindingErrantReply}
+        STATUS current
+        DESCRIPTION
+           "A collection of trap objects that provide DSNOOPv6 notifications."
+        ::= { hpicfDSnoopV6Groups 8 }
+
+    hpicfDSnoopV6DbaseFileGroup1 OBJECT-GROUP
+        OBJECTS {hpicfDSnoopV6DatabaseFile, hpicfDSnoopV6DatabaseWriteDelay,
+        hpicfDSnoopV6DatabaseWriteTimeout, hpicfDSnoopV6DBFileWriteAttempts,
+        hpicfDSnoopV6DBFileWriteFailures, hpicfDSnoopV6DBFileReadStatus,
+        hpicfDSnoopV6DBFileWriteStatus, hpicfDSnoopV6DBFileLastWriteTime,
+        hpicfDSnoopV6DatabaseFTPort, hpicfDSnoopV6DatabaseSFTPUsername,
+	hpicfDSnoopV6DatabaseSFTPPassword, hpicfDSnoopV6DatabaseValidateSFTPServer}
+        STATUS current
+        DESCRIPTION
+            "A collection of objects for configuring and
+            monitoring DHCP snooping database file
+            management."
+        ::= { hpicfDSnoopV6Groups 9 }
+ 
+hpicfDSnoopV6Compliances OBJECT IDENTIFIER ::= { hpicfDSnoopV6Conformance 3 }
+ 
+    hpicfDSnoopV6Compliance2 MODULE-COMPLIANCE
+        STATUS deprecated
+        DESCRIPTION
+            "The compliance statement for HP Routing switches
+            that support DHCPv6 Snooping."
+        MODULE -- this module
+            MANDATORY-GROUPS { hpicfDSnoopV6BaseGroup }
+            GROUP hpicfDSnoopV6ServersGroup
+                DESCRIPTION
+                    "This group is mandatory for implementations
+                    that support a DHCPv6 trusted server list."
+            GROUP hpicfDSnoopV6DbaseFileGroup
+                DESCRIPTION
+                    "This group is mandatory for implementations
+                    that support saving the DHCPv6 lease database
+                    to a remote server."
+            GROUP hpicfDSnoopV6MaxBindingsGroup
+                DESCRIPTION
+                   "This group is mandatory for implementations
+                    that supports monitoring the max-bindings on a port."
+           GROUP hpicfDSnoopV6StaticBindingsGroup
+                DESCRIPTION
+                   "This group is mandatory for implementations that support
+                     adding static binding entries into Binding Table."
+           GROUP  hpicfDSnoopV6ClearStatsOptionsGroup
+                DESCRIPTION
+                  "This group is mandatory for implementations that support
+                   clearing of DSNOOPv6 statistics."
+           GROUP  hpicfDSnoopV6TrapObjectsGroup
+                DESCRIPTION
+                 "Group of objects used in DHCPV6 Snooping notifications."
+           GROUP  hpicfDSnoopV6TrapsGroup
+                DESCRIPTION
+                "DHCPV6 Snooping notifications."
+         ::= { hpicfDSnoopV6Compliances 1 }
+
+    hpicfDSnoopV6Compliance MODULE-COMPLIANCE
+        STATUS current
+        DESCRIPTION
+            "The compliance statement for HP Routing switches
+            that support DHCPv6 Snooping."
+        MODULE -- this module
+            MANDATORY-GROUPS { hpicfDSnoopV6BaseGroup }
+            GROUP hpicfDSnoopV6ServersGroup
+                DESCRIPTION
+                    "This group is mandatory for implementations
+                    that support a DHCPv6 trusted server list."
+            GROUP hpicfDSnoopV6MaxBindingsGroup
+                DESCRIPTION
+                   "This group is mandatory for implementations
+                    that supports monitoring the max-bindings on a port."
+           GROUP hpicfDSnoopV6StaticBindingsGroup
+                DESCRIPTION
+                   "This group is mandatory for implementations that support
+                     adding static binding entries into Binding Table."
+           GROUP  hpicfDSnoopV6ClearStatsOptionsGroup
+                DESCRIPTION
+                  "This group is mandatory for implementations that support
+                   clearing of DSNOOPv6 statistics."
+           GROUP  hpicfDSnoopV6TrapObjectsGroup
+                DESCRIPTION
+                 "Group of objects used in DHCPV6 Snooping notifications."
+           GROUP  hpicfDSnoopV6TrapsGroup
+                DESCRIPTION
+                "DHCPV6 Snooping notifications."
+           GROUP hpicfDSnoopV6DbaseFileGroup1
+                DESCRIPTION
+                    "This group is mandatory for implementations
+                    that support saving the DHCPv6 lease database
+                    to a remote server."
+         ::= { hpicfDSnoopV6Compliances 2 }
+ 
+
+ 
+END
+
