@@ -1,9 +1,12 @@
 -- *****************************************************************
 -- CISCO-POWER-ETHERNET-EXT-MIB
 --   
+-- Ported from flo_dsbu7
+--   
+-- Nov 2011, ovld-sw-platform-dev
 -- March 2004, Seth Wang
 --   
--- Copyright (c) 2004-2007, 2009, 2011, 2013 by Cisco Systems Inc.
+-- Copyright (c) 2004-2007, 2010-2013, 2017-2018 by Cisco Systems, Inc.
 --   
 -- All rights reserved.
 -- ****************************************************************
@@ -37,7 +40,7 @@ IMPORTS
 
 
 ciscoPowerEthernetExtMIB MODULE-IDENTITY
-    LAST-UPDATED    "201307100000Z"
+    LAST-UPDATED    "201801190000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -69,6 +72,12 @@ ciscoPowerEthernetExtMIB MODULE-IDENTITY
             supply from Power Sourcing Equipment. They are, for
             example, IP telephones and wireless access points
             or bridges."
+    REVISION        "201801190000Z"
+    DESCRIPTION
+        "Added following OBJECT-GROUP
+        - cpeExtPseInfoPwrGroup
+        Added new compliance
+        - cpeExtMIBCompliance6."
     REVISION        "201307100000Z"
     DESCRIPTION
         "Added following TEXTUAL-CONVENTION
@@ -604,7 +613,9 @@ cpeExtMainPseEntry OBJECT-TYPE
 CpeExtMainPseEntry ::= SEQUENCE {
         cpeExtMainPseEntPhyIndex       EntPhysicalIndexOrZero,
         cpeExtMainPseDescr             SnmpAdminString,
-        cpeExtMainPsePwrMonitorCapable TruthValue
+        cpeExtMainPsePwrMonitorCapable TruthValue,
+        cpeExtMainPseUsedPower         Unsigned32,
+        cpeExtMainPseRemainingPower    Unsigned32
 }
 
 cpeExtMainPseEntPhyIndex OBJECT-TYPE
@@ -640,6 +651,26 @@ cpeExtMainPsePwrMonitorCapable OBJECT-TYPE
         group is capable. The value 'false' means that the group
         in not capable." 
     ::= { cpeExtMainPseEntry 3 }
+
+cpeExtMainPseUsedPower OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "miliwatts"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates used power expressed in miliwatts." 
+    ::= { cpeExtMainPseEntry 4 }
+
+cpeExtMainPseRemainingPower OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "miliwatts"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates remaining power expressed in
+        miliwatts, this parameter is calculated as pethMainPsePower
+        minus cpeExtMainPseUsedPower." 
+    ::= { cpeExtMainPseEntry 5 }
  
 
 cpeExtPdStatistics  OBJECT IDENTIFIER
@@ -802,20 +833,20 @@ cpeExtPsePortLldpEntry OBJECT-TYPE
     ::= { cpeExtPsePortLldpTable 1 }
 
 CpeExtPsePortLldpEntry ::= SEQUENCE {
-        cpeExtPsePortLldpPwrType           CpeExtLldpPwrType,
-        cpeExtPsePortLldpPdPwrType         CpeExtLldpPwrType,
-        cpeExtPsePortLldpPwrSrc            CpeExtLldpPwrSrc,
-        cpeExtPsePortLldpPdPwrSrc          CpeExtLldpPwrSrc,
-        cpeExtPsePortLldpPwrPriority       CpeExtPwrPriority,
-        cpeExtPsePortLldpPdPwrPriority     CpeExtPwrPriority,
-        cpeExtPsePortLldpPwrReq            Unsigned32,
-        cpeExtPsePortLldpPdPwrReq          Unsigned32,
-        cpeExtPsePortLldpPwrAlloc          Unsigned32,
-        cpeExtPsePortLldpPdPwrAlloc        Unsigned32,
-        cpeExtPsePortLldpPwrClass          CpeExtLldpPwrClassOrZero,
-        cpeExtPsePortLldpPdPwrClass        CpeExtLldpPwrClassOrZero, 
-        cpeExtPsePortLldpPdPwrSupport      BITS,
-        cpeExtPsePortLldpPdPwrPairsOrZero  INTEGER
+        cpeExtPsePortLldpPwrType          CpeExtLldpPwrType,
+        cpeExtPsePortLldpPdPwrType        CpeExtLldpPwrType,
+        cpeExtPsePortLldpPwrSrc           CpeExtLldpPwrSrc,
+        cpeExtPsePortLldpPdPwrSrc         CpeExtLldpPwrSrc,
+        cpeExtPsePortLldpPwrPriority      CpeExtPwrPriority,
+        cpeExtPsePortLldpPdPwrPriority    CpeExtPwrPriority,
+        cpeExtPsePortLldpPwrReq           Unsigned32,
+        cpeExtPsePortLldpPdPwrReq         Unsigned32,
+        cpeExtPsePortLldpPwrAlloc         Unsigned32,
+        cpeExtPsePortLldpPdPwrAlloc       Unsigned32,
+        cpeExtPsePortLldpPwrClass         CpeExtLldpPwrClassOrZero,
+        cpeExtPsePortLldpPdPwrClass       CpeExtLldpPwrClassOrZero,
+        cpeExtPsePortLldpPdPwrSupport     BITS,
+        cpeExtPsePortLldpPdPwrPairsOrZero INTEGER
 }
 
 cpeExtPsePortLldpPwrType OBJECT-TYPE
@@ -929,7 +960,7 @@ cpeExtPsePortLldpPdPwrClass OBJECT-TYPE
         "IEEE Std 802.3af Section 30.9.1.1.6
         aPSEPowerClassification" 
     ::= { cpeExtPsePortLldpEntry 12 }
- 
+
 cpeExtPsePortLldpPdPwrSupport OBJECT-TYPE
     SYNTAX          BITS {
                         portClass(0),
@@ -940,7 +971,7 @@ cpeExtPsePortLldpPdPwrSupport OBJECT-TYPE
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "This object indicates the power support mode received 
+        "This object indicates the power support mode received
         from the remote PD via MDI TLV in LLDP protocol.
 
         'portClass'          - This bit is set if the port is
@@ -974,6 +1005,8 @@ cpeExtPsePortLldpPdPwrPairsOrZero OBJECT-TYPE
 
         'spare'   - the spare pairs are in use." 
     ::= { cpeExtPsePortLldpEntry 14 }
+ 
+
 
 -- Notifications
 
@@ -1239,7 +1272,7 @@ cpeExtMIBCompliance4 MODULE-COMPLIANCE
     ::= { cpeExtMIBCompliances 4 }
 
 cpeExtMIBCompliance5 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the
         CISCO-POWER-ETHERNET-EXT-MIB."
@@ -1367,6 +1400,141 @@ cpeExtMIBCompliance5 MODULE-COMPLIANCE
     DESCRIPTION
         "Write access is not required."
     ::= { cpeExtMIBCompliances 5 }
+
+cpeExtMIBCompliance6 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the
+        CISCO-POWER-ETHERNET-EXT-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS { cpeExtPsePortGroup }
+
+    GROUP           cpeExtPsePortGlobalConfigGroup
+    DESCRIPTION
+        "The cpeExtPsePortGlobalConfigGroup is mandatory for agents
+        that support global configurations on the PSE interfaces."
+
+    GROUP           cpeExtPsePortPwrMonitorGroup
+    DESCRIPTION
+        "The cpeExtPsePortPwrMonitorGroup is mandatory for agents
+        that provide power monitoring on PD's connected to the
+        PSE interfaces."
+
+    GROUP           cpeExtMainPseGroup2
+    DESCRIPTION
+        "The cpeExtMainPseGroup2 is mandatory for agents
+        that need additional information to identify the PSE 
+        group."
+
+    GROUP           cpeExtPseGrpPwrGroup
+    DESCRIPTION
+        "The cpeExtPseGrpPwrGroup is mandatory for agents
+        that support the power consumption monitoring for
+        PSE groups."
+
+    GROUP           cpeExtPortEntityIndexGroup
+    DESCRIPTION
+        "The cpeExtPortEntityIndexGroup is mandatory for agents
+        that needs additional info to identify the interfaces 
+        of the PSE port."
+
+    GROUP           cpeExtPortPolicingGroup
+    DESCRIPTION
+        "The cpeExtPortPolicingGroup is mandatory for agents
+        that provide power consumption policing for the PSE 
+        ports."
+
+    GROUP           cpeExtPdStatsGroup
+    DESCRIPTION
+        "The cpeExtPdStatsGroup is mandatory for agents
+        that provide the statistics information for powered 
+        devices."
+
+    GROUP           cpeExtPortPolicingActionGroup
+    DESCRIPTION
+        "The cpeExtPortPolicingActionGroup is mandatory
+        for agents that provide control of the power policing
+        action."
+
+    GROUP           cpeExtPortPwrManAllocGroup
+    DESCRIPTION
+        "The cpeExtPortPolicingActionGroup is mandatory
+        for agents that provide manual power allocation."
+
+    GROUP           cpeExtPolicingNotifEnableGroup
+    DESCRIPTION
+        "The cpeExtPolicingNotifEnableGroup is mandatory for agents
+        that provide notifications of power consumption policing
+        status for the PSE ports."
+
+    GROUP           cpeExtPolicingNotifGroup
+    DESCRIPTION
+        "The cpeExtPolicingNotifGroup is mandatory for agents
+        that provide notifications of power consumption policing
+        status for the PSE ports."
+
+    GROUP           cpeExtPowerPriorityGroup
+    DESCRIPTION
+        "The cpeExtPowerPriorityGroup is mandatory for agents
+        that support global control of the power priority
+        feature."
+
+    GROUP           cpeExtPsePortLldpGroup
+    DESCRIPTION
+        "The cpeExtPsePortLldpGroup is mandatory for agents
+        that support the LLDP based Data Link Layer
+        power classification."
+
+    GROUP           cpeExtPsePortCapabilitiesGroup
+    DESCRIPTION
+        "The cpeExtPsePortCapabilitiesGroup is mandatory for agents
+        that support PSE port capabilities."
+
+    GROUP           cpeExtPsePortLldpPowerGroup
+    DESCRIPTION
+        "The cpeExtPsePortLldpPowerGroup is mandatory for agents
+        that support Power via MDI TLV in LLDP protocol."
+
+    GROUP           cpeExtPseInfoPwrGroup
+    DESCRIPTION
+        "The cpeExtPseInfoPwrGroup is mandatory for agents
+        that support used and remaining power info for PSE groups."
+
+    OBJECT          cpeExtPsePortEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPsePortPwrMax
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPsePortPolicingEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPsePortPolicingAction
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPsePortPwrManAlloc
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPolicingNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cpeExtPowerPriorityEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { cpeExtMIBCompliances 6 }
 
 -- Units of Conformance
 
@@ -1521,7 +1689,6 @@ cpeExtPsePortLldpGroup OBJECT-GROUP
                         cpeExtPsePortLldpPdPwrReq,
                         cpeExtPsePortLldpPwrAlloc,
                         cpeExtPsePortLldpPdPwrAlloc
-
                     }
     STATUS          current
     DESCRIPTION
@@ -1548,8 +1715,21 @@ cpeExtPsePortLldpPowerGroup OBJECT-GROUP
                     }
     STATUS          current
     DESCRIPTION
-        "A collection of objects which provide Power information 
+        "A collection of objects which provide Power information
         via MDI TLV in LLDP Protocol."
     ::= { cpeExtMIBGroups 17 }
 
+cpeExtPseInfoPwrGroup OBJECT-GROUP
+    OBJECTS         {
+                        cpeExtMainPseUsedPower,
+                        cpeExtMainPseRemainingPower
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This is a collection of objects which provide
+        used and remaining power information for the PSE group."
+    ::= { cpeExtMIBGroups 18 }
+
 END
+
+
