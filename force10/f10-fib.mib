@@ -2,8 +2,12 @@ F10-FIB-MIB DEFINITIONS ::= BEGIN
 
 	IMPORTS
 		MODULE-IDENTITY, OBJECT-TYPE,
-		Integer32, IpAddress, Counter64
+		Unsigned32, Gauge32, Integer32, IpAddress, Counter64
 			FROM SNMPv2-SMI
+                InterfaceIndexOrZero               
+                        FROM IF-MIB
+	        InetAddressType, InetAddress, InetAddressPrefixLength
+	                FROM INET-ADDRESS-MIB
 		MacAddress
 			FROM SNMPv2-TC
 		MODULE-COMPLIANCE, OBJECT-GROUP
@@ -15,16 +19,16 @@ F10-FIB-MIB DEFINITIONS ::= BEGIN
     
 	f10IpForwardMib MODULE-IDENTITY
 		LAST-UPDATED "200709141200Z"   -- Sep 14, 2007 12:00:00 GMT
-		ORGANIZATION "Force10 Networks, Inc."
+		ORGANIZATION "Dell Inc"
 		CONTACT-INFO
-			"Force10 Networks, Inc.
-			 350 Holger Way
-			 San Jose, CA 95134 USA
-			 Phone: +1 (408) 571 3500
-			 Fax:   +1 (408) 571 3550
-			 Email: support@force10networks.com"
+                             "http://www.force10networks.com/support"   
 		DESCRIPTION
 			"This MIB module is used to display CIDR multipath IP Routes." 
+		REVISION     "201107081200Z"   -- Jul 08, 2011 12:00:00 GMT
+		DESCRIPTION
+			"This version of MIB module deprecates the f10IpForwardTable
+                   and replaces it with f10InetCidrRouteTable which adds the
+                   IP Protocol Independance "
 		REVISION     "200709141200Z"   -- Sep 14, 2007 12:00:00 GMT
 		DESCRIPTION
 			"Initial version of this MIB module." 
@@ -39,7 +43,6 @@ F10-FIB-MIB DEFINITIONS ::= BEGIN
 
 f10IpForwardMibObjects       OBJECT IDENTIFIER ::= { f10IpForwardMib 1 }
 f10IpForwardMibConformance   OBJECT IDENTIFIER ::= { f10IpForwardMib 2 }
-
 
 -- ****************************************************************************
 --
@@ -62,15 +65,28 @@ f10IpForwardVersionEntry OBJECT-TYPE
 	DESCRIPTION
 		"The row definition for the ip forward version Table."
 	INDEX {
-		chSysCardNumber
-	}
+		chSysCardNumber,
+                f10IpForwardAddrFamily
+              }
 	::= { f10IpForwardVersionTable 1 }
 
 F10IpForwardVersionEntry ::=
 	SEQUENCE {
+                f10IpForwardAddrFamily
+                        InetAddressType,
 		f10IpForwardVersion
 			Counter64
 	}
+
+f10IpForwardAddrFamily OBJECT-TYPE
+	SYNTAX     InetAddressType
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+             "Address Family of the IP Forwarding Table for which this entry
+              provides the Version information. "
+
+	::= { f10IpForwardVersionEntry 1}
 
 f10IpForwardVersion OBJECT-TYPE
 	SYNTAX     Counter64 
@@ -79,7 +95,7 @@ f10IpForwardVersion OBJECT-TYPE
 	DESCRIPTION
 		"A version number on the Forwarding Table. 
 		 This is always fetched from one line card."
-	::= { f10IpForwardVersionEntry 1 }
+	::= { f10IpForwardVersionEntry 2 }
 		
 	
 -- ****************************************************************************
@@ -95,7 +111,7 @@ f10IpForwardVersion OBJECT-TYPE
 f10IpForwardTable OBJECT-TYPE
 	SYNTAX     SEQUENCE OF F10IpForwardEntry
 	MAX-ACCESS not-accessible
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"This entity's IP Routing table."
 	::= { f10IpForwardMibObjects 2 }
@@ -103,7 +119,7 @@ f10IpForwardTable OBJECT-TYPE
 f10IpForwardEntry OBJECT-TYPE
 	SYNTAX     F10IpForwardEntry
 	MAX-ACCESS not-accessible
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"A particular route to a particular  destination,
 		 under a particular policy."
@@ -139,7 +155,7 @@ F10IpForwardEntry ::=
 f10IpforwardDest OBJECT-TYPE
 	SYNTAX     IpAddress
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"The destination IP address of this route. An
 		 entry  with  a value of 0.0.0.0 is considered a
@@ -149,7 +165,7 @@ f10IpforwardDest OBJECT-TYPE
 f10IpforwardMask OBJECT-TYPE
 	SYNTAX     IpAddress
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"Indicate the mask to be logical-ANDed with the destination
 		 address  before  being compared to the value in 
@@ -159,7 +175,7 @@ f10IpforwardMask OBJECT-TYPE
 f10IpforwardNextHop OBJECT-TYPE
 	SYNTAX     IpAddress
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"On remote routes, the address of the next system
 		 en route; Otherwise, 0.0.0.0."
@@ -168,7 +184,7 @@ f10IpforwardNextHop OBJECT-TYPE
 f10IpforwardFirstHop OBJECT-TYPE
 	SYNTAX     IpAddress
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"On remote routes, the address of the Gateway 
 		 to the nexthop; 0.0.0.0 if the Nexthop itself is a Gateway
@@ -178,7 +194,7 @@ f10IpforwardFirstHop OBJECT-TYPE
 f10IpforwardIfIndex OBJECT-TYPE
 	SYNTAX     Integer32
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"The ifIndex value which identifies  the  local
 		 interface  through  which  the next hop of this
@@ -188,7 +204,7 @@ f10IpforwardIfIndex OBJECT-TYPE
 f10IpforwardMacAddress OBJECT-TYPE
 	SYNTAX     MacAddress 
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"The Mac address of the NextHop."
 	::= { f10IpForwardEntry 6 }
@@ -196,7 +212,7 @@ f10IpforwardMacAddress OBJECT-TYPE
 f10IpforwardEgressPort OBJECT-TYPE
 	SYNTAX     OCTET STRING (SIZE (0..255))
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"The name of the egress port to which the packets will be
 		 forwarded."
@@ -205,10 +221,234 @@ f10IpforwardEgressPort OBJECT-TYPE
 f10IpforwardCamIndex OBJECT-TYPE
 	SYNTAX     Integer32
 	MAX-ACCESS read-only
-	STATUS     current
+	STATUS     deprecated
 	DESCRIPTION
 		"Cam Entry corresponding to a row."
 	::= { f10IpForwardEntry 8 }
+
+-- ****************************************************************************
+
+-- f10 scalar objects which provide the number of current f10InetCidrRouteTable entries 
+-- each per destination type
+
+-- ****************************************************************************
+
+f10InetCidrIpv4RouteNumber OBJECT-TYPE
+	SYNTAX     Gauge32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The number of current f10InetCidrRouteTable entries that are not
+                 Invalid and whose f10InetCidrRouteDestType is ipv4(1)"
+	::= { f10IpForwardMibObjects 3 }
+
+f10InetCidrIpv6RouteNumber OBJECT-TYPE
+	SYNTAX     Gauge32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The number of current f10InetCidrRouteTable entries that are not
+                 Invalid and whose f10InetCidrRouteDestType is ipv6(2)"
+	::= { f10IpForwardMibObjects 4 }
+
+
+-- ****************************************************************************
+-- f10 Inet Cidr Route Table
+
+-- The f10 Inet Cidr Route Table deprecates and replaces the f10IpForwardTable.
+-- It adds IP Protocol Independence.
+
+-- ****************************************************************************
+
+
+f10InetCidrRouteTable OBJECT-TYPE
+	SYNTAX     SEQUENCE OF F10InetCidrRouteTableEntry
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+		"This entity's IP Routing table."
+	::= { f10IpForwardMibObjects 5 }
+
+f10InetCidrRouteTableEntry OBJECT-TYPE
+	SYNTAX     F10InetCidrRouteTableEntry
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+		"A particular route to a particular  destination
+
+                 Implementers need to be aware that if the total number
+                 of elements (octets or sub-identifiers) in
+                 inetCidrRouteDest, inetCidrRoutePolicy, and
+                 inetCidrRouteNextHop exceeds 111, then OIDs of column
+                 instances in this table will have more than 128 sub-
+                 identifiers and cannot be accessed using SNMPv1,
+                 SNMPv2c, or SNMPv3.
+
+                 For S-Series Platform, Value of chSysCardNumber will always
+                 be zero"
+
+	INDEX {
+		chSysCardNumber,
+		f10InetCidrRouteDestType,
+		f10InetCidrRouteDest,
+		f10InetCidrRoutePfxLen,
+		f10InetCidrRouteNextHopType,
+		f10InetCidrRouteNextHop,
+		f10InetCidrRouteFirstHopType,
+		f10InetCidrRouteFirstHop
+	}
+	::= { f10InetCidrRouteTable 1 }
+
+F10InetCidrRouteTableEntry ::=
+	SEQUENCE {
+		f10InetCidrRouteDestType
+			InetAddressType,
+		f10InetCidrRouteDest
+			InetAddress,
+		f10InetCidrRoutePfxLen
+			InetAddressPrefixLength,
+		f10InetCidrRouteNextHopType
+			InetAddressType,
+		f10InetCidrRouteNextHop
+			InetAddress,
+		f10InetCidrRouteFirstHopType
+			InetAddressType,
+		f10InetCidrRouteFirstHop
+			InetAddress,
+		f10InetCidrRouteIfIndex
+			InterfaceIndexOrZero,
+		f10InetCidrRouteMacAddress
+			MacAddress,
+		f10InetCidrRouteEgressPort
+			OCTET STRING,
+		f10InetCidrRouteCamIndex
+			Unsigned32
+	}
+
+f10InetCidrRouteDestType OBJECT-TYPE
+	SYNTAX     InetAddressType
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+		"The type of the inetCidrRouteDest address, as defined
+                 in the InetAddress MIB.
+
+                 Only those address types that may appear in an actual
+                 routing table are allowed as values of this object."
+
+	::= { f10InetCidrRouteTableEntry 1 }
+
+f10InetCidrRouteDest OBJECT-TYPE
+	SYNTAX     InetAddress
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+		"The destination IP address of this route.
+                 The type of this address is determined by the value of
+                 the inetCidrRouteDestType object."
+
+	::= { f10InetCidrRouteTableEntry 2 }
+
+f10InetCidrRoutePfxLen OBJECT-TYPE
+	SYNTAX     InetAddressPrefixLength
+	MAX-ACCESS not-accessible
+	STATUS     current
+	DESCRIPTION
+		"Indicates the number of leading one bits that form the
+                 mask to be logical-ANDed with the destination address
+                 before being compared to the value in the inetCidrRouteDest field."
+
+	::= { f10InetCidrRouteTableEntry 3 }
+
+f10InetCidrRouteNextHopType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "The type of the inetCidrRouteNextHop address, as
+                 defined in the InetAddress MIB.
+
+                 Value should be set to unknown(0) for non-remote
+                 routes.
+
+                 Only those address types that may appear in an actual
+                 routing table are allowed as values of this object."
+        ::= { f10InetCidrRouteTableEntry 4 }
+
+f10InetCidrRouteNextHop OBJECT-TYPE
+        SYNTAX     InetAddress
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "On remote routes, the address of the next system en
+                 route.  For non-remote routes, a zero length string.
+
+                 The type of this address is determined by the value of
+                 the inetCidrRouteNextHopType object."
+        ::= { f10InetCidrRouteTableEntry 5 }
+
+f10InetCidrRouteFirstHopType OBJECT-TYPE
+        SYNTAX     InetAddressType
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "The type of the inetCidrRouteFirstHop address, as
+                 defined in the InetAddress MIB.
+
+                 Value should be set to unknown(0) for non-remote
+                 routes.
+
+                 Only those address types that may appear in an actual
+                 routing table are allowed as values of this object."
+        ::= { f10InetCidrRouteTableEntry 6 }
+
+f10InetCidrRouteFirstHop OBJECT-TYPE
+        SYNTAX     InetAddress
+        MAX-ACCESS not-accessible
+        STATUS     current
+        DESCRIPTION
+                "The address of the gateway to the Nexthop.
+                 If the nexthop itself is the gateway, a zero length string.
+  
+                 The type of this address is determined by the value of
+                 the inetCidrRouteFirstHopType object."
+        ::= { f10InetCidrRouteTableEntry 7 }
+
+f10InetCidrRouteIfIndex OBJECT-TYPE
+        SYNTAX     InterfaceIndexOrZero
+        MAX-ACCESS read-only
+        STATUS     current
+        DESCRIPTION
+                "The ifIndex value that identifies the local interface
+                 through which the next hop of this route should be
+                 reached.  A value of 0 is valid and represents the
+                 scenario where no interface is specified."
+        ::= { f10InetCidrRouteTableEntry 8 }
+
+f10InetCidrRouteMacAddress OBJECT-TYPE
+	SYNTAX     MacAddress 
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The Mac address of the NextHop."
+	::= { f10InetCidrRouteTableEntry 9 }
+
+f10InetCidrRouteEgressPort OBJECT-TYPE
+	SYNTAX     OCTET STRING (SIZE (0..255))
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The name of the egress port to which the packets will be
+		 forwarded."
+	::= { f10InetCidrRouteTableEntry 10 }
+
+f10InetCidrRouteCamIndex OBJECT-TYPE
+	SYNTAX     Unsigned32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"Cam Entry corresponding to a row."
+	::= { f10InetCidrRouteTableEntry 11 }
 
 
 -- ****************************************************************************
@@ -231,7 +471,7 @@ f10IpForwardMibCompliance MODULE-COMPLIANCE
 	STATUS current
 	DESCRIPTION 
 		"The basic implementation requirements for the 
-		 Force10 Enterprise Ip Forward MIB."
+		 Dell Networking OS Ip Forward MIB."
 	MODULE    -- this module
 	MANDATORY-GROUPS { 
 		f10IpForwardObjectGroup
@@ -245,18 +485,14 @@ f10IpForwardMibCompliance MODULE-COMPLIANCE
 f10IpForwardObjectGroup OBJECT-GROUP
 	OBJECTS {
 		f10IpForwardVersion,
-		f10IpforwardDest,
-		f10IpforwardMask,
-		f10IpforwardNextHop,
-		f10IpforwardFirstHop,
-		f10IpforwardIfIndex,
-		f10IpforwardMacAddress,
-		f10IpforwardEgressPort,
-		f10IpforwardCamIndex
-   }
-   STATUS current
-   DESCRIPTION 
-      "Objects for the ATM interface table."
-   ::= { f10IpForwardMibGroups 1 }
+		f10InetCidrRouteIfIndex,
+		f10InetCidrRouteMacAddress,
+		f10InetCidrRouteEgressPort,
+		f10InetCidrRouteCamIndex
+        }
+        STATUS current
+        DESCRIPTION 
+                "Objects for the IP aware Route Table."
+        ::= { f10IpForwardMibGroups 1 }
 
 END
