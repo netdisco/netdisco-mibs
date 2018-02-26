@@ -1,0 +1,300 @@
+-- ***********************************************************************
+-- Module:    hpicfUrpf.mib
+-- 
+-- Copyright (C) 2016 Hewlett Packard Enterprise Development LP
+-- All Rights Reserved.
+--  
+-- The contents of this software are proprietary and confidential to
+-- the Hewlett Packard Enterprise Development LP. No part of this
+-- program may be photocopied, reproduced, or translated into another
+-- programming language without prior written consent of the
+-- Hewlett Packard Enterprise Development LP.
+--
+-- Purpose: This file contains MIB definition of HP-ICF-URPF-MIB 
+--
+-- ***********************************************************************
+
+HP-ICF-URPF-MIB DEFINITIONS ::= BEGIN
+
+  IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Counter64, Integer32
+      FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP
+      FROM SNMPv2-CONF
+    InterfaceIndex
+      FROM IF-MIB
+    InetAddressType
+      FROM INET-ADDRESS-MIB
+    SnmpAdminString
+      FROM SNMP-FRAMEWORK-MIB
+    TruthValue
+      FROM SNMPv2-TC
+    hpSwitch
+      FROM HP-ICF-OID;
+
+  hpicfUrpfMIB MODULE-IDENTITY
+    LAST-UPDATED "201606140000Z"     -- June 14, 2016
+    ORGANIZATION "Hewlett Packard Enterprise"
+    CONTACT-INFO "Hewlett Packard Enterprise Development Company LP
+      8000 Foothills Blvd.
+      Roseville, CA 95747"
+    DESCRIPTION
+            "This MIB module describes objects for management of
+             Unicast Reverse Path Forwarding (URPF)."
+    REVISION     "201606140000Z"     -- June 14, 2016
+    DESCRIPTION
+            "Initial version of URPF MIB module."
+    ::= { hpSwitch 131 }
+
+    hpicfUrpfConfig       OBJECT IDENTIFIER ::= { hpicfUrpfMIB 1 }
+    hpicfUrpfStats        OBJECT IDENTIFIER ::= { hpicfUrpfMIB 2 }
+    hpicfUrpfConformance  OBJECT IDENTIFIER ::= { hpicfUrpfMIB 3 }
+
+    hpicfUrpfConfigGlobalEnable  OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "Is the URPF feature enabled.
+                 true(1)  - URPF is enabled;
+                 false(2)  URPF is disabled."
+        DEFVAL      { false }
+        ::= { hpicfUrpfConfig 1 }
+
+    hpicfUrpfConfigGlobalLogTimeout  OBJECT-TYPE
+        SYNTAX      Integer32 (30..300)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "The time, in seconds, between URPF logging summary messages."
+        DEFVAL      { 300 }
+        ::= { hpicfUrpfConfig 2 }
+
+    hpicfUrpfConfigTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfUrpfConfigEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "The table contains configuration information
+                 for URPF processing."
+        ::= { hpicfUrpfConfig 3 }
+
+    hpicfUrpfConfigEntry  OBJECT-TYPE
+        SYNTAX      HpicfUrpfConfigEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "Each table entry contains configuration parameters for an
+                 interface and address family."
+        INDEX   { hpicfUrpfIfIndex, hpicfUrpfAddrFamily }
+        ::= { hpicfUrpfConfigTable 1 }
+
+    HpicfUrpfConfigEntry ::=
+        SEQUENCE {
+            hpicfUrpfIfIndex                InterfaceIndex,
+            hpicfUrpfAddrFamily             InetAddressType,
+            hpicfUrpfConfigMode             INTEGER,
+            hpicfUrpfConfigDefRoute         TruthValue,
+            hpicfUrpfConfigAllowDhcp        TruthValue,
+            hpicfUrpfConfigLogging          TruthValue,
+            hpicfUrpfConfigHasWhitelistAcl  TruthValue,
+            hpicfUrpfConfigWhitelistAclName SnmpAdminString
+        }
+
+    hpicfUrpfIfIndex  OBJECT-TYPE
+        SYNTAX      InterfaceIndex
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "The interface for the table entry."
+        ::= { hpicfUrpfConfigEntry 1 }
+
+    hpicfUrpfAddrFamily  OBJECT-TYPE
+        SYNTAX      InetAddressType
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "The address family for the table entry."
+        ::= { hpicfUrpfConfigEntry 2 }
+
+    hpicfUrpfConfigMode  OBJECT-TYPE
+        SYNTAX      INTEGER { none(1),
+                              strict(2),
+                              loose(3)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "The URPF match mode. URPF operates in one of two modes:
+                 strict and loose. In strict mode, a route to the source
+                 address must exist, and the ingress interface of the
+                 packet must be the same interface used to egress packets
+                 back to the source. For example, the ingress and egress routes
+                 are symmetric and must use the same interface. In loose
+                 mode, a route to the source address must exist, but the
+                 ingress interface of the packet is not checked.
+                 none(1)   - URPF not applied to the interface;
+                 strict(2) - must match expected interface;
+                 loose(3)  - ingress interface is not checked."
+        DEFVAL      { none }
+        ::= { hpicfUrpfConfigEntry 3 }
+
+    hpicfUrpfConfigDefRoute  OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "Allow use of the default route when checking the ingress
+                 port. Enabling use of the default route is only supported
+                 in strict mode. If use of the default route was enabled in
+                 loose mode, all packets would be allowed, therefore this
+                 option is not supported in loose mode.
+                 true(1)  - enable use of default route in port match;
+                 false(2) - disable use of default route in port match."
+        DEFVAL      { false }
+        ::= { hpicfUrpfConfigEntry 4 }
+
+    hpicfUrpfConfigAllowDhcp  OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "Allow packets with SA=0.0.0.0 and DA=255.255.255.255, such as
+                 DHCP and BOOTP, to bypass the URPF checks.
+                 true(1)  - packets will bypass URPF checks;
+                 false(2)  packets will be dropped."
+        DEFVAL      { false }
+        ::= { hpicfUrpfConfigEntry 5 }
+
+    hpicfUrpfConfigLogging  OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "Is logging of dropped packets enabled.
+                 true(1)  - logging enabled;
+                 false(2) - logging disabled."
+        DEFVAL      { false }
+        ::= { hpicfUrpfConfigEntry 6 }
+
+    hpicfUrpfConfigHasWhitelistAcl  OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "Is a whitelist ACL applied to this interface.
+                 true(1)  - whitelist ACL applied;
+                 false(2) - whitelist ACL not applied."
+        DEFVAL      { false }
+        ::= { hpicfUrpfConfigEntry 7 }
+
+    hpicfUrpfConfigWhitelistAclName  OBJECT-TYPE
+        SYNTAX      SnmpAdminString
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+                "The URPF whitelist ACL name. The ACL must already exist at 
+                 the time of application."
+        ::= { hpicfUrpfConfigEntry 8 }
+
+    hpicfUrpfStatsTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfUrpfStatsEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "The table containing statistics information for packets
+                 that are dropped by URPF processing."
+        ::= { hpicfUrpfStats 1 }
+
+    hpicfUrpfStatsEntry    OBJECT-TYPE
+        SYNTAX      HpicfUrpfStatsEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+                "Each table entry counts packets that are dropped by URPF processing
+                 on a particular interface and IP address family."
+        INDEX   { hpicfUrpfIfIndex, hpicfUrpfAddrFamily }
+        ::= { hpicfUrpfStatsTable 1 }
+
+    HpicfUrpfStatsEntry ::=
+        SEQUENCE {
+            hpicfUrpfStatsBlockedPackets   Counter64,
+            hpicfUrpfStatsBlockedOctets    Counter64
+        }
+
+    hpicfUrpfStatsBlockedPackets OBJECT-TYPE
+        SYNTAX      Counter64
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+                "The number of packets blocked by URPF on this interface and
+                 address family."
+        ::= { hpicfUrpfStatsEntry 1 }
+
+    hpicfUrpfStatsBlockedOctets OBJECT-TYPE
+        SYNTAX      Counter64
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+                "The number of octets blocked by URPF on this interface and
+                 address family."
+        ::= { hpicfUrpfStatsEntry 2 }
+
+
+-- ****************************************************************************
+-- Conformance Information  
+-- ****************************************************************************
+
+-- units of conformance
+
+    hpicfUrpfMIBGroups      OBJECT IDENTIFIER ::= { hpicfUrpfConformance 1 }
+    hpicfUrpfMIBCompliances OBJECT IDENTIFIER ::= { hpicfUrpfConformance 2 }
+
+    hpicfUrpfScalarGroup  OBJECT-GROUP
+        OBJECTS {
+            hpicfUrpfConfigGlobalEnable,
+            hpicfUrpfConfigGlobalLogTimeout
+        }
+        STATUS      current
+        DESCRIPTION "A collection of scalar objects providing global
+                     configuration information for URPF."
+        ::= { hpicfUrpfMIBGroups 1 }
+ 
+    hpicfUrpfConfigTableGroup  OBJECT-GROUP
+        OBJECTS {
+            hpicfUrpfConfigMode,
+            hpicfUrpfConfigDefRoute,
+            hpicfUrpfConfigAllowDhcp,
+            hpicfUrpfConfigLogging,
+            hpicfUrpfConfigHasWhitelistAcl,
+            hpicfUrpfConfigWhitelistAclName
+        }
+        STATUS      current
+        DESCRIPTION "A collection of objects providing configuration
+                     information for URPF."
+        ::= { hpicfUrpfMIBGroups 2 }
+ 
+    hpicfUrpfStatsTableGroup  OBJECT-GROUP
+        OBJECTS {
+            hpicfUrpfStatsBlockedPackets,
+            hpicfUrpfStatsBlockedOctets
+        }
+        STATUS      current
+        DESCRIPTION "A collection of objects providing statistics for URPF."
+        ::= { hpicfUrpfMIBGroups 3 }
+ 
+-- compliance statements
+
+    hpicfUrpfMIBCompliance  MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP switches implementing
+                     the HPICF-URPF MIB."
+        MODULE -- This Module
+        MANDATORY-GROUPS {
+            hpicfUrpfScalarGroup,
+            hpicfUrpfConfigTableGroup,
+            hpicfUrpfStatsTableGroup
+        }
+        ::= { hpicfUrpfMIBCompliances 1 }
+
+END

@@ -1,19 +1,37 @@
+--**MOD+***********************************************************************
+ -- Module:    hpicfIpRoute.mib
+ --
+ -- Copyright (C) 2016 Hewlett Packard Enterprise Development LP
+ -- All Rights Reserved.
+ --
+ -- The contents of this software are proprietary and confidential
+ -- to the Hewlett Packard Enterprise Development LP.  No part of this
+ -- program may be photocopied, reproduced, or translated into another
+ -- programming language without prior written consent of the
+ -- Hewlett Packard Enterprise Development LP.
+ --
+ -- Purpose:  Defining propreitary MIB objects for HP-ICF-IP-ROUTING.
+ --
+ --*MOD-***********************************************************************/
+
 HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 
     IMPORTS
         OBJECT-TYPE, MODULE-IDENTITY, Integer32,
-        Unsigned32
+        Unsigned32, Counter32
             FROM SNMPv2-SMI
-        PhysAddress, RowStatus, TruthValue,
+        PhysAddress, RowStatus, TruthValue, DisplayString,
         TEXTUAL-CONVENTION
             FROM SNMPv2-TC
         MODULE-COMPLIANCE, OBJECT-GROUP
             FROM SNMPv2-CONF
+        SnmpAdminString
+            FROM SNMP-FRAMEWORK-MIB
         ifIndex, InterfaceIndex, InterfaceIndexOrZero
             FROM IF-MIB
         InetAddressType, InetAddress, InetAddressPrefixLength
             FROM INET-ADDRESS-MIB
-        ipCidrRouteEntry, inetCidrRouteEntry
+        ipCidrRouteEntry, inetCidrRouteEntry, inetCidrRouteDestType
             FROM IP-FORWARD-MIB
         hpSwitch
             FROM HP-ICF-OID
@@ -21,16 +39,49 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
             FROM IP-MIB
         Metric
             FROM OSPF-MIB
+        HpInetCidrRouteState
+            FROM HP-ICF-TC 
             ;
 
     hpicfIpRouting MODULE-IDENTITY
-        LAST-UPDATED "201108300000Z" -- Aug 30, 2011
+        LAST-UPDATED "201612020000Z" -- Dec 2, 2016"
         ORGANIZATION "HP Networking."
         CONTACT-INFO "Hewlett-Packard Company
                       8000 Foothills Blvd.
                       Roseville, CA 95747"
         DESCRIPTION  "This MIB module contains HP proprietary
                       objects for managing IP Routing."
+
+        REVISION     "201612020000Z" -- Dec 2, 2016
+        DESCRIPTION  " Added hpicfIpStaticRouteBfdTable
+                       to provide BFD support to Static Routes."
+
+        REVISION     "201611090000Z" -- Nov 16, 2016
+        DESCRIPTION  "Added hpicfIpv6RouterAdvertRtrPreference,
+                      hpicfIpv6RtrAdvParamGroup and
+                      hpicfIpv6RtrAdvParamCompliance.
+                      Deprecated hpicfIpv6RtrAdvGroup and
+                      hpicfIpv6RtrAdvCompliance."
+
+        REVISION     "201603180000Z" -- Mar 18, 2016
+        DESCRIPTION  "Changed syntax and description of
+                      hpicfIpStaticRouteLogging"
+
+        REVISION     "201602170000Z" -- Feb 17, 2016
+        DESCRIPTION  "Added hpicfIpStaticRouteLogging" 
+
+        REVISION     "201408260000Z" -- Aug 26, 2014
+        DESCRIPTION  "Added hpicfDBroadcastFwdAcl" 
+
+        REVISION     "201306030000Z" -- Jun 03, 2013
+        DESCRIPTION  "Added hpicfIpv6RouteSummary" 
+
+        REVISION     "201210200000Z" -- Oct 20, 2012
+        DESCRIPTION  "Added hpicfIpStaticRouteName"
+
+        REVISION     "201111100000Z" -- Nov 10, 2011
+        DESCRIPTION  "Added hpicfIpv6NDRADNSAdminStatus and
+                      hpicfIpv6RouterAdvertSendDNSAdverts."
 
         REVISION     "201108300000Z" -- Aug 30, 2011
         DESCRIPTION  "Added hpicfIpStaticRouteMetric."
@@ -289,6 +340,21 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                      that we will add to the IP routing table."
         ::= { hpicfGlobalIpConfig 3 }
 
+    hpicfDBroadcastFwdAcl OBJECT-TYPE
+        SYNTAX      SnmpAdminString (SIZE (0..64))
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "This object contains the ACL to apply to IP Directed 
+                     Broadcast packets.The value is the name of an existing 
+                     IP ACL defined using the Command Line Interface (CLI) or
+                     a zero length string if there is no ACL applied.
+                     This object can only be set when hpicfDBroadcastFwdEnable 
+                     is also set to 'enable' in the same request. Setting 
+                     hpicfBroadcastFwdEnable to 'enable' without also setting 
+                     this object will clear this object and unapply any 
+                     IP Directed Broadcast ACL."
+        ::= { hpicfGlobalIpConfig 4 }
+
     -- HP Static Route Configuration objects
     hpicfIpStaticRouteConfig OBJECT IDENTIFIER ::=
         { hpicfIpRoutingObjects 4 }
@@ -365,7 +431,10 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
             hpicfIpStaticRouteDistance       Integer32,
             hpicfIpStaticRouteTag            Unsigned32,
             hpicfIpStaticRouteStatus         RowStatus,
-            hpicfIpStaticRouteMetric         Metric 
+            hpicfIpStaticRouteMetric         Metric,
+            hpicfIpStaticRouteName           DisplayString,
+            hpicfIpStaticRouteLogging        INTEGER,
+            hpicfIpStaticRouteBfdEnable      TruthValue
         }
 
     hpicfIpStaticRoutePrefixType OBJECT-TYPE
@@ -564,6 +633,43 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         DEFVAL      { 1 }
         ::= { hpicfIpStaticRouteEntry 11 }
 
+    hpicfIpStaticRouteName   OBJECT-TYPE
+        SYNTAX      DisplayString
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "Name of the configured static route. 
+                     It is used for lucidity and troubleshooting   
+                     purpose and is optional."
+        ::= { hpicfIpStaticRouteEntry 12 }
+
+
+   hpicfIpStaticRouteLogging OBJECT-TYPE
+       SYNTAX     INTEGER
+                  {
+                    enable(1),
+                    disable(2)
+                  }
+       MAX-ACCESS  read-create
+       STATUS      current
+       DESCRIPTION "This object determines whether or not debug log
+                    messages are to be generated for packets matching
+                    statically configured blackhole routes.
+
+                    When enabled, the debug option 'ip/ipv6 fib blackhole'
+                    needs to be enabled in order to print the log
+                    messages to a specified destination."
+       DEFVAL { disable }
+       ::= { hpicfIpStaticRouteEntry 13 }
+
+    hpicfIpStaticRouteBfdEnable OBJECT-TYPE
+       SYNTAX       TruthValue
+       MAX-ACCESS   read-create
+       STATUS       current
+       DESCRIPTION  "This object enables or disables BFD on Static route.
+                     When set to true(1), BFD is enabled for the session.
+                     When set to false(2), BFD is disabled for the session."
+       DEFVAL       { false }
+       ::= { hpicfIpStaticRouteEntry 14 }
 
     hpicfIpStaticNeighborTable OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpicfIpStaticNeighborEntry
@@ -652,6 +758,91 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                     corresponding row is active."
         ::= { hpicfIpStaticNeighborEntry 5 }
 
+   hpicfIpStaticRouteBfdTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfIpStaticRouteBfdEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Extension of Static Route table to enable BFD on
+                     Static routes."
+        ::= { hpicfIpStaticRouteConfig 3 }
+
+    hpicfIpStaticRouteBfdEntry OBJECT-TYPE
+        SYNTAX      HpicfIpStaticRouteBfdEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION  "Static route BFD table contains
+                     BFD objects. This table is added to provide
+                     BFD support to Static Routes.
+                     This is the additional param of
+                     Static Route table.
+                     The Value of Index in BFD table should be
+                     as same in Static Route table.
+
+                     1. While enabling BFD static route, verify
+                     the RowStatus of hpicfIpStaticRouteTable
+                     for the configured index.
+                     2. If Rowstatus is not present in hpicfIpStaticRouteTable
+                     Create Rowstatus for that recIndex in hpicfIpStaticRouteTable
+                     and then create the RowStatus in hpicfIpStaticRouteBfdTable.
+                     3. While disabling the bfd Status, Destroy the rowstatus in
+                     hpicfIpStaticRouteBfdTable."
+
+        INDEX       { hpicfIpStaticRoutePrefixType,
+                      hpicfIpStaticRoutePrefix,
+                      hpicfIpStaticRoutePrefixLength,
+                      hpicfIpStaticRouteFwdAddrType,
+                      hpicfIpStaticRouteFwdAddr,
+                      hpicfIpStaticRouteFwdIfIndex }
+        ::= { hpicfIpStaticRouteBfdTable 1 }
+
+    HpicfIpStaticRouteBfdEntry ::=
+        SEQUENCE {
+            hpicfIpStaticRouteBfdSrcAddrType InetAddressType,
+            hpicfIpStaticRouteBfdSrcAddr     InetAddress,
+            hpicfIpStaticRouteBfdDstAddrType InetAddressType,
+            hpicfIpStaticRouteBfdDstAddr     InetAddress,
+            hpicfIpStaticRouteBfdStatus      RowStatus
+        }
+
+    hpicfIpStaticRouteBfdSrcAddrType OBJECT-TYPE
+            SYNTAX     InetAddressType
+            MAX-ACCESS read-create
+            STATUS     current
+            DESCRIPTION
+                    "The type of IP address used as source address for BFD "
+            ::= { hpicfIpStaticRouteBfdEntry 1 }
+
+    hpicfIpStaticRouteBfdSrcAddr OBJECT-TYPE
+        SYNTAX     InetAddress
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "The IP address which is used as source address for BFD"
+        ::= { hpicfIpStaticRouteBfdEntry 2 }
+
+    hpicfIpStaticRouteBfdDstAddrType OBJECT-TYPE
+            SYNTAX     InetAddressType
+            MAX-ACCESS read-create
+            STATUS     current
+            DESCRIPTION
+                    "The type of IP address used as destination address for BFD "
+            ::= { hpicfIpStaticRouteBfdEntry 3}
+
+    hpicfIpStaticRouteBfdDstAddr OBJECT-TYPE
+        SYNTAX     InetAddress
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+                "The IP address which is used as destination address for BFD"
+        ::= { hpicfIpStaticRouteBfdEntry 4 }
+
+    hpicfIpStaticRouteBfdStatus OBJECT-TYPE
+        SYNTAX      RowStatus
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION
+                 "Row status for this table."
+        ::= { hpicfIpStaticRouteBfdEntry 5 }
 
     -- HP Routing table extensions
     hpicfIpRouteStats OBJECT IDENTIFIER ::= { hpicfIpRoutingObjects 5 }
@@ -701,7 +892,8 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
     HpicfInetCidrRouteEntry ::=
         SEQUENCE {
             hpicfInetCidrRouteDistance         Integer32,
-            hpicfInetCidrRouteInfo             OBJECT IDENTIFIER
+            hpicfInetCidrRouteInfo             OBJECT IDENTIFIER,
+            hpicfInetCidrRouteState            HpInetCidrRouteState
         }
 
     hpicfInetCidrRouteDistance OBJECT-TYPE
@@ -727,6 +919,48 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
           and the Basic Encoding Rules must  be  able  to
           generate and recognize this value."
        ::= { hpicfInetCidrRouteEntry 2 }
+
+    hpicfInetCidrRouteState OBJECT-TYPE
+        SYNTAX      HpInetCidrRouteState
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "The state of the route."
+        ::= { hpicfInetCidrRouteEntry 3 }
+ 
+    hpicfInetCidrRouteStatsTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfInetCidrRouteStatsEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "HP extensions to the InetCidrRouteTable for scalar stats"
+        ::= { hpicfIpRouteStats 3 }
+
+    hpicfInetCidrRouteStatsEntry OBJECT-TYPE
+        SYNTAX      HpicfInetCidrRouteStatsEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Extended information about a scalar stats of the route."
+        INDEX { inetCidrRouteDestType }
+        ::= { hpicfInetCidrRouteStatsTable 1 }
+
+    HpicfInetCidrRouteStatsEntry ::=
+        SEQUENCE {
+            hpicfInetCidrNumRouteDestinations      Counter32,
+            hpicfInetCidrNumRouteRoutes            Counter32
+        }
+
+    hpicfInetCidrNumRouteDestinations OBJECT-TYPE
+        SYNTAX      Counter32 
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Total number of destinations for a particular inetCidrRouteDestType."            
+        ::= { hpicfInetCidrRouteStatsEntry 1 }
+
+    hpicfInetCidrNumRouteRoutes OBJECT-TYPE
+        SYNTAX      Counter32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "Total number of routes for a particular inetCidrRouteDestType."
+        ::= { hpicfInetCidrRouteStatsEntry 2 }
 
     -- HP Arp (address resolution protocol) objects
 
@@ -1175,6 +1409,63 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 	DESCRIPTION "count of active routes per routing protocol."
  	::= { hpicfIpRouteEntry 2 }
 
+    hpicfIpv6RouteSummary OBJECT IDENTIFIER ::= { hpicfIpRoutingObjects 11 }
+
+    HpicfIpv6RouteProtoName ::= TEXTUAL-CONVENTION
+               STATUS      current
+               DESCRIPTION "An enumerated value which indicates the
+                            protocol name for show IPv6 route summary."
+               SYNTAX      INTEGER {
+                                connected(1),
+                                ospf3(4),ospf3ase(5),
+                                ospf3nssa(6),ipv6(7),ospf2ase(8),
+                                rip(9),bgp(10),rdisc6(11),static(12),
+                                snmp(13),isis(15),
+                                ripng(17),ipv4(18),
+                                pim(22),rdisc(23),ospf2(24),
+                                ospf2nssa(25),mroute(27),
+                                igmpv3(32),pim6(33),
+                                mpls(40),vrrp2(42)
+
+                               }
+
+    hpicfIpv6RouteSummaryTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfIpv6RouteEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "IPv6 route summary table in the global context."
+        ::= { hpicfIpv6RouteSummary 1 }
+
+    hpicfIpv6RouteEntry OBJECT-TYPE
+        SYNTAX      HpicfIpv6RouteEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "IPv6 route summary table information."
+        INDEX     { hpicfIpv6RouteProto }
+        ::= { hpicfIpv6RouteSummaryTable 1 }
+
+
+    HpicfIpv6RouteEntry ::=
+        SEQUENCE {
+            hpicfIpv6RouteProto           HpicfIpv6RouteProtoName,
+            hpicfIpv6RouteCnt             Unsigned32
+        }
+
+    hpicfIpv6RouteProto OBJECT-TYPE
+        SYNTAX      HpicfIpv6RouteProtoName
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "IPv6 route protocol names that are enabled and active."
+        ::= { hpicfIpv6RouteEntry 1 }
+
+    hpicfIpv6RouteCnt OBJECT-TYPE
+        SYNTAX      Unsigned32
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION "A count of active IPv6 routes per routing protocol."
+        ::= { hpicfIpv6RouteEntry 2 }
+
+
     hpicfIpRouteBaseScalars 
         OBJECT IDENTIFIER ::= { hpicfIpRouting 3 }
 
@@ -1205,6 +1496,16 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                 HP proprietary objects for managing router advertisements."
         ::= { hpicfIpv6ND 3 }
 
+    hpicfIpv6NDRADNSAdminStatus OBJECT-TYPE
+        SYNTAX     TruthValue
+        MAX-ACCESS read-write
+        STATUS     current
+        DESCRIPTION
+               "A flag indicating whether or not the router includes DNS
+                options with periodic router advertisements."
+        DEFVAL { true }
+        ::= { hpicfIpv6ND 4 }
+
     hpicfIpv6RtrAdvEntry OBJECT-TYPE
         SYNTAX      HpicfIpv6RtrAdvEntry
         MAX-ACCESS  not-accessible
@@ -1216,7 +1517,9 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 
     HpicfIpv6RtrAdvEntry ::=
         SEQUENCE {
-            hpicfIpv6RtrAdvCurHopLimitMode                    INTEGER
+            hpicfIpv6RtrAdvCurHopLimitMode                    INTEGER,
+            hpicfIpv6RouterAdvertSendDNSAdverts               TruthValue,
+            hpicfIpv6RouterAdvertRtrPreference                INTEGER
         }
    
     hpicfIpv6RtrAdvCurHopLimitMode OBJECT-TYPE
@@ -1238,6 +1541,29 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
                        hop limit."
         DEFVAL { global }             
         ::= { hpicfIpv6RtrAdvEntry 1 }
+
+    hpicfIpv6RouterAdvertSendDNSAdverts OBJECT-TYPE
+       SYNTAX      TruthValue
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION "A flag indicating whether or not the router includes DNS
+                    options in periodic router advertisements on
+                    this interface."
+        DEFVAL { true }
+        ::= { hpicfIpv6RtrAdvEntry 2 }
+
+    hpicfIpv6RouterAdvertRtrPreference OBJECT-TYPE
+       SYNTAX      INTEGER {
+                       low (1),
+                       medium (2),
+                       high (3)
+                   }
+       MAX-ACCESS  read-write
+       STATUS      current
+       DESCRIPTION "Indicates whether to prefer this router over
+                    other default routers."
+       DEFVAL { medium }
+       ::= { hpicfIpv6RtrAdvEntry 3 }
 
     hpicfIpRoutingConformance OBJECT IDENTIFIER ::= { hpicfIpRouting 2 }
 
@@ -1292,8 +1618,9 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         OBJECTS     { hpicfIpStaticRouteType,
                       hpicfIpStaticRouteDistance,
                       hpicfIpStaticRouteTag,
+                      hpicfIpStaticRouteLogging,
                       hpicfIpStaticRouteStatus }
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "A collection of objects for configuring IP static
                     routes."
         ::= { hpicfIpRoutingGroups 6 }
@@ -1346,7 +1673,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 
     hpicfIpv6RtrAdvGroup OBJECT-GROUP
     OBJECTS   { hpicfIpv6RtrAdvCurHopLimitMode }
-    STATUS     current
+    STATUS     deprecated
     DESCRIPTION
            "The group of objects in a table for configuring the Router
            Advertisement options.
@@ -1395,7 +1722,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
 
     hpicfIpStaticRouteOtherGroup OBJECT-GROUP
     OBJECTS   { hpicfIpStaticRouteMetric }
-    STATUS     current
+    STATUS     deprecated
     DESCRIPTION
            "The group of objects for configuring IP static 
             routes."
@@ -1410,6 +1737,120 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
            "This group contains the count of active routes for each
             routing protocol."
     ::= { hpicfIpRoutingGroups 18 }
+
+    hpicfInetCidrRouteGroup1 OBJECT-GROUP
+        OBJECTS     { hpicfInetCidrRouteState }
+        STATUS      current
+        DESCRIPTION "A collection of objects for retrieving extended
+                    information (state and age) about routes in the routing table."
+        ::= { hpicfIpRoutingGroups 19 }
+
+
+    hpicfInetCidrRouteStatsGroup OBJECT-GROUP
+        OBJECTS   { hpicfInetCidrNumRouteDestinations,
+                    hpicfInetCidrNumRouteRoutes }
+        STATUS     current
+        DESCRIPTION "The group of objects for the total number of 
+                    destinations and routes for a particular inet type."
+        ::= { hpicfIpRoutingGroups 20 }
+
+    hpicfIpv6RtrAdvDNSGroup OBJECT-GROUP
+    OBJECTS   { hpicfIpv6RouterAdvertSendDNSAdverts }
+    STATUS     current
+    DESCRIPTION
+           "The group of objects in a table for configuring the Router
+           Advertisement options."
+    ::= { hpicfIpRoutingGroups 21 }
+
+    hpicfIpv6NDRADNSAdminGroup OBJECT-GROUP
+    OBJECTS   { hpicfIpv6NDRADNSAdminStatus }
+    STATUS     current
+    DESCRIPTION
+           "This group member is used to enable / disable IPV6
+            router advertisement DNS option global admin status."
+    ::= { hpicfIpRoutingGroups 22 }
+
+   hpicfIpStaticRouteNameGroup OBJECT-GROUP
+   OBJECTS    { hpicfIpStaticRouteName }
+   STATUS      deprecated
+   DESCRIPTION
+          "This group member is used to configure name of the 
+            static route being configured"
+   ::= { hpicfIpRoutingGroups 23 }
+
+    hpicfIpv6RouteSummaryTableGroup OBJECT-GROUP
+    OBJECTS   {
+                hpicfIpv6RouteProto,
+                hpicfIpv6RouteCnt
+              }
+    STATUS     current
+    DESCRIPTION
+           "This group contains the count of active IPv6 routes for each
+            routing protocol."
+    ::= { hpicfIpRoutingGroups 24 }
+
+
+    hpicfDBroadcastFwdAclGroup OBJECT-GROUP
+        OBJECTS     { hpicfDBroadcastFwdAcl }
+        STATUS      current
+        DESCRIPTION "The group member is used to configure name of ACL
+                     when it is applied to IP Directed Broadcast."
+        ::= { hpicfIpRoutingGroups 25 }
+
+
+    hpicfIpStaticRouteParamGroup OBJECT-GROUP
+    OBJECTS   { hpicfIpStaticRouteType,
+               hpicfIpStaticRouteDistance,
+               hpicfIpStaticRouteTag,
+               hpicfIpStaticRouteStatus,
+               hpicfIpStaticRouteMetric,
+               hpicfIpStaticRouteName,
+               hpicfIpStaticRouteLogging
+              }
+    STATUS     deprecated
+    DESCRIPTION "A collection of objects for configuring IP static
+                 routes."
+    ::= { hpicfIpRoutingGroups 26 }
+
+    hpicfIpStaticRouteParamGroup1 OBJECT-GROUP
+    OBJECTS   { hpicfIpStaticRouteType,
+               hpicfIpStaticRouteDistance,
+               hpicfIpStaticRouteTag,
+               hpicfIpStaticRouteStatus,
+               hpicfIpStaticRouteMetric,
+               hpicfIpStaticRouteName,
+               hpicfIpStaticRouteLogging,
+               hpicfIpStaticRouteBfdEnable
+              }
+    STATUS     current
+    DESCRIPTION "A collection of objects for configuring IP static
+                 routes."
+    ::= { hpicfIpRoutingGroups 28 }
+
+    hpicfIpStaticRouteBfdGroup OBJECT-GROUP
+    OBJECTS   {
+                hpicfIpStaticRouteBfdSrcAddrType,
+                hpicfIpStaticRouteBfdSrcAddr,
+                hpicfIpStaticRouteBfdDstAddrType,
+                hpicfIpStaticRouteBfdDstAddr,
+                hpicfIpStaticRouteBfdStatus }
+    STATUS     current
+    DESCRIPTION
+           "The group of objects in a table for configuring the bfd
+           for static routes.
+            "
+    ::= { hpicfIpRoutingGroups 29 }
+
+    hpicfIpv6RtrAdvParamGroup OBJECT-GROUP
+    OBJECTS   { hpicfIpv6RtrAdvCurHopLimitMode,
+                hpicfIpv6RouterAdvertRtrPreference }
+    STATUS     current
+    DESCRIPTION
+           "The group of objects in a table for configuring the Router
+           Advertisement options.
+            "
+    ::= { hpicfIpRoutingGroups 27 }
+
 
     hpicfIpRoutingCompliances OBJECT IDENTIFIER ::=
          { hpicfIpRoutingConformance 2 }
@@ -1443,7 +1884,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         ::= { hpicfIpRoutingCompliances 2 }
 
     hpicfIpRouterCompliance MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "The compliance statement for HP Routing switches."
         MODULE
             MANDATORY-GROUPS { hpicfRdiscBaseGroup,
@@ -1474,7 +1915,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         ::= { hpicfIpRoutingCompliances 5 }
 
     hpicfIpv6RtrAdvCompliance MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "The compliance statement for HP Routing switches
                     that support Router Advertisements"
         MODULE
@@ -1522,7 +1963,7 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         ::= { hpicfIpRoutingCompliances 11 }
 
     hpicfIpRouterOtherCompliance MODULE-COMPLIANCE
-        STATUS      current
+        STATUS      deprecated
         DESCRIPTION "The compliance statement for HP Routing switches."
         MODULE
             MANDATORY-GROUPS { hpicfIpStaticRouteOtherGroup }
@@ -1534,6 +1975,100 @@ HP-ICF-IP-ROUTING DEFINITIONS ::= BEGIN
         MODULE
             MANDATORY-GROUPS { hpicfIpRouteSummaryTableGroup }
         ::= { hpicfIpRoutingCompliances 13 }
+
+    hpicfInetCidrRouteCompliance1 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "A collection of objects for retrieving extended
+                     information (state and age) about routes in the routing table."
+        MODULE
+            MANDATORY-GROUPS { hpicfInetCidrRouteGroup1 }
+        ::= { hpicfIpRoutingCompliances 14 }
+
+    hpicfInetCidrRouteStatsCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "A collection of objects for retrieving the total number of 
+                     destinations and routes for a particular inet type."
+        MODULE
+            MANDATORY-GROUPS { hpicfInetCidrRouteStatsGroup }
+        ::= { hpicfIpRoutingCompliances 15 }
+
+
+    hpicfIpv6RtrAdvDNSCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP Routing switches
+                    that support Router Advertisements"
+        MODULE
+            MANDATORY-GROUPS { hpicfIpv6RtrAdvDNSGroup }
+        ::= { hpicfIpRoutingCompliances 16 }
+
+    hpicfIpv6NDRADNSAdminCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "IPV6 router advertisement DNS option
+                     global admin status."
+        MODULE
+            MANDATORY-GROUPS { hpicfIpv6NDRADNSAdminGroup }
+        ::= { hpicfIpRoutingCompliances 17 }
+
+   hpicfIpStaticRouteNameCompliance MODULE-COMPLIANCE
+        STATUS      deprecated
+        DESCRIPTION "The compliance statement for the static route
+                     name to add visibility to the static route being configured"
+        MODULE
+            MANDATORY-GROUPS {hpicfIpStaticRouteNameGroup }
+         ::= { hpicfIpRoutingCompliances 18 }
+
+   hpicfIpv6RouteSummaryCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "A collection of objects providing information about
+                     an active IPv6 routes."
+        MODULE
+            MANDATORY-GROUPS { hpicfIpv6RouteSummaryTableGroup }
+        ::= { hpicfIpRoutingCompliances 19 }
+
+   hpicfIpDBroadcastFwdAclCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for the ACL
+                     name being applied to IP Directed Broadcast."
+        MODULE
+            MANDATORY-GROUPS {hpicfDBroadcastFwdAclGroup }
+         ::= { hpicfIpRoutingCompliances 20 }
+
+   hpicfIpRouteCompliance MODULE-COMPLIANCE
+        STATUS      deprecated
+        DESCRIPTION "The compliance statement for HP Routing switches."
+        MODULE
+            MANDATORY-GROUPS { hpicfRdiscBaseGroup,
+                               hpicfRdiscIfCfgGroup,
+                               hpicfIcmpReplyBaseGroup,
+                               hpicfIcmpReplyLimitGroup,
+                               hpicfIpRouteCfgGroup,
+                               hpicfIpStaticNeighborGroup,
+                               hpicfIpCidrRouteGroup,
+                               hpicfIpStaticRouteParamGroup }
+        ::= { hpicfIpRoutingCompliances 21 }
+
+   hpicfIpv6RtrAdvParamCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP Routing switches
+                    that support Router Advertisements"
+        MODULE
+            MANDATORY-GROUPS { hpicfIpv6RtrAdvParamGroup }
+        ::= { hpicfIpRoutingCompliances 22 }
+
+   hpicfIpStaticRouteCompliance1 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for HP Routing switches."
+        MODULE
+            MANDATORY-GROUPS { hpicfRdiscBaseGroup,
+                               hpicfRdiscIfCfgGroup,
+                               hpicfIcmpReplyBaseGroup,
+                               hpicfIcmpReplyLimitGroup,
+                               hpicfIpRouteCfgGroup,
+                               hpicfIpStaticNeighborGroup,
+                               hpicfIpCidrRouteGroup,
+                               hpicfIpStaticRouteParamGroup1,
+                               hpicfIpStaticRouteBfdGroup }
+        ::= { hpicfIpRoutingCompliances 23 }
 
 END
 

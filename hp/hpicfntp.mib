@@ -1,7 +1,7 @@
 --**MOD+***********************************************************************
 --* Module:    hpicfNtp.mib
 --*
---* Copyright (C) 2015-2016 Hewlett Packard Enterprise Development LP
+--* Copyright (C) 2015-2017 Hewlett Packard Enterprise Development LP
 --* All Rights Reserved.
 --* 
 --* The contents of this software are proprietary and confidential
@@ -20,7 +20,7 @@ HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
       OBJECT-TYPE, MODULE-IDENTITY, Integer32,
       Unsigned32
          FROM SNMPv2-SMI
-      RowStatus, TruthValue
+      RowStatus, TruthValue, DisplayString
          FROM SNMPv2-TC
       OBJECT-GROUP, MODULE-COMPLIANCE
          FROM SNMPv2-CONF
@@ -34,13 +34,16 @@ HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
          FROM INET-ADDRESS-MIB;
 
     hpicfNtpMIB MODULE-IDENTITY
-      LAST-UPDATED "201602100000Z"  -- Feb 10, 2016
+      LAST-UPDATED "201708220000Z"  -- Aug 22, 2017
       ORGANIZATION "HP Networking"
       CONTACT-INFO "Hewlett-Packard Company
                     8000 Foothills Blvd.
                     Roseville, CA 95747"
       DESCRIPTION  "Management information for configuring the NTP client
                     on Hewlett-Packard network devices."
+
+      REVISION     "201708220000Z"  -- Aug 22, 2017
+      DESCRIPTION  " Added new MIB table hpicfNtpInetServerNameTable"
 
       REVISION     "201602100000Z"  -- Feb 10, 2016
       DESCRIPTION  " Added new enum in following MIB object hpicfNtpAuthenticationKeyAuthMode"
@@ -658,11 +661,187 @@ HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
       DESCRIPTION "The offset of the sample of this association."
       ::= { hpicfNtpAssoSampleEntry 3 }
 
+-- ----------------------------------------------------------------------
+-- Table for configuring Server Names
+-- ----------------------------------------------------------------------
+
+   hpicfNtpInetServerNameTable OBJECT-TYPE
+     SYNTAX      SEQUENCE OF HpicfNtpInetServerNameEntry
+     MAX-ACCESS  not-accessible
+     STATUS      current
+     DESCRIPTION "A table containing trusted IPv4 or IPv6 NTP server's to be
+                  queried in unicast mode."
+     ::= { hpicfNtpConfig 8 }
+
+   hpicfNtpInetServerNameEntry OBJECT-TYPE
+     SYNTAX       HpicfNtpInetServerNameEntry
+     MAX-ACCESS  not-accessible
+     STATUS      current
+     DESCRIPTION "The NTP server description."
+     INDEX       {
+                   hpicfNtpServerNameIndex
+                 }
+     ::= { hpicfNtpInetServerNameTable 1 }
+
+   HpicfNtpInetServerNameEntry ::=
+     SEQUENCE {
+        hpicfNtpServerNameIndex                     Unsigned32,
+        hpicfNtpInetServerName                      DisplayString,
+        hpicfNtpInetServerNameRowStatus             RowStatus,
+        hpicfNtpServerNameResolvAddType             InetAddressType,
+        hpicfNtpServerNameResolvAddress             InetAddress,
+        hpicfNtpServerNameResolveStatus             INTEGER,
+        hpicfNtpInetServerNameAuthKeyId             Unsigned32,
+        hpicfNtpConfigServerNamePollMinInterval     Integer32,
+        hpicfNtpConfigServerNamePollMaxInterval     Integer32,
+        hpicfNtpServerNameAssoBurst                 INTEGER,
+        hpicfNtpServerNameAssoIsOobm                TruthValue
+     }
+
+   hpicfNtpServerNameIndex   OBJECT-TYPE
+       SYNTAX  Unsigned32 (1..8)
+       MAX-ACCESS not-accessible
+       STATUS     current
+       DESCRIPTION
+          "The index of a NTP unicast server  name in hpicfNtpInetServerNameTable.
+           The maximum number of server name configurabile is 8."
+       ::= {hpicfNtpInetServerNameEntry 1}
+
+   hpicfNtpInetServerName   OBJECT-TYPE
+       SYNTAX  DisplayString (SIZE (1..255))
+       MAX-ACCESS read-write
+       STATUS     current
+       DESCRIPTION "The NTP server Name"
+       ::= {hpicfNtpInetServerNameEntry 2}
+
+   hpicfNtpInetServerNameRowStatus OBJECT-TYPE
+     SYNTAX      RowStatus
+     MAX-ACCESS  read-create
+     STATUS      current
+     DESCRIPTION "The row status of this NTP server information.
+                  Supporting CREATEANDGO and DESTROY only."
+     ::= { hpicfNtpInetServerNameEntry 3}
+
+   hpicfNtpServerNameResolvAddType OBJECT-TYPE
+     SYNTAX      InetAddressType
+     MAX-ACCESS  read-only
+     STATUS      current
+     DESCRIPTION "The IP address type of a DNS resolved NTP server name."
+     ::= { hpicfNtpInetServerNameEntry 4 }
+
+   hpicfNtpServerNameResolvAddress OBJECT-TYPE
+     SYNTAX      InetAddress ( SIZE (4|16) )
+     MAX-ACCESS  read-only
+     STATUS      current
+     DESCRIPTION "The IP address of a DNS resolved NTP server name in which
+                  client communicates with server to synchorize its time."
+     ::= { hpicfNtpInetServerNameEntry 5 }
+
+   hpicfNtpServerNameResolveStatus OBJECT-TYPE
+     SYNTAX      INTEGER {
+           notattempted(0),
+           active(1),
+           dnsunknownhost(2),
+           dnsnotresponding(3),
+           dnsfailed(4),
+           notactive(5)
+     }
+     MAX-ACCESS  read-only
+     STATUS      current
+     DESCRIPTION "This object indicates the NTP Server name resolution status.
+                  The definition of each possible value as follows:
+                  notattempted(0)     - DNS resolution is not
+                                        attempted for the NTP server name.
+                  active(1)           - DNS resolution succeeded for the NTP server
+                                        name and the NTP server is active.
+                  dnsunknownhost(2)   - DNS resolution failed with unknown host 
+                                        for the NTP server name.
+                  dnsnotresponding(3) - DNS server is not responding for 
+                                        the NTP server name.
+                  dnsfailed(4)        - DNS resolution failed for the NTP server name. 
+                  notactive(5)        - DNS resolution succeeded for the NTP server
+                                        name but the NTP server is not active."
+     DEFVAL      { 0 }
+     ::= { hpicfNtpInetServerNameEntry 6 }
+
+   hpicfNtpInetServerNameAuthKeyId OBJECT-TYPE
+     SYNTAX      Unsigned32 (0..4294967295)
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "The key identifier associated with the
+                  NTP server specified by this instance. It is an index
+                  to the  hpicfntpAuthenticationKeyTable. The value identifies
+                  the row in the hpicfntpAuthenticationKeyTable where the
+                  authentication key can be found. The value '0' indicates
+                  that the key-id is disassociated from the NTP server."
+     DEFVAL       { 0 }
+     ::= { hpicfNtpInetServerNameEntry 7 }
+
+   hpicfNtpConfigServerNamePollMinInterval OBJECT-TYPE
+     SYNTAX      Integer32 (4..17)
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "Period of time between successive attempts to
+                  perform an update via NTP."
+     DEFVAL      { 6 }
+     ::= { hpicfNtpInetServerNameEntry 8 }
+
+
+   hpicfNtpConfigServerNamePollMaxInterval OBJECT-TYPE
+     SYNTAX      Integer32 (4..17)
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "Maximum period of time between successive attempts to
+                  perform an update via NTP."
+     DEFVAL      { 10 }
+     ::= { hpicfNtpInetServerNameEntry 9 }
+
+
+   hpicfNtpServerNameAssoBurst  OBJECT-TYPE
+     SYNTAX      INTEGER {
+          noburst(1),
+            burst(2),
+           iburst(3)
+     }
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "This option is used for, to speed up the initial
+                  synchronization acquisition with the server, Below are
+                  different options supported.
+                  
+                  noburst - Burst not set, Polling happens with configured or
+                            default poll interval.  
+
+                  burst   - Send a burst of eight packets instead of the usual one 
+                            packet. The interval between the first and the second   
+                            packets is about 16 seconds to allow a modem call to   
+                            complete, while the spacing between the remaining   
+                            packets is about 2s. 
+
+                  iburst  - Send a burst of eight packets instead of the usual one. 
+                            As long as the server is unreachable, the interval 
+                            between packets is about 16 seconds to allow a modem 
+                            call to complete. 
+                            After the server is reachable, the spacing between 
+                            packets is about 2 seconds."
+     DEFVAL      { 1 }
+     ::= { hpicfNtpInetServerNameEntry 10 }
+
+   hpicfNtpServerNameAssoIsOobm OBJECT-TYPE
+     SYNTAX      TruthValue
+     MAX-ACCESS  read-write
+     STATUS      current
+     DESCRIPTION "This object indicates whether this NTP Server name
+                  is reachable over OOBM (Out Of Band Management)
+                  interface or not. This mib object will be applicable
+                  only if there is a physical OOBM port on the device."
+     DEFVAL      { false }
+     ::= { hpicfNtpInetServerNameEntry 11 }
 
 -- --------------------------------------------------------------------------
 -- Compliance Information
 -- --------------------------------------------------------------------------
-   
+
    hpicfNtpConfigConformance
       OBJECT IDENTIFIER ::= { hpicfNtpMIB 3 }
 
@@ -715,14 +894,27 @@ HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
       STATUS           current
       DESCRIPTION      "The compliance statement for devices implementing
                         the hpicfNtpConfig MIB."
-     
+
       MODULE
       MANDATORY-GROUPS   { hpicfNtpAssociationSampleGroup }
 
       GROUP              hpicfNtpAssociationSampleGroup
       DESCRIPTION        "This group is required for samples from different
-                          association."  
+                          association."
          ::= { hpicfNtpConfigCompliances 4 }
+
+   hpicfNtpServerNameCfgCompliance MODULE-COMPLIANCE
+       STATUS           current
+       DESCRIPTION      "The compliance statement for devices implementing
+                         the hpicfNtpConfig MIB."
+
+       MODULE
+       MANDATORY-GROUPS   { hpicfNtpInetServerNameCfgGroup }
+     
+       GROUP              hpicfNtpInetServerNameCfgGroup
+       DESCRIPTION        "This group is required for server Name configurations
+                           for syncronization."
+       ::= { hpicfNtpConfigCompliances 5 }
 
    hpicfNtpConfigGroup OBJECT-GROUP
       OBJECTS     {
@@ -795,5 +987,23 @@ HP-ICF-NTP-MIB DEFINITIONS ::= BEGIN
      STATUS      current
      DESCRIPTION "This group defines sample information for eight 
                   samples taken per association."
-     ::= { hpicfNtpConfigGroups 4 }             
+     ::= { hpicfNtpConfigGroups 4 }    
+
+   hpicfNtpInetServerNameCfgGroup OBJECT-GROUP
+      OBJECTS     {
+                    hpicfNtpInetServerName,
+                    hpicfNtpInetServerNameRowStatus,
+                    hpicfNtpServerNameResolvAddType,
+                    hpicfNtpServerNameResolvAddress,
+                    hpicfNtpServerNameResolveStatus,
+                    hpicfNtpInetServerNameAuthKeyId,
+                    hpicfNtpConfigServerNamePollMinInterval,
+                    hpicfNtpConfigServerNamePollMaxInterval,
+                    hpicfNtpServerNameAssoBurst,
+                    hpicfNtpServerNameAssoIsOobm
+                  }
+      STATUS      current
+      DESCRIPTION "A collection of objects for configuring the
+                   NTP server Name entry." 
+      ::= { hpicfNtpConfigGroups 5 }            
 END

@@ -1,0 +1,234 @@
+--
+HP-ICF-ARP-THROTTLE DEFINITIONS ::= BEGIN
+
+    IMPORTS
+        hpSwitch
+            FROM HP-ICF-OID
+        OBJECT-GROUP, MODULE-COMPLIANCE, NOTIFICATION-GROUP
+            FROM SNMPv2-CONF
+        Integer32, Counter32, OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE
+            FROM SNMPv2-SMI
+        TruthValue, MacAddress, RowStatus
+            FROM SNMPv2-TC;
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119
+    hpicfArpThrottle MODULE-IDENTITY
+        LAST-UPDATED "201505070000Z"
+        ORGANIZATION  "HP Networking"
+        CONTACT-INFO
+            "Hewlett-Packard Company
+             8000 Foothills Blvd.
+             Roseville, CA 95747"
+        DESCRIPTION
+            "This MIB module contains HP proprietary
+             objects for managing ARP throttling."
+        REVISION "201505070000Z"
+        DESCRIPTION
+            "Initial revision."
+        ::= { hpSwitch 119 }
+
+
+-- Top-level structure of this MIB
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.0
+    hpicfArpThrottleNotifications OBJECT IDENTIFIER ::= { hpicfArpThrottle 0 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1
+    hpicfArpThrottleObjects OBJECT IDENTIFIER ::= { hpicfArpThrottle 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2
+    hpicfArpThrottleConformance OBJECT IDENTIFIER ::= { hpicfArpThrottle 2 }
+
+
+-- Notifications
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.0.1
+    hpicfArpThrottleExceedThresholdTrap NOTIFICATION-TYPE
+        OBJECTS     { hpicfArpThrottleClientOverThreshold }
+        STATUS      current
+        DESCRIPTION "This notification indicates that a client sending large number
+                     of ARP packets over the configured threshold is detected. The
+                     MAC address of the client is included in the notification."
+        ::= { hpicfArpThrottleNotifications 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.1
+    hpicfArpThrottleClientOverThreshold OBJECT-TYPE
+        SYNTAX      MacAddress
+        MAX-ACCESS  accessible-for-notify
+        STATUS      current
+        DESCRIPTION "MAC address of a client that just went over the ARP throttle
+                     Threshold. It is used in hpicfArpThrottle notification."
+        ::= { hpicfArpThrottleObjects 1 }
+
+
+-- Configurations
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2
+    hpicfArpThrottleConfig OBJECT IDENTIFIER ::= { hpicfArpThrottleObjects 2 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.1
+    hpicfArpThrottleEnable OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "The administrative status of the ARP Throttle feature.
+                     true(1)  - enabled;
+                     false(2) - disabled."
+        ::= { hpicfArpThrottleConfig 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.2
+    hpicfArpThrottleRemediationMode OBJECT-TYPE
+        SYNTAX      INTEGER { monitor(0),
+                              filter(1)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The remediation mode of the ARP Throttle. In monitor mode, the switch
+             only logs alerts when a client exceeds the configured threshold;
+             In filter mode, ARP packets over the threshold will be dropped in
+             addition to alert logging."
+        DEFVAL     { 0 }
+        ::= { hpicfArpThrottleConfig 2 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.3
+    hpicfArpThrottleThreshold OBJECT-TYPE
+        SYNTAX      Integer32 (1..1024)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The maximum number of ARP packets a client can send in 5 seconds. When a
+             client goes over the threshold, it will be put into a blacklist and
+             subject to the configured remediation action."
+        DEFVAL     { 30 }
+        ::= { hpicfArpThrottleConfig 3 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.4
+    hpicfArpThrottleBlacklistAgingTime OBJECT-TYPE
+        SYNTAX      Integer32 (1..86400)
+        UNITS       "seconds"
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "The time a client stays in the blacklist, in seconds."
+        DEFVAL      { 300 }
+        ::= { hpicfArpThrottleConfig 4 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.5
+    hpicfArpThrottleExcludedMacTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF HpicfArpThrottleExcludedMacEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "List of excluded MAC addresses that are not subject to throttling."
+        ::= { hpicfArpThrottleConfig 5 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.5.1
+    hpicfArpThrottleExcludedMacEntry OBJECT-TYPE
+        SYNTAX      HpicfArpThrottleExcludedMacEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "Information of an excluded MAC address that is not subject
+                     to throttling."
+        INDEX       { hpicfArpThrottleExcludedMac }
+        ::= { hpicfArpThrottleExcludedMacTable 1 }
+
+    HpicfArpThrottleExcludedMacEntry ::=
+        SEQUENCE {
+            hpicfArpThrottleExcludedMac        MacAddress,
+            hpicfArpThrottleExcludedMacStatus  RowStatus
+        }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.5.1.1
+    hpicfArpThrottleExcludedMac OBJECT-TYPE
+        SYNTAX      MacAddress
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION "A MAC address to be included from ARP throttle."
+        ::= { hpicfArpThrottleExcludedMacEntry 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.2.5.1.2
+    hpicfArpThrottleExcludedMacStatus OBJECT-TYPE
+        SYNTAX      RowStatus
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION "The row status of this entry instance.
+                     createAndGo - will create the entry for the excluded MAC 
+                                   and transition the status to active.
+                     active - indicate the entry instance is in effect.
+                     destroy - delete the entry instance.
+                     All other RowStatus values are NOT supported."
+        ::= { hpicfArpThrottleExcludedMacEntry 2 }
+
+
+-- Statistics
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.3
+    hpicfArpThrottleStats OBJECT IDENTIFIER  ::= { hpicfArpThrottleObjects 3 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.3.1
+    hpicfArpThrottleStatsNumClientsInBlacklist OBJECT-TYPE
+        SYNTAX       Counter32
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "Total number of clients in blacklist."
+        ::= { hpicfArpThrottleStats 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.1.3.2
+    hpicfArpThrottleStatsNumClientsBeingTracked OBJECT-TYPE
+        SYNTAX       Counter32
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION  "Total number of clients being tracked for their ARP packets."
+        ::= { hpicfArpThrottleStats 2 }
+
+
+-- Object Groups
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2.1
+    hpicfArpThrottleGroups OBJECT IDENTIFIER ::= { hpicfArpThrottleConformance 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2.1.1
+    hpicfArpThrottleBaseGroup OBJECT-GROUP
+        OBJECTS  {
+            hpicfArpThrottleEnable,
+            hpicfArpThrottleRemediationMode,
+            hpicfArpThrottleThreshold,
+            hpicfArpThrottleBlacklistAgingTime,
+            hpicfArpThrottleExcludedMacStatus,
+            hpicfArpThrottleStatsNumClientsInBlacklist,
+            hpicfArpThrottleStatsNumClientsBeingTracked,
+            hpicfArpThrottleClientOverThreshold
+        }
+        STATUS      current
+        DESCRIPTION "A group of objects that provides ARP throttle configuration,
+                     Statistics, and traps."
+        ::= { hpicfArpThrottleGroups 1 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2.1.2
+    hpicfArpThrottleNotificationGroup NOTIFICATION-GROUP
+        NOTIFICATIONS  { hpicfArpThrottleExceedThresholdTrap }
+        STATUS      current
+        DESCRIPTION "A group of notifications for ARP throttle."
+        ::= { hpicfArpThrottleGroups 2 }
+
+
+    -- Compliances
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2.2
+    hpicfArpThrottleCompliances OBJECT IDENTIFIER
+        ::= { hpicfArpThrottleConformance 2 }
+
+    -- 1.3.6.1.4.1.11.2.14.11.5.1.119.2.2.1
+    hpicfArpThrottleCompliance MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION
+            "The compliance statement for HP switches that support ARP Throttle."
+        MODULE      -- this module
+        MANDATORY-GROUPS {
+            hpicfArpThrottleBaseGroup,
+            hpicfArpThrottleNotificationGroup
+        }
+        ::= { hpicfArpThrottleCompliances 1 }
+
+END
+

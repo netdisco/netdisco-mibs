@@ -25,13 +25,13 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
             FROM SNMPv2-CONF
         Unsigned32, OBJECT-TYPE, MODULE-IDENTITY
             FROM SNMPv2-SMI
-        MacAddress, RowStatus, TEXTUAL-CONVENTION
+        MacAddress, RowStatus, TruthValue, TEXTUAL-CONVENTION
             FROM SNMPv2-TC
         InterfaceIndex
             FROM IF-MIB;
 
     hpicfDevConf MODULE-IDENTITY
-       LAST-UPDATED "201602010000Z" -- February 1, 2016
+       LAST-UPDATED "201705020000Z" -- May 2, 2017
        ORGANIZATION "HP Networking"
        CONTACT-INFO
             "Hewlett Packard Enterprise Development LP.
@@ -40,7 +40,26 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION
             "This MIB module contains HP proprietary objects for 
              managing the auto-configuration feature."
+
+        REVISION "201705020000Z" -- May 2, 2017
+        DESCRIPTION
+            "Added new object hpSwitchProfTunneledNodeSupport in table hpSwitchDevProfTable."
+       
+        REVISION "201611020000Z" -- Nov 2, 2016
+        DESCRIPTION
+	    "Deprecated the table hpSwitchDevAssociationTable. 
+        Created new table hpSwitchDevIdentAssociationTable to have different
+        device under same hpSwitchDevAssociationType.
+
+	     Added deviceIdentity(8) in  HpPartnerDeviceType to support device 
+        defined in device-identity.
         
+        Added new object hpSwitchDevPortDeviceName in table hpSwitchDevPortEntry."
+             
+        REVISION "201606070000Z" -- June 7, 2016
+        DESCRIPTION
+	    "Updated HpPartnerDeviceType to support new device-profile type."
+       
         REVISION "201602010000Z"  -- February 1, 2016
         DESCRIPTION
             "This MIB module has been modified to incoporate device
@@ -50,7 +69,7 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION
             "Updated zero bit of hpPartnerDeviceTypeList."
 
-	    REVISION "201512180000Z"  -- December 18, 2015
+	REVISION "201512180000Z"  -- December 18, 2015
         DESCRIPTION
             "Updated hpPartnerDevideTypeList to support QoS Trust feature."
 
@@ -94,10 +113,12 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
         SYNTAX  INTEGER  {
                          none(1),
                          arubaAccessPoint(2),
-                         arubaBridgeRouter (3),
-                         hpBridgeRouter (4),
-                         ciscoBridgeRouter (5),
-                         ciscoPhone (6)                    
+                         arubaBridgeRouter(3),
+                         hpBridgeRouter(4),
+                         ciscoBridgeRouter(5),
+                         ciscoPhone(6),
+                         scsWanCpe(7),
+                         deviceIdentity(8)
                    	 }
 
     HpPartnerDeviceTypeList ::= TEXTUAL-CONVENTION
@@ -105,13 +126,15 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
 	DESCRIPTION 	    "This object is to store the list of HP partner devices"
 	SYNTAX      	    BITS
                        	    {
-			    reserved(0),
-                       	    none(1),
-                       	    arubaAccessPoint(2),
-                            arubaBridgeRouter (3),
-                            hpBridgeRouter (4),
-                            ciscoBridgeRouter (5),
-                            ciscoPhone (6)
+                            reserved(0),
+                            none(1),
+                            arubaAccessPoint(2),
+                            arubaBridgeRouter(3),
+                            hpBridgeRouter(4),
+                            ciscoBridgeRouter(5),
+                            ciscoPhone(6),
+                            scsWanCpe(7),
+                            deviceIdentity(8)
                             }
 
 -- ---------------------------------------------------------------------
@@ -123,6 +146,8 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
 -- 4 for whitelist MAC
 -- 5 for displaying device connected to each port and
 --   the profile associated with it.
+-- 6 new association table with new index that include 
+--   device configured under device identity.
 -- ---------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------
@@ -146,18 +171,19 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
 
    HpSwitchDevProfEntry ::=
         SEQUENCE {
-           		hpSwitchProfIndex                Unsigned32,
-			hpSwitchProfRowStatus	   	 RowStatus,
-            		hpSwitchProfName                 OCTET STRING,
-           		hpSwitchProfUntaggedVlanID       Unsigned32,
-			hpSwitchProfTaggedVlanList	 VidList,
+           	hpSwitchProfIndex                Unsigned32,
+			hpSwitchProfRowStatus	   	     RowStatus,
+            hpSwitchProfName                 OCTET STRING,
+           	hpSwitchProfUntaggedVlanID       Unsigned32,
+			hpSwitchProfTaggedVlanList	     VidList,
 			hpSwitchProfIngressBandwidth     Unsigned32,
 			hpSwitchProfEgressBandwidth      Unsigned32,
 			hpSwitchProfCosPriority          Unsigned32,
 			hpSwitchProfPortSpeed            INTEGER,
 			hpSwitchProfPoeMaxPower          Unsigned32,
 			hpSwitchProfPoePriority	    	 INTEGER,
-			hpSwitchProfJumboFrameSupport    INTEGER
+			hpSwitchProfJumboFrameSupport    INTEGER,
+            hpSwitchProfTunneledNodeSupport  TruthValue
                  }
 
    hpSwitchProfIndex OBJECT-TYPE
@@ -284,7 +310,17 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
                             all other member ports of all VLANs the 
                             port is a member of. The default value 
                             is disable."
-         ::= { hpSwitchDevProfEntry 12 }	
+         ::= { hpSwitchDevProfEntry 12 }
+
+     hpSwitchProfTunneledNodeSupport OBJECT-TYPE
+            SYNTAX         TruthValue
+            MAX-ACCESS     read-create
+            STATUS         current
+            DESCRIPTION    "Configuration parameter to (dis)allow tunneled node 
+                            configuration on port when device profile is 
+                            applied."
+            DEFVAL         { true }
+         ::= { hpSwitchDevProfEntry 13 } 	
 
 ----------------------------------------------------------------------
 -- 2 nd member of hpSwitchDevConfig MIB.
@@ -295,14 +331,18 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
   hpSwitchDevAssociationTable OBJECT-TYPE
         SYNTAX     	SEQUENCE OF HpSwitchDevAssociationEntry
         MAX-ACCESS  	not-accessible
-        STATUS      	current
-        DESCRIPTION 	"The device association configuration table."
+        STATUS      	deprecated
+        DESCRIPTION 	"The device association configuration table.
+                         This table has deprecated because it has only 
+                         hpSwitchDevAssociationType as index.This index 
+                         can not differentiate different device under 
+                         same hpSwitchDevAssociationType."
         ::= { hpSwitchDevConfig 2 }
 
    hpSwitchDevAssociationEntry OBJECT-TYPE
         SYNTAX     	HpSwitchDevAssociationEntry
         MAX-ACCESS  	not-accessible
-        STATUS      	current
+        STATUS      	deprecated
         DESCRIPTION 	"The device association configuration entry."
           INDEX { hpSwitchDevAssociationType }
         ::= { hpSwitchDevAssociationTable 1 }
@@ -317,22 +357,22 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
 		
    hpSwitchDevAssociationType OBJECT-TYPE
         SYNTAX     	HpPartnerDeviceType
-        MAX-ACCESS  	not-accessible
-        STATUS     	current
+        MAX-ACCESS  not-accessible
+        STATUS     	deprecated
         DESCRIPTION 	"The type of the auto-configurable device."
         ::= { hpSwitchDevAssociationEntry 1 }
 	
    hpSwitchDevAssociationProfName OBJECT-TYPE
         SYNTAX      	OCTET STRING ( SIZE (1..32))
         MAX-ACCESS  	read-create
-        STATUS      	current
+        STATUS      	deprecated
         DESCRIPTION 	"The name of the profile associated with this device."
         ::= { hpSwitchDevAssociationEntry 2 }		
 		
    hpSwitchDevAssociationProfID OBJECT-TYPE
         SYNTAX      	Unsigned32 (1..2147483647)
         MAX-ACCESS  	read-create
-        STATUS      	current
+        STATUS      	deprecated
         DESCRIPTION     "The ID of the profile associated with this device."
         ::= { hpSwitchDevAssociationEntry 3 }	
 		
@@ -342,7 +382,7 @@ HP-ICF-DEV-CONF-MIB DEFINITIONS ::= BEGIN
                        		disable(2)
                                 }
         MAX-ACCESS     	read-create
-        STATUS      	current
+        STATUS      	deprecated
         DESCRIPTION 	"The auto-configuration feature status for this device-type.
 			 By default, the status is disabled. If enabled, the profile 
 			 configuration is applied." 
@@ -462,7 +502,7 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
         MAX-ACCESS  	not-accessible
         STATUS      	current
         DESCRIPTION 	"The table shows per-port connected devices and any 
-			 profiles associated with them."
+			            profiles associated with them."
         ::= { hpSwitchDevConfig 5 }
 
    hpSwitchDevPortEntry OBJECT-TYPE
@@ -470,15 +510,16 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
         MAX-ACCESS  	not-accessible
         STATUS      	current
         DESCRIPTION 	"The table entry showing the device connected to this
-			 port and any profile associated with it."
+             			 port and any profile associated with it."
           INDEX { hpSwitchDevPortIndex }
         ::= { hpSwitchDevPortTable 1 }
 
    HpSwitchDevPortEntry ::=
         SEQUENCE {
-		    hpSwitchDevPortIndex          InterfaceIndex,
-		    hpSwitchDevPortType		  HpPartnerDeviceType,	
-		    hpSwitchDevPortProfName	  OCTET STRING
+		    hpSwitchDevPortIndex        InterfaceIndex,
+		    hpSwitchDevPortType		    HpPartnerDeviceType,	
+		    hpSwitchDevPortProfName	    OCTET STRING,
+		    hpSwitchDevPortDeviceName	OCTET STRING
                  }
 
     hpSwitchDevPortIndex OBJECT-TYPE	
@@ -500,9 +541,133 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
         MAX-ACCESS  	read-only
         STATUS      	current
         DESCRIPTION 	"The name of the profile associated with the partner 
-			 device connected to this port."
+			            device connected to this port."
         ::= { hpSwitchDevPortEntry 3 }
 
+   hpSwitchDevPortDeviceName OBJECT-TYPE
+        SYNTAX     	OCTET STRING ( SIZE (1..255))
+        MAX-ACCESS  	read-only
+        STATUS     	current
+        DESCRIPTION 	"The name of partner device connected to this port."
+        ::= { hpSwitchDevPortEntry 4 }
+
+----------------------------------------------------------------------
+-- 6 nd member of hpSwitchDevConfig MIB.
+-- This is for storing details of device associations  to profile mapping
+-- for device defined under device identity and old device.
+-- Profile attached to device, status (enable/disable) etc.
+----------------------------------------------------------------------
+
+  hpSwitchDevIdentAssociationTable OBJECT-TYPE
+        SYNTAX     	SEQUENCE OF HpSwitchDevIdentAssociationEntry
+        MAX-ACCESS  	not-accessible
+        STATUS      	current
+        DESCRIPTION 	"The device association configuration table."
+        ::= { hpSwitchDevConfig 6 }
+
+   hpSwitchDevIdentAssociationEntry OBJECT-TYPE
+        SYNTAX     	HpSwitchDevIdentAssociationEntry
+        MAX-ACCESS  	not-accessible
+        STATUS      	current
+        DESCRIPTION 	"The device association configuration entry for device."
+
+        INDEX { hpSwitchDevIdentAssociationType,
+                hpSwitchDevIdentAssociationSubType }
+
+        ::= { hpSwitchDevIdentAssociationTable 1 }
+
+   HpSwitchDevIdentAssociationEntry ::=
+        SEQUENCE {
+		    hpSwitchDevIdentAssociationType           HpPartnerDeviceType,
+		    hpSwitchDevIdentAssociationSubType        Unsigned32,
+		    hpSwitchDevIdentAssociationRowStatus	  RowStatus,
+            hpSwitchDevIdentAssociationProfName       OCTET STRING,
+		    hpSwitchDevIdentAssociationProfID   	  Unsigned32,
+            hpSwitchDevIdentAssociationStatus         INTEGER,
+            hpSwitchDevIdentAssociationDeviceType     Unsigned32
+	          }
+
+  hpSwitchDevIdentAssociationType OBJECT-TYPE
+        SYNTAX     	HpPartnerDeviceType
+        MAX-ACCESS  	not-accessible
+        STATUS     	    current
+        DESCRIPTION 	"The type of the auto-configurable device."
+        ::= { hpSwitchDevIdentAssociationEntry 1 }
+	
+  hpSwitchDevIdentAssociationSubType OBJECT-TYPE
+        SYNTAX        Unsigned32 (1..20)
+        MAX-ACCESS    not-accessible 
+        STATUS        current
+        DESCRIPTION   "This mib is use to differentiate device under same 
+                      hpSwitchDevIdentAssociationType. Combination of 
+                      hpSwitchDevIdentAssociationType and this OID uniquely 
+                      identifies a row in the device association table.
+
+                      For device type 'deviceidentity(8)' the value of 
+                      this mib will be one of index from device-identity 
+                      table.
+                      For device 'arubaAccessPoint(2)', 'arubaBridgeRouter(3)' and
+                      scsWanCpe(7) value of this mib will be 1."
+
+        REFERENCE 
+                    "hpicfDeviceIdentityTable"
+
+        ::= { hpSwitchDevIdentAssociationEntry 2 }
+
+    hpSwitchDevIdentAssociationRowStatus OBJECT-TYPE
+      SYNTAX         RowStatus
+      MAX-ACCESS     read-create
+      STATUS         current
+      DESCRIPTION
+           "The row status of this device association entry. Allows
+           creation/deletion of the device association entry. 
+
+           For device type 'deviceidentity(8)' row cannot be create 
+           if the device is not found in device-identity table.
+
+           For device 'arubaAccessPoint(2)', 'arubaBridgeRouter(3)' and
+           scsWanCpe(7) row cannot delete.
+
+           To create a new entry, send an SNMP SET request with a
+           RowStatus of 'createAndGo'.
+
+           createAndGo - create a new entry.
+           createAndWait - not valid for this table."
+
+      ::= { hpSwitchDevIdentAssociationEntry 3 }
+
+   hpSwitchDevIdentAssociationProfName OBJECT-TYPE
+        SYNTAX      	OCTET STRING ( SIZE (1..32))
+        MAX-ACCESS  	read-create
+        STATUS      	current
+        DESCRIPTION 	"The name of the profile associated with this device."
+        ::= { hpSwitchDevIdentAssociationEntry 4 }		
+		
+   hpSwitchDevIdentAssociationProfID OBJECT-TYPE
+        SYNTAX      	Unsigned32 (1..2147483647)
+        MAX-ACCESS  	read-create
+        STATUS      	current
+        DESCRIPTION     "The ID of the profile associated with this device."
+        ::= { hpSwitchDevIdentAssociationEntry 5 }	
+		
+    hpSwitchDevIdentAssociationStatus OBJECT-TYPE
+        SYNTAX  INTEGER {
+                   enable(1),
+                   disable(2)
+                    }
+        MAX-ACCESS    read-create
+        STATUS        current
+        DESCRIPTION 	"The auto-configuration feature status for this device-type.
+			            By default, the status is disabled. If enabled, the profile 
+			            configuration is applied." 
+        ::= { hpSwitchDevIdentAssociationEntry 6 }	
+
+   hpSwitchDevIdentAssociationDeviceType OBJECT-TYPE
+        SYNTAX      	 Unsigned32 (1..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "Device type ID which will be use by profile manager."
+        ::= { hpSwitchDevIdentAssociationEntry 7 }	
 
 -------------------------------------------------------------------------------
 -- "hpSwitchDevConformance" is the 3rd node of "hpicfDevConf"
@@ -529,7 +694,7 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
         ::= { hpSwitchDevCompliances 1 }
 
     hpSwitchDevCompliance1 MODULE-COMPLIANCE
-        STATUS		 current
+        STATUS		 deprecated
         DESCRIPTION      "The compliance statement for switches that support 
 			  device auto-configuration."
         MODULE -- this module
@@ -538,9 +703,24 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 			 hpSwitchRogueDevGroup,
 			 hpSwitchWhitelistGroup,
 			 hpSwitchDevPortGroup,
-                         hpSwitchDevProfileGroupNew
+             hpSwitchDevProfileGroupNew
                          }
         ::= { hpSwitchDevCompliances 2 }
+
+   hpSwitchDevCompliance2 MODULE-COMPLIANCE
+        STATUS	   	 current
+        DESCRIPTION   "The compliance statement for switches that support 
+	            		  device auto-configuration."
+        MODULE -- this module
+        MANDATORY-GROUPS {
+			 hpSwitchRogueDevGroup,
+			 hpSwitchWhitelistGroup,
+             hpSwitchDevProfileGroupNew,
+             hpSwitchDevPortGroupNew,
+			 hpSwitchDevIdentAssociationGroup
+                         }
+        ::= { hpSwitchDevCompliances 3 }
+
 
 ------------------------------------------------------------------------------
 --  Group Declarations
@@ -549,9 +729,9 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 
     hpSwitchDevProfileGroup OBJECT-GROUP
         OBJECTS 	{
-            		hpSwitchProfName,
+            hpSwitchProfName,
 			hpSwitchProfRowStatus,
-           		hpSwitchProfUntaggedVlanID,
+            hpSwitchProfUntaggedVlanID,
 			hpSwitchProfTaggedVlanList,
 			hpSwitchProfIngressBandwidth,
 			hpSwitchProfEgressBandwidth,
@@ -560,7 +740,7 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 			hpSwitchProfPoeMaxPower,
 			hpSwitchProfPoePriority
 			}
-        STATUS 		deprecated
+        STATUS 		   deprecated
         DESCRIPTION     "A collection of objects containing device profile
 			 information."
         ::= { hpSwitchDevConfigGroups 1 }
@@ -569,9 +749,9 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
         OBJECTS 	{
 			hpSwitchDevAssociationProfName,
 		  	hpSwitchDevAssociationProfID,
-            	 	hpSwitchDevAssociationStatus
+            hpSwitchDevAssociationStatus
 		 	}
-        STATUS 		current
+        STATUS 		   deprecated
         DESCRIPTION     "A collection of objects containing information about 
 			 associated devices."
         ::= { hpSwitchDevConfigGroups 2 }
@@ -579,8 +759,8 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
     hpSwitchRogueDevGroup OBJECT-GROUP
         OBJECTS 	{
 		    	hpSwitchRogueDevStatus,
-		   	hpSwitchRogueDevAction,
-			hpSwitchNeighborDevMacAddress
+		   	    hpSwitchRogueDevAction,
+			    hpSwitchNeighborDevMacAddress
                 	}
         STATUS 		current
         DESCRIPTION     "A collection of objects containing rogue device information."
@@ -591,8 +771,8 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 			 hpSwitchWhitelistRowStatus
                 	 }
         STATUS 		 current
-        DESCRIPTION      "A collection of objects containing information about
-			  whitelisted devices."
+        DESCRIPTION   "A collection of objects containing information about
+			           whitelisted devices."
         ::= { hpSwitchDevConfigGroups 4 }
 
     hpSwitchDevPortGroup OBJECT-GROUP
@@ -600,16 +780,16 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 			 hpSwitchDevPortType,
 			 hpSwitchDevPortProfName
                 	 }
-        STATUS 		 current
-        DESCRIPTION      "A collection of objects containing per-port device 
-			  connections and any profiles associated with them."
+        STATUS 		 deprecated
+        DESCRIPTION   "A collection of objects containing per-port device 
+                       connections and any profiles associated with them."
         ::= { hpSwitchDevConfigGroups 5 }
 
     hpSwitchDevProfileGroupNew OBJECT-GROUP
         OBJECTS 	{
-            		hpSwitchProfName,
+            hpSwitchProfName,
 			hpSwitchProfRowStatus,
-           		hpSwitchProfUntaggedVlanID,
+            hpSwitchProfUntaggedVlanID,
 			hpSwitchProfTaggedVlanList,
 			hpSwitchProfIngressBandwidth,
 			hpSwitchProfEgressBandwidth,
@@ -617,12 +797,37 @@ hpSwitchRogueDevice OBJECT IDENTIFIER ::= { hpSwitchDevConfig 3 }
 			hpSwitchProfPortSpeed,
 			hpSwitchProfPoeMaxPower,
 			hpSwitchProfPoePriority,
-			hpSwitchProfJumboFrameSupport
+			hpSwitchProfJumboFrameSupport,
+            hpSwitchProfTunneledNodeSupport
 			}
-        STATUS 		current
-        DESCRIPTION     "A collection of objects containing device profile
-			 information."
+        STATUS 		 current
+        DESCRIPTION   "A collection of objects containing device profile
+			             information."
         ::= { hpSwitchDevConfigGroups  6 }
+
+        hpSwitchDevIdentAssociationGroup OBJECT-GROUP
+        OBJECTS 	{
+          hpSwitchDevIdentAssociationRowStatus,
+          hpSwitchDevIdentAssociationProfName,
+		  hpSwitchDevIdentAssociationProfID,
+          hpSwitchDevIdentAssociationStatus,
+          hpSwitchDevIdentAssociationDeviceType
+		 	}
+        STATUS 		  current
+        DESCRIPTION    "A collection of objects containing information about 
+			               associated devices."
+        ::= { hpSwitchDevConfigGroups 7 }
+
+        hpSwitchDevPortGroupNew OBJECT-GROUP
+        OBJECTS		 {
+		  hpSwitchDevPortType,
+		  hpSwitchDevPortProfName,
+          hpSwitchDevPortDeviceName
+                	 }
+        STATUS 		 current
+        DESCRIPTION   "A collection of objects containing per-port device 
+			              connections and any profiles associated with them."
+        ::= { hpSwitchDevConfigGroups 8 }
 
  ------------------------------------------------------------------------------	
 END

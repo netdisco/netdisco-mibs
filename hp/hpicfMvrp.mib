@@ -1,0 +1,555 @@
+-- *****************************************************************
+-- HP-ICF-MVRP-MIB :  MVRP MIB file
+-- Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+-- All Rights Reserved.
+-- *****************************************************************
+
+HP-ICF-MVRP-MIB DEFINITIONS  ::= BEGIN
+
+IMPORTS
+  Integer32, Counter32, MODULE-IDENTITY, NOTIFICATION-TYPE,
+  OBJECT-TYPE 
+               FROM SNMPv2-SMI
+  MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+               FROM SNMPv2-CONF
+  TimeInterval, TruthValue
+               FROM SNMPv2-TC
+  ifIndex 
+               FROM IF-MIB
+  EnabledStatus
+              FROM P-BRIDGE-MIB
+  VlanId 
+              FROM Q-BRIDGE-MIB
+  hpSwitch
+              FROM HP-ICF-OID;
+
+hpicfMvrpMIB MODULE-IDENTITY
+  LAST-UPDATED "201504200000Z" -- April 20, 2015
+  ORGANIZATION "HP Networking"
+  CONTACT-INFO "Hewlett-Packard Company
+               8000 Foothills Blvd.
+               Roseville, CA 95747"
+  DESCRIPTION  "This MIB module describes objects to configure 
+               the MVRP feature."
+  REVISION   "201504200000Z" -- April 20, 2015
+  DESCRIPTION  "Updated the default value and description."
+  REVISION   "201503240000Z" -- March 24, 2015
+  DESCRIPTION  "Initial revision."
+
+  ::= { hpSwitch 117 }
+
+--**********************************************************************
+-- The MVRP MIB Objects
+-- **********************************************************************
+
+hpicfMvrpNotifications     OBJECT IDENTIFIER ::= {hpicfMvrpMIB 0}
+hpicfMvrpObjects           OBJECT IDENTIFIER ::= {hpicfMvrpMIB 1}  
+hpicfMvrpConformance       OBJECT IDENTIFIER ::= {hpicfMvrpMIB  3}
+
+--**********************************************************************
+--Start of MIB objects
+--**********************************************************************
+
+hpicfMvrpConfig           OBJECT IDENTIFIER ::= { hpicfMvrpObjects 1 } 
+hpicfMvrpStats            OBJECT IDENTIFIER ::= { hpicfMvrpObjects 2 }
+
+
+hpicfMvrpGlobalClearStats OBJECT-TYPE
+  SYNTAX  TruthValue
+  MAX-ACCESS  read-write
+  STATUS  current
+  DESCRIPTION
+              "Defines the global clear statistics control for MVRP.  
+              True(1) indicates that MVRP should clear all
+              statistic counters related to all ports in the system. 
+              A write operation of False(0) leads to a no operation and 
+              a GET request for this object always returns FALSE."
+              
+ ::= { hpicfMvrpConfig 1 }
+  
+hpicfMvrpMaxVlanLimit OBJECT-TYPE
+  SYNTAX     Integer32 
+  MAX-ACCESS read-write
+  STATUS     current
+  DESCRIPTION
+              "Defines the maximum number of dynamic VLANs that 
+              can be created on the system by MVRP. If the number of VLANs 
+              created by MVRP reaches this limit, the system will prevent
+              MVRP from creating additional VLANs. A write operation for   
+              this object is not supported."
+
+ ::= { hpicfMvrpConfig 2 }
+
+---------------------------------------------------------------
+--MVRP Port Config Table
+---------------------------------------------------------------
+--joinTimer will be taken care by standard mib oid : ieee8021BridgePortMrpJoinTime 
+--leaveTimer will be taken care by standard mib oid : ieee8021BridgePortMrpLeaveTime  
+--leaveAllTimer will be taken care by standard mib oid : ieee8021BridgePortMrpLeaveAllTime 
+--Global MVRP enable will be taken care by standard mib : ieee8021QBridgeMvrpEnabledStatus  
+--Port MVRP enable will be taken care by standard mib : ieee8021QBridgePortMvrpEnabledStatus  
+--Forbidden mode of Registrar state will be taken care by standard mib : ieee8021QBridgeVlanForbiddenEgressPorts  
+ 
+     
+hpicfMvrpPortConfigTable OBJECT-TYPE
+  SYNTAX      SEQUENCE OF HpicfMvrpPortConfigEntry
+  MAX-ACCESS  not-accessible
+  STATUS  current
+  DESCRIPTION
+              "A table containing MVRP port configuration information."
+ ::= { hpicfMvrpConfig 3 }
+            
+hpicfMvrpPortConfigEntry OBJECT-TYPE
+  SYNTAX  HpicfMvrpPortConfigEntry
+  MAX-ACCESS  not-accessible
+  STATUS  current
+  DESCRIPTION
+            "An MVRP port configuration entry."
+  INDEX { ifIndex }
+ ::= { hpicfMvrpPortConfigTable 1 }
+
+HpicfMvrpPortConfigEntry ::= SEQUENCE {
+  hpicfMvrpPortConfigRegistrarMode    INTEGER,
+  hpicfMvrpPortConfigPeriodicTimer    TimeInterval,
+  hpicfMvrpPortConfigPeriodicTransmissionStatus  EnabledStatus,
+    hpicfMvrpPortStatsClearStats        TruthValue  
+  }    
+
+hpicfMvrpPortConfigRegistrarMode OBJECT-TYPE
+  SYNTAX  INTEGER
+   {
+   normal(1),
+   fixed(2)
+   }
+  MAX-ACCESS  read-write
+  STATUS  current
+  DESCRIPTION
+            "Defines the mode of operation of all the registrar state
+            machines associated to the port.
+            normal - Registration as well as de-registration of VLANs are allowed.
+            fixed - The Registrar ignores all MRP messages and remains in IN state(Registered).
+            
+            NOTE: Forbidden Registration Mode will be managed by
+            ieee8021QBridgeVlanForbiddenEgressPorts."
+
+  DEFVAL  { normal }
+ ::= { hpicfMvrpPortConfigEntry 1 }
+    
+hpicfMvrpPortConfigPeriodicTimer OBJECT-TYPE
+  SYNTAX  TimeInterval (100..1000000)
+  UNITS    "centi-seconds"
+  MAX-ACCESS  read-write
+  STATUS  current
+  DESCRIPTION
+            "Interval at which the Periodic transmission state machine 
+            of an MVRP instance generates transmission opportunities 
+            for the MVRP instance."  
+  DEFVAL  { 100 }
+ ::= { hpicfMvrpPortConfigEntry 2 }
+   
+hpicfMvrpPortConfigPeriodicTransmissionStatus OBJECT-TYPE
+  SYNTAX    EnabledStatus
+  MAX-ACCESS  read-write
+  STATUS  current  
+  DESCRIPTION
+              "Used to enable or disable the Periodic transmission   
+              state machine of an MVRP instance."
+  DEFVAL  { enabled }
+ ::= { hpicfMvrpPortConfigEntry 3 }
+hpicfMvrpPortStatsClearStats OBJECT-TYPE
+  SYNTAX TruthValue  
+  MAX-ACCESS  read-write
+  STATUS  current
+  DESCRIPTION
+             "Clear all statistics parameters corresponding to this port. 
+              True(1) indicates that MVRP will clear all
+              statistic counters related to this port.
+              A write operation of False(0) leads to a no operation and 
+              a GET request for this object always returns FALSE."
+ 
+::= { hpicfMvrpPortConfigEntry 4}   
+
+  
+---------------------------------------------------------------
+--MVRP Port Statistics Table
+---------------------------------------------------------------
+--Last PDU Origin will taken care by standard mib : ieee8021QBridgePortMvrpLastPduOrigin  
+--Registration failed will be taken care by standard mib : ieee8021QBridgePortMvrpFailedRegistrations 
+
+hpicfMvrpPortStatsTable OBJECT-TYPE
+  SYNTAX  SEQUENCE OF HpicfMvrpPortStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS  current
+  DESCRIPTION
+              "A table containing MVRP port statistics information."
+ ::= { hpicfMvrpStats 1 }
+
+hpicfMvrpPortStatsEntry OBJECT-TYPE
+  SYNTAX  HpicfMvrpPortStatsEntry
+  MAX-ACCESS  not-accessible
+  STATUS  current
+  DESCRIPTION
+            "An MVRP port statistics entry."
+  INDEX { ifIndex }
+ ::= { hpicfMvrpPortStatsTable 1 }
+
+HpicfMvrpPortStatsEntry ::= SEQUENCE {  
+  hpicfMvrpPortStatsNewReceived  Counter32,
+  hpicfMvrpPortStatsJoinInReceived  Counter32,
+  hpicfMvrpPortStatsJoinEmptyReceived  Counter32,
+  hpicfMvrpPortStatsLeaveReceived  Counter32,
+  hpicfMvrpPortStatsInReceived  Counter32,
+  hpicfMvrpPortStatsEmptyReceived  Counter32,
+  hpicfMvrpPortStatsLeaveAllReceived  Counter32,
+  hpicfMvrpPortStatsNewTransmitted  Counter32,
+  hpicfMvrpPortStatsJoinInTransmitted  Counter32,
+  hpicfMvrpPortStatsJoinEmptyTransmitted  Counter32,
+  hpicfMvrpPortStatsLeaveTransmitted  Counter32,
+  hpicfMvrpPortStatsInTransmitted  Counter32,
+  hpicfMvrpPortStatsEmptyTransmitted  Counter32,
+  hpicfMvrpPortStatsLeaveAllTransmitted  Counter32,
+  hpicfMvrpPortStatsTotalPDUReceived  Counter32,
+  hpicfMvrpPortStatsTotalPDUTransmitted  Counter32,
+  hpicfMvrpPortStatsFramesDiscarded  Counter32
+  }                                      
+    
+    
+hpicfMvrpPortStatsNewReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+              "The number of New messages received."
+ ::= { hpicfMvrpPortStatsEntry 1}
+
+hpicfMvrpPortStatsJoinInReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+              "The number of Join In messages received."
+ ::= { hpicfMvrpPortStatsEntry 2}
+  
+hpicfMvrpPortStatsJoinEmptyReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Join Empty messages received."
+ ::= { hpicfMvrpPortStatsEntry 3}
+
+hpicfMvrpPortStatsLeaveReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+              "The number of Leave messages received."
+ ::= { hpicfMvrpPortStatsEntry 4}
+  
+hpicfMvrpPortStatsInReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of In messages received."
+ ::= { hpicfMvrpPortStatsEntry 5}
+  
+hpicfMvrpPortStatsEmptyReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Empty messages received."
+ ::= { hpicfMvrpPortStatsEntry 6}
+
+hpicfMvrpPortStatsLeaveAllReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Leave all messages received."
+ ::= { hpicfMvrpPortStatsEntry 7}
+                            
+hpicfMvrpPortStatsNewTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of New messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 8}
+
+hpicfMvrpPortStatsJoinInTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Join In messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 9}
+  
+hpicfMvrpPortStatsJoinEmptyTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Join Empty messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 10}
+
+hpicfMvrpPortStatsLeaveTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Leave messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 11}
+  
+hpicfMvrpPortStatsInTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of In messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 12}
+  
+hpicfMvrpPortStatsEmptyTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Empty messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 13}
+
+hpicfMvrpPortStatsLeaveAllTransmitted OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+            "The number of Leave all messages transmitted."
+ ::= { hpicfMvrpPortStatsEntry 14}
+  
+hpicfMvrpPortStatsTotalPDUReceived OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+    "The total number of MVRP PDUs received."
+ ::= { hpicfMvrpPortStatsEntry 15}
+            
+hpicfMvrpPortStatsTotalPDUTransmitted  OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+    "The total number of MVRP PDUs transmitted."
+ ::= { hpicfMvrpPortStatsEntry 16}
+                                                 
+hpicfMvrpPortStatsFramesDiscarded OBJECT-TYPE
+  SYNTAX  Counter32
+  MAX-ACCESS  read-only
+  STATUS  current
+  DESCRIPTION
+    "The number of Invalid messages received."
+ ::= { hpicfMvrpPortStatsEntry 17}
+
+
+hpicfBridgeMvrpStateTable OBJECT-TYPE
+  SYNTAX    SEQUENCE OF HpicfBridgeMvrpStateEntry
+  MAX-ACCESS  not-accessible
+  STATUS    current
+  DESCRIPTION 
+            "A table that contains information about the
+            MVRP state Machine(s) configuration."
+ ::= { hpicfMvrpStats 2 }
+
+hpicfBridgeMvrpStateEntry OBJECT-TYPE
+  SYNTAX    HpicfBridgeMvrpStateEntry
+  MAX-ACCESS  not-accessible
+  STATUS    current
+  DESCRIPTION 
+            "A row in a table that contains the VLAN ID and port list."
+  INDEX   
+  {
+   hpicfMvrpVlanId,
+   ifIndex
+  }
+ ::= { hpicfBridgeMvrpStateTable 1 }
+
+HpicfBridgeMvrpStateEntry ::= SEQUENCE
+       {
+       hpicfMvrpVlanId               VlanId,
+       hpicfMvrpApplicantState       INTEGER,
+       hpicfMvrpRegistrarState        INTEGER
+       }
+
+hpicfMvrpVlanId OBJECT-TYPE
+  SYNTAX    VlanId
+  MAX-ACCESS  not-accessible
+  STATUS    current
+  DESCRIPTION "The VLAN ID to which this entry belongs."
+ ::= { hpicfBridgeMvrpStateEntry 1}
+
+hpicfMvrpApplicantState OBJECT-TYPE
+  SYNTAX INTEGER {
+   aa(0),
+   qa(1),
+   la(2),
+   vp(3),
+   ap(4),
+   qp(5),
+   vo(6),
+   ao(7),
+   qo(8),
+   lo(9),
+   vn(10),
+   an(11)
+   }
+  MAX-ACCESS  read-only
+  STATUS    current
+  DESCRIPTION
+    " This MIB provides the Applicant State Machine values 
+      of the MVRP enabled port as follows: 0 = aa, 1 = qa, 2 = la,
+      3 = vp, 4 = ap, 5 = qp, 6 = vo, 7 = ao, 8 = qo, 9 = lo, 10 = vn,
+      11 = an. The first letter indicates the state:
+      V for Very anxious, A for Anxious, Q for Quiet, and L for
+      Leaving. The second letter indicates the membership state:
+      A for Active member, P for Passive member, O for Observer and
+      N for New."
+ ::= { hpicfBridgeMvrpStateEntry 2}
+
+hpicfMvrpRegistrarState OBJECT-TYPE
+  SYNTAX  INTEGER {
+          in(1),
+          lv(2),
+          mt(3)
+          }
+  MAX-ACCESS  read-only
+  STATUS    current
+  DESCRIPTION
+         "This MIB provides the Registrar state machine value for
+          the MVRP enabled port as follows: 1 = registered, 2 = leaving,
+          3 = empty."
+ ::= { hpicfBridgeMvrpStateEntry 3}
+
+ 
+--**********************************************************************
+--  NOTIFICATIONS (TRAPS)
+--**********************************************************************
+
+hpicfMvrpVlanLimitReachedEvent NOTIFICATION-TYPE
+  OBJECTS  
+    {
+     hpicfMvrpMaxVlanLimit
+    }
+  STATUS  current
+  DESCRIPTION
+             "The number of VLANs learned dynamically by MVRP has
+             reached a configured limit. Notify the management
+             entity with the number of VLANs learned dynamically by
+             MVRP and the configured MVRP VLAN limit."
+ ::= { hpicfMvrpNotifications 1 }
+
+--**********************************************************************
+--MVRP MIB – Groups and Compliances
+-- conformance information 
+--**********************************************************************
+
+hpicfMvrpCompliances
+  OBJECT IDENTIFIER ::= { hpicfMvrpConformance   1 }
+
+hpicfMvrpGroups
+  OBJECT IDENTIFIER ::= { hpicfMvrpConformance   2 }
+
+--**********************************************************************
+--COMPLIANCE
+--**********************************************************************
+
+hpicfMvrpCompliance MODULE-COMPLIANCE
+  STATUS  current
+  DESCRIPTION
+            "Compliance statement for MVRP."
+  MODULE
+  MANDATORY-GROUPS
+    {
+      hpicfMvrpBaseGroup,
+      hpicfMvrpPortConfigGroup,
+      hpicfMvrpPortStatsGroup,
+      hpicfMvrpPortStateGroup,
+      hpicfMvrpNotifyGroup
+    }
+ ::= { hpicfMvrpCompliances 1 }  
+
+--**********************************************************************
+--UNITS OF CONFORMANCE
+--**********************************************************************
+hpicfMvrpBaseGroup OBJECT-GROUP
+  OBJECTS
+    {
+      hpicfMvrpGlobalClearStats,
+      hpicfMvrpMaxVlanLimit
+    }   
+  STATUS  current
+  DESCRIPTION
+             "Collection of objects for management of MVRP Base Group."
+ ::= { hpicfMvrpGroups 1 }
+
+hpicfMvrpPortConfigGroup OBJECT-GROUP
+  OBJECTS
+    {
+       hpicfMvrpPortConfigRegistrarMode,
+       hpicfMvrpPortConfigPeriodicTimer,
+       hpicfMvrpPortConfigPeriodicTransmissionStatus,
+       hpicfMvrpPortStatsClearStats
+    }
+  STATUS  current
+  DESCRIPTION
+            "Collection of objects for management of MVRP Port Configuration Table."
+ ::= { hpicfMvrpGroups 2 }
+
+hpicfMvrpPortStatsGroup OBJECT-GROUP
+  OBJECTS
+    {
+      hpicfMvrpPortStatsNewReceived,
+      hpicfMvrpPortStatsJoinInReceived,
+      hpicfMvrpPortStatsJoinEmptyReceived,
+      hpicfMvrpPortStatsLeaveReceived,
+      hpicfMvrpPortStatsInReceived,
+      hpicfMvrpPortStatsEmptyReceived,
+      hpicfMvrpPortStatsLeaveAllReceived,
+      hpicfMvrpPortStatsNewTransmitted,
+      hpicfMvrpPortStatsJoinInTransmitted,
+      hpicfMvrpPortStatsJoinEmptyTransmitted,
+      hpicfMvrpPortStatsLeaveTransmitted,
+      hpicfMvrpPortStatsInTransmitted,
+      hpicfMvrpPortStatsEmptyTransmitted,
+      hpicfMvrpPortStatsLeaveAllTransmitted,
+      hpicfMvrpPortStatsTotalPDUReceived,
+      hpicfMvrpPortStatsTotalPDUTransmitted,
+      hpicfMvrpPortStatsFramesDiscarded
+     }    
+  STATUS  current
+  DESCRIPTION
+            "Collection of objects for management of MVRP Statistics Table."
+ ::= { hpicfMvrpGroups 3 }
+
+hpicfMvrpPortStateGroup OBJECT-GROUP
+  OBJECTS
+    {
+        hpicfMvrpApplicantState,
+        hpicfMvrpRegistrarState 
+    }
+  STATUS  current
+  DESCRIPTION
+             "Collection of objects to display Applicant and 
+             Registrar state machine of the ports."
+ ::= { hpicfMvrpGroups 4 }
+  
+hpicfMvrpNotifyGroup NOTIFICATION-GROUP
+  NOTIFICATIONS
+    {
+       hpicfMvrpVlanLimitReachedEvent
+    }
+  STATUS  current
+  DESCRIPTION
+            "MVRP notification group."
+ ::= { hpicfMvrpGroups 5 }
+
+END
