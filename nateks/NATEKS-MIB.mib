@@ -1,0 +1,3870 @@
+NATEKS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, enterprises,
+	Gauge32, Integer32, IpAddress, TimeTicks
+		FROM SNMPv2-SMI
+	OBJECT-GROUP, NOTIFICATION-GROUP, MODULE-COMPLIANCE
+		FROM SNMPv2-CONF
+	TEXTUAL-CONVENTION, DisplayString, DateAndTime, MacAddress
+		FROM SNMPv2-TC
+    ifDescr
+        FROM RFC1213-MIB
+	InterfaceIndex
+		FROM IF-MIB;
+
+nateks MODULE-IDENTITY
+    LAST-UPDATED "201611221200Z"
+    ORGANIZATION "Nateks Group"
+    CONTACT-INFO
+		   "        Vladimir Gudin
+
+			Postal: 10A, Vesyolaya str.
+					Moscow, 115516
+					Russian Federation
+
+			   Tel: +7 499 704 32 32
+
+			E-mail: gudin@nateks.ru"
+
+    DESCRIPTION
+            "Added statReset to stats branch"
+    REVISION      "201611221200Z"
+    DESCRIPTION
+			"Added sfpDDMIfIndex to SfpDDMEntry"
+    REVISION      "201609151200Z"
+    DESCRIPTION
+		   "This MIB module defines variables and variable groups common
+			to more than one type of equipment manufactured by Nateks Group."
+    REVISION      "201601211200Z"
+	DESCRIPTION
+			"Added sfpDDMmediaType sfpDDMpresence fields to SfpDDMEntry"
+    	REVISION  "201601201200Z"
+	DESCRIPTION
+			"Added Digital IO traps and compliance statements"
+    REVISION      "201503101200Z"
+	DESCRIPTION
+			"Added Digital IO support"
+	REVISION      "201411171200Z"
+	DESCRIPTION
+			"Added SFP DDM support"
+	REVISION      "201411131200Z"
+	DESCRIPTION
+			"Added support for FTP operations"
+	REVISION      "201404161200Z"
+    DESCRIPTION
+			"Converted from SMIv1 version of NATEKS-MIB v1.2."
+	::= { enterprises 4249 }
+
+	nateksTraps		OBJECT IDENTIFIER ::= { nateks 0 }
+    nateksProducts  OBJECT IDENTIFIER ::= { nateks 1 }
+        megatrans3CLTU     OBJECT IDENTIFIER ::= { nateksProducts 1 }
+        orion2LTU          OBJECT IDENTIFIER ::= { nateksProducts 7 }
+        megatrans3CRGN     OBJECT IDENTIFIER ::= { nateksProducts 8 }
+        megatrans4LTU      OBJECT IDENTIFIER ::= { nateksProducts 11 }
+        megatrans4RGN      OBJECT IDENTIFIER ::= { nateksProducts 12 }
+        orion3LTU          OBJECT IDENTIFIER ::= { nateksProducts 22 }
+        orion3NTU          OBJECT IDENTIFIER ::= { nateksProducts 23 }
+        orion3repeater     OBJECT IDENTIFIER ::= { nateksProducts 24 }
+        miniFlex           OBJECT IDENTIFIER ::= { nateksProducts 26 }
+    nateksMgmt      OBJECT IDENTIFIER ::= { nateks 2 }
+        common      OBJECT IDENTIFIER ::= { nateksMgmt 3 }
+        config      OBJECT IDENTIFIER ::= { nateksMgmt 4 }
+            configSystem      OBJECT IDENTIFIER ::= { config 100 }
+        stats       OBJECT IDENTIFIER ::= { nateksMgmt 5 }
+            g826        OBJECT IDENTIFIER ::= { stats 1 }
+            alarms      OBJECT IDENTIFIER ::= { stats 2 }
+            tlm         OBJECT IDENTIFIER ::= { stats 3 }
+            dsl         OBJECT IDENTIFIER ::= { stats 4 }
+            indication  OBJECT IDENTIFIER ::= { stats 5 }
+            temperature OBJECT IDENTIFIER ::= { stats 6 }
+			time		OBJECT IDENTIFIER ::= { stats 7 }
+			localPower	OBJECT IDENTIFIER ::= { stats 8 }
+			sfpDDM		OBJECT IDENTIFIER ::= { stats 9 }
+			io			OBJECT IDENTIFIER ::= { stats 10 }
+				ioDIn   OBJECT IDENTIFIER ::= { io 1}
+				ioDOut  OBJECT IDENTIFIER ::= { io 2}
+		maintenance OBJECT IDENTIFIER ::= { nateksMgmt 6 }
+            tftp        OBJECT IDENTIFIER ::= { maintenance 1 }
+		nateksSecurity  OBJECT IDENTIFIER ::= { nateksMgmt 7 }
+		    macFilter   OBJECT IDENTIFIER ::= { nateksSecurity 1 }
+		nateksDev		OBJECT IDENTIFIER ::= { nateksMgmt 8 }
+	nateksMibInfo	OBJECT IDENTIFIER ::= { nateks 3 }
+		nateksMIBGroup		OBJECT IDENTIFIER ::= { nateksMibInfo 1 }
+		nateksMIBCompliance	OBJECT IDENTIFIER ::= { nateksMibInfo 2 }
+
+
+
+IntegerNumber ::= TEXTUAL-CONVENTION
+	DISPLAY-HINT "d"
+    STATUS       current
+    DESCRIPTION
+            "Number of some objects, for example, rows in the table. May
+			 be zero, if there are no objects or higher if there are some."
+    SYNTAX       Integer32 (0..2147483647)
+
+IntegerIndex ::= TEXTUAL-CONVENTION
+	DISPLAY-HINT "d"
+    STATUS       current
+    DESCRIPTION
+            "One-based index to the table."
+    SYNTAX       Integer32 (1..2147483647)
+
+IntegerWithDecimal ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d-1"
+    STATUS       current
+    DESCRIPTION  "Fixed-point value with one decimal digit. For example, 250 = 25, -105 = -10.5."
+    SYNTAX       Integer32
+
+IntegerMillis ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d-3"
+    STATUS       current
+    DESCRIPTION  "Fixed-point value with three decimal digits. For example, 25000 = 25, -10500 = -10.5."
+    SYNTAX       Integer32
+
+
+systemAlarm OBJECT-TYPE
+    SYNTAX  INTEGER {
+                no(1),
+                nonurgent(2),
+                urgent(3),
+                urgentAndNonurgent(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Device alarm state"
+    ::= { nateksMgmt 1 }
+
+systemReset OBJECT-TYPE
+    SYNTAX  INTEGER {
+                reset(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing reset(1) to maintReset perform a restart of the device.
+         Read always returns readValue(2)."
+    ::= { nateksMgmt 2 }
+
+--- common group
+
+model OBJECT-TYPE
+    SYNTAX  	DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Model name, for example MGS-3C-RGN. It is mandatory
+        that this only contain printable ASCII characters."
+    ::= { common 1 }
+
+id OBJECT-TYPE
+    SYNTAX  	DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Device ID, displayed in the main menu of the module. It is mandatory
+         that this only contain printable ASCII characters."
+    ::= { common 2 }
+
+hardwareVersion OBJECT-TYPE
+    SYNTAX  	DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Version of the device's hardware. For examle: 1.0"
+    ::= { common 3 }
+
+softwareVersion OBJECT-TYPE
+    SYNTAX  	DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Version of the device's main software and, optionally, versions
+         of firmware loaded in DSL chipsets, etc. (if present).
+         For examle: 3.5.0.5.9/5.0"
+    ::= { common 4 }
+
+softwareDate OBJECT-TYPE
+    SYNTAX  	DisplayString (SIZE (0..10))
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Build date of the device's main software in MM.DD.YYYY format.
+         Empty string, if build date is not maintained by devices software."
+    ::= { common 5 }
+
+moduleType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                subrack(1),
+                standalone(2),
+                standaloneSmall(3),
+                rackmount(4),
+				miniflex(5)
+             }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Module type"
+    ::= { common 6 }
+
+subrackAddress OBJECT-TYPE
+    SYNTAX  	Integer32 (0..128)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Address of the module in the FlexGain cassette. For modules that
+         do not have such an address, a value of 0 is returned."
+    ::= { common 7 }
+
+errorCode OBJECT-TYPE
+    SYNTAX  	Integer32
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Device-dependent error code. Normal value for errorCode is 0,
+         i.e. device is fully operational. Any non-zero value indicates
+         device hardware fault to management software."
+    ::= { common 8 }
+
+serialNumber OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Device serial number."
+    ::= { common 9 }
+
+
+
+--- config group
+
+configRW OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..65535))
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Reading configRW results in reading the whole running config
+         (as DUMP R in Megatrans 3C does). Writing configRW results
+         in writing to startup config (as LOAD in Megatrans 3C does).
+         This variable may be also used by devices, that do not maintain
+         configValueTable and configGroupTable, to get/set their
+         configuration."
+    ::= { config 1 }
+
+configDefault OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing integer value to configDefault applies
+         default profile to the configuration. Values and contents
+         of default profiles are device-dependent."
+    ::= { config 2 }
+
+--- config-system group. Is used for configure and read configuration
+--- of Megatrans-3C, 4, 4W, Orion2, Orion3 line of devices.
+
+configNumberValues OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of configuration values in device's configuration."
+    ::= { configSystem 1 }
+
+configValueTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF ConfigValueEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of configuration values.  The number of
+         entries is given by the value of configSize."
+    ::= { configSystem 2 }
+
+configValueEntry OBJECT-TYPE
+    SYNTAX  	ConfigValueEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Configuration item."
+    INDEX   { valueId }
+    ::= { configValueTable 1 }
+
+ConfigValueEntry ::=
+        SEQUENCE {
+            valueId
+                IntegerIndex,
+            valueGroup
+                IntegerIndex,
+            valueName
+                DisplayString,
+            valueGroupName
+                DisplayString,
+            valueType
+                INTEGER,
+            valueStatus
+                INTEGER,
+            valueStartup
+                OCTET STRING,
+            valueRunning
+                OCTET STRING,
+            valueNew
+                OCTET STRING,
+            valueBackup
+                OCTET STRING
+        }
+
+valueId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of configuration value. It is constant
+         at least until main software of the module changes."
+    ::= { configValueEntry 1 }
+
+valueGroup OBJECT-TYPE
+    SYNTAX  	IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Index of values' configuration group in the configGroupTable."
+    ::= { configValueEntry 2 }
+
+valueName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "A unique name of configuration value. It is constant
+         at least until main software of the module changes. Usually,
+         it remains constant through the lifecycle of the product."
+    ::= { configValueEntry 3 }
+
+valueGroupName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of values' configuration group."
+    ::= { configValueEntry 4 }
+
+valueType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                setNow(1),
+                applyConfirm(2),
+                afterReset(3)
+             }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Value type."
+    ::= { configValueEntry 5 }
+
+valueStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+                unchanged(1),
+                changed(2),
+                applied(3)
+             }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Change status for a value.
+
+         All values of valueType setNow(1) have unchanged(1) status.
+
+         Status for values of valueType applyConfirm(2):
+            Initially, all values have unchanged(1) status.
+            When value is changed in new configuration, valueStatus is
+            changed(2). When APPLY is made in respect of a value,
+            valueStatus is applied(3). When CONFIRM is made for a value,
+            valueStatus returns to unchanged(1).
+
+         Status for values of type afterReset:
+            If valueStartup is different from valueRunning, valueStatus
+            is changed(2), otherwise unchanged(1)."
+    ::= { configValueEntry 6 }
+
+valueStartup OBJECT-TYPE
+    SYNTAX  	OCTET STRING (SIZE(0..65535))
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Startup value of configuration variable. Write operation changes
+         valueStartup for values of valueType afterReset(3),
+         valueRunning for values of valueType setNow(1),
+         valueNew for values of valueType applyConfirm(2)."
+    ::= { configValueEntry 7 }
+
+valueRunning OBJECT-TYPE
+    SYNTAX  	OCTET STRING (SIZE(0..65535))
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Running value of configuration variable. Write operation changes
+         valueStartup for values of valueType afterReset(3),
+         valueRunning for values of valueType setNow(1),
+         valueNew for values of valueType applyConfirm(2)."
+    ::= { configValueEntry 8 }
+
+valueNew OBJECT-TYPE
+    SYNTAX  	OCTET STRING (SIZE(0..65535))
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "New value of configuration variable. Write operation changes
+         valueStartup for values of valueType afterReset(3),
+         valueRunning for values of valueType setNow(1),
+         valueNew for values of valueType applyConfirm(2)."
+    ::= { configValueEntry 9 }
+
+valueBackup OBJECT-TYPE
+    SYNTAX  	OCTET STRING (SIZE(0..65535))
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Backup value of configuration variable."
+    ::= { configValueEntry 10 }
+
+configNumberGroups OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of configuration groups in device's configuration."
+    ::= { configSystem 3 }
+
+configGroupTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF ConfigGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of configuration values.  The number of
+         entries is given by the value of configSize."
+    ::= { configSystem 4 }
+
+configGroupEntry OBJECT-TYPE
+    SYNTAX  	ConfigGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Configuration group."
+    INDEX   { groupId }
+    ::= { configGroupTable 1 }
+
+ConfigGroupEntry ::=
+        SEQUENCE {
+            groupId
+                IntegerIndex,
+            groupName
+                DisplayString,
+            groupType
+                INTEGER,
+            groupStatus
+                INTEGER
+        }
+
+groupId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of configuration group. It is constant
+         at least until main software of the module changes."
+    ::= { configGroupEntry 1 }
+
+groupName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of configuration group. It is constant
+         at least until main software of the module changes. Usually,
+         it remains constant through the lifecycle of the product."
+    ::= { configGroupEntry 2 }
+
+groupType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                setNow(1),
+                applyConfirm(2),
+                afterReset(3)
+             }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Group type."
+    ::= { configGroupEntry 3 }
+
+groupStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+                unchanged(1),
+                changed(2),
+                applied(3)
+             }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Change status for a groupvalue.
+
+         All groups of groupType setNow(1) have unchanged(1) status.
+
+         Status for groups of groupType applyConfirm(2):
+            Initially, all values have unchanged(1) status.
+            When some of group values are changed in new configuration,
+            groupStatus is changed(2). When APPLY is made for a group,
+            groupStatus is applied(3). When CONFIRM is made for a group,
+            groupStatus returns to unchanged(1).
+
+         Status for groups of type afterReset:
+            If startup values in the group are different from running
+            values, groupStatus is changed(2), otherwise unchanged(1).
+
+         Writing applied(3) to the groupStatus makes APPLY operation
+         on a group. APPLY operation is allowed only for groups of
+         groupType applyConfirm(2).
+
+         Other write operations should report error."
+    ::= { configGroupEntry 4 }
+
+configApplyAll OBJECT-TYPE
+    SYNTAX  INTEGER {
+                applyAll(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing applyAll(1) to configApplyAll makes APPLY ALL operation.
+         Read always returns readValue(2)."
+    ::= { configSystem 5 }
+
+configConfirm OBJECT-TYPE
+    SYNTAX  INTEGER {
+                confirm(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing confirm(1) to configConfirm makes CONFIRM operation.
+         Read always returns readValue(2)."
+    ::= { configSystem 6 }
+
+configBackup OBJECT-TYPE
+    SYNTAX  INTEGER {
+                backup(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing backup(1) to configBackup performs BACKUP operation.
+         Read always returns readValue(2)."
+    ::= { configSystem 7 }
+
+configRestore OBJECT-TYPE
+    SYNTAX  INTEGER {
+                restore(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing restore(1) to configRestore performs RESTORE operation.
+         Read always returns readValue(2)."
+    ::= { configSystem 8 }
+
+
+
+--- stats group
+
+--- g826 group
+
+g826Number OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of g826 statistics."
+    ::= { g826 1 }
+
+g826Table OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF G826Entry
+    MAX-ACCESS  not-accessible
+    STATUS  	deprecated
+    DESCRIPTION
+        "A list of g826 statistics. Each consists of an interface index
+         in interfaces table, statistics name and g826 statistics valuess."
+    ::= { g826 2 }
+
+g826Entry OBJECT-TYPE
+    SYNTAX  	G826Entry
+    MAX-ACCESS  not-accessible
+	STATUS  	deprecated
+    DESCRIPTION
+        "G826 statistics."
+    INDEX   { g826Id }
+    ::= { g826Table 1 }
+
+G826Entry ::=
+        SEQUENCE {
+            g826Id
+                IntegerIndex,
+            g826IfIndex
+                InterfaceIndex,
+            g826Name
+                DisplayString,
+            g826EB
+                Gauge32,
+            g826ES
+                Gauge32,
+            g826SES
+                Gauge32,
+            g826BBE
+                Gauge32,
+            g826AvailableTime
+                Gauge32,
+            g826UnavailableTime
+                Gauge32,
+            g826StatReset
+                INTEGER
+        }
+
+g826Id OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	deprecated
+    DESCRIPTION
+        "A unique index of this g826 statistics. It is constant
+         at least between device reboots."
+    ::= { g826Entry 1 }
+
+g826IfIndex OBJECT-TYPE
+    SYNTAX  	InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Index of interface in interfaces table, this g826
+         statistics is for."
+    ::= { g826Entry 2 }
+
+g826Name OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Name of the statistic, for example: E1-1-CRC4, E1-2-E-Bit."
+    ::= { g826Entry 3 }
+
+g826EB OBJECT-TYPE
+    SYNTAX  	Gauge32
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Number of errored blocks."
+    ::= { g826Entry 4 }
+
+g826ES OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Number of errored seconds."
+    ::= { g826Entry 5 }
+
+g826SES OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Number of severely errored seconds."
+    ::= { g826Entry 6 }
+
+g826BBE OBJECT-TYPE
+    SYNTAX  	Gauge32
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Number of background block errors."
+    ::= { g826Entry 7 }
+
+g826AvailableTime OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Available time in seconds."
+    ::= { g826Entry 8 }
+
+g826UnavailableTime OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	deprecated
+    DESCRIPTION
+        "Unavailable time in seconds."
+    ::= { g826Entry 9 }
+
+g826StatReset OBJECT-TYPE
+    SYNTAX  INTEGER {
+                reset(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	deprecated
+    DESCRIPTION
+        "Writing reset(1) to g826StatReset restarts this g826 statistic.
+         Read always returns readValue(2)."
+    ::= { g826Entry 10 }
+
+g826Reset OBJECT-TYPE
+    SYNTAX  INTEGER {
+                reset(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing reset(1) to g826Reset restarts all g826 statistics.
+         Read always returns readValue(2)."
+    ::= { g826 3 }
+
+-- NATEKS-MIB v0.9 and earlier versions contained a typo: g826Reset
+-- was called g286Reset. This string maintains backward compatibility.
+-- g286Reset OBJECT IDENTIFIER ::= { g826 3 }
+
+
+ifG826Table OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF IfG826Entry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of g826 statistics. Each consists of an interface index
+         in interfaces table, statistics name and g826 statistics valuess."
+    ::= { g826 4 }
+
+ifG826Entry OBJECT-TYPE
+    SYNTAX  	IfG826Entry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "G826 statistics grouped by interface."
+    INDEX   { ifG826IfIndex, ifG826Id }
+    ::= { ifG826Table 1 }
+
+IfG826Entry ::=
+        SEQUENCE {
+            ifG826Id
+                IntegerIndex,
+            ifG826IfIndex
+                InterfaceIndex,
+            ifG826Name
+                DisplayString,
+            ifG826EB
+                Gauge32,
+            ifG826ES
+                Gauge32,
+            ifG826SES
+                Gauge32,
+            ifG826BBE
+                Gauge32,
+            ifG826AvailableTime
+                Gauge32,
+            ifG826UnavailableTime
+                Gauge32,
+            ifG826StatReset
+                INTEGER
+        }
+
+ifG826Id OBJECT-TYPE
+    SYNTAX  IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of this g826 statistics. It is constant
+         at least between device reboots."
+    ::= { ifG826Entry 1 }
+
+ifG826IfIndex OBJECT-TYPE
+    SYNTAX  	InterfaceIndex(1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Index of interface in interfaces table, this g826
+         statistics is for."
+    ::= { ifG826Entry 2 }
+
+ifG826Name OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the statistic, for example: E1-1-CRC4, E1-2-E-Bit."
+    ::= { ifG826Entry 3 }
+
+ifG826EB OBJECT-TYPE
+    SYNTAX  	Gauge32
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of errored blocks."
+    ::= { ifG826Entry 4 }
+
+ifG826ES OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of errored seconds."
+    ::= { ifG826Entry 5 }
+
+ifG826SES OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of severely errored seconds."
+    ::= { ifG826Entry 6 }
+
+ifG826BBE OBJECT-TYPE
+    SYNTAX  	Gauge32
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of background block errors."
+    ::= { ifG826Entry 7 }
+
+ifG826AvailableTime OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Available time in seconds."
+    ::= { ifG826Entry 8 }
+
+ifG826UnavailableTime OBJECT-TYPE
+    SYNTAX  	Gauge32
+	UNITS		"s"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Unavailable time in seconds."
+    ::= { ifG826Entry 9 }
+
+ifG826StatReset OBJECT-TYPE
+    SYNTAX  INTEGER {
+                reset(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing reset(1) to ifG826StatReset restarts this g826 statistic.
+         Read always returns readValue(2)."
+    ::= { ifG826Entry 10 }
+
+
+
+--- alarm group
+
+alarmNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of alarms."
+    ::= { alarms 1 }
+
+alarmTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF AlarmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of alarms. Each consists of an interface index
+         in interfaces table, alarm name, value and cutoff information."
+    ::= { alarms 2 }
+
+alarmEntry OBJECT-TYPE
+    SYNTAX  	AlarmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Alarms."
+    INDEX   { alarmId }
+    ::= { alarmTable 1 }
+
+AlarmEntry ::=
+        SEQUENCE {
+            alarmId
+                IntegerIndex,
+            alarmIfIndex
+                InterfaceIndex,
+            alarmName
+                DisplayString,
+            alarmValue
+                INTEGER,
+            alarmCutoff
+                INTEGER,
+            alarmType
+                BITS,
+            alarmDisplayType
+                INTEGER
+        }
+
+alarmId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of alarm. It is constant
+         at least between device reboots."
+    ::= { alarmEntry 1 }
+
+alarmIfIndex OBJECT-TYPE
+    SYNTAX  	InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Index of interface in interfaces table, which state this
+        alarm indicates. Alarms, that do not have associated interfaces
+        (for example, maintenance alarms), should have index
+		of management interface as alarmIfIndex."
+    ::= { alarmEntry 2 }
+
+alarmName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the alarm, for example: LOS-S, BER-H."
+    ::= { alarmEntry 3 }
+
+alarmValue OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm status."
+    ::= { alarmEntry 4 }
+
+alarmCutoff OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm cutoff status."
+    ::= { alarmEntry 5 }
+
+alarmType OBJECT-TYPE
+    SYNTAX  BITS {
+                localMajor(0),
+                localMinor(1),
+                remoteMajor(2),
+                remoteMinor(3),
+                maintenance(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm type. If none of alarm types is applicable to this
+         alarm, all bits are zero."
+    ::= { alarmEntry 6 }
+
+alarmDisplayType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                major(1),
+                minor(2),
+                maintenance(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Simplified alarm type to be used in trap filters"
+    ::= { alarmEntry 7 }
+
+alarmTrapEnable OBJECT-TYPE
+    SYNTAX  INTEGER {
+                true(1),
+                false(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Alarm trap generation setup: changes in alarm state will cause trap
+         generation when the alarmTrapEnable is true."
+    ::= { alarms 3 }
+
+--- same alarms, but grouped by interface
+
+ifAlarmTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF IfAlarmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A two-dimentional array of alarms. Alarms are grouped by interface number."
+    ::= { alarms 4 }
+
+ifAlarmEntry OBJECT-TYPE
+    SYNTAX  	IfAlarmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Alarms grouped by interface."
+    INDEX   { ifAlarmIfIndex, ifAlarmId }
+    ::= { ifAlarmTable 1 }
+
+IfAlarmEntry ::=
+        SEQUENCE {
+            ifAlarmId
+                IntegerIndex,
+            ifAlarmIfIndex
+                InterfaceIndex,
+            ifAlarmName
+                DisplayString,
+            ifAlarmValue
+                INTEGER,
+            ifAlarmCutoff
+                INTEGER,
+            ifAlarmType
+                BITS,
+            ifAlarmDisplayType
+                INTEGER
+        }
+
+ifAlarmId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of alarm within interface. It is constant
+         at least between device reboots."
+    ::= { ifAlarmEntry 1 }
+
+ifAlarmIfIndex OBJECT-TYPE
+    SYNTAX  	InterfaceIndex (1..2147483647)
+    MAX-ACCESS  read-only
+	STATUS  	current
+    DESCRIPTION
+        "Index of interface in interfaces table, which state this
+        alarm indicates. Alarms, that do not have associated interfaces
+        (for example, maintenance alarms), should have index
+		of management interface as alarmIfIndex."
+    ::= { ifAlarmEntry 2 }
+
+ifAlarmName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the alarm, for example: LOS-S, BER-H."
+    ::= { ifAlarmEntry 3 }
+
+ifAlarmValue OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm status."
+    ::= { ifAlarmEntry 4 }
+
+ifAlarmCutoff OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm cutoff status."
+    ::= { ifAlarmEntry 5 }
+
+ifAlarmType OBJECT-TYPE
+    SYNTAX  BITS {
+                localMajor(0),
+                localMinor(1),
+                remoteMajor(2),
+                remoteMinor(3),
+                maintenance(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Alarm type. If none of alarm types is applicable to this
+         alarm, all bits are zero."
+    ::= { ifAlarmEntry 6 }
+
+ifAlarmDisplayType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                major(1),
+                minor(2),
+                maintenance(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Simplified alarm type to be used in trap filters"
+    ::= { ifAlarmEntry 7 }
+
+
+
+
+--- tlm group
+
+tlmNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of tlm contacts."
+    ::= { tlm 1 }
+
+tlmTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF TlmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of tlms. Each consists of tlm name, setup and status
+         information, and trap generation setup."
+    ::= { tlm 2 }
+
+tlmEntry OBJECT-TYPE
+    SYNTAX  	TlmEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "TLM"
+    INDEX   { tlmId }
+    ::= { tlmTable 1 }
+
+TlmEntry ::=
+        SEQUENCE {
+            tlmId
+                IntegerIndex,
+            tlmName
+                DisplayString,
+            tlmStatus
+                INTEGER,
+            tlmLastStatusChange
+                TimeTicks,
+            tlmSetup
+                INTEGER,
+            tlmTrapEnable
+                INTEGER
+        }
+
+tlmId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of TLM. It is constant
+         at least between device reboots."
+    ::= { tlmEntry 1 }
+
+tlmName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the TLM."
+    ::= { tlmEntry 2 }
+
+tlmStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2),
+                det(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The status of the TLM: on, off or detected."
+    ::= { tlmEntry 3 }
+
+tlmLastStatusChange OBJECT-TYPE
+    SYNTAX  	TimeTicks
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The time of last TLM status change, counted from system start."
+    ::= { tlmEntry 4 }
+
+tlmSetup OBJECT-TYPE
+    SYNTAX  INTEGER {
+                normalOpen(1),
+                normalClosed(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "TLM setup: normally open or normally closed.
+         Writing to this variable will configure this TLM, if the device
+         does support the write access to this variable."
+    ::= { tlmEntry 5 }
+
+tlmTrapEnable OBJECT-TYPE
+    SYNTAX  INTEGER {
+                true(1),
+                false(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "TLM trap generation setup: changes in TLM status will cause trap
+         generation when the tlmTrapEnable is true."
+    ::= { tlmEntry 6 }
+
+tlmClear OBJECT-TYPE
+    SYNTAX  INTEGER {
+                reset(1),
+                readValue(2)
+            }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing reset(1) to tlmClear will clear the TLM history,
+         and det state of all TLM indicators will become off state.
+         Read always returns readValue(2)."
+    ::= { tlm 3 }
+
+
+--- dsl group
+
+dslChannelNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of dsl channels."
+    ::= { dsl 1 }
+
+dslUnitType OBJECT-TYPE
+    SYNTAX  INTEGER {
+                modem(1),
+                regenerator(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The type of the unit: line termination units (LTU) and
+         network termination units (NTU) will have the modem(1) value.
+         All types of regenerators have regenerator(2) value."
+    ::= { dsl 2 }
+
+dslChannelTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF DslChannelEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list of DSL channels present on this device. Each consists of DSL index, ifIndex, setup and status
+         information."
+    ::= { dsl 3 }
+
+dslChannelEntry OBJECT-TYPE
+    SYNTAX  DslChannelEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "DSL channel"
+    INDEX   { dslChannelId }
+    ::= { dslChannelTable 1 }
+
+DslChannelEntry ::=
+        SEQUENCE {
+            dslChannelId
+                IntegerIndex,
+            dslChannelIfIndex
+                InterfaceIndex,
+            dslChannelMode           --- Master/Slave
+                INTEGER,
+            dslChannelStandard       --- G.shdsl, G.shdsl.bis, etc.
+                INTEGER,
+            dslChannelClockReference --- 1, 2, 3a, 3b
+                INTEGER,
+            dslChannelLineCodeConfig --- PAM configuration
+                INTEGER,
+            dslChannelPSDConfig      --- Annex configuration
+                INTEGER,
+            dslChannelBaserateConfig --- Baserate configuration
+                Integer32,
+            dslChannelStatus         --- Link up, link down, training
+                INTEGER,
+            dslChannelLineCode       --- PAM status
+                INTEGER,
+            dslChannelPSD            --- Annex status
+                INTEGER,
+            dslChannelBaserate       --- Baserate status
+                Integer32,
+            dslChannelLineRate       --- Line rate = Baserate*64k + 8k
+                Integer32,
+            dslChannelPayloadRate    --- Payload rate = Baserate*64k
+                Integer32,
+            dslChannelNMR
+                Integer32,
+            dslChannelPowerBackoff
+                Integer32,
+            dslChannelFarEndPowerBackoff
+                Integer32,
+            dslChannelLoopAttenuation
+                Integer32,
+            dslChannelEOCNumber
+                IntegerIndex,
+            --- For NTU/LTU only
+            dslChannelRegeneratorNumber
+                IntegerNumber,
+            dslChannelRemotePower       --- Remote power supply status
+                INTEGER,
+            dslChannelRemotePowerVoltage --- Remote power voltage
+                Integer32
+        }
+
+dslChannelId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the DSL channel. It is constant for a given model."
+    ::= { dslChannelEntry 1 }
+
+dslChannelIfIndex OBJECT-TYPE
+    SYNTAX  	InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Index in interfaces table of this DSL channel."
+    ::= { dslChannelEntry 2 }
+
+dslChannelMode OBJECT-TYPE
+    SYNTAX  INTEGER {
+                master(1),
+                slave(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The activation mode of this channel: either it is Master (xU-C) or Slave (xU-R)."
+    ::= { dslChannelEntry 3 }
+
+dslChannelStandard OBJECT-TYPE
+    SYNTAX  INTEGER {
+                gshdsl(1),
+                gshdslBis(2),
+                gshdslExt(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The G.Shdsl mode this channel is working in."
+    ::= { dslChannelEntry 4 }
+
+dslChannelClockReference OBJECT-TYPE
+    SYNTAX  INTEGER {
+                clockMode1(1),
+                clockMode2(2),
+                clockMode3a(3),
+                clockMode3b(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The G.Shdsl clock mode this channel is working in."
+    ::= { dslChannelEntry 5 }
+
+dslChannelLineCodeConfig OBJECT-TYPE
+    SYNTAX  INTEGER {
+                auto(1),
+                pam4(2),
+                pam8(3),
+                pam16(4),
+                pam32(5),
+                pam64(6),
+                pam128(7)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The configured line code of this channel."
+    ::= { dslChannelEntry 6 }
+
+dslChannelPSDConfig OBJECT-TYPE
+    SYNTAX  INTEGER {
+                annexA(1),
+                annexB(2),
+                annexAB(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The configured PSD mask (annex) of this channel."
+    ::= { dslChannelEntry 7 }
+
+dslChannelBaserateConfig OBJECT-TYPE
+    SYNTAX  	Integer32 (0..1024)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The configured base data rate (in 64kbit/s units) of this channel. 0 means auto."
+    ::= { dslChannelEntry 8 }
+
+dslChannelStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+                down(1),
+                preactivation(2),
+                activation(3),
+                up(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The activation status of this DSL channel."
+    ::= { dslChannelEntry 9 }
+
+dslChannelLineCode OBJECT-TYPE
+    SYNTAX  INTEGER {
+                notAvailable(0),
+                pam4(2),
+                pam8(3),
+                pam16(4),
+                pam32(5),
+                pam64(6),
+                pam128(7)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current working line code of this channel. If the link is down, this item
+         has notAvailable(0) value."
+    ::= { dslChannelEntry 10 }
+
+dslChannelPSD OBJECT-TYPE
+    SYNTAX  INTEGER {
+                notAvailable(0),
+                annexA(1),
+                annexB(2),
+                annexAB(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current working PSD mask (annex) of this channel. If the link is down, this item
+         has notAvailable(0) value."
+    ::= { dslChannelEntry 11 }
+
+dslChannelBaserate OBJECT-TYPE
+    SYNTAX  	Integer32(0..1024)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current working base data rate (in 64kbit/s units) of this channel. If the link is down, this item has 0 value."
+    ::= { dslChannelEntry 12 }
+
+dslChannelLineRate OBJECT-TYPE
+    SYNTAX  	Integer32(0..65536)
+    UNITS   	"kbps"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current working line rate in kbit/s of this channel. If the link is down, this item has 0 value."
+    ::= { dslChannelEntry 13 }
+
+dslChannelPayloadRate OBJECT-TYPE
+    SYNTAX  	Integer32(0..65536)
+	UNITS   	"kbps"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current working payload rate in kbit/s of this channel. If the link is down, this item has 0 value."
+    ::= { dslChannelEntry 14 }
+
+dslChannelNMR OBJECT-TYPE
+    SYNTAX  	Integer32
+    UNITS   	"dB"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current noise margin rate for the DSL channel in dB."
+    ::= { dslChannelEntry 15 }
+
+dslChannelPowerBackoff OBJECT-TYPE
+    SYNTAX  	Integer32
+    UNITS   	"dB"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current power backoff of the local side of the DSL channel in dB."
+    ::= { dslChannelEntry 16 }
+
+dslChannelFarEndPowerBackoff OBJECT-TYPE
+    SYNTAX  	Integer32
+    UNITS   	"dB"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current far end power backoff of the DSL channel in dB."
+    ::= { dslChannelEntry 17 }
+
+dslChannelLoopAttenuation OBJECT-TYPE
+    SYNTAX  	Integer32
+    UNITS   	"dB"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Current loop attenuation of the DSL channel in dB."
+    ::= { dslChannelEntry 18 }
+
+dslChannelEOCNumber OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The EOC number of the unit in this DSL link.
+            xtuC               1
+            xtuR               2
+            repeater N=1..max  N+2"
+    ::= { dslChannelEntry 19 }
+
+dslChannelRegeneratorNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The number of regenerators in the link.
+         This unit is not present on regenerators."
+    ::= { dslChannelEntry 20 }
+
+dslChannelRemotePower OBJECT-TYPE
+    SYNTAX  INTEGER {
+            on(1),
+            off(2),
+            alarm(3)
+        }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The remote power status of the channel.
+         This item is not present on regenerators. On devices without remote powering capability it
+         is present and always shows off(2).
+
+         on(1) means the remote power is turned on in configuration and remote power in turned on.
+
+         off(2) means the remote power is turned off in configuration or remote power capability is
+         not present in the device.
+
+         alarm(3) means remote power is turned off for a certain amount of time because overcurrent
+         protection has triggered or AC/DC leakage threshold was met."
+    ::= { dslChannelEntry 21 }
+
+dslChannelRemotePowerVoltage OBJECT-TYPE
+    SYNTAX  	Integer32
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Remote power voltage configuration for the channel.
+         This item is not present on regenerators.
+         On devices without remote powering capability it is present and always shows 0.
+         If remote power is turned off for this channel in configuration, 0 is read from this item.
+         If remote power is turned on for this channel in configuration, remote power nominal voltage
+         is read from this item regardless of error status (it may be off due to overcurrent etc).
+
+         This item appeared in MIB v0.9 and some devices may not support it."
+    ::= { dslChannelEntry 22 }
+
+dslGroupNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The number of multiwire groups."
+    ::= { dsl 4 }
+
+dslGroupTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF DslGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "This table contains information on multipair and 4-wire goups of DSL channels."
+    ::= { dsl 5 }
+
+dslGroupEntry OBJECT-TYPE
+    SYNTAX  	DslGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "DSL multipair of 4-wire group"
+    INDEX   { dslGroupId }
+    ::= { dslGroupTable 1 }
+
+DslGroupEntry ::=
+        SEQUENCE {
+            dslGroupId
+                IntegerIndex,
+            dslGroupType
+                INTEGER,
+            dslGroupMainChannel
+                IntegerIndex,
+            dslGroupChannel1
+                IntegerIndex,
+            dslGroupChannel2
+                IntegerIndex,
+            dslGroupChannel3
+                IntegerIndex,
+            dslGroupChannel4
+                IntegerIndex
+        }
+
+dslGroupId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the DSL channel group. It is constant between changes of unit configuration."
+    ::= { dslGroupEntry 1 }
+
+dslGroupType OBJECT-TYPE
+    SYNTAX INTEGER {
+                type4wire(1),
+                type2pair(2),
+                type3pair(3),
+                type4pair(4)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The type of channel grouping.
+         type4wire(1) represent 4-wire method of channel aggregation.
+         type2pair(2)-type4pair(4) represent the M-pair method of channel aggregation."
+    ::= { dslGroupEntry 2 }
+
+dslGroupMainChannel OBJECT-TYPE
+    SYNTAX 		IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "This is the dslChannelId of the main channel in the multipair or 4-wire group.
+         The configuration for all channels in the group is taken from the main channel.
+         Only the main channel is mentioned in regenerator pairs when regenerator is
+         working in multipair mode."
+    ::= { dslGroupEntry 3 }
+
+dslGroupChannel1 OBJECT-TYPE
+    SYNTAX 		IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The first channel in the sequence of dslChannelId's of the channels in the
+         multipair or 4-wire group. The main channel is mentioned amongst others."
+    ::= { dslGroupEntry 4 }
+
+dslGroupChannel2 OBJECT-TYPE
+    SYNTAX 		IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The second channel in the sequence of dslChannelId's of the channels in the
+         multipair or 4-wire group. The main channel is mentioned amongst others."
+    ::= { dslGroupEntry 5 }
+
+dslGroupChannel3 OBJECT-TYPE
+    SYNTAX 		IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The third channel in the sequence of dslChannelId's of the channels in the
+         multipair or 4-wire group. The main channel is mentioned amongst others.
+         Only present for 3-pair and 4-pair groups."
+    ::= { dslGroupEntry 6 }
+
+dslGroupChannel4 OBJECT-TYPE
+    SYNTAX 		IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The fourth channel in the sequence of dslChannelId's of the channels in the
+         multipair or 4-wire group. The main channel is mentioned amongst others.
+         Only present for 4-pair groups."
+    ::= { dslGroupEntry 7 }
+
+dslRegenerationChannels OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The number of regenerator channels working in this device."
+    ::= { dsl 6 }
+
+dslRegenerationTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF DslRegenerationEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "This table is a list of regenerator channels working in this device.
+         Devices that do not have regenerator functions do not need to implement this table."
+    ::= { dsl 7 }
+
+dslRegenerationEntry OBJECT-TYPE
+    SYNTAX  	DslRegenerationEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Regeneration channel"
+    INDEX   { dslRegenerationId }
+    ::= { dslRegenerationTable 1 }
+
+DslRegenerationEntry ::=
+        SEQUENCE {
+            dslRegenerationId
+                IntegerIndex,
+            dslRegenerationSide1
+                IntegerIndex,
+            dslRegenerationSide2
+                IntegerIndex
+        }
+
+dslRegenerationId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the DSL regeneration channel. It is constant between configuration changes."
+    ::= { dslRegenerationEntry 1 }
+
+dslRegenerationSide1 OBJECT-TYPE
+    SYNTAX  	IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "This is the dslChannelId of side 1 of the regeneration channel."
+    ::= { dslRegenerationEntry 2 }
+
+dslRegenerationSide2 OBJECT-TYPE
+    SYNTAX  	IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "This is the dslChannelId of side 2 of the regeneration channel."
+    ::= { dslRegenerationEntry 3 }
+
+
+--- indication group
+
+indicationLedNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of LED indicators the device has."
+    ::= { indication 1 }
+
+indicationLedTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF IndicationLedEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list LED indicators. Each consists of an LED index, textual description,
+         populated/not populated status, current color and blinking rate."
+    ::= { indication 2 }
+
+indicationLedEntry OBJECT-TYPE
+    SYNTAX  	IndicationLedEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "LED inidicators."
+    INDEX   { indicationLedId }
+    ::= { indicationLedTable 1 }
+
+IndicationLedEntry ::=
+        SEQUENCE {
+            indicationLedId
+                IntegerIndex,
+            indicationLedDescription
+                DisplayString,
+            indicationLedState
+                INTEGER,
+            indicationLedFlash
+                INTEGER
+        }
+
+indicationLedId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the LED indicator. It is constant between
+         different models of one device family."
+    ::= { indicationLedEntry 1 }
+
+
+indicationLedDescription OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Description of LED indicator. May include name on the front/back panel
+         of the device and/or place of the LED."
+    ::= { indicationLedEntry 2 }
+
+indicationLedState OBJECT-TYPE
+    SYNTAX  INTEGER {
+        notPopulated(0),
+        off(1),
+        red(2),
+        yellow(3),
+        green(4),
+        cyan(5),
+        blue(6),
+        magenta(7),
+        white(8)
+    }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The state of a LED. If the LED is not present, it's state is not-populated.
+         If it is not lit, it's state is OFF. If it is lit, then a color is reported."
+    ::= { indicationLedEntry 3 }
+
+indicationLedFlash OBJECT-TYPE
+    SYNTAX  INTEGER {
+        notPopulated(0),
+        blink1000(1),
+        blink0100(2),
+        blink1100(3),
+        blink0010(4),
+        blink1010(5),
+        blink0110(6),
+        blink1110(7),
+        blink0001(8),
+        blink1001(9),
+        blink0101(10),
+        blink1101(11),
+        blink0011(12),
+        blink1011(13),
+        blink0111(14),
+        constant(15)
+    }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "If the LED is switching on and off at a constant rate, shows how is it blinking.
+         Values from 1 to 14 represent a bit mask, where each bit shows, if the LED is lit during
+         corresponding quarter of second: bit 0 - first quarter, bit 1 - second etc.
+         If the LED is lit constantly, returns 'constant(15)'."
+    ::= { indicationLedEntry 4 }
+
+
+--- temperature group
+
+temperatureSensorNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of the temperature sensors the device has."
+    ::= { temperature 1 }
+
+temperatureSensorTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF TemperatureSensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A list temperature sensors. First sensor in the list should always
+         be the sensor that can be considered as 'Board temperature' sensor.
+         For each sensor there is an identifier, description and the temperature
+         value in 1/1000 of the Celcium degree."
+    ::= { temperature 2 }
+
+temperatureSensorEntry OBJECT-TYPE
+    SYNTAX  	TemperatureSensorEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Temperature sensors."
+    INDEX   { temperatureSensorId }
+    ::= { temperatureSensorTable 1 }
+
+TemperatureSensorEntry ::=
+        SEQUENCE {
+            temperatureSensorId
+                IntegerIndex,
+            temperatureSensorDescription
+                DisplayString,
+            temperatureSensorValue
+                IntegerMillis
+        }
+
+temperatureSensorId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the temperature sensor. It is constant between
+         different models of one device family."
+    ::= { temperatureSensorEntry 1 }
+
+temperatureSensorDescription OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Description of the temperature sensor. Should describe, where temperature is measured."
+    ::= { temperatureSensorEntry 2 }
+
+temperatureSensorValue OBJECT-TYPE
+	SYNTAX  	IntegerMillis
+	UNITS   	"C"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The temperature value in 1/1000 of the Celcium degree. For example, 25000 = 25C, -10500 = -10.5C."
+    ::= { temperatureSensorEntry 3 }
+
+
+
+--- time group
+
+timeSourceNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of device's UTC time sources."
+    ::= { time 1 }
+
+timeSourceTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF TimeSourceEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Table of UTC time sources present on device. Examples are UTC,
+		 satellite (GNSS) etc."
+    ::= { time 2 }
+
+timeSourceEntry OBJECT-TYPE
+    SYNTAX  	TimeSourceEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Time source."
+    INDEX   { timeSourceId }
+    ::= { timeSourceTable 1 }
+
+TimeSourceEntry ::=
+        SEQUENCE {
+            timeSourceId
+                IntegerIndex,
+            timeSourceName
+                DisplayString,
+            timeSourceStratum
+                Integer32,
+			timeSourceValue
+                DateAndTime
+        }
+
+timeSourceId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the time source. It is constant between
+         reconfigurations of a device."
+    ::= { timeSourceEntry 1 }
+
+
+timeSourceName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the time source. For example: NTP."
+    ::= { timeSourceEntry 2 }
+
+timeSourceStratum OBJECT-TYPE
+    SYNTAX  	Integer32 (1..16)
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Clock source stratum as it is defined in NTP."
+    ::= { timeSourceEntry 3 }
+
+timeSourceValue OBJECT-TYPE
+    SYNTAX  	DateAndTime
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "UTC time as reported by this source. If source is not ready
+		 (no connection to server or no signal), zero-length octet string
+		 is returned."
+    ::= { timeSourceEntry 4 }
+
+timeZone OBJECT-TYPE
+    SYNTAX  	Integer32 (-1440..1440)
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Displacement, in minutes, of local time relative to UTC.
+		 For example, 240 is UTC+04:00 (Moscow Time),
+		 -480 is UTC-08:00 (Pacific Standard Time)."
+    ::= { time 3 }
+
+
+-- local power sources group
+
+powerSourceNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of device's local power sources."
+    ::= { localPower 1 }
+
+powerSourceTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF PowerSourceEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Table of local power sources available to the device, listed in
+		 priority order."
+    ::= { localPower 2 }
+
+powerSourceEntry OBJECT-TYPE
+    SYNTAX  	PowerSourceEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Power source."
+    INDEX   { powerSourceId }
+    ::= { powerSourceTable 1 }
+
+PowerSourceEntry ::=
+        SEQUENCE {
+            powerSourceId
+                IntegerIndex,
+            powerSourceName
+                DisplayString,
+            powerSourceNominalVoltage
+                Integer32,
+			powerSourceStatus
+                INTEGER
+        }
+
+powerSourceId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of the power source."
+    ::= { powerSourceEntry 1 }
+
+
+powerSourceName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Name of the power source. For example: 48V-a."
+    ::= { powerSourceEntry 2 }
+
+powerSourceNominalVoltage OBJECT-TYPE
+    SYNTAX  	Integer32
+	UNITS   	"V"
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Nominal voltage of the power source."
+    ::= { powerSourceEntry 3 }
+
+powerSourceStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+		available(1),
+		unavailable(2)
+	}
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Availability status of this power source."
+    ::= { powerSourceEntry 4 }
+
+--- SFP DDM group
+
+SfpPowerMilliWatt ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d-4"
+    STATUS       current
+    DESCRIPTION  "SFP optical power from 0 to 6.5535 mW, in 1E-4 mW units."
+    SYNTAX       Integer32
+
+
+sfpDDMNumber OBJECT-TYPE
+    SYNTAX  	IntegerNumber
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Number of the sfp modules the device has."
+    ::= { sfpDDM 1 }
+
+sfpDDMTable OBJECT-TYPE
+	SYNTAX		SEQUENCE OF SfpDDMEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table of DDM values read from SFP"
+	::= { sfpDDM 2 }
+
+sfpDDMEntry OBJECT-TYPE
+	SYNTAX 		SfpDDMEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"SFP Digital diagnostics monitoring"
+	INDEX	{ sfpDDMId }
+	::= { sfpDDMTable 1}
+
+SfpDDMEntry ::=
+		SEQUENCE {
+			sfpDDMId
+				IntegerIndex,
+			sfpDDMTemperature
+				IntegerMillis,
+			sfpDDMSupplyVoltage
+				IntegerMillis,
+			sfpDDMTxBiasCurrent
+				IntegerWithDecimal,
+			sfpDDMTxOutputmW
+				SfpPowerMilliWatt,
+			sfpDDMTxOutputdBm
+				IntegerWithDecimal,
+			sfpDDMRxInputmW
+				SfpPowerMilliWatt,
+			sfpDDMRxInputdBm
+				IntegerWithDecimal,
+			sfpDDMMediaType
+				INTEGER,
+			sfpDDMPresence
+				INTEGER,
+ 			sfpDDMIfIndex
+ 				InterfaceIndex
+		}
+
+sfpDDMId OBJECT-TYPE
+	SYNTAX		 IntegerIndex (1..2147483647)
+	MAX-ACCESS	 not-accessible
+	STATUS		 current
+	DESCRIPTION
+		"An Index of DDM value"
+	::= { sfpDDMEntry 1 }
+
+sfpDDMTemperature OBJECT-TYPE
+    SYNTAX  	 IntegerMillis(-128000..128000)
+	UNITS		 "C"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Internally measured transceiver temperature in range from -128C to +128C. "
+	::= { sfpDDMEntry 2 }
+
+sfpDDMSupplyVoltage OBJECT-TYPE
+    SYNTAX  	 IntegerMillis(0..65535)
+	UNITS		 "V"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Internally measured transceiver supply voltage in range from 0 to +6.5535 Volts."
+	::= { sfpDDMEntry 3 }
+
+sfpDDMTxBiasCurrent OBJECT-TYPE
+    SYNTAX  	IntegerWithDecimal(0..1310)
+	UNITS		"mA"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Measured TX bias current in range from 0 to 131.0 mA"
+	::= { sfpDDMEntry 4 }
+
+sfpDDMTxOutputmW OBJECT-TYPE
+    SYNTAX  	 SfpPowerMilliWatt(0..65535)
+	UNITS		 "mW"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Measured TX output power in range from 0 to 6.5535 mW"
+	::= { sfpDDMEntry 5 }
+
+sfpDDMTxOutputdBm OBJECT-TYPE
+    SYNTAX  	 IntegerWithDecimal(-400..82)
+	UNITS		 "dBm"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Measured TX output power in range from -40 to +8.2 dBm"
+	::= { sfpDDMEntry 6 }
+
+sfpDDMRxInputmW OBJECT-TYPE
+    SYNTAX  	 SfpPowerMilliWatt(0..65535)
+	UNITS		 "mW"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Measured RX received optical power from 0 to 6.5535 mW."
+	::= { sfpDDMEntry 7 }
+
+sfpDDMRxInputdBm OBJECT-TYPE
+    SYNTAX  	 IntegerWithDecimal(-400..82)
+	UNITS		 "dBm"
+	MAX-ACCESS	 read-only
+	STATUS		 current
+	DESCRIPTION
+		"Measured RX received optical power from -40 to +8.2 dBm."
+	::= { sfpDDMEntry 8 }
+
+sfpDDMMediaType OBJECT-TYPE
+	SYNTAX INTEGER {
+		fiber		(1),
+		copper		(2),
+		other		(3),
+		unknown		(4)
+	}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+	"This object returns sfpMedia type.
+	when module is not mounted return value is unknown (3)"
+	::= { sfpDDMEntry 9 }
+
+sfpDDMPresence	OBJECT-TYPE
+	SYNTAX INTEGER {
+		present		(1),
+		absent		(2)
+	}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+	"This object indicates if specified SFP interface plugged or not
+	present (1) indicates that SFP interface is plugged.
+	absent	(2) indicates that SFP interface is unplugged."
+	::= { sfpDDMEntry 10 }
+
+sfpDDMIfIndex	OBJECT-TYPE
+    SYNTAX  	InterfaceIndex
+ 	MAX-ACCESS	read-only
+ 	STATUS		current
+ 	DESCRIPTION
+        "Index of interface in interfaces table, which state this
+        SFP interface represents."
+ 	::= { sfpDDMEntry 11 }
+
+--- IO group
+
+-- io.DIn group
+
+ioDInNumber OBJECT-TYPE
+	SYNTAX		IntegerNumber
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of digital inputs the device has"
+	::= { ioDIn 1}
+
+ioDInTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF IoDInEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Discrete input table represents all discrete (digital) inputs present and
+		 configured in the device, including voltage inputs, dry contact inputs and
+		 any other."
+    ::= { ioDIn 2 }
+
+ioDInEntry OBJECT-TYPE
+    SYNTAX  	IoDInEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Discrete (digital) input"
+    INDEX   { dInId }
+    ::= { ioDInTable 1 }
+
+IoDInEntry ::=
+	SEQUENCE {
+		dInId
+			IntegerIndex,
+		dInName
+			DisplayString,
+		dInState
+			INTEGER,
+		dInNormalState
+			INTEGER,
+		dInAlarmSeverity
+			INTEGER,
+		dInDescription
+			DisplayString,
+		dInTrapEnable
+			INTEGER
+	}
+
+dInId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of discrete input. It should remain constant through
+		any reconfiguration and reboot of the device."
+    ::= { ioDInEntry 1 }
+
+dInName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Discrete input name, typically - connector marking."
+    ::= { ioDInEntry 2 }
+
+dInState OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		open(1),
+        closed(2),
+		high(3),
+		low(4)
+	}
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Discrete input state. For voltage input values are high(3) or low(4).
+		 For npn or dry contact input it is open(1) or closed(2)."
+    ::= { ioDInEntry 3 }
+
+dInNormalState OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		open(1),
+        closed(2),
+		high(3),
+		low(4),
+		any(5)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Normal discrete input state. If it is any(5), then input is considered
+		 informative, else it is has normal (normally open or normally closed) and
+		 alarm state."
+    ::= { ioDInEntry 4 }
+
+dInAlarmSeverity OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		no(1),
+        nonurgent(2),
+		urgent(3)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "dInAlarmSeverity allows systemAlarm variable to be triggered by the state
+		of the input. Setting its to no(1) means that systemAlarm is not triggered;
+		setting its to nonurgent(2) or urgent(3) will trigger the systemAlarm if
+		dInState is not equal to dInNormalState."
+    ::= { ioDInEntry 5 }
+
+dInDescription OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "User configurable description: input purpose, meaning, net."
+    ::= { ioDInEntry 6 }
+
+dInTrapEnable OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		true(1),
+        false(2)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "If true(1), trap will be sent on each change of dInState.
+		 If false(2), no traps will be sent"
+    ::= { ioDInEntry 7 }
+
+-- io.Out group
+
+ioDOutNumber OBJECT-TYPE
+	SYNTAX		IntegerNumber
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Number of digital outputs the device has"
+	::= { ioDOut 1}
+
+
+ioDOutTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF IoDOutEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Discrete output table represents all discrete outputs present and
+		 configured in the device, including relay outputs, voltage outputs,
+		 and any other."
+    ::= { ioDOut 2 }
+
+ioDOutEntry OBJECT-TYPE
+    SYNTAX  	IoDOutEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Discrete output"
+    INDEX   { dOutId }
+    ::= { ioDOutTable 1 }
+
+IoDOutEntry ::=
+	SEQUENCE {
+		dOutId
+			IntegerIndex,
+		dOutName
+			DisplayString,
+		dOutState
+			INTEGER,
+		dOutNormalState
+			INTEGER,
+		dOutAlarmSeverity
+			INTEGER,
+		dOutDescription
+			DisplayString,
+		dOutTrapEnable
+			INTEGER
+	}
+
+dOutId OBJECT-TYPE
+    SYNTAX  	IntegerIndex (1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "A unique index of discrete output. It should remain constant through
+		any reconfiguration and reboot of the device."
+    ::= { ioDOutEntry 1 }
+
+dOutName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Discrete output name, typically - connector marking."
+    ::= { ioDOutEntry 2 }
+
+dOutState OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		active(1),
+        inactive(2),
+		high(3),
+		low(4)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Discrete output state. For voltage output values are high(3) or low(4).
+		 For open-drain, npn, relay coil output (and other) it is active(1) or inactive(2).
+			active(1)  : coil energized, open-drain or npn output conducting current.
+			inactive(2): coil de-energized, open-drain or npn output not conducting."
+    ::= { ioDOutEntry 3 }
+
+dOutNormalState OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		open(1),
+        closed(2),
+		high(3),
+		low(4),
+		any(5)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Normal discrete output state. If it is any(5), then input is considered
+		 informative, else it is has normal (normally open or normally closed) and
+		 alarm state."
+    ::= { ioDOutEntry 4 }
+
+dOutAlarmSeverity OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		no(1),
+        nonurgent(2),
+		urgent(3)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "dOutAlarmSeverity allows systemAlarm variable to trigger the state
+		of the output. Setting its to no(1) means that systemAlarm will not trigger;
+		setting its to nonurgent(2) or urgent(3) will trigger the output by changing
+		the dOutState to the opposite of dOutNormalState."
+    ::= { ioDOutEntry 5 }
+
+
+dOutDescription OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "User configurable description: output purpose, connected load, net."
+    ::= { ioDOutEntry 6 }
+
+dOutTrapEnable OBJECT-TYPE
+    SYNTAX  	INTEGER {
+		true(1),
+        false(2)
+	}
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "If true(1), trap will be sent on each change of dOutState.
+		 If false(2), no traps will be sent"
+    ::= { ioDOutEntry 7 }
+
+--- statReset entity
+
+statReset OBJECT-TYPE
+    SYNTAX  INTEGER {
+        reset(1),
+        readValue(2)
+    }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Writing reset(1) perform a device statistics reset.
+		 All device statistics should be re-initialized.
+         Read always returns readValue(2)."
+    ::= { stats 11 }
+
+--- maintenance.tftp group
+
+tftpServerIP OBJECT-TYPE
+    SYNTAX  	IpAddress
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "The IP address of the server from which the file is loaded.
+         This value is not stored between device reboots and should
+         be set before each TFTP operation."
+    ::= { tftp 1 }
+
+tftpSoftFileName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "The remote filename for firmware upgrade.
+         This value is not stored between device reboots and should
+         be set before each TFTP operation."
+    ::= { tftp 2 }
+
+tftpConfFileName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "The remote filename for the up and download the startup-config.
+         This value is not stored between device reboots and should
+         be set before each TFTP operation."
+    ::= { tftp 3 }
+
+tftpConnectionTimeout OBJECT-TYPE
+    SYNTAX  	Integer32
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Time the device will wait for reply from TFTP server,
+         during connection and while transferring a block of data.
+         While waiting, the device will retransmit it's request
+         each 8 seconds (typically). Thus it is reasonable to set
+         the timeout to a multiple of 8 seconds.
+         If during tftpConnectionTimeout device will not get a responce
+         from the server, current TFTP operation will be retried several
+         times (set by tftpNumRetries) before ending with and error."
+    ::= { tftp 4 }
+
+tftpNumRetries OBJECT-TYPE
+    SYNTAX  	Integer32
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Number of times the device will retry to connect and perform
+         requested operation (firmware download, configuration up/download)
+         before stopping with error status."
+    ::= { tftp 5 }
+
+
+tftpTransCmd OBJECT-TYPE
+    SYNTAX  INTEGER {
+        noOp              (1),
+        readValue         (2),
+        swDownload        (3),
+        configDownload    (4),
+        configUpload      (5),
+        allDownload       (6),
+		sdSwUpload		  (9),
+		sdSwDownload	  (10),
+		sdConfigUpload	  (11),
+		sdConfigDownload  (12),
+		sdLoaderUpload	  (13),
+		sdLoaderDownload  (14),
+		sdCreateSnapshot  (15)
+    }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "This object, when read, always returns readValue(2).
+
+         Setting this object will initiate following actions:
+         swDownload(3)
+             Download the firmware from TFTP server, filename on the server
+             is specified by tftpSoftFileName.
+         configDownload(4)
+             Download the startup-config from the TFTP server, filename on
+             the server is specified by tftpConfFileName.
+         configUpLoad(5)
+             Download the startup-config to the TFTP-Server, filename on the
+             server is specified by tftpConfFileName.
+         allDownload(6)
+             Download the startup-config and firmware from the TFTP server.
+         sdSwUpload(9)
+             Upload software from main flash to SD card
+         sdSwDownload(10)
+             Download software from SD card
+         sdConfigUpload(11)
+             Upload the startup-config from main flash to SD card
+         sdConfigDownload(12)
+             Download the startup-config from SD card
+         sdLoaderUpload(13)
+             Upload bootloader from main flash to SD card
+         sdLoaderDownload(14)
+             Download bootloader from SD card
+         sdCreateSnapshot(15)
+             Upload Software, Loader and startup-config to SD card.
+             Create filesystem if necesary
+         noOp(1)
+             Cancel all running SNMP-initiated TFTP operations.
+
+         TFTP server IP address is configured by tftpServerIP variable.
+
+         If device does not perform any other maintenance operations, the
+         command will be executed, otherwise it will be denied.
+
+         In case of command execution:
+             The value of tftpLastOp will change to the value of the command.
+             tftpTransferStatus will reflect transfer progress (connecting-
+             transferringData-endedOk/error).
+             Current timestamp will be saved into tftpLastOpTime variable.
+             During the execution a series of tftpStatusChange is sent.
+
+         In case of denial:
+             tftpLastOp and tftpTransferStatus will not be affected.
+             Current timestamp is also not saved into tftpLastOpTime variable.
+             By quering tftpLastOpTime before and after setting the tftpTransCmd
+             one can find out if the command was denied.
+             Current operation that caused the denial can be queried by tftpLastOp.
+             tftpStatusChange with tftpTransferStatus value of busyByOther is sent."
+    ::= { tftp 6 }
+
+tftpLastOp OBJECT-TYPE
+    SYNTAX  INTEGER {
+        noOp                (1),
+        tftpSwDownload      (3),
+        tftpConfigDownload  (4),
+        tftpConfigUpload    (5),
+        otherSwDownload     (6),
+        otherConfigDownLoad (7),
+        otherConfigUpload   (8),
+		sdSwUpload			(9),
+		sdSwDownload		(10),
+		sdConfigUpload		(11),
+		sdConfigDownload	(12),
+		sdLoaderUpload		(13),
+		sdLoaderDownload	(14),
+		sdCreateSnapshot	(15)
+    }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "This object returns the last executed maintenance operation,
+         regardless was it successful or not. It reports following actions:
+         noOp(1)
+             No maintenance operations were requested since last restart of the device.
+         tftpSwDownload(3)
+             Software download initiated from SNMP.
+         tftpConfigDownload(4)
+             Startup-config download initiated from SNMP.
+         tftpConfigUpload(5)
+             Startup-config upload initiated from SNMP.
+         otherSwDownload(6)
+             Software download, either TFTP or any other way, not initiated from SNMP.
+         otherConfigDownload(7)
+             Startup-config download, either TFTP or any other way, not initiated from SNMP.
+         otherConfigUpload(8)
+             Startup-config upload, either TFTP or any other way, not initiated from SNMP.
+         sdSwUpload(9)
+             Upload software from main flash to SD card
+         sdSwDownload(10)
+             Download software from SD card
+         sdConfigUpload(11)
+             Upload the startup-config from main flash to SD card
+         sdConfigDownload(12)
+             Download the startup-config from SD card
+         sdLoaderUpload(13)
+             Upload bootloader from main flash to SD card
+         sdLoaderDownload(14)
+             Download bootloader from SD card
+         sdCreateSnapshot(15)
+             Upload Software, Loader and startup-config to SD card.
+             Create filesystem if necesary"
+    ::= { tftp 7 }
+
+tftpTransferStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+        noOp(1),
+        connecting(2),
+        transferringData(3),
+        endedOk(4),
+        error(5),
+        busyByOther(6)
+     }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Status of SNMP-initiated TFTP transfer. Results:
+         noOp(1)
+             Default, no TFTP operation was in progress.
+         connecting(2)
+             Device is connecting to the server specified by tftpServerIP.
+         transferringData(3)
+             TFTP data transfer is in progress.
+         endedOk(4)
+             TFTP transfer ended with success.
+         error(5)
+             TFTP data transfer ended with an Error, (e.g. server timeout or
+             remote filename not found). Check TFTP server log file for details.
+         busyByOther(6)
+             This value can never be read directly from the MIB tree. It is
+             used only in tftpStatusChange to notify that device is bysy with
+             other maintenance operation and the request for another operation
+             was denied.
+
+         If tftpLastOp is tftpSwDownload(3), tftpConfigDownload(4) or tftpConfigUpload(5),
+         this variable shows the status of exactly that operation. Transfers initiated by
+         other means (for example CLI command TFTP operation or normal software download),
+         do not change this variable. This way one can get full status of SNMP-initiated
+         up/download without interference."
+    ::= { tftp 8 }
+
+tftpLastOpTime OBJECT-TYPE
+    SYNTAX  	TimeTicks
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "The time in timeticks when last maintenance operation (TFTP software download or
+         configuration up/download) was executed from SNMP by setting tftpTransCmd.
+         If operation execution was denied, this variable is not affected.
+         By comparing tftpLastOpTime before and after tftpTransCmd setting one can
+         find out if the command was successful or denied."
+    ::= { tftp 9 }
+
+tftpSoftConfirm OBJECT-TYPE
+    SYNTAX  INTEGER {
+        softConfirm(1),
+        readValue(2)
+    }
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "Writing softConfirm(1) to tftpSoftConfirm will confirm previously uploaded firmware.
+         Read always returns readValue(2)."
+    ::= { tftp 10 }
+
+tftpProtocolVersion OBJECT-TYPE
+	SYNTAX	INTEGER {
+			tftp(1),
+			ftp(2),
+			sftp(3)
+	}
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Allows protocol selection between tftp(1), ftp(2) and sftp(3) for up/download.
+		 This value is not stored between device reboots and should
+         be set before each operation."
+	::= { tftp 11 }
+
+tftpServerUserName OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "The Username for Server access.
+         This value is not stored between device reboots and should
+         be set before each operation."
+    ::= { tftp 12 }
+
+tftpServerUserPass OBJECT-TYPE
+    SYNTAX  	DisplayString
+    MAX-ACCESS  read-write
+    STATUS  	current
+    DESCRIPTION
+        "The User Password for Server access.
+         This value is not stored between device reboots and should
+         be set before each operation."
+    ::= { tftp 13 }
+
+tftpServerPortNumber OBJECT-TYPE
+	SYNTAX		Integer32 (0..65535)
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"The port number for accessing FTP or SFTP server.
+		 This value is not stored between device reboots and should
+         be set before each operation."
+    ::= { tftp 14 }
+
+macFilterConfigTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF MacFilterConfigEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Table representing MAC-based filter configuration of network interfaces."
+    ::= { macFilter 1 }
+
+macFilterConfigEntry OBJECT-TYPE
+    SYNTAX  	MacFilterConfigEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "MAC-based filter configuration of one interface"
+    INDEX   { macFilterConfigIfIndex }
+    ::= { macFilterConfigTable 1 }
+
+MacFilterConfigEntry ::=
+        SEQUENCE {
+            macFilterConfigIfIndex
+                IntegerIndex,
+            macFilterConfigStatus          --- On/Off
+                INTEGER,
+            macFilterConfigAction          --- Filter/Indicate/Block
+                INTEGER
+        }
+
+macFilterConfigIfIndex OBJECT-TYPE
+    SYNTAX  	IntegerIndex(1..2147483647)
+    MAX-ACCESS 	not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Index in interfaces table of the configured interface."
+    ::= { macFilterConfigEntry 1 }
+
+macFilterConfigStatus OBJECT-TYPE
+    SYNTAX  INTEGER {
+                on(1),
+                off(2)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Indicates, whether filtering is on(1) or off(2)."
+    ::= { macFilterConfigEntry 2 }
+
+macFilterConfigAction OBJECT-TYPE
+    SYNTAX  INTEGER {
+                filter(1),
+                indicate(2),
+                block(3)
+            }
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Security action when non-permitted frame is received:
+			filter   - just drop the frame;
+			indicate - drop the frame and send trap;
+			block    - drop the frame, send trap and permanently block the interface."
+    ::= { macFilterConfigEntry 3 }
+
+
+macFilterWhitelistTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF MacFilterWhitelistEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "White list of allowed MAC addresses."
+    ::= { macFilter 2 }
+
+macFilterWhitelistEntry OBJECT-TYPE
+    SYNTAX  	MacFilterWhitelistEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "White list"
+    INDEX   { macFilterWhitelistIfIndex, macFilterWhitelistIndex }
+    ::= { macFilterWhitelistTable 1 }
+
+MacFilterWhitelistEntry ::=
+        SEQUENCE {
+            macFilterWhitelistIndex
+                IntegerIndex,
+            macFilterWhitelistIfIndex
+                IntegerIndex,
+            macFilterWhitelistMAC
+                MacAddress
+        }
+
+macFilterWhitelistIndex OBJECT-TYPE
+    SYNTAX  	IntegerIndex(1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Index in whitelist table."
+    ::= { macFilterWhitelistEntry 1 }
+
+macFilterWhitelistIfIndex OBJECT-TYPE
+    SYNTAX  	IntegerIndex(1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "IfIndex of the related interface."
+    ::= { macFilterWhitelistEntry 2 }
+
+macFilterWhitelistMAC OBJECT-TYPE
+    SYNTAX  	MacAddress
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Permitted MAC address"
+    ::= { macFilterWhitelistEntry 3 }
+
+
+macFilterViolationsTable OBJECT-TYPE
+    SYNTAX  	SEQUENCE OF MacFilterViolationsEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "List of several last MAC address security violations."
+    ::= { macFilter 3 }
+
+macFilterViolationsEntry OBJECT-TYPE
+    SYNTAX  	MacFilterViolationsEntry
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Violations list"
+    INDEX   { macFilterViolationsIndex }
+    ::= { macFilterViolationsTable 1 }
+
+MacFilterViolationsEntry ::=
+        SEQUENCE {
+            macFilterViolationsIndex
+                IntegerIndex,
+            macFilterViolationsIfIndex
+                IntegerIndex,
+            macFilterViolationsMAC
+                MacAddress,
+            macFilterViolationsTimestamp
+                TimeTicks
+        }
+
+macFilterViolationsIndex OBJECT-TYPE
+    SYNTAX  	IntegerIndex(1..2147483647)
+    MAX-ACCESS  not-accessible
+    STATUS  	current
+    DESCRIPTION
+        "Index in violations table."
+    ::= { macFilterViolationsEntry 1 }
+
+macFilterViolationsIfIndex OBJECT-TYPE
+    SYNTAX  	IntegerIndex
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "IfIndex of the related interface."
+    ::= { macFilterViolationsEntry 2 }
+
+macFilterViolationsMAC OBJECT-TYPE
+    SYNTAX  	MacAddress
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Violating MAC address"
+    ::= { macFilterViolationsEntry 3 }
+
+macFilterViolationsTimestamp OBJECT-TYPE
+    SYNTAX  	TimeTicks
+    MAX-ACCESS  read-only
+    STATUS  	current
+    DESCRIPTION
+        "Timestamp of last time an action was taken against security
+		 violation performed by this MAC address on this interface.
+		 Measured in 1/100s of second from the last start of the unit -
+		 same as sysUpTime."
+    ::= { macFilterViolationsEntry 4 }
+
+
+
+--- Notifications (Traps)
+
+
+tlmStatusChange NOTIFICATION-TYPE
+    OBJECTS { tlmStatus, tlmLastStatusChange }
+	STATUS current
+    DESCRIPTION
+        "A tlmStatusChange trap is sent when the
+         value of an instance tlmStatus changes. It
+         can be utilized by an NMS to trigger polls."
+    ::= { nateksTraps 1 }
+
+
+alarmValueChange NOTIFICATION-TYPE
+    OBJECTS { alarmId, alarmIfIndex, alarmName, alarmValue, alarmDisplayType, alarmCutoff, ifDescr }
+	STATUS current
+
+    --&FILTNAME "MAJOR ALARM ON"
+    --&ACTIONS {log, critical}
+    --&CLEARS  {"ALARM OFF", "ALARM CUTOFF"}
+    --&MATCH   {alarmIfIndex, alarmName, alarmValue "on", alarmCutoff "off", alarmDisplayType "major"}
+    --&MESG    "$7 alarm $3 ON"
+
+    --&FILTNAME "MINOR ALARM ON"
+    --&ACTIONS {log, major}
+    --&CLEARS  {"ALARM OFF", "ALARM CUTOFF"}
+    --&MATCH   {alarmIfIndex, alarmName, alarmValue "on", alarmCutoff "off", alarmDisplayType "minor"}
+    --&MESG    "$7 alarm $3 ON"
+
+    --&FILTNAME "MAINTENANCE ALARM ON"
+    --&ACTIONS {log, minor}
+    --&CLEARS  {"ALARM OFF", "ALARM CUTOFF"}
+    --&MATCH   {alarmIfIndex, alarmName, alarmValue "on", alarmCutoff "off", alarmDisplayType "maintenance"}
+    --&MESG    "$7 alarm $3 ON"
+
+    --&FILTNAME "ALARM OFF"
+    --&ACTIONS {log, normal}
+    --&CLEARS  {"MAJOR ALARM ON", "MINOR ALARM ON", "MAINTENANCE ALARM ON", "ALARM CUTOFF"}
+    --&MATCH   {alarmIfIndex, alarmName, alarmValue "off", alarmCutoff "off"}
+    --&MESG    "$7 alarm $3 OFF"
+
+    --&FILTNAME "ALARM CUTOFF"
+    --&ACTIONS {log, normal}
+    --&CLEARS  {"MAJOR ALARM ON", "MINOR ALARM ON", "MAINTENANCE ALARM ON", "ALARM OFF"}
+    --&MATCH   {alarmIfIndex, alarmName, alarmCutoff "on"}
+    --&MESG    "$7 alarm $3 OFF"
+
+    DESCRIPTION
+        "A alarmValueChange trap is sent when alarm value changes.
+         It can be utilized by an NMS to trigger polls."
+    ::= { nateksTraps 2 }
+
+
+tftpStatusChange NOTIFICATION-TYPE
+    OBJECTS { tftpLastOp, tftpTransferStatus, tftpLastOpTime }
+	STATUS current
+
+    --&FILTNAME "TFTP denied"
+    --&ACTIONS {log, minor}
+    --&MATCH   {tftpTransferStatus "busyByOther"}
+    --&MESG    "TFTP transfer was denied because operation $'1 is still in progress"
+
+    --&FILTNAME "TFTP connecting"
+    --&ACTIONS {log, warning}
+    --&MATCH   {tftpLastOp, tftpLastOpTime, tftpTransferStatus "connecting"}
+    --&MESG    "TFTP operation $'1 status: connecting..."
+
+    --&FILTNAME "TFTP transfer"
+    --&ACTIONS {log, warning}
+    --&CLEARS  {"TFTP connecting"}
+    --&MATCH   {tftpLastOp, tftpLastOpTime, tftpTransferStatus "transferringData"}
+    --&MESG    "TFTP operation $'1 status: transferring..."
+
+    --&FILTNAME "TFTP ended OK"
+    --&ACTIONS {log, normal}
+    --&CLEARS  {"TFTP connecting", "TFTP transfer"}
+    --&MATCH   {tftpLastOp, tftpLastOpTime, tftpTransferStatus "endedOk"}
+    --&MESG    "TFTP operation $'1 status: OK"
+
+    --&FILTNAME "TFTP error"
+    --&ACTIONS {log, minor}
+    --&CLEARS  {"TFTP connecting", "TFTP transfer"}
+    --&MATCH   {tftpLastOp, tftpLastOpTime, tftpTransferStatus "error"}
+    --&MESG    "TFTP operation $'1 status: error"
+
+    DESCRIPTION
+        "This trap is sent during the process of SNMP-initiated TFTP maintenance
+         command (TFTP software download or configuration up/download) to report
+         current execution status. In this case tftpLastOp shows the current
+         operation, tftpLastOpTime indicates starting time of current operation,
+         tftpTransferStatus indicates status of the transfer.
+
+         If the command is denied, this trap is also sent with tftpTransferStatus
+         value of busyByOther. In this case tftpLastOp indicates the operation that
+         conflicted with the command."
+    ::= { nateksTraps 3 }
+
+
+macFilterViolation NOTIFICATION-TYPE
+    OBJECTS { macFilterViolationsIfIndex, ifDescr, macFilterViolationsMAC, macFilterConfigAction }
+	STATUS current
+
+    --&FILTNAME "MAC violation: filtered"
+    --&ACTIONS {log, warning}
+    --&MATCH   { macFilterConfigAction "indicate"}
+    --&MESG    "$2 access violation, MAC $3"
+
+    --&FILTNAME "MAC violation: blocked"
+    --&ACTIONS {log, major}
+    --&MATCH   { macFilterConfigAction "block"}
+    --&MESG    "$2 blocked due to access violation by MAC $3"
+
+    DESCRIPTION
+        "This trap is sent to indicate that MAC filter access violation
+		 has happened and specific security action will be performed.
+		 Variables:
+			macFilterViolationsIfIndex, ifDescr - index and name of interface;
+			macFilterViolationsMAC              - violating MAC;
+			macFilterConfigAction               - action to be performed.
+		 "
+    ::= { nateksTraps 4 }
+
+
+dInStateChange NOTIFICATION-TYPE
+    OBJECTS { dInName, dInState, dInNormalState, dInDescription }
+	STATUS current
+
+		--&FILTNAME "Normally-open Closed"
+		--&ACTIONS	{log, warning}
+		--&MATCH		{ dInNormalState "open", dInState "closed" }
+		--&MESG			"Input: $1 with description: $4 Closed"
+
+		--&FILTNAME "Normally-closed Open"
+		--&ACTIONS	{log, warning}
+		--&MATCH		{ dInNormalState "closed", dInState "open" }
+		--&MESG			"Input: $1 with description: $4 Opened"
+
+		--&FILTNAME "Normally-open Open"
+		--&ACTIONS	{log, normal}
+		--&CLEARS		{"Normally-open Closed"}
+		--&MATCH		{ dInNormalState "open", dInState "open" }
+		--&MESG			"Input: $1 with description: $4 Opened"
+
+		--&FILTNAME "Normally-closed Closed"
+		--&CLEARS		{"Input trigger: Normally-closed Open"}
+		--&ACTIONS	{log, normal}
+		--&MATCH		{ dInNormalState "closed", dInState "closed" }
+		--&MESG			"Input: $1 with description: $4 Closed"
+
+
+    DESCRIPTION
+        "This trap is sent to indicate that input state has changed."
+    ::= { nateksTraps 5 }
+
+dOutStateChange NOTIFICATION-TYPE
+    OBJECTS { dOutName, dOutState, dOutNormalState, dOutDescription }
+	STATUS current
+
+		--&FILTNAME "Output Active"
+		--&ACTIONS 	{log, warning}
+		--&MATCH		{ dOutName, dOutState "active", dOutDescription }
+		--&MESG			"Output $1 with description: $4 Active"
+
+		--&FILTNAME "Output Inactive"
+		--&ACTIONS 	{log, warning}
+		--&MATCH		{ dOutName, dOutState "inactive", dOutDescription }
+		--&MESG			"Output $1 with description: $4 Inactive"
+
+    DESCRIPTION
+        "This trap is sent to indicate that output state has changed."
+    ::= { nateksTraps 6 }
+
+
+nateksMinimalGroup OBJECT-GROUP
+		OBJECTS {
+				systemAlarm,
+                systemReset
+			}
+		STATUS  current
+		DESCRIPTION
+               "A minimal collection of objects requred from any supporting device."
+    ::= { nateksMIBGroup 1 }
+
+nateksCommonInfoGroup OBJECT-GROUP
+		OBJECTS {
+				model,
+				softwareVersion
+			}
+		STATUS  current
+		DESCRIPTION
+               "Basic unit information regarding model and software of a unit."
+	::= { nateksMIBGroup 2 }
+
+nateksCommonExtGroup OBJECT-GROUP
+		OBJECTS {
+				model,
+				id,
+				hardwareVersion,
+				softwareVersion,
+				softwareDate,
+				moduleType,
+				subrackAddress,
+				errorCode,
+				serialNumber
+			}
+		STATUS  current
+		DESCRIPTION
+               "Extended unit information regarding hardware and software of a unit."
+    ::= { nateksMIBGroup 3 }
+
+nateksConfigBasicGroup OBJECT-GROUP
+       OBJECTS {
+				configDefault,
+				configNumberValues,
+				valueName,
+				valueRunning
+			}
+       STATUS  current
+       DESCRIPTION
+               "Basic configuration management interface."
+      ::= { nateksMIBGroup 4 }
+
+nateksConfigConfirmedGroup OBJECT-GROUP
+       OBJECTS {
+				configDefault,
+				configNumberValues,
+				valueName,
+				valueType,
+				valueStatus,
+				valueStartup,
+				valueRunning,
+				valueNew,
+				configApplyAll,
+				configConfirm
+			}
+       STATUS  current
+       DESCRIPTION
+               "Minimal configuration management interface with support
+				for Apply-Confirm configuration behaviour."
+      ::= { nateksMIBGroup 5 }
+
+nateksConfigBackupGroup OBJECT-GROUP
+       OBJECTS {
+				valueBackup,
+				configBackup,
+				configRestore
+			}
+       STATUS  current
+       DESCRIPTION
+               "Local configuration backup management interface."
+      ::= { nateksMIBGroup 6 }
+
+
+nateksConfigGroupsGroup OBJECT-GROUP
+       OBJECTS {
+				valueGroup,
+				valueGroupName,
+				configNumberGroups,
+				groupName,
+				groupType,
+				groupStatus
+				}
+       STATUS  current
+       DESCRIPTION
+               "Management interface for variable groups."
+      ::= { nateksMIBGroup 7 }
+
+
+nateksConfigRWGroup OBJECT-GROUP
+       OBJECTS { configRW }
+       STATUS  current
+       DESCRIPTION
+               "Management interface for full configuration profile read/write."
+      ::= { nateksMIBGroup 8 }
+
+
+nateksG826Group OBJECT-GROUP
+       OBJECTS {
+				g826Number,
+				g826Reset,
+				g826IfIndex,
+				g826Name,
+				g826EB,
+				g826ES,
+				g826SES,
+				g826BBE,
+				g826AvailableTime,
+				g826UnavailableTime,
+				g826StatReset
+			}
+       STATUS  deprecated
+       DESCRIPTION
+               "Use of g826Table is deprecated in favor of ifG826Table."
+      ::= { nateksMIBGroup 9 }
+
+nateksIfG826Group OBJECT-GROUP
+       OBJECTS {
+				g826Number,
+				g826Reset,
+				ifG826Name,
+				ifG826EB,
+				ifG826ES,
+				ifG826SES,
+				ifG826BBE,
+				ifG826AvailableTime,
+				ifG826UnavailableTime,
+				ifG826StatReset
+			}
+       STATUS  current
+       DESCRIPTION
+               "G.826 statistics information and management."
+      ::= { nateksMIBGroup 10 }
+
+
+nateksAlarmGroup OBJECT-GROUP
+       OBJECTS {
+				alarmNumber,
+				alarmTrapEnable,
+				alarmId,
+				alarmIfIndex,
+				alarmName,
+				alarmValue,
+				alarmCutoff,
+				alarmType,
+				alarmDisplayType
+			}
+       STATUS  current
+       DESCRIPTION
+               "Old style alarm table. Using ifAlarmTable is more convenient than alarmTable.
+			    Members of this group are included into alarmValueChange notification."
+      ::= { nateksMIBGroup 11 }
+
+nateksIfAlarmGroup OBJECT-GROUP
+       OBJECTS {
+				alarmNumber,
+				alarmTrapEnable,
+				ifAlarmId,
+				ifAlarmIfIndex,
+				ifAlarmName,
+				ifAlarmValue,
+				ifAlarmCutoff,
+				ifAlarmType,
+				ifAlarmDisplayType
+			}
+       STATUS  current
+       DESCRIPTION
+               "Alarm information and management."
+      ::= { nateksMIBGroup 12 }
+
+nateksTlmGroup OBJECT-GROUP
+       OBJECTS {
+			tlmNumber,
+			tlmClear,
+            tlmName,
+            tlmStatus,
+            tlmLastStatusChange,
+            tlmSetup,
+            tlmTrapEnable
+			}
+       STATUS  current
+       DESCRIPTION
+               "TLM information and management."
+      ::= { nateksMIBGroup 13 }
+
+nateksDSLGroup OBJECT-GROUP
+       OBJECTS {
+			dslChannelNumber,
+			dslUnitType,
+            dslChannelIfIndex,
+            dslChannelMode,
+            dslChannelStandard,
+            dslChannelClockReference,
+            dslChannelLineCodeConfig,
+            dslChannelPSDConfig,
+            dslChannelBaserateConfig,
+            dslChannelLineCode,
+            dslChannelPSD,
+            dslChannelBaserate,
+            dslChannelLineRate,
+            dslChannelPayloadRate,
+            dslChannelStatus,
+            dslChannelNMR,
+            dslChannelPowerBackoff,
+            dslChannelFarEndPowerBackoff,
+            dslChannelLoopAttenuation,
+            dslChannelEOCNumber
+			}
+       STATUS  current
+       DESCRIPTION
+               "DSL channel information."
+      ::= { nateksMIBGroup 14 }
+
+nateksDSLMultipairGroup OBJECT-GROUP
+       OBJECTS {
+				dslGroupNumber,
+	            dslGroupType,
+				dslGroupMainChannel,
+				dslGroupChannel1,
+				dslGroupChannel2,
+				dslGroupChannel3,
+				dslGroupChannel4
+			}
+       STATUS  current
+       DESCRIPTION
+               "DSL multi-pair bonding information."
+      ::= { nateksMIBGroup 15 }
+
+nateksDSLLTUGroup OBJECT-GROUP
+       OBJECTS {
+            dslChannelRegeneratorNumber,
+            dslChannelRemotePower,
+            dslChannelRemotePowerVoltage
+			}
+       STATUS  current
+       DESCRIPTION
+               "Information aout remote power and regenerators present only on LTU/NTU DSL units."
+      ::= { nateksMIBGroup 16 }
+
+nateksDSLRegenerationGroup OBJECT-GROUP
+       OBJECTS {
+				dslRegenerationChannels,
+				dslRegenerationSide1,
+				dslRegenerationSide2
+			}
+       STATUS  current
+       DESCRIPTION
+               "DSL regeneration channels information."
+      ::= { nateksMIBGroup 17 }
+
+nateksIndicationGroup OBJECT-GROUP
+       OBJECTS {
+				indicationLedNumber,
+				indicationLedDescription,
+				indicationLedState,
+				indicationLedFlash
+			}
+       STATUS  current
+       DESCRIPTION
+               "LED indication status."
+      ::= { nateksMIBGroup 18 }
+
+
+nateksTemperatureGroup OBJECT-GROUP
+       OBJECTS {
+				temperatureSensorNumber,
+				temperatureSensorDescription,
+				temperatureSensorValue
+			}
+       STATUS  current
+       DESCRIPTION
+               "Temperature sensors data."
+      ::= { nateksMIBGroup 19 }
+
+nateksTimeGroup OBJECT-GROUP
+       OBJECTS {
+				timeSourceNumber,
+				timeSourceName,
+				timeSourceStratum,
+				timeSourceValue,
+				timeZone
+			}
+       STATUS  current
+       DESCRIPTION
+               "Data from time reference sources."
+      ::= { nateksMIBGroup 20 }
+
+
+nateksLocalPowerGroup OBJECT-GROUP
+       OBJECTS {
+				powerSourceNumber,
+				powerSourceName,
+				powerSourceNominalVoltage,
+				powerSourceStatus
+			}
+       STATUS  current
+       DESCRIPTION
+               "Local power sources status."
+      ::= { nateksMIBGroup 21 }
+
+
+nateksTFTPManagementGroup OBJECT-GROUP
+       OBJECTS {
+				tftpServerIP,
+				tftpSoftFileName,
+				tftpConfFileName,
+				tftpConnectionTimeout,
+				tftpNumRetries,
+				tftpTransCmd,
+				tftpLastOp,
+				tftpTransferStatus,
+				tftpLastOpTime,
+				tftpSoftConfirm,
+				tftpProtocolVersion,
+				tftpServerUserName,
+				tftpServerUserPass,
+				tftpServerPortNumber
+			}
+       STATUS  current
+       DESCRIPTION
+               "Software upload and configuration upload/download via TFTP protocol."
+      ::= { nateksMIBGroup 22 }
+
+
+nateksMacFilterGroup OBJECT-GROUP
+       OBJECTS {
+				macFilterConfigStatus,
+				macFilterConfigAction,
+				macFilterWhitelistMAC,
+				macFilterViolationsIfIndex,
+				macFilterViolationsMAC,
+				macFilterViolationsTimestamp
+			}
+       STATUS  current
+       DESCRIPTION
+               "MAC-based Ethernet port access control group."
+      ::= { nateksMIBGroup 23 }
+
+nateksSfpDDMGroup OBJECT-GROUP
+	   OBJECTS {
+				sfpDDMNumber,
+				sfpDDMTemperature,
+				sfpDDMSupplyVoltage,
+				sfpDDMTxBiasCurrent,
+				sfpDDMTxOutputmW,
+				sfpDDMTxOutputdBm,
+				sfpDDMRxInputmW,
+				sfpDDMRxInputdBm,
+				sfpDDMMediaType,
+				sfpDDMPresence,
+				sfpDDMIfIndex
+			}
+	   STATUS  current
+	   DESCRIPTION
+				"SFP DDM parameters group"
+	  ::= { nateksMIBGroup 24 }
+
+nateksDigitalIoGroup OBJECT-GROUP
+	   OBJECTS {
+				ioDInNumber,
+				dInName,
+				dInState,
+				dInNormalState,
+				dInAlarmSeverity,
+				dInDescription,
+				dInTrapEnable,
+				ioDOutNumber,
+				dOutName,
+				dOutState,
+				dOutNormalState,
+				dOutAlarmSeverity,
+				dOutDescription,
+				dOutTrapEnable
+			}
+	   STATUS  current
+	   DESCRIPTION
+				"Digital Input/Output managementgroup"
+	  ::= { nateksMIBGroup 25 }
+
+nateksStatResetGroup OBJECT-GROUP
+		OBJECTS {
+			statReset
+		}
+		STATUS current
+		DESCRIPTION
+				"Statistics reset group"
+	  ::= { nateksMIBGroup 26 }
+
+nateksTlmNotificationGroup NOTIFICATION-GROUP
+       NOTIFICATIONS { tlmStatusChange }
+       STATUS        current
+       DESCRIPTION
+               "TLM status change notification is required if an agent implements TLM table."
+      ::= { nateksMIBGroup 1001 }
+
+nateksAlarmNotificationGroup NOTIFICATION-GROUP
+       NOTIFICATIONS { alarmValueChange }
+       STATUS        current
+       DESCRIPTION
+               "Alarm value change notification is required if an agent implements Alarm table."
+      ::= { nateksMIBGroup 1002 }
+
+nateksTFTPNotificationGroup NOTIFICATION-GROUP
+       NOTIFICATIONS { tftpStatusChange }
+       STATUS        current
+       DESCRIPTION
+               "TFTP software or configuration management requires implementation of this
+			    notification to communicate the status of operation to the management station."
+      ::= { nateksMIBGroup 1003 }
+
+nateksMacFilterNotificationGroup NOTIFICATION-GROUP
+       NOTIFICATIONS { macFilterViolation }
+       STATUS        current
+       DESCRIPTION
+               "Notification about security violations are required if an agent implements MAC filtering."
+      ::= { nateksMIBGroup 1004 }
+
+nateksDigitalIoNotificationGroup NOTIFICATION-GROUP
+       NOTIFICATIONS { dInStateChange, dOutStateChange }
+       STATUS        current
+       DESCRIPTION
+               "Notification about input/output state changes are required if an agent implements digital IO."
+      ::= { nateksMIBGroup 1005 }
+
+
+nateksMinCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Minimal variable set to claim compiance with NATEKS-MIB."
+    MODULE
+		MANDATORY-GROUPS { nateksMinimalGroup,
+						   nateksCommonInfoGroup
+						 }
+		OBJECT      systemReset
+		MIN-ACCESS  read-only
+		DESCRIPTION
+			"System reset action may be unavailable due to security restrictions."
+  ::= { nateksMIBCompliance 1 }
+
+nateksBasicCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Basic variable set to claim compiance with NATEKS-MIB."
+    MODULE
+		MANDATORY-GROUPS { nateksMinimalGroup,
+						   nateksCommonExtGroup
+						 }
+		OBJECT      systemReset
+		MIN-ACCESS  read-only
+		DESCRIPTION
+			"System reset action may be unavailable due to security restrictions."
+		OBJECT		serialNumber
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"serialNumber variable is required by all new agent implementations
+			 but not necessary for legacy agents and for those, where this information
+			 is not available to the agent."
+  ::= { nateksMIBCompliance 2 }
+
+nateksConfigBasicCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Basic capabilities of configuration management."
+    MODULE
+		MANDATORY-GROUPS { nateksConfigBasicGroup }
+  ::= { nateksMIBCompliance 3 }
+
+nateksConfigConfirmedCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Capabilities of configuration management with Apply and Confirm behaviour."
+    MODULE
+		MANDATORY-GROUPS { nateksConfigConfirmedGroup }
+  ::= { nateksMIBCompliance 4 }
+
+nateksConfigBackupCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Capabilities of local configuration backup management."
+    MODULE
+		MANDATORY-GROUPS { nateksConfigBackupGroup }
+  ::= { nateksMIBCompliance 5 }
+
+nateksConfigFullCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Basic capabilities of configuration management."
+    MODULE
+		MANDATORY-GROUPS { nateksConfigConfirmedGroup,
+						   nateksConfigBackupGroup,
+						   nateksConfigGroupsGroup
+						 }
+		GROUP		nateksConfigRWGroup
+		DESCRIPTION
+			"The configRW variable may be not accessible if implementation of
+			 configuration management subsystem of a device can not serialize
+			 configuration to a string of bytes.
+			 The configRW variable may be read-only if writing device configuration
+			 this way can not be supported.
+			 The configRW variable may be not accessible if device configuration
+			 size exceeds internal SNMP PDU size limitations of device's SNMP agent."
+ ::= { nateksMIBCompliance 6 }
+
+nateksG826Compliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"G.826 statistics representation and management"
+    MODULE
+		MANDATORY-GROUPS { nateksIfG826Group }
+
+		OBJECT ifG826EB
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"For interfaces, where errors are not reported per block of data received
+			 (like transparent E1), errored blocks counters should be unavailable."
+
+		OBJECT ifG826ES
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"For interfaces, where errors are not reported per block of data received
+			 (like transparent E1),errored seconds counters should be unavailable."
+
+		OBJECT ifG826SES
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"For interfaces, where errors are not reported per block of data received
+			 (like transparent E1), severely errored seconds counters should be unavailable."
+
+		OBJECT ifG826BBE
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"For interfaces, where errors are not reported per block of data received
+			 (like transparent E1), background block errors counters should be unavailable."
+ ::= { nateksMIBCompliance 7 }
+
+
+nateksIfAlarmCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Alarm representation and management"
+    MODULE
+		MANDATORY-GROUPS { nateksIfAlarmGroup, nateksAlarmNotificationGroup }
+		GROUP nateksAlarmGroup
+		DESCRIPTION
+			"Implementation for alarmTable is not absolutely required, but members of
+			 it should be included into alarmValueChange notification."
+		OBJECT alarmId
+		MIN-ACCESS  accessible-for-notify
+		DESCRIPTION
+			"In SMIv1 version of MIB alarmId was accessible as read-only. Implementations
+			 can now not implement this variable in table and use it only in notifications."
+		OBJECT ifAlarmId
+		MIN-ACCESS  accessible-for-notify
+		DESCRIPTION
+			"In SMIv1 version of MIB alarmId was accessible as read-only. Implementations
+			 can now not implement this variable in table and use it only in notifications."
+		OBJECT ifAlarmIfIndex
+		MIN-ACCESS  not-accessible
+		DESCRIPTION
+			"In SMIv1 version of MIB alarmId was accessible as read-only. Implementations
+			 can now not implement this variable"
+		OBJECT alarmTrapEnable
+		MIN-ACCESS  read-only
+		DESCRIPTION
+			"If device can not send alarm traps, alarmTrapEnable may be read-only and
+			 indicate 'false'."
+ ::= { nateksMIBCompliance 8 }
+
+nateksTLMCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"TLM (dry contact inputs) representation and management"
+    MODULE
+		MANDATORY-GROUPS { nateksTlmGroup, nateksTlmNotificationGroup }
+ ::= { nateksMIBCompliance 9 }
+
+nateksDSLLTUCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"DSL information for LTU and NTU DSL units"
+    MODULE
+		MANDATORY-GROUPS { nateksDSLGroup,
+						   nateksDSLMultipairGroup,
+						   nateksDSLLTUGroup
+						 }
+ ::= { nateksMIBCompliance 10 }
+
+nateksDSLRegeneratorCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"DSL information for DSL regenerator/repeater units"
+    MODULE
+		MANDATORY-GROUPS { nateksDSLGroup,
+						   nateksDSLMultipairGroup,
+						   nateksDSLRegenerationGroup
+						 }
+ ::= { nateksMIBCompliance 11 }
+
+nateksIndicationCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"LED status information."
+    MODULE
+		MANDATORY-GROUPS { nateksIndicationGroup }
+ ::= { nateksMIBCompliance 12 }
+
+nateksTemperatureCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Temperature sensors data."
+    MODULE
+		MANDATORY-GROUPS { nateksTemperatureGroup }
+ ::= { nateksMIBCompliance 13 }
+
+nateksTimeCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Data from time reference sources."
+    MODULE
+		MANDATORY-GROUPS { nateksTimeGroup }
+ ::= { nateksMIBCompliance 14 }
+
+nateksLocalPowerCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Local power sources status."
+    MODULE
+		MANDATORY-GROUPS { nateksLocalPowerGroup }
+ ::= { nateksMIBCompliance 15 }
+
+nateksTFTPManagementCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Software upload and configuration upload/download via TFTP protocol."
+    MODULE
+		MANDATORY-GROUPS { nateksTFTPManagementGroup, nateksTFTPNotificationGroup }
+ ::= { nateksMIBCompliance 16 }
+
+nateksMacFilterCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"MAC-based Ethernet port access control group."
+    MODULE
+		MANDATORY-GROUPS { nateksMacFilterGroup, nateksMacFilterNotificationGroup }
+ ::= { nateksMIBCompliance 17 }
+
+nateksSfpDDMGroupCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"SFP DDM information support."
+    MODULE
+		MANDATORY-GROUPS { nateksSfpDDMGroup }
+ ::= { nateksMIBCompliance 18 }
+
+nateksDigitalIoCompliance MODULE-COMPLIANCE
+	STATUS  current
+	DESCRIPTION
+		"Digital input/output management support."
+    MODULE
+		MANDATORY-GROUPS { nateksDigitalIoGroup, nateksDigitalIoNotificationGroup }
+ ::= { nateksMIBCompliance 19 }
+
+nateksStatResetCompliance MODULE-COMPLIANCE
+	STATUS current
+	DESCRIPTION
+		"Statistics reset support."
+	MODULE
+		MANDATORY-GROUPS { nateksStatResetGroup }
+		
+ ::= {nateksMIBCompliance 20 }
+
+
+END
