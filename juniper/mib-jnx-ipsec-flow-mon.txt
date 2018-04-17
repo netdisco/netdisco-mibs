@@ -22,7 +22,7 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
 
 
     jnxIpSecFlowMonMIB  MODULE-IDENTITY
-        LAST-UPDATED "200705112153Z"     -- May 16, 2007 
+        LAST-UPDATED "201605310000Z"     -- Tue May  31 00:00:00 2016 UTC 
         ORGANIZATION "Juniper Networks, Inc."
         CONTACT-INFO
                      "Juniper Technical Assistance Center
@@ -43,11 +43,21 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
 	         Building on the existing IKE infrastruature, the  
 	         security IKE implementation integrates the value-added 
 	         features for the security products"
+
+        REVISION    "201606220000Z" -- June 22, 2016
+        DESCRIPTION 
+            "Added traffic-selector-name and vpn-name to ipsec-tunnel
+            -monitor-entry table"
+
         REVISION    "200705160000Z" -- May 16, 2007
         DESCRIPTION 
             "Revised the MIB to exlude platform/product specific attributes"
-        ::= { jnxIpSecMibRoot 1 } 
 
+        REVISION    "201605310000Z" -- 31-May-16
+        DESCRIPTION
+            "Consolidated TC duplicated b/n jnx-ipsec-flow-mon.mib, jnx-ipsec-monitor-asp.mib"
+
+        ::= { jnxIpSecMibRoot 1 } 
 
     --
     -- Branch tree objects
@@ -69,6 +79,7 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
              The IKE peer may be identified by one of the ID types 
 	         defined in IPSEC DOI.
                  idIpv4Addr - IPv4 Address.   
+                 idIpv6Addr - IPv6 Address.   
                  idUfqdn    - user fully qualified domain name (user@hostname).  
                  idFqdn     - full qualified domain name 
                  idDn       - distinquished name"
@@ -77,7 +88,8 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
                    idIpv4Addr           (1),   
                    idFqdn               (2),  
                    idDn                 (3),
-                   idUfqdn              (4)  
+                   idUfqdn              (4),  
+                   idIpv6Addr           (5)   
          }
 
     JnxIkeNegoMode ::= TEXTUAL-CONVENTION
@@ -90,7 +102,8 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
              not provide identity protection"
          SYNTAX INTEGER {
                    main         (1),
-                   aggressive   (2)
+                   aggressive   (2),
+                   ikev2(3)
          }
 
     JnxIkeHashAlgo ::= TEXTUAL-CONVENTION
@@ -100,7 +113,8 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
          SYNTAX INTEGER {
                    md5(1),
                    sha(2),
-                   sha256(3)
+                   sha256(3),
+                   sha384(4)
          }
 
     JnxIkeAuthMethod ::= TEXTUAL-CONVENTION
@@ -118,7 +132,9 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
                    xauthDssSignature      (7),
                    xauthRsaSignature      (8),
                    xauthRsaEncryption     (9),
-                   xauthRevRsaEncryption  (10)
+                   xauthRevRsaEncryption  (10),
+                   ecdsa256Signature      (11),
+                   ecdsa384Signature      (12)
          }
 
     JnxIkePeerRole ::= TEXTUAL-CONVENTION
@@ -147,13 +163,25 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
             "The Diffie Hellman Group used in negotiations.
                    modp768        -- 768-bit MODP
                    modp1024       -- 1024-bit MODP
-                   modp1536       -- 1536-bit MODP; voyager only
+                   modp1536       -- 1536-bit MODP
+                   modp2048       -- 2048-bit MODP
+                   modp3072       -- 3072-bit MODP
+                   modp4096       -- 4096-bit MODP
+                   ec-modp256     -- 256-bit EC-MODP
+                   ec-modp384     -- 384-bit EC-MODP
+                   modp2048s256   -- 2048-bit MODP group with 256 bit subgroup
             "
          SYNTAX INTEGER {
-                   unknown	(0),
-                   modp768	(1),
-                   modp1024	(2),
-                   modp1536     (5)
+                   unknown(0),
+                   modp768(1),
+                   modp1024(2),
+                   modp1536(5),
+                   modp2048(14),
+                   modp3072(15),
+                   modp4096(16),
+                   ecmodp256(19),
+                   ecmodp384(20),
+                   modp2048s256(24)
          }
 
     JnxKeyType    ::= TEXTUAL-CONVENTION
@@ -186,7 +214,10 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
                    espNull              (3),
                    espAes128            (4),  
                    espAes192            (5),
-                   espAes256            (6)
+                   espAes256            (6),
+                   espAesGcm128         (7),
+                   espAesGcm192         (8),
+                   espAesGcm256         (9)
          }
 
     JnxAuthAlgo      ::= TEXTUAL-CONVENTION
@@ -667,7 +698,9 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
          jnxIpSecTunMonDecryptFails         Counter64,
          jnxIpSecTunMonBadHeaders           Counter64,
          jnxIpSecTunMonBadTrailers          Counter64,
-         jnxIpSecTunMonDroppedPkts          Counter64   -- obsolete        
+         jnxIpSecTunMonDroppedPkts          Counter64,  -- obsolete        
+         jnxIpSecTunMonVpnName              DisplayString,
+         jnxIpSecTunMonTsName               DisplayString
       }											
 
       jnxIpSecTunMonRemoteGwAddrType OBJECT-TYPE
@@ -898,6 +931,21 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
              This attribute is obsolete."
          ::= { jnxIpSecTunnelMonEntry 26 }
 
+      jnxIpSecTunMonVpnName OBJECT-TYPE
+         SYNTAX        DisplayString
+         MAX-ACCESS    read-only 
+         STATUS        current 
+         DESCRIPTION
+            "VPN tunnel name."
+         ::= { jnxIpSecTunnelMonEntry 27 }
+
+      jnxIpSecTunMonTsName OBJECT-TYPE
+         SYNTAX        DisplayString
+         MAX-ACCESS    read-only 
+         STATUS        current 
+         DESCRIPTION
+            "Traffic selector name."
+         ::= { jnxIpSecTunnelMonEntry 28 }
 
    -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++
    -- The IPsec Phase-2 Security Association (SA) Table
@@ -1063,8 +1111,7 @@ JUNIPER-IPSEC-FLOW-MON-MIB DEFINITIONS ::= BEGIN
          MAX-ACCESS read-only 
          STATUS     current
          DESCRIPTION
-            "The Encryption algorithm used to encrypt 
-			 the packets which can be either es-cbc or 3des-cbc. "
+            "The Encryption algorithm used to encrypt the packets. "
          ::= { jnxIpSecSaMonEntry 12 }
 
       jnxIpSecSaMonAuthAlgo OBJECT-TYPE
