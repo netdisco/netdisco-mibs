@@ -1,7 +1,7 @@
 --
 -- Juniper Enterprise Specific MIB: Chassis MIB
 -- 
--- Copyright (c) 1998-2013, Juniper Networks, Inc.
+-- Copyright (c) 1998-2015, Juniper Networks, Inc.
 -- All rights reserved.
 --
 -- The contents of this document are subject to change without notice.
@@ -21,7 +21,7 @@ IMPORTS
 
 jnxBoxAnatomy MODULE-IDENTITY
 
-    LAST-UPDATED "201504220000Z" -- Tue Apr 22 00:00:00 2015 UTC
+    LAST-UPDATED "201605160000Z"    -- May 16, 2016
     ORGANIZATION "Juniper Networks, Inc."
     CONTACT-INFO
             "        Juniper Technical Assistance Center
@@ -136,6 +136,11 @@ jnxBoxAnatomy MODULE-IDENTITY
     DESCRIPTION
                "Added new offline reason fruPfeErrors to
                 jnxFruOfflineReason enumeration."
+    REVISION     "201212100000Z"    -- Dec 10, 2012
+    DESCRIPTION 
+               "Added new OIDs to get control plane memory 
+                allocation (jnxOperatingMemoryCP)
+                and utilization(jnxOperatingBufferCP) in RE."
 
     REVISION     "201404080000Z"    -- Apr 08, 2014
     DESCRIPTION
@@ -151,14 +156,32 @@ jnxBoxAnatomy MODULE-IDENTITY
                "Added new offline reasons fruFpcFanTrayIncompatible &
                 fruFpcPEMIncompatible to jnxFruOfflineReason enumeration."
 
+    REVISION     "201501140000Z"    -- Jan 14, 2015
+    DESCRIPTION
+               "Added new color types for jnxLEDState and jnxLEDStateOrdered."
+
     REVISION     "201412040000Z"    -- Dec 04, 2014
     DESCRIPTION
                "Added new trap: jnxFmAsicErr."
-    
-    REVISION     "201504220000Z"    -- Apr 22, 2015
+
+    REVISION     "201504010000Z"    -- Apr 1, 2015
     DESCRIPTION
               "Added new FRU Power consumption variable."
-    
+
+    REVISION     "201504280000Z"    -- Apr 28, 2015
+    DESCRIPTION
+              "Added new MIB jnxContentsModel."
+
+    REVISION     "201602020000Z"    -- Feb 02, 2016
+    DESCRIPTION
+               "Added new offline reason fruFpcHFanTrayIncompatible and
+                missing entries mixedSwitchFabric, unsupportedFabric,
+                jamConfigError."
+
+    REVISION     "201605160000Z"    -- May 16, 2016
+    DESCRIPTION
+               "Added new trap: jnxFmHealthChkErr."
+ 
     ::= { jnxMibs 1 }
 
 --
@@ -210,7 +233,17 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                      nodeDevice    (39),
                      interconnectDevice (40),
                      controlPlaneDevice (41),
-                     directorDevice (42)
+                     directorDevice (42),
+                     gnf1          (43),
+                     gnf2          (44),
+                     gnf3          (45),
+                     gnf4          (46),
+                     gnf5          (47),
+                     gnf6          (48),
+                     gnf7          (49),
+                     gnf8          (50),
+                     gnf9          (51),
+                     gnf10         (52)
                  }
 
 
@@ -449,10 +482,11 @@ JnxChassisId ::= TEXTUAL-CONVENTION
 	    jnxContentsSerialNo		DisplayString,
 	    jnxContentsRevision		DisplayString,
 	    jnxContentsInstalled	TimeStamp,
-            jnxContentsPartNo           DisplayString,
-            jnxContentsChassisId        JnxChassisId,
-            jnxContentsChassisDescr     DisplayString,
-            jnxContentsChassisCleiCode  DisplayString
+        jnxContentsPartNo           DisplayString,
+        jnxContentsChassisId        JnxChassisId,
+        jnxContentsChassisDescr     DisplayString,
+        jnxContentsChassisCleiCode  DisplayString,
+        jnxContentsModel            DisplayString
     }
 
     jnxContentsContainerIndex OBJECT-TYPE
@@ -596,6 +630,17 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                  telecommunications industry."
         ::= { jnxContentsEntry 13 }
 
+    jnxContentsModel OBJECT-TYPE
+        SYNTAX          DisplayString (SIZE (0..255))
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION
+                "The FRU model name of this subject, blank if unknown
+                 or unavailable."
+        ::= { jnxContentsEntry 14 }
+
+
+
 --
 -- Box LED Indicators Table
 --
@@ -720,7 +765,13 @@ JnxChassisId ::= TEXTUAL-CONVENTION
 		yellow(3),    -- alarm, warning, marginally working
 		red(4),	      -- alert, failed, not working
 		blue(5),      -- ok, on-line as an active primary
-		amber(6)      -- alarm, off-line, not running
+		amber(6),     -- alarm, off-line, not running
+		off(7),            -- off-line, not running
+		blinkingGreen(8),  -- entering state of ok, good, normally working
+		blinkingYellow(9), -- entering state of alarm, warning, marginally working
+		blinkingRed(10),   -- entering state of alert, failed, not working
+		blinkingBlue(11),  -- entering state of ok, on-line as an active primary
+		blinkingAmber(12)  -- entering state of alarm, off-line, not running
 	}
 	MAX-ACCESS	read-only
 	STATUS		deprecated
@@ -737,7 +788,13 @@ JnxChassisId ::= TEXTUAL-CONVENTION
 		amber(3),     -- alarm, off-line, not running
 		yellow(4),    -- alarm, warning, marginally working
 		red(5),	      -- alert, failed, not working
-		other(6)      -- unknown or unavailable
+		other(6),     -- unknown or unavailable
+		off(7),             -- off-line, not running
+		blinkingBlue(8),    -- entering state of ok, on-line as an active primary
+		blinkingGreen(9),   -- entering state of ok, good, normally working
+		blinkingAmber(10),  -- entering state of alarm, off-line, not running
+		blinkingYellow(11), -- entering state of alarm, warning, marginally working
+		blinkingRed(12)     -- entering state of alert, failed, not working
 	}
 	MAX-ACCESS	read-only
 	STATUS		deprecated
@@ -926,7 +983,9 @@ JnxChassisId ::= TEXTUAL-CONVENTION
         jnxOperating1MinAvgCPU      Gauge32,
         jnxOperating5MinAvgCPU      Gauge32,
         jnxOperating15MinAvgCPU     Gauge32,
-        jnxOperatingFRUPower        Gauge32
+        jnxOperatingFRUPower        Gauge32,
+             jnxOperatingBufferCP        Gauge32,
+             jnxOperatingMemoryCP        Integer32
     }
 
     jnxOperatingContentsIndex OBJECT-TYPE
@@ -1185,26 +1244,35 @@ JnxChassisId ::= TEXTUAL-CONVENTION
              if unavailable or inapplicable."
         ::= { jnxOperatingEntry 25 }
   
-    jnxOperatingFRUPower   OBJECT-TYPE
-           SYNTAX          Gauge32
-           MAX-ACCESS      read-only
-           STATUS          current
-           DESCRIPTION
-                   "The present power of each FRU. Here it will
-                    be shown in terms of voltage. Zero if unavailable
-                    or inapplicable"
-           ::= { jnxOperatingEntry 26 }
+        jnxOperatingFRUPower    OBJECT-TYPE
+            SYNTAX          Gauge32
+            MAX-ACCESS      read-only
+            STATUS          current
+            DESCRIPTION
+                    "The present power of each FRU. Here it will
+                     be shown in terms of voltage. Zero if unavailable
+                     or inapplicable"
+            ::= { jnxOperatingEntry 26 }
 
-
-        jnxOperatingFRUPower	OBJECT-TYPE
-	    SYNTAX	    Gauge32
-	    MAX-ACCESS	    read-only
-	    STATUS	    current
+    	jnxOperatingBufferCP OBJECT-TYPE
+	    SYNTAX		Gauge32
+	    MAX-ACCESS		read-only
+	    STATUS		current
 	    DESCRIPTION
-		    "The present power of each FRU. Here it will
- 		     be shown in terms of voltage. Zero if unavailable
-		     or inapplicable"
-	    ::= { jnxOperatingEntry 26 }
+	    	    "The buffer pool utilization in percentage
+	    	    of this subject in control plane.  Zero if 
+                    unavailable or inapplicable."
+	    ::= { jnxOperatingEntry 27 }
+	
+    	jnxOperatingMemoryCP OBJECT-TYPE
+	    SYNTAX	    	Integer32	
+	    MAX-ACCESS		read-only
+	    STATUS		current
+	    DESCRIPTION
+		        "The Allocated memory size for control plane
+                        in Megabytes. Zero if unavailable or
+	        	inapplicable."
+	    ::= { jnxOperatingEntry 28 }
 
 --
 -- Box Redundancy Information Table
@@ -1684,8 +1752,15 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                 fruPfeErrors(97),                -- PIC offlined on PFE Errors cross limit.
                 vpnLocalizationRoleChange(98),   -- VPN localization core-facing-FPC role change
                 fruFpcFanTrayIncompatible(99),   -- FPC incompatible with FAN-TRAYs
-                fruFpcPEMIncompatible(100)       -- FPC incompatible with PEMs
-
+                fruFpcPEMIncompatible(100),      -- FPC incompatible with PEMs
+                mixedSwitchFabric(101),          -- Mixed Switch Fabric error
+                unsupportedFabric(102),          -- unsupported Fabric error
+                jamConfigError(103),             -- JAM configuration error
+                fruFpcHFanTrayIncompatible(104), -- FPC incompatible with Horizontal FAN-TRAYs
+                gnfIsOffline(105),               -- GNF is Offline
+                gnfdisconnected(106),            -- GNF disconnected
+                fruIncompatibleWithVersion(107), -- Incompatibile with BSYS
+                reasonOfflineEnd(108)            -- Unknown
 	}
 	MAX-ACCESS	read-only
 	STATUS		current
@@ -2215,7 +2290,7 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                 entity, acting in an agent role, has detected 
                 errors in a switching device within the fabric."
         ::= { jnxChassisTraps 25 }
-
+    
     jnxMountVarOffHardDiskFailed NOTIFICATION-TYPE
         OBJECTS         { jnxFruContentsIndex,
                           jnxFruL1Index,
@@ -2230,6 +2305,21 @@ JnxChassisId ::= TEXTUAL-CONVENTION
                 entity, acting in an agent role, has detected that
                 mount of /var failed off harddisk, emergency /var created."
         ::= { jnxChassisTraps 26 }
+
+    jnxFmHealthChkErr NOTIFICATION-TYPE
+        OBJECTS         { jnxFruContentsIndex,
+                          jnxFruL1Index,
+                          jnxFruL2Index,
+                          jnxFruL3Index,
+                          jnxFruName,
+                          jnxFruType,
+                          jnxFruSlot }
+        STATUS          current
+        DESCRIPTION
+                "A HealthChkErr trap signifies that the SNMP
+                entity, acting in an agent role, has detected 
+                health check errors."
+        ::= { jnxChassisTraps 27 }
 
     -- Traps for chassis alarm cleared conditions
 

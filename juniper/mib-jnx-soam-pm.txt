@@ -28,7 +28,6 @@ IMPORTS
     LldpChassisIdSubtype,
     LldpPortId,
     LldpPortIdSubtype        FROM LLDP-MIB      -- [IEEExxx]
-    VlanIdOrNone, VlanId     FROM Q-BRIDGE-MIB  -- [RFC4363]
     ieee802dot1mibs, 
     IEEE8021VlanIndex        FROM IEEE8021-TC-MIB     
     dot1agCfmMdIndex,   
@@ -38,10 +37,11 @@ IMPORTS
     Dot1afCfmIndexIntegerNextFree,  
     Dot1agCfmMepIdOrZero     FROM IEEE8021-CFM-MIB
     jnxMibs                  FROM JUNIPER-SMI
+    IEEE8021PriorityValue FROM IEEE8021-TC-MIB
     ;
 
 jnxSoamPmMib MODULE-IDENTITY
-    LAST-UPDATED "201201131200Z" -- January 13, 2012
+    LAST-UPDATED "201605310000Z"     -- Tue May  31 00:00:00 2016 UTC 
     ORGANIZATION "Juniper Networks, Inc."
     CONTACT-INFO
         "Juniper Technical Assistance Center
@@ -57,6 +57,11 @@ jnxSoamPmMib MODULE-IDENTITY
         REVISION "201201131200Z" -- January 13, 2012
         DESCRIPTION
          "Initial Version."
+
+        REVISION    "201605310000Z" -- 31-May-16
+        DESCRIPTION
+            "Removed duplicate entries"
+
         ::= { jnxMibs 78 }
 
 -- *****************************************************************************
@@ -79,13 +84,6 @@ jnxSoamPmNotificationObj OBJECT IDENTIFIER ::= { jnxSoamPmMibObjects 5 }
 -- Textual conventions
 -- ******************************************************************
 
-IEEE8021PriorityValue ::= TEXTUAL-CONVENTION 
-    DISPLAY-HINT "d"
-    STATUS      current 
-    DESCRIPTION
-        "An 802.1Q user priority value."
-    REFERENCE   "12.13.3.3"
-    SYNTAX      Unsigned32 (0..65535)
 
 JnxSoamTcTestPatternType ::= TEXTUAL-CONVENTION
     STATUS current
@@ -144,6 +142,68 @@ JnxSoamTcOperationTimeType ::= TEXTUAL-CONVENTION
                 relative(3),
                 fixed(4)
     }
+
+JnxSoamTcAvailabilityType ::= TEXTUAL-CONVENTION 
+    STATUS current 
+    DESCRIPTION 
+       "This enumeration data type defines the availability of a session,  
+        measured by a loss measurement session. The valid enumerated values
+        associated with this type are: 
+        available(1)       indicates the MEP is available. 
+        unavailable(2)     indicates the MEP is unavailable. 
+        unknown(3)         indicates the availability is not known, for 
+                           instance because insufficient time has passed to 
+                           make an availability calculation, the time has been 
+                           excluded because of a maintenance interval, or because  
+                           availability measurement is not enabled. 
+       " 
+    SYNTAX INTEGER { 
+                available(1), 
+                unavailable(2), 
+                unknown(3) 
+    }
+
+JnxSoamTcDelayMeasurementBinType ::= TEXTUAL-CONVENTION
+    STATUS current
+    DESCRIPTION
+        "This enumeration data type is used to distinguish between
+        measurement bins for Frame Delay, Frame Delay Range, and
+        Inter-frame Delay variation.
+       
+        The valid enumerated values associated with this type are:
+       
+        twoWayFrameDelay(1) indicates a measurement bin for two-way
+        Frame Delay.
+        forwardFrameDelay(2) indicates a measurement bin for one-way
+        Frame Delay in the forward direction.
+        backwardFrameDelay(3) indicates a measurement bin for one-way
+        Frame Delay in the backward direction.
+        twoWayIfdv(4) indicates a measurement bin for two-way
+        Inter-frame Delay Variation.
+        forwardIfdv(5) indicates a measurement bin for one-way
+        Inter-frame Delay Variation in the forward
+        direction.
+        backwardIfdv(6) indicates a measurement bin for one-way
+        Inter-frame Delay Variation in the backward
+        direction.
+        twoWayFrameDelayRange(7) indicates a measurement bin for two-way
+        Frame Delay Range.
+        forwardFrameDelayRange(8) indicates a measurement bin for one-way
+        Frame Delay Range in the forward direction.
+        backwardFrameDelayRange(9) indicates a measurement bin for one-way
+        Frame Delay Range in the backward direction.
+        "
+    SYNTAX INTEGER {
+            twoWayFrameDelay(1),
+            forwardFrameDelay(2),
+            backwardFrameDelay(3),
+            twoWayIfdv(4),
+            forwardIfdv(5),
+            backwardIfdv(6),
+            twoWayFrameDelayRange(7),
+            forwardFrameDelayRange(8),
+            backwardFrameDelayRange(9)
+    } 
 
 -- *****************************************************************************
 -- Ethernet MEP Performance Monitoring Configuration
@@ -340,7 +400,17 @@ JnxSoamLmCfgEntry ::= SEQUENCE {
      jnxSoamLmCfgSessionType  OCTET STRING,
      jnxSoamLmCfgSessionStatus OCTET STRING,
      jnxSoamLmCfgHistoryClear TruthValue,
-     jnxSoamLmCfgRowStatus RowStatus
+     jnxSoamLmCfgRowStatus RowStatus,
+     jnxSoamLmCfgMeasurementInterval Unsigned32,
+     jnxSoamLmCfgDestMacAddress MacAddress,
+     jnxSoamLmCfgStopTimeType JnxSoamTcOperationTimeType,
+     jnxSoamLmCfgFixedStopDateAndTime DateAndTime,
+     jnxSoamLmCfgRelativeStopTime TimeInterval,
+     jnxSoamLmCfgAvailabilityMeasurementInterval Unsigned32,
+     jnxSoamLmCfgAvailabilityNumConsecutiveMeasPdus Unsigned32,
+     jnxSoamLmCfgAvailabilityFlrThreshold Unsigned32,
+     jnxSoamLmCfgAvailabilityNumConsecutiveIntervals Unsigned32,
+     jnxSoamLmCfgAvailabilityNumConsecutiveHighFlr Unsigned32
 }
 
 jnxSoamLmCfgIndex
@@ -467,8 +537,24 @@ jnxSoamLmCfgMeasurementEnable OBJECT-TYPE
                  bBackwardAvgFlr(9),
                  bSoamPdusSent(10),
                  bSoamPdusReceived (11),
+                 bAvailForwardHighLoss(12),
+                 bAvailForwardConsecutiveHighLoss(13),
+                 bAvailForwardAvailable(14),
+                 bAvailForwardUnavailable(15),
+                 bAvailForwardMinFlr(16),
+                 bAvailForwardMaxFlr(17),
+                 bAvailForwardAvgFlr(18),
+                 bAvailBackwardHighLoss(19),
+                 bAvailBackwardConsecutiveHighLoss(20),
+                 bAvailBackwardAvailable(21),
+                 bAvailBackwardUnavailable(22),
+                 bAvailBackwardMinFlr(23),
+                 bAvailBackwardMaxFlr(24),
+                 bAvailBackwardAvgFlr(25),
                  bMeasuredStatsForwardMeasuredFlr(26),
-                 bMeasuredStatsBackwardMeasuredFlr(27)
+                 bMeasuredStatsBackwardMeasuredFlr(27),
+                 bMeasuredStatsAvailForwardStatus(28),
+                 bMeasuredStatsAvailBackwardStatus(29)
      }
      MAX-ACCESS read-only
      STATUS current
@@ -525,10 +611,58 @@ jnxSoamLmCfgMeasurementEnable OBJECT-TYPE
           bSoamPdusReceivedbReceivedMeasurements (11)
           Enables/disables the jnxSoamLmCurrentStatsSoamPdusReceived
           and jnxSoamLmHistoryStatsSoamPdusReceived counters.
+          bAvailForwardHighLoss(12)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardHighLoss
+          and jnxSoamLmHistoryAvailStatsForwardHighLoss counters.
+          bAvailForwardConsecutiveHighLoss(13)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardConsecutiveHighLoss
+          and jnxSoamLmHistoryAvailStatsForwardConsecutiveHighLoss counters.
+          bAvailForwardAvailable(14)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardAvailable
+          and jnxSoamLmHistoryAvailStatsForwardAvailable counters.
+          bAvailForwardUnavailable(15)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardUnavailable
+          and jnxSoamLmHistoryAvailStatsForwardUnavailable counters.
+          bAvailForwardMinFlr(16)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardMinFlr
+          and jnxSoamLmHistoryAvailStatsForwardMinFlr counters.
+          bAvailForwardMaxFlr(17)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardMaxFlr
+          and jnxSoamLmHistoryAvailStatsForwardMaxFlr counters.
+          bAvailForwardAvgFlr(18)
+          Enables/disables the jnxSoamLmCurrentAvailStatsForwardAvgFlr
+          and jnxSoamLmHistoryAvailStatsForwardAvgFlr counters.
+          bAvailBackwardHighLoss(19)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardHighLoss
+          and jnxSoamLmHistoryAvailStatsBackwardHighLoss counters.
+          bAvailBackwardConsecutiveHighLoss(20)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardConsecutiveHighLoss
+          and jnxSoamLmHistoryAvailStatsBackwardConsecutiveHighLoss counters.
+          bAvailBackwardAvailable(21)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardAvailable
+          and jnxSoamLmHistoryAvailStatsBackwardAvailable counters.
+          bAvailBackwardUnavailable(22)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardUnavailable
+          and jnxSoamLmHistoryAvailStatsBackwardUnavailable counters.
+          bAvailBackwardMinFlr(23)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardMinFlr
+          and jnxSoamLmHistoryAvailStatsBackwardMinFlr counters.
+          bAvailBackwardMaxFlr(24)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardMaxFlr
+          and jnxSoamLmHistoryAvailStatsBackwardMaxFlr counters.
+          bAvailBackwardAvgFlr(25)
+          Enables/disables the jnxSoamLmCurrentAvailStatsBackwardAvgFlr
+          and jnxSoamLmHistoryAvailStatsBackwardAvgFlr counters.
+          Enables/disables the jnxSoamLmCurrentStatsSoamPdusReceived
+          and jnxSoamLmHistoryStatsSoamPdusReceived counters.
           bMeasuredStatsForwardMeasuredFlr(26)
           Enables/disables the jnxSoamLmMeasuredStatsForwardFlr counter.
           bMeasuredStatsBackwardMeasuredFlr(27)
           Enables/disables the jnxSoamLmMeasuredStatsBackwardFlr counter.
+          bMeasuredStatsAvailForwardStatus(28)
+          Enables/disables the jnxSoamLmMeasuredStatsAvailForwardStatus counter.
+          bMeasuredStatsAvailBackwardStatus(29)
+          Enables/disables the jnxSoamLmMeasuredStatsAvailBackwardStatus counter.
           "
      REFERENCE
          "[Y.1731]"
@@ -956,6 +1090,257 @@ jnxSoamLmCfgRowStatus OBJECT-TYPE
           "
      ::= { jnxSoamLmCfgEntry 24 }
 
+jnxSoamLmCfgMeasurementInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (1..525600)
+    UNITS "minutes"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object specifies the Measurement Interval for FLR statistics, 
+         in minutes. A Measurement Interval of 15 minutes needs to be supported,
+         other intervals may be supported.
+
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R16, R17, R110, R111, D46"
+    DEFVAL { 15 }
+    ::= { jnxSoamLmCfgEntry 25 }
+
+
+jnxSoamLmCfgDestMacAddress OBJECT-TYPE
+    SYNTAX MacAddress
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+    "The Target or Destination MAC Address Field to be transmitted.
+
+     If jnxSoamLmCfgType is 'lmCcm', the destination MAC address is always a
+     multicast address indicating the level of the MEG: 01-80-c2-00-00-3y,
+     where y is the level of the MEG. An error is returned if this object
+     is set to any other value.
+
+     If jnxSoamLmCfgType is 'lmLmm' or 'lmSlm', the destination address is
+     the unicast address of the destination MEP. An error is returned if
+     this object is set to a multicast address.
+
+     This address will be used if the value of the object
+     mefSoamLmDestIsMepId is 'false'.
+
+     This object is only valid for the entity transmitting the
+     SOAM LM frames and is ignored by the entity receiving
+     SOAM LM frames.
+
+     This object can only be written at row creation time and cannot be
+     modified once it has been created.
+    "
+    REFERENCE
+        "[MEF SOAM-PM] R70, R104"
+    ::= { jnxSoamLmCfgEntry 26 }
+
+jnxSoamLmCfgStopTimeType OBJECT-TYPE
+     SYNTAX JnxSoamTcOperationTimeType
+     MAX-ACCESS read-create
+     STATUS current
+     DESCRIPTION
+     "This object specifies the type of stop time to terminate the
+      SOAM LM session. The stop time can be forever (none), relative, or
+      fixed.
+
+      The value of 'none' indicates that the SOAM LM session never ends once it
+      has started unless it the session is disabled.
+
+      The value of 'immediate' is illegal and a write error will be returned
+      if this value is used.
+
+      The value of 'fixed' stops the SOAM LM session when the
+      jnxSoamLmFixedStopDateAndTime is less than or equal
+      to the current system date and time. This
+      value is used to implement an On-Demand fixed time PM session.
+
+      The value of 'relative' stops the SOAM LM session when the time
+      indicated by jnxSoamLmRelativeStopTime has passed since the session
+      start time as determined by the jnxSoamLmCfgStartTimeType,
+      jnxSoamLmCfgFixedStartDateAndTime and jnxSoamLmCfgRelativeStartTime
+      objects. This value is used to implement an On-Demand relative time
+      PM session.
+
+      This object can only be written at row creation time and cannot be
+      modified once it has been created.
+     "
+    REFERENCE
+        "[MEF SOAM-PM] R3, R10, D2"
+    DEFVAL { none }
+    ::= { jnxSoamLmCfgEntry 27 }
+
+jnxSoamLmCfgFixedStopDateAndTime OBJECT-TYPE
+     SYNTAX DateAndTime
+     MAX-ACCESS read-only
+     STATUS current
+     DESCRIPTION
+         "This object specifies the fixed stop date/time for the
+          SOAM Loss Measurement session. This object is used only used
+          if jnxSoamLmStopTimeType is 'fixed' and is ignored otherwise.
+ 
+          The default value is year 0000, month 01, day 01, time 00:00:00.00.
+
+          This object can only be written at row creation time and cannot be
+          modified once it has been created.
+         "
+     REFERENCE
+         "[MEF SOAM-PM] R10, R13"
+     DEFVAL { '0000010100000000'H }
+     ::= { jnxSoamLmCfgEntry 28 }
+
+jnxSoamLmCfgRelativeStopTime OBJECT-TYPE
+     SYNTAX TimeInterval
+     MAX-ACCESS read-create
+     STATUS current
+     DESCRIPTION
+         "This object specifies the relative stop time, from the
+          session start time, to stop the SOAM LM session. This
+          object is used only if jnxSoamLmStopTimeType is 'relative' and is
+          ignored otherwise.
+          object can only be written at row creation time 1922 and cannot be
+          modified once it has been created.
+         "
+     REFERENCE
+         "[MEF SOAM-PM] R11"
+     DEFVAL { 0 }
+     ::= { jnxSoamLmCfgEntry 29 }
+
+jnxSoamLmCfgAvailabilityMeasurementInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (1..525600)
+    UNITS "minutes"
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the availability Measurement Interval in
+         minutes.
+         A Measurement Interval of 15 minutes is to be supported, other intervals
+         can be supported.
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R16, R17"
+    DEFVAL { 15 }
+    ::= { jnxSoamLmCfgEntry 30 }
+
+jnxSoamLmCfgAvailabilityNumConsecutiveMeasPdus OBJECT-TYPE
+    SYNTAX Unsigned32 (1..1000000)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies a configurable number of consecutive
+         loss measurement PDUs to be used in evaluating the
+         availability/unavailability status of each availability
+         indicator per MEF 10.2.1. Loss Measurement PDUs (LMMs, CCMs or
+         SLMs) are sent regularly with a period defined by
+         jnxSoamLmCfgMessagePeriod. Therefore, this object, when
+         multiplied by mefSoamLmCfgMessagePeriod, 2050 is equivalent to
+         is equivalent to the Availability parameter of 'delta_t' as 
+         specified by MEF 10.2.1.
+
+         If the jnxSoamLmCfgType is lmLMM or lmCCM, this object defines the
+         number of LMM or CCM PDUs transmitted during each 'delta_t' period.
+         The Availability flr for a given 'delta_t' can be calculated based
+         on the counters in the last LMM/R or CCM during this 'delta_t' and
+         the last LMM/R or CCM in the previous 'delta_t'.
+
+         If the jnxSoamLmCfgType is lmSLM, this object defines the number
+         of SLM PDUs transmitted during each 'delta_t' period. The
+         Availability flr for a given 'delta_t' is calculated based on the
+         number of those SLM PDUs that are lost.
+
+         If the jnxSoamLmCfgType is lmLMM or lmCCM, the number range of 1
+         through 10 must be supported. The number range of 10 through 1000000
+         may be supported, but is not mandatory.
+
+         If the jnxSoamLmCfgType is lmSLM, the number range of 10 through
+         100 must be supported. The number range of 100 through 1000000
+         may be supported, but is not mandatory.
+
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF 10.2.1] Section 7.9.8; [MEF SOAM-PM] R80, D33, R81"
+    DEFVAL { 10 }
+    ::= { jnxSoamLmCfgEntry 31 }
+
+jnxSoamLmCfgAvailabilityFlrThreshold OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies a configurable availability threshold to be
+         used in evaluating the availability/unavailability status of an
+         availability indicator per MEF 10.2.1. The availability threshold range
+         of 0.00 (0) through 1.00 (100000) is supported. This parameter is
+         equivalent to the Availability parameter of 'C' as specified by
+         MEF 10.2.1.
+
+         Units are in milli-percent, where 1 indicates 0.001 percent.
+
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF 10.2.1] Section 7.9.8; [MEF SOAM-PM] R81, R82, D34"
+    DEFVAL { 50000 }
+    ::= { jnxSoamLmCfgEntry 32 }
+
+jnxSoamLmCfgAvailabilityNumConsecutiveIntervals OBJECT-TYPE
+    SYNTAX Unsigned32 (1..1000)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies a configurable number of consecutive
+         availability indicators to be used to determine a change in the
+         availability status as indicated by MEF 10.2.1. This parameter is
+         equivalent to the Availability parameter of 'n' as specified
+         by MEF 10.2.1.
+         The number range of 1 through 10 must be supported. The number 
+         range of 1 through 1000 may be supported, but is not mandatory.
+
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF 10.2.1] Section 7.9.8; [MEF SOAM-PM] R80, D33"
+    DEFVAL { 10 }
+    ::= { jnxSoamLmCfgEntry 33 }
+
+jnxSoamLmCfgAvailabilityNumConsecutiveHighFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (1..1000)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies a configurable number of consecutive
+         availability indicators to be used for assessing CHLI. This
+         parameter is equivalent to the Resilency parameter of 'p' as
+         specified by MEF 10.2.1.
+
+         jnxSoamLmCfgAvailabilityNumConsecutiveHighFlr must be strictly less than
+         jnxSoamLmCfgAvailabilityNumConsecutiveIntervals. If not, the count of 
+         high loss intervals over time, jnxSoamLmAvailabilityHighLoss, and the 
+         count  of consecutive high loss levels, 
+         jnxSoamLmAvailabilityConsecutiveHighLoss, is disabled.
+
+         The number range of 1 through 10 must be supported. The number range
+         of 1 through 1000 may be supported, but is not mandatory.
+
+         This object can only be written at row creation time and cannot be
+         modified once it has been created.
+        "
+    REFERENCE
+        "[MEF 10.2.1] Section 7.9.8; [MEF SOAM-PM] R86, D35, D36"
+    DEFVAL { 5 }
+    ::= { jnxSoamLmCfgEntry 34 }
+
 -- *****************************************************************************
 -- Ethernet Loss Measurement Measured Statistic Table
 -- *****************************************************************************
@@ -1002,7 +1387,11 @@ jnxSoamLmMeasuredStatsEntry OBJECT-TYPE
 
 JnxSoamLmMeasuredStatsEntry ::= SEQUENCE {
      jnxSoamLmMeasuredStatsForwardFlr Unsigned32,
-     jnxSoamLmMeasuredStatsBackwardFlr Unsigned32
+     jnxSoamLmMeasuredStatsBackwardFlr Unsigned32,
+     jnxSoamLmMeasuredStatsAvailForwardStatus JnxSoamTcAvailabilityType,
+     jnxSoamLmMeasuredStatsAvailBackwardStatus JnxSoamTcAvailabilityType,
+     jnxSoamLmMeasuredStatsAvailForwardLastTransitionTime DateAndTime,
+     jnxSoamLmMeasuredStatsAvailBackwardLastTransitionTime DateAndTime
 }
 
 jnxSoamLmMeasuredStatsForwardFlr OBJECT-TYPE
@@ -1039,10 +1428,72 @@ jnxSoamLmMeasuredStatsBackwardFlr OBJECT-TYPE
          "[MEF SOAM-PM] D37"
      ::= { jnxSoamLmMeasuredStatsEntry 2 }
 
+jnxSoamLmMeasuredStatsAvailForwardStatus OBJECT-TYPE
+      SYNTAX JnxSoamTcAvailabilityType
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "This object indicates the availability status (the outcome of the
+          last known availability indicator) in the forward direction.
+          Note that the status of an availability indicator is not known until
+          the loss for a number of subsequent availability indicators has been
+          calculated (as determined by
+          jnxSoamLmCfgAvailabilityNumConsecutiveIntervals)
+          "
+      REFERENCE
+          "[MEF SOAM-PM] R83"
+      ::= { jnxSoamLmMeasuredStatsEntry 3 }
+      
+jnxSoamLmMeasuredStatsAvailBackwardStatus OBJECT-TYPE
+      SYNTAX JnxSoamTcAvailabilityType
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "This object indicates the availability status (the outcome of the
+          last availability indicator) in the backward direction.
+          Note that the status of an availability indicator is not known until
+          the loss for a number of subsequent availability indicators has been
+          calculated (as determined by
+          jnxSoamLmCfgAvailabilityNumConsecutiveIntervals)
+          "
+      REFERENCE
+          "[MEF SOAM-PM] R83"
+      ::= { jnxSoamLmMeasuredStatsEntry 4 }
+      
+jnxSoamLmMeasuredStatsAvailForwardLastTransitionTime OBJECT-TYPE
+      SYNTAX DateAndTime
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "This object indicates the time of the last transition
+          between available and unavailable in the forward direction.
+      
+          If there have been no transitions since the Loss Measurement
+          Session was started, this is set to 0.
+          "
+      REFERENCE
+          "[MEF SOAM-PM] R83"
+      ::= { jnxSoamLmMeasuredStatsEntry 5 }
+      
+jnxSoamLmMeasuredStatsAvailBackwardLastTransitionTime OBJECT-TYPE
+      SYNTAX DateAndTime
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "This object indicates the time of the last transition
+          between available and unavailable in the backward direction.
+      
+          If there have been no transitions since the Loss Measurement
+          Session was started, this is set to 0.
+          "
+      REFERENCE
+          "[MEF SOAM-PM] R83"
+      ::= { jnxSoamLmMeasuredStatsEntry 6 }
+      
 -- *****************************************************************************
 -- Ethernet Loss Measurement Current Statistic Table
 -- *****************************************************************************
-
+      
 jnxSoamLmCurrentStatsTable OBJECT-TYPE
      SYNTAX SEQUENCE OF JnxSoamLmCurrentStatsEntry
      MAX-ACCESS not-accessible
@@ -1793,7 +2244,19 @@ JnxSoamDmCfgEntry ::= SEQUENCE {
      jnxSoamDmCfgSessionType OCTET STRING,
      jnxSoamDmCfgSessionStatus OCTET STRING,
      jnxSoamDmCfgHistoryClear TruthValue,
-     jnxSoamDmCfgRowStatus RowStatus
+     jnxSoamDmCfgRowStatus RowStatus,
+     jnxSoamDmCfgMeasurementInterval Unsigned32,
+     jnxSoamDmCfgDestMacAddress MacAddress,
+     jnxSoamDmCfgSourceMacAddress MacAddress,
+     jnxSoamDmCfgFixedStartDateAndTime DateAndTime,
+     jnxSoamDmCfgRelativeStartTime TimeInterval,
+     jnxSoamDmCfgStopTimeType JnxSoamTcOperationTimeType,
+     jnxSoamDmCfgFixedStopDateAndTime DateAndTime,
+     jnxSoamDmCfgRelativeStopTime TimeInterval,
+     jnxSoamDmCfgAlignMeasurementOffset Unsigned32,
+     jnxSoamDmCfgNumMeasBinsPerFrameDelayInterval Unsigned32,
+     jnxSoamDmCfgNumMeasBinsPerInterFrameDelayVariationInterval Unsigned32,
+     jnxSoamDmCfgNumMeasBinsPerFrameDelayRangeInterval Unsigned32
 }
 
 jnxSoamDmCfgIndex
@@ -2476,6 +2939,271 @@ jnxSoamDmCfgRowStatus OBJECT-TYPE
           "
      ::= { jnxSoamDmCfgEntry 22 }
 
+jnxSoamDmCfgMeasurementInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (1..1440)
+    UNITS "minutes"
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies a Measurement Interval in minutes.
+       
+        A Measurement Interval 15 minutes needs to be supported, other intervals
+        may be supported.
+       
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R16, R17"
+    DEFVAL { 15 }
+    ::= { jnxSoamDmCfgEntry 23 }
+
+jnxSoamDmCfgDestMacAddress OBJECT-TYPE
+    SYNTAX MacAddress
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "The Target or Destination MAC Address Field to be transmitted.
+
+        If mefSoamDmCfgType is 'dmDmm', the destination address is to be the
+        unicast address of the destination MEP. An error is returned if this
+        object is set to a multicast address.
+
+        If mefSoamDmCfgType is 'dm1DmTx', the destination address is normally the
+        unicast address of the destination MEP, but can be a multicast address
+        indicating the level of the MEG: 01-80-c2-00-00-3y, where y is the
+        level of the MEG. An error is returned if this object is set to any
+        other multicast address.
+
+        If mefSoamDmCfgType is 'dm1DmRx', this object is ignored.
+
+        This address will be used if the value of the object
+        mefSoamDmDestIsMepId is 'false'.
+
+        This object is only valid for the entity transmitting the
+        SOAM DM frames and is ignored by the entity receiving
+        SOAM DM frames.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R55, R89"
+    ::= { jnxSoamDmCfgEntry 24 }
+
+jnxSoamDmCfgSourceMacAddress OBJECT-TYPE
+    SYNTAX MacAddress
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "The Source MAC Address Field of the received SOAM DM session PDUs.
+
+        If mefSoamDmCfgType is dm1DmRx this object indicates the source
+        address of the dm1DmTx DM session.
+
+        This object is only valid for mefSoamDmCfgType set to dm1DmRx. It is
+        ignored for mefSoamDmCfgType set to dmDmm or dm1DmTx.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R55, R89"
+    ::= { jnxSoamDmCfgEntry 25 }
+
+
+jnxSoamDmCfgFixedStartDateAndTime OBJECT-TYPE
+    SYNTAX DateAndTime
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the fixed start date/time for the
+        SOAM Delay Measurement session. This object is used only used if
+        mefSoamDmStartTimeType is 'fixed' and is ignored otherwise.
+
+        The default value is year 0000, month 01, day 01, time 00:00:00.00.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R9"
+    DEFVAL { '0000010100000000'H }
+    ::= { jnxSoamDmCfgEntry 26 }
+
+jnxSoamDmCfgRelativeStartTime OBJECT-TYPE
+    SYNTAX TimeInterval
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the relative start time, from
+        the current system time, for the SOAM DM session. This
+        object is used only if mefSoamDmStartTimeType is 'relative'
+        and is ignored otherwise.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R9"
+    DEFVAL { 0 }
+    ::= { jnxSoamDmCfgEntry 27 }
+
+jnxSoamDmCfgStopTimeType OBJECT-TYPE
+    SYNTAX JnxSoamTcOperationTimeType
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the type of stop time to terminate the
+        SOAM DM session. The stop time can be forever (none), relative, or
+        fixed.
+
+        The value of 'none' indicates that the SOAM DM session never ends once it
+        has started unless the session is disabled.
+
+        The value of 'immediate' is illegal and a write error will be returned
+        if this value is used.
+
+        The value of 'fixed' stops the SOAM DM session when the
+        mefSoamDmFixedStopDateAndTime is less than or equal
+        to the current system date. This
+        value is used to implement an On-Demand fixed time PM session.
+
+        The value of 'relative' stops the SOAM DM session when the time
+        indicated by mefSoamDmRelativeStopTime has passed since the session
+        start time as determined by the mefSoamDmCfgStartTimeType,
+        mefSoamDmCfgFixedStartDateAndTime and mefSoamDmCfgRelativeStartTime
+        objects.
+        This value is used to implement an On-Demand relative time PM session.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R3, R10, D2"
+    DEFVAL { none }
+    ::= { jnxSoamDmCfgEntry 28 }
+
+jnxSoamDmCfgFixedStopDateAndTime OBJECT-TYPE
+    SYNTAX DateAndTime
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the fixed stop date/time for the
+        SOAM Delay Measurement session. This object is used only used
+        if mefSoamDmStopTimeType is 'fixed' and is ignored otherwise.
+
+        The default value is year 0000, month 01, day 01, time 00:00:00.00.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R10, R13"
+    DEFVAL { '0000010100000000'H }
+    ::= { jnxSoamDmCfgEntry 29 }
+
+jnxSoamDmCfgRelativeStopTime OBJECT-TYPE
+    SYNTAX TimeInterval
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the relative stop time, from the
+        session start time, to stop the SOAM DM session. This
+        object is used only if mefSoamDmStopTimeType is 'relative' and is
+        otherwise.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R11"
+    DEFVAL { 0 }
+    ::= { jnxSoamDmCfgEntry 30 }
+
+jnxSoamDmCfgAlignMeasurementOffset OBJECT-TYPE
+    SYNTAX Unsigned32 (0..525600)
+    UNITS "minutes"
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the offset in minutes from the time of day value
+        if mefSoamDmCfgAlignMeasurementIntervals is 'true' and the repetition
+        time is a factor of 60 minutes. If not, the value of this object
+        is ignored.
+
+        If the Measurement Interval is 15 minutes and
+        mefSoamDmCfgAlignMeasurementIntervals is true and if this object was
+        set to 5 minutes, the Measurement Intervals would start at 5, 20, 35, 50
+        minutes past each hour.
+
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] D7"
+    DEFVAL { 0 }
+    ::= { jnxSoamDmCfgEntry 31 }
+
+jnxSoamDmCfgNumMeasBinsPerFrameDelayInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (2..100)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the number of measurement bins
+        per Measurement Interval for Frame Delay measurements.
+       
+        At least 3 bins are to be supported; at least 10 bins are recommended
+        to be supported.
+       
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+        REFERENCE
+        "[MEF SOAM-PM] R27, D11, R28, D12"
+        DEFVAL { 3 }
+        ::= { jnxSoamDmCfgEntry 32 }
+       
+jnxSoamDmCfgNumMeasBinsPerInterFrameDelayVariationInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (2..100)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the number of measurement bins
+        per Measurement Interval for Inter-Frame Delay Variation
+        measurements.
+       
+        The minimum number of measurement bins to be supported is 2. The
+        supported is 10.
+       
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R29, D13, R30, D14"
+    DEFVAL { 2 }
+        ::= { jnxSoamDmCfgEntry 33 }
+
+jnxSoamDmCfgNumMeasBinsPerFrameDelayRangeInterval OBJECT-TYPE
+    SYNTAX Unsigned32 (2..100)
+    MAX-ACCESS read-create
+    STATUS current
+    DESCRIPTION
+        "This object specifies the number of measurement bins
+        per Measurement Interval for Frame Delay Range measurements.
+       
+        At least 2 bins are to be supported; at least 10 bins are recommended
+        to be supported.
+       
+        This object can only be written at row creation time and cannot be
+        modified once it has been created.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R31, D15, R32, D16"
+    DEFVAL { 2 }
+    ::= { jnxSoamDmCfgEntry 34 }
+       
+
 -- *****************************************************************************
 -- Ethernet Delay Measurement Measured Statistic Table
 -- *****************************************************************************
@@ -2703,7 +3431,13 @@ JnxSoamDmCurrentStatsEntry ::= SEQUENCE {
      jnxSoamDmCurrentStatsIfdvTwoWayMax Unsigned32,
      jnxSoamDmCurrentStatsIfdvTwoWayAvg Unsigned32,
      jnxSoamDmCurrentStatsSoamPdusSent Gauge32,
-     jnxSoamDmCurrentStatsSoamPdusReceived Gauge32
+     jnxSoamDmCurrentStatsSoamPdusReceived Gauge32,
+     jnxSoamDmCurrentStatsFrameDelayRangeForwardMax Unsigned32,
+     jnxSoamDmCurrentStatsFrameDelayRangeForwardAvg Unsigned32,
+     jnxSoamDmCurrentStatsFrameDelayRangeBackwardMax Unsigned32,
+     jnxSoamDmCurrentStatsFrameDelayRangeBackwardAvg Unsigned32,
+     jnxSoamDmCurrentStatsFrameDelayRangeTwoWayMax Unsigned32,
+     jnxSoamDmCurrentStatsFrameDelayRangeTwoWayAvg Unsigned32
 }
 
 jnxSoamDmCurrentStatsIndex OBJECT-TYPE
@@ -3092,6 +3826,102 @@ jnxSoamDmCurrentStatsSoamPdusReceived OBJECT-TYPE
         "[MEF SOAM-PM] R66, R100"
      ::= { jnxSoamDmCurrentStatsEntry 24 }
 
+jnxSoamDmCurrentStatsFrameDelayRangeForwardMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum one-way frame delay range
+        in the forward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R100"
+    ::= { jnxSoamDmCurrentStatsEntry 25 }
+
+jnxSoamDmCurrentStatsFrameDelayRangeForwardAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average one-way frame delay range
+        in the forward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R100"
+    ::= { jnxSoamDmCurrentStatsEntry 26 }
+
+jnxSoamDmCurrentStatsFrameDelayRangeBackwardMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum one-way frame delay range
+        in the backward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66"
+    ::= { jnxSoamDmCurrentStatsEntry 27 }
+
+jnxSoamDmCurrentStatsFrameDelayRangeBackwardAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average one-way frame delay range
+        in the backward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66"
+    ::= { jnxSoamDmCurrentStatsEntry 28 }
+
+jnxSoamDmCurrentStatsFrameDelayRangeTwoWayMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum two-way frame delay range
+        calculated by this MEP for this Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    ::= { jnxSoamDmCurrentStatsEntry 29 }
+
+jnxSoamDmCurrentStatsFrameDelayRangeTwoWayAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average two-way frame delay range
+        calculated by this MEP for this Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    ::= { jnxSoamDmCurrentStatsEntry 30 }
+
 -- *****************************************************************************
 -- Ethernet Delay Measurement History Statistic Table
 -- *****************************************************************************
@@ -3180,7 +4010,13 @@ JnxSoamDmHistoryStatsEntry ::= SEQUENCE {
      jnxSoamDmHistoryStatsIfdvTwoWayMax Unsigned32,
      jnxSoamDmHistoryStatsIfdvTwoWayAvg Unsigned32,
      jnxSoamDmHistoryStatsSoamPdusSent Gauge32,
-     jnxSoamDmHistoryStatsSoamPdusReceived Gauge32
+     jnxSoamDmHistoryStatsSoamPdusReceived Gauge32,
+     jnxSoamDmHistoryStatsFrameDelayRangeForwardMax Unsigned32,
+     jnxSoamDmHistoryStatsFrameDelayRangeForwardAvg Unsigned32,
+     jnxSoamDmHistoryStatsFrameDelayRangeBackwardMax Unsigned32,
+     jnxSoamDmHistoryStatsFrameDelayRangeBackwardAvg Unsigned32,
+     jnxSoamDmHistoryStatsFrameDelayRangeTwoWayMax Unsigned32,
+     jnxSoamDmHistoryStatsFrameDelayRangeTwoWayAvg Unsigned32
 }
 
 jnxSoamDmHistoryStatsIndex OBJECT-TYPE
@@ -3570,6 +4406,102 @@ jnxSoamDmHistoryStatsSoamPdusReceived OBJECT-TYPE
         "[MEF SOAM-PM] R66, R100"
      ::= { jnxSoamDmHistoryStatsEntry 24 }
 
+jnxSoamDmHistoryStatsFrameDelayRangeForwardMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum one-way Frame Delay Range
+        in the forward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R100"
+    ::= { jnxSoamDmHistoryStatsEntry 25 }
+
+jnxSoamDmHistoryStatsFrameDelayRangeForwardAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average one-way Frame Delay Range
+        in the forward direction calculated by this MEP for this
+        Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R100"
+    ::= { jnxSoamDmHistoryStatsEntry 26 }
+
+jnxSoamDmHistoryStatsFrameDelayRangeBackwardMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum one-way Frame Delay Range
+        in the backward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66"
+    ::= { jnxSoamDmHistoryStatsEntry 27 }
+
+jnxSoamDmHistoryStatsFrameDelayRangeBackwardAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average one-way Frame Delay Range
+        in the backward direction calculated by this MEP for this
+        Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66"
+    ::= { jnxSoamDmHistoryStatsEntry 28 }
+
+jnxSoamDmHistoryStatsFrameDelayRangeTwoWayMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the maximum two-way Frame Delay Range
+        calculated by this MEP for this Measurement Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+        ::= { jnxSoamDmHistoryStatsEntry 29 }
+
+jnxSoamDmHistoryStatsFrameDelayRangeTwoWayAvg OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average two-way Frame Delay Range
+        Interval.
+
+        The value of this object is undefined when jnxSoamDmCfgType
+        is dm1DmTx or dm1DmRx.
+        "
+    ::= { jnxSoamDmHistoryStatsEntry 30 }
+
 -- *****************************************************************************
 -- Performance Measurement Loss Threshold Configuration Table
 -- *****************************************************************************
@@ -3750,6 +4682,767 @@ jnxSoamLmThresholdCfgRowStatus OBJECT-TYPE
           can be activated.
           "
      ::= { jnxSoamLmThresholdCfgEntry 5 }
+
+-- *****************************************************************************
+-- Ethernet Loss Measurement Current Availability Statistic Table
+-- *****************************************************************************
+
+jnxSoamLmCurrentAvailStatsTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF JnxSoamLmCurrentAvailStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+       "This object contains the current results for a SOAM Loss Measurement
+        session for availability statistics gathered during the interval
+        indicated by jnxSoamLmCfgAvailabilityMeasurementInterval.
+
+        Each row in the table represents a Loss Measurement session for
+        the defined MEP. This table uses four indices. The first three indices
+        are the indices of the Maintenance Domain, MaNet, and MEP tables. The
+        fourth index is the specific LM session on the selected MEP.
+
+        Instances of this managed object are created automatically
+        by the SNMP Agent when the Loss Measurement session is running.
+
+        The objects in this table apply regardless of the value of
+        jnxSoamLmCfgType unless otherwise specified in the object description.
+
+        Except for jnxSoamLmCurrentAvailStatsIndex,
+        jnxSoamLmCurrentAvailStatsStartTime, jnxSoamLmCurrentAvailStatsElapsedTime
+        and jnxSoamLmCurrentAvailStatsSuspect, each object in this table applies
+        only if the corresponding bit is set in jnxSoamLmCfgMeasurementEnable.
+
+        The objects in this table may be persistent upon reboot or restart
+        of a device.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D9, D18"
+    ::= { jnxSoamPmLmObjects 6 }
+
+jnxSoamLmCurrentAvailStatsEntry OBJECT-TYPE
+    SYNTAX JnxSoamLmCurrentAvailStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+       "The conceptual row of jnxSoamLmCurrentAvailStatsTable"
+    INDEX {
+        dot1agCfmMdIndex,
+        dot1agCfmMaIndex,
+        dot1agCfmMepIdentifier,
+        jnxSoamLmCfgIndex
+    }
+    ::= { jnxSoamLmCurrentAvailStatsTable 1 }
+
+JnxSoamLmCurrentAvailStatsEntry ::= SEQUENCE {
+     jnxSoamLmCurrentAvailStatsIndex Unsigned32,
+     jnxSoamLmCurrentAvailStatsStartTime DateAndTime,
+     jnxSoamLmCurrentAvailStatsElapsedTime TimeInterval,
+     jnxSoamLmCurrentAvailStatsSuspect TruthValue,
+   
+     jnxSoamLmCurrentAvailStatsForwardHighLoss Unsigned32,
+     jnxSoamLmCurrentAvailStatsBackwardHighLoss Unsigned32,
+     jnxSoamLmCurrentAvailStatsForwardConsecutiveHighLoss Unsigned32,
+     jnxSoamLmCurrentAvailStatsBackwardConsecutiveHighLoss Unsigned32,
+   
+     jnxSoamLmCurrentAvailStatsForwardAvailable Gauge32,
+     jnxSoamLmCurrentAvailStatsBackwardAvailable Gauge32,
+     jnxSoamLmCurrentAvailStatsForwardUnavailable Gauge32,
+     jnxSoamLmCurrentAvailStatsBackwardUnavailable Gauge32,
+     jnxSoamLmCurrentAvailStatsForwardMinFlr Unsigned32,
+     jnxSoamLmCurrentAvailStatsForwardMaxFlr Unsigned32,
+     jnxSoamLmCurrentAvailStatsForwardAvgFlr Unsigned32,
+     jnxSoamLmCurrentAvailStatsBackwardMinFlr Unsigned32,
+     jnxSoamLmCurrentAvailStatsBackwardMaxFlr Unsigned32,
+     jnxSoamLmCurrentAvailStatsBackwardAvgFlr Unsigned32
+}
+
+jnxSoamLmCurrentAvailStatsIndex OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "The index for the current availability Measurement Interval for this
+        PM session. This value will become the value for
+        jnxSoamLmHistoryAvailStatsIndex once the Measurement Interval
+        is completed. The duration of the Measurement Interval is specified
+        by jnxSoamLmCfgAvailabilityMeasurementInterval.
+
+        Measurement Interval indexes are assigned sequentially by
+        the SNMP Agent. The first Measurement Interval that occurs after
+        the session is started is assigned index 1.
+       "
+    ::= { jnxSoamLmCurrentAvailStatsEntry 1 }
+
+jnxSoamLmCurrentAvailStatsStartTime OBJECT-TYPE
+    SYNTAX DateAndTime
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "The time that the current Measurement Interval started.
+       "
+    REFERENCE
+       "[MEF SOAM-PM] R87, R112"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 2 }
+
+jnxSoamLmCurrentAvailStatsElapsedTime OBJECT-TYPE
+    SYNTAX TimeInterval
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "The time that the current Measurement Interval has been running, in 0.01
+        seconds.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R24, R87, R112"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 3 }
+
+jnxSoamLmCurrentAvailStatsSuspect OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "Whether the Measurement Interval has been marked as suspect.
+
+        The object is set to false at the start of a measurement
+        interval. It is set to true when there is a discontinuity in the
+        performance measurements during the Measurement Interval. Conditions
+        for a discontinuity include, but are not limited to the following:
+
+        1 - The local time-of-day clock is adjusted by at least 10 seconds
+        2 - The conducting of a performance measurement is halted before the
+            current Measurement Interval is completed
+        3 - A local test, failure, or reconfiguration that disrupts service
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R39, R40, R41"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 4 }
+
+jnxSoamLmCurrentAvailStatsForwardHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of high loss intervals (HLI) over
+        time in the forward direction.
+
+        The value starts at 0 and increments for every HLI that occurs.
+        This parameter is equivalent to 'L Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 5 }
+
+jnxSoamLmCurrentAvailStatsBackwardHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of high loss intervals (HLI) over
+        time in the backwards direction.
+
+        The value starts at 0 and increments for every HLI that occurs.
+        This parameter is equivalent to 'L Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 6 }
+
+jnxSoamLmCurrentAvailStatsForwardConsecutiveHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of consecutive high loss intervals
+        (CHLI) over time in the forward direction.
+
+        The value starts at 0 and increments for every HLI that occurs
+        that is determined to fall within a CHLI.
+        This parameter is equivalent to 'B Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 7 }
+
+jnxSoamLmCurrentAvailStatsBackwardConsecutiveHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of consecutive high loss intervals
+        (CHLI) over time in the backward direction.
+
+         The value starts at 0 and increments for every HLI that occurs
+         that is determined to fall within a CHLI.
+         This parameter is equivalent to 'B Sub T' found in MEF 10.2.1.
+        "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 8 }
+
+jnxSoamLmCurrentAvailStatsForwardAvailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as available in the forward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87; [MEF 10.2.1]"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 9 }
+
+jnxSoamLmCurrentAvailStatsBackwardAvailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as available in the backward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 10 }
+
+jnxSoamLmCurrentAvailStatsForwardUnavailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as unavailable in the forward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 11 }
+
+jnxSoamLmCurrentAvailStatsBackwardUnavailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as unavailable in the backward direction by this MEP
+        during this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 12 }
+
+jnxSoamLmCurrentAvailStatsForwardMinFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the minimum one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 2626 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 13 }
+
+jnxSoamLmCurrentAvailStatsForwardMaxFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the maximum one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 14 }
+
+jnxSoamLmCurrentAvailStatsForwardAvgFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the average one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 15 }
+
+jnxSoamLmCurrentAvailStatsBackwardMinFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the minimum one-way availability flr in the backward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 16 }
+
+jnxSoamLmCurrentAvailStatsBackwardMaxFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the maximum one-way availability flr in the backward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed
+        as a percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 17 }
+
+jnxSoamLmCurrentAvailStatsBackwardAvgFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the average one-way availability flr in the backward
+         direction, from among the set of availability flr values calculated by
+         the MEP in this Measurement Interval. There is one availability flr
+         value for each 'delta_t' time period within the Measurement Interval, as
+         specified in MEF 10.2.1.
+
+         The flr value is a ratio that is expressed as a
+         percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+         Units are in milli-percent, where 1 indicates 0.001 percent.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmCurrentAvailStatsEntry 18 }
+
+-- *****************************************************************************
+-- Ethernet Loss Measurement Availability History Statistic Table
+-- *****************************************************************************
+
+jnxSoamLmHistoryAvailStatsTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF JnxSoamLmHistoryAvailStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+       "This table contains the results for availability history Measurement
+        Intervals in a SOAM Loss Measurement session.
+
+        Rows of this table object are created automatically
+        by the SNMP Agent when the Loss Measurement session is running and a
+        Measurement Interval is completed.
+
+        Each row in the table represents the history statistics for a Loss
+        Measurement session availability Measurement Interval for the defined
+        MEP. This table uses five indices. The first three indices are the indices
+        of the Maintenance Domain, MaNet, and MEP tables. The fourth index is the
+        specific LM session on the selected MEP. The fifth index index the
+        specific Measurement Interval.
+
+        At least 32 completed Measurement Intervals are to be supported. 96
+        completed Measurement Intervals are recommended to be supported. If
+        there are at least 32 rows in the table and a new Measurement Interval
+        completes and a new row is to be added to the table, the oldest completed
+        Measurement Interval can be deleted (row deletion). If the availability
+        Measurement Interval is other than 15 minutes then a minimum of 8 hours of
+        completed Measurement Intervals are to be supported and 24 hours are
+        recommended to be supported.
+
+        Except for jnxSoamLmHistoryAvailStatsIndex,
+        jnxSoamLmHistoryAvailStatsEndTime, jnxSoamLmHistoryAvailStatsElapsedTime and
+        jnxSoamLmHistoryAvailStatsSuspect, each object in this table applies only
+        if the corresponding bit is set in jnxSoamLmCfgMeasurementEnable.
+
+        The rows and objects in this table are to be persistent upon reboot
+        or restart of a device.
+       "
+    REFERENCE
+       "[MEF SOAM-PM] R7, R15, R21, D8, R25"
+     ::= { jnxSoamPmLmObjects 7 }
+
+jnxSoamLmHistoryAvailStatsEntry OBJECT-TYPE
+    SYNTAX JnxSoamLmHistoryAvailStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+       "The conceptual row of jnxSoamLmHistoryAvailStatsTable"
+    INDEX {
+        dot1agCfmMdIndex,
+        dot1agCfmMaIndex,
+        dot1agCfmMepIdentifier,
+        jnxSoamLmCfgIndex,
+        jnxSoamLmHistoryAvailStatsIndex
+    }
+   ::= { jnxSoamLmHistoryAvailStatsTable 1 }
+   
+JnxSoamLmHistoryAvailStatsEntry ::= SEQUENCE {
+    jnxSoamLmHistoryAvailStatsIndex Unsigned32,
+    jnxSoamLmHistoryAvailStatsEndTime DateAndTime,
+    jnxSoamLmHistoryAvailStatsElapsedTime TimeInterval,
+    jnxSoamLmHistoryAvailStatsSuspect TruthValue,
+    jnxSoamLmHistoryAvailStatsForwardHighLoss Unsigned32,
+    jnxSoamLmHistoryAvailStatsBackwardHighLoss Unsigned32,
+    jnxSoamLmHistoryAvailStatsForwardConsecutiveHighLoss Unsigned32,
+    jnxSoamLmHistoryAvailStatsBackwardConsecutiveHighLoss Unsigned32,
+
+    jnxSoamLmHistoryAvailStatsForwardAvailable Gauge32,
+    jnxSoamLmHistoryAvailStatsBackwardAvailable Gauge32,
+    jnxSoamLmHistoryAvailStatsForwardUnavailable Gauge32,
+    jnxSoamLmHistoryAvailStatsBackwardUnavailable Gauge32,
+    jnxSoamLmHistoryAvailStatsForwardMinFlr Unsigned32,
+    jnxSoamLmHistoryAvailStatsForwardMaxFlr Unsigned32,
+    jnxSoamLmHistoryAvailStatsForwardAvgFlr Unsigned32,
+    jnxSoamLmHistoryAvailStatsBackwardMinFlr Unsigned32,
+    jnxSoamLmHistoryAvailStatsBackwardMaxFlr Unsigned32,
+    jnxSoamLmHistoryAvailStatsBackwardAvgFlr Unsigned32
+}
+
+jnxSoamLmHistoryAvailStatsIndex OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+       "The index for the availability Measurement Interval within this
+        PM session.
+
+        Measurement Interval indexes are assigned sequentially by
+        the SNMP Agent. The first Measurement Interval that occurs after
+        the session is started is assigned index 1. Measurement Intervals
+        for availability (stored in this table) are based on
+        jnxSoamLmCfgAvailabilityMeasurementInterval and are indexed independently
+        of Measurement Intervals for FLR (stored in jnxSoamLmHistoryStatsTable).
+
+        Referential integrity is necessary, i.e., the index needs to be
+        persistent upon a reboot or restart of a device. The index
+        is never reused while this session is active until it wraps to zero.
+        The index value keeps increasing up to that time.
+       "
+    ::= { jnxSoamLmHistoryAvailStatsEntry 1 }
+
+jnxSoamLmHistoryAvailStatsEndTime OBJECT-TYPE
+    SYNTAX DateAndTime
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "The time that the Measurement Interval ended.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R23, R87, R112"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 2 }
+
+jnxSoamLmHistoryAvailStatsElapsedTime OBJECT-TYPE
+    SYNTAX TimeInterval
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "The length of time that the Measurement Interval ran for,
+        in 0.01 seconds.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R24, R87, R112"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 3 }
+
+jnxSoamLmHistoryAvailStatsSuspect OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "Whether the Measurement Interval has been marked as suspect.
+
+        The object is set to true when there is a discontinuity in the
+        performance measurements during the Measurement Interval. Conditions
+        for a discontinuity include, but are not limited to the following:
+
+        1 - The local time-of-day clock is adjusted by at least 10 seconds
+        2 - The conducting of a performance measurement is halted before the
+            current Measurement Interval is completed
+        3 - A local test, failure, or reconfiguration that disrupts service
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R39, R40, R41, R42"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 4 }
+
+jnxSoamLmHistoryAvailStatsForwardHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of high loss intervals (HLI) over
+        time in the forward direction.
+
+        The value starts at 0 and increments for every HLI that occurs.
+        This parameter is equivalent to 'L Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 5 }
+
+jnxSoamLmHistoryAvailStatsBackwardHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of high loss intervals (HLI) over
+        time in the backward direction.
+
+        The value starts at 0 and increments for every HLI that occurs.
+        This parameter is equivalent to 'L Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+       "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 6 }
+
+jnxSoamLmHistoryAvailStatsForwardConsecutiveHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of consecutive high loss intervals
+        (CHLI) over time in the forward direction.
+
+        The value starts at 0 and increments for every HLI that occurs
+        that is determined to fall within a CHLI.
+        This parameter is equivalent to 'B Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+       "[MEF 10.2.1] 6.9.9; 3266 [MEF SOAM-PM] R87"
+::= { jnxSoamLmHistoryAvailStatsEntry 7 }
+
+jnxSoamLmHistoryAvailStatsBackwardConsecutiveHighLoss OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object is the number of consecutive high loss intervals
+        (CHLI) over time in the forward direction.
+
+        The value starts at 0 and increments for every HLI that occurs
+        that is determined to fall within a CHLI.
+        This parameter is equivalent to 'B Sub T' found in MEF 10.2.1.
+       "
+    REFERENCE
+        "[MEF 10.2.1] 6.9.9; [MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 8 }
+
+jnxSoamLmHistoryAvailStatsForwardAvailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as available in the forward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87; [MEF 10.2.1]"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 9 }
+
+jnxSoamLmHistoryAvailStatsBackwardAvailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as available in the backward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 10 }
+
+jnxSoamLmHistoryAvailStatsForwardUnavailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as unavailable in the forward direction by this MEP during
+        this Measurement Interval.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 11 }
+
+
+jnxSoamLmHistoryAvailStatsBackwardUnavailable OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the number of availability indicators
+        evaluated as unavailable in the backward direction by this MEP
+        during this Measurement Interval.
+       "
+    REFERENCE
+       "[MEF SOAM-PM] R87"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 12 }
+
+jnxSoamLmHistoryAvailStatsForwardMinFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the minimum one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+       "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 13 }
+
+jnxSoamLmHistoryAvailStatsForwardMaxFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the maximum one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+    
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+    
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 14 }
+    
+jnxSoamLmHistoryAvailStatsForwardAvgFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the average one-way availability flr in the forward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+    
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 15 }
+
+jnxSoamLmHistoryAvailStatsBackwardMinFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the minimum one-way availability flr in the backward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 16 }
+
+jnxSoamLmHistoryAvailStatsBackwardMaxFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the maximum one-way availability flr in the backward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed
+        as a percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 17 }
+
+jnxSoamLmHistoryAvailStatsBackwardAvgFlr OBJECT-TYPE
+    SYNTAX Unsigned32 (0..100000)
+    UNITS "milli-percent"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+       "This object contains the average one-way availability flr in the backward
+        direction, from among the set of availability flr values calculated by
+        the MEP in this Measurement Interval. There is one availability flr
+        value for each 'delta_t' time period within the Measurement Interval, as
+        specified in MEF 10.2.1.
+
+        The flr value is a ratio that is expressed as a
+        percent with a value of 0 (ratio 0.00) through 100000 (ratio 1.00).
+
+        Units are in milli-percent, where 1 indicates 3458 0.001 percent.
+       "
+    REFERENCE
+        "[MEF SOAM-PM] D37"
+    ::= { jnxSoamLmHistoryAvailStatsEntry 18 }
+
 
 -- *****************************************************************************
 -- Performance Measurement Delay Threshold Configuration Table
@@ -4044,6 +5737,313 @@ jnxSoamDmThresholdCfgRowStatus OBJECT-TYPE
           "
      ::= { jnxSoamDmThresholdCfgEntry 5 }
 
+
+-- *****************************************************************************
+-- Ethernet Delay Measurement Bin Configuration Table
+-- *****************************************************************************
+
+jnxSoamDmCfgMeasBinTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF JnxSoamDmCfgMeasBinEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table includes configuration objects for the Delay Measurement
+        bins to collect stats.
+
+        Each row in the table is automatically created when the Delay
+        Measurement session is defined for the selected MEP. The number of rows
+        created is based upon three items: the DM type, the number of bins
+        defined for each type, and whether bins are enabled for each type.
+
+        The first four indices are the same as used to create the DM session:
+        Maintenance Domain, MaNet, MEP identification, and jnxSoamDmCfgIndex. The
+        fifth index is the type of bin, and the sixth index is the bin number.
+
+        For a dmDmm session all nine types of bins can be created. For a dm1DmmTx
+        session no bins are created. For a dm1DmmRx session only types
+        forwardFrameDelay, forwardIfdv, and forwardFrameDelayRange can be created.
+
+        The number of bins created for a bin type is based upon: the
+        jnxSoamDmCfgNumMeasBinsPerFrameDelayInterval object, the
+        jnxSoamDmCfgNumMeasBinsPerInterFrameDelayVariationInterval object, the
+        jnxSoamDmCfgNumMeasBinsPerFrameDelayRangeInterval object, and
+        the jnxSoamDmCfgMeasurementEnable object.
+
+        For instance, if a dmDmm session with Bins per Frame Delay Interval
+        set to 5, Bins per Frame Delay Variation Interval set to 3, and Frame
+        Delay Range set to 2 (default), all of the appropriate bits set in
+        jnxSoamDmMeasurementCfgEnable, the following number of rows would be
+        created:
+
+        For bin types TwoWayFrameDelay(1), forwardFrameDelay(2), and
+        backwardFrameDelay(3) = 5 bins * 3 types = 15 rows
+
+        For bin types TwoWayIfdv(4), forwardIfdv(5), backwardIfdv(6) =
+        3 bins * 3 types = 9 rows.
+
+        For bins types twoWayFrameDelayRange(7), forwardFrameDelayRange(8),
+        backwardFrameDelayRange(9) =
+        2 bins * 3 types = 6 rows.
+
+        This gives a total of 30 rows created for the DMM session example.
+
+        Each value in the bin defaults to 5000us greater than the previous bin,
+        with the first bin default value set to 0.
+
+        For the delay example above (5 bins), the following default values
+        would be written to the bins:
+        bin 1: 0 (range is 0us <= measurement < 5,000us)
+        bin 2: 5000 (range is 5,000us <= measurement < 10,000us)
+        bin 3: 10000 (range is 10,000us <= measurement < 15,000us)
+        bin 4: 15000 (range is 15,000us <= measurement < 20,000us)
+        bin 5: 20000 (range is 20,000us <= measurement < infinity)
+
+        For the delay variation example above (3 bins), the following default
+        values would be written to the bins:
+        bin 1: 0 (range is 0us <= measurement < 5,000us)
+        bin 2: 5000 (range is 5,000us <= measurement < 10,000us)
+        bin 3: 10000 (range is 10,000us <= measurement < infinity)
+
+        For the frame delay range example above (2 bins), the following default
+        values would be written to the bins:
+        bin 1: 0 (range is 0us <= measurement < 5,000us)
+        bin 2: 5000 (range is 5,000us <= measurement < infinity)
+
+        The writable objects in this table need to be persistent upon reboot
+        or restart of a device.
+
+        Rows are only created if the corresponding measurement type has been enabled
+        via the jnxSoamDmCfgMeasurementEnable object.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R34, R36, R37, D17, R38, R65, D26, D27, R99, D43, D44"
+    ::= { jnxSoamPmDmObjects 6 }
+
+jnxSoamDmCfgMeasBinEntry OBJECT-TYPE
+    SYNTAX JnxSoamDmCfgMeasBinEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The conceptual row of jnxSoamDmCfgMeasBinTable."
+    INDEX {
+        dot1agCfmMdIndex,
+        dot1agCfmMaIndex,
+        dot1agCfmMepIdentifier,
+        jnxSoamDmCfgIndex,
+        jnxSoamDmCfgMeasBinType,
+        jnxSoamDmCfgMeasBinNumber
+        }
+    ::= { jnxSoamDmCfgMeasBinTable 1 }
+
+JnxSoamDmCfgMeasBinEntry ::= SEQUENCE {
+    jnxSoamDmCfgMeasBinType JnxSoamTcDelayMeasurementBinType,
+    jnxSoamDmCfgMeasBinNumber Unsigned32,
+    jnxSoamDmCfgMeasBinLowerBound Unsigned32
+}
+
+jnxSoamDmCfgMeasBinType OBJECT-TYPE
+    SYNTAX JnxSoamTcDelayMeasurementBinType
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This object specifies whether the bin number is for
+        Frame Delay or Inter-Frame Delay Variation.
+        "
+    ::= { jnxSoamDmCfgMeasBinEntry 1 }
+
+jnxSoamDmCfgMeasBinNumber OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This object specifies the bin number for the
+        configured boundary. The first bin has bin number 1.
+        "
+    ::= { jnxSoamDmCfgMeasBinEntry 2 }
+
+jnxSoamDmCfgMeasBinLowerBound OBJECT-TYPE
+    SYNTAX Unsigned32
+    UNITS "microseconds (us)"
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "This object specifies the lower boundary for a
+        measurement bin. The upper boundary is defined by the next bin
+        value or infinite for the last bin defined.
+        The measurement boundary for each measurement bin is to
+        be larger than the measurement boundary of the preceding
+        measurement bin. By default, the next bin is set to 5000us larger
+        than the lower bin boundary.
+
+        The values in a bin boundary object represents the time range
+        used to segregate delay data into the appropriate statistical
+        data bin. For five bins with default values, each bin has the
+        following time range:
+
+        bin 1 = 0, range is 0us <= measurement < 5,000us
+        bin 2 = 5000, range is 5,000us <= measurement < 10,000us
+        bin 3 = 10000, range is 10,000us <= measurement < 15,000us
+        bin 4 = 15000, range is 15,000us <= measurement < 20,000us
+        < infinity
+
+        The first bin boundary (jnxSoamDmCfgBinNumber set to 1) always contains
+        the value of 0. Attempting to write a non-zero value to this bin will
+        result in an error.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R33, R35, D17"
+    ::= { jnxSoamDmCfgMeasBinEntry 3 }
+
+-- *****************************************************************************
+-- Ethernet Delay Measurement Current Bin Statistic Table
+-- *****************************************************************************
+
+jnxSoamDmCurrentStatsBinsTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF JnxSoamDmCurrentStatsBinsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table contains the result bins for the current Measurement
+        Interval in a SOAM Delay Measurement session.
+
+        Each row in the table represents the current bin statistics for a
+        Delay Measurement session for the defined MEP. This table uses six
+        indices. The first three indices are the indices of the Maintenance
+        Domain, MaNet, and MEP tables. The fourth index is the specific DM
+        session on the selected MEP. The fifth index indicates bin type and
+        the sixth indicates the specific bin number.
+
+        A row in this table is created automatically by the SNMP Agent when
+        the Delay Measurement session is configured and the bin counter value
+        is set to 0.
+
+        The objects in this table are ignored if jnxSoamDmCfgType is 1DmTx.
+
+        This table applies only if the corresponding bit is set in
+        jnxSoamDmCfgMeasurementEnable.
+
+        The objects in this table do not need to be persistent upon reboot
+        or restart of a device.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R7, R15, D9"
+    ::= { jnxSoamPmDmObjects 7 }
+
+jnxSoamDmCurrentStatsBinsEntry OBJECT-TYPE
+    SYNTAX JnxSoamDmCurrentStatsBinsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The conceptual row of jnxSoamDmCurrentStatsBinsTable"
+    INDEX {
+        dot1agCfmMdIndex,
+        dot1agCfmMaIndex,
+        dot1agCfmMepIdentifier,
+        jnxSoamDmCfgIndex,
+        jnxSoamDmCfgMeasBinType,
+        jnxSoamDmCfgMeasBinNumber
+        }
+    ::= { jnxSoamDmCurrentStatsBinsTable 1 }
+
+JnxSoamDmCurrentStatsBinsEntry ::= SEQUENCE {
+    jnxSoamDmCurrentStatsBinsCounter Gauge32
+}
+
+jnxSoamDmCurrentStatsBinsCounter OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the count of the number of completed
+        measurements initiated in this Measurement Interval whose value
+        falls within the range specified for this bin (that is, greater
+        than or equal to the measurement boundary for the bin, and
+        (unless the bin is the last bin) less than the measurement
+        boundary for the following bin.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R67, R100, R101"
+    ::= { jnxSoamDmCurrentStatsBinsEntry 1 }
+
+-- *****************************************************************************
+-- Ethernet Delay Measurement Bin History Statistic Table
+-- *****************************************************************************
+
+jnxSoamDmHistoryStatsBinsTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF JnxSoamDmHistoryStatsBinsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table contains the result bins for the history Measurement
+        Intervals in a SOAM Delay Measurement session.
+
+        Rows of this table are created automatically
+        by the SNMP Agent when the Delay Measurement session is running and a
+        Measurement Interval is completed.
+
+        Each row in the table represents the Measurement Interval history
+        statistics for a specific bin in a Delay Measurement session for the
+        defined MEP. This table uses seven indices. The first three indices
+        are the indices of the Maintenance Domain, MaNet, and MEP tables. The
+        fourth index is the specific DM session on the selected MEP. The
+        fifth index is the Measurement Interval. The sixth index is the
+        specific bin type. The seventh index is the specific bin number.
+
+        Rows in this table pertaining to a given Measurement Interval are
+        row in the
+        jnxSoamDmHistoryStatsTable is deleted.
+
+        The objects in this table are ignored if jnxSoamDmCfgType is 1DmTx.
+
+        This table applies only if the corresponding bit is set in
+        jnxSoamDmCfgMeasurementEnable.
+
+        The objects in this table need to be persistent upon reboot
+        or restart of a device.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R7, R15, R21, D8, R66, R67"
+    ::= { jnxSoamPmDmObjects 8 }
+
+jnxSoamDmHistoryStatsBinsEntry OBJECT-TYPE
+    SYNTAX JnxSoamDmHistoryStatsBinsEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The conceptual row of jnxSoamDmHistoryStatsBinsTable"
+    INDEX {
+        dot1agCfmMdIndex,
+        dot1agCfmMaIndex,
+        dot1agCfmMepIdentifier,
+        jnxSoamDmCfgIndex,
+        jnxSoamDmHistoryStatsIndex,
+        jnxSoamDmCfgMeasBinType,
+        jnxSoamDmCfgMeasBinNumber
+        }
+    ::= { jnxSoamDmHistoryStatsBinsTable 1 }
+
+JnxSoamDmHistoryStatsBinsEntry ::= SEQUENCE {
+    jnxSoamDmHistoryStatsBinsCounter Gauge32
+}
+
+jnxSoamDmHistoryStatsBinsCounter OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "This object contains the count of the number of completed
+        measurements initiated in this Measurement Interval whose value
+        falls within the range specified for this bin (that is, greater
+        than or equal to the measurement boundary for the bin, and
+        (unless the bin is the last bin) less than the measurement
+        boundary for the following bin.
+        "
+    REFERENCE
+        "[MEF SOAM-PM] R66, R67, R100, R101"
+    ::= { jnxSoamDmHistoryStatsBinsEntry 1 }
+
+
+
 -- *****************************************************************************
 -- Notification Data Objects
 -- *****************************************************************************
@@ -4162,6 +6162,81 @@ jnxSoamPmNotificationObjPriority OBJECT-TYPE
           This object is only used for the notification.
           "
      ::= { jnxSoamPmNotificationObj 8 }
+
+jnxSoamPmNotificationTotalFlaps OBJECT-TYPE
+     SYNTAX Unsigned32
+     MAX-ACCESS accessible-for-notify
+     STATUS current
+     DESCRIPTION
+         "The measured value of total number of flaps occured during the
+          flap trap timer itnerval.
+          "
+     ::= { jnxSoamPmNotificationObj 9 }
+
+jnxSoamPmNotificationAccTotalFlaps OBJECT-TYPE
+     SYNTAX Unsigned32
+     MAX-ACCESS accessible-for-notify
+     STATUS current
+     DESCRIPTION
+         "The measured value of total number of accumulated flaps occured during the
+          flap trap timer itnerval.
+          "
+     ::= { jnxSoamPmNotificationObj 10 }
+
+jnxSoamPmNotificationObjThresholdLastValue OBJECT-TYPE
+     SYNTAX Unsigned32
+     MAX-ACCESS accessible-for-notify
+     STATUS current
+     DESCRIPTION
+         "The measured value of the object at the time of the generation of the
+          last Notification during the flap trap timer interval.
+                 
+          This object is only used for the notification.
+          "
+     ::= { jnxSoamPmNotificationObj 11 }
+
+jnxSoamPmNotificationObjCurrentState OBJECT-TYPE
+     SYNTAX INTEGER {
+                aboveAlarm (1),
+                setAlarm (2),
+                clearAlarm (3)
+     }
+     MAX-ACCESS accessible-for-notify
+     STATUS current
+     DESCRIPTION
+         "The Current Notification Crossing Type of the 
+          object that caused the generation
+          of the notification at the end of timer interval 
+          from the jnxSoamLmThresholdEntry or
+          jnxSoamDmThresholdEntry.
+
+          aboveAlarm(1) indicates that the crossing type alarm was an above
+          threshold
+
+          setAlarm(2) indicates that the crossing type alarm was a set
+          threshold
+
+          clearAlarm(3) indicates that the crossing type alarm was a clear
+          threshold
+
+          This object is only used for the notification.
+          "
+     ::= { jnxSoamPmNotificationObj 12 }
+
+jnxSoamPmNotificationObjLastDateAndTime OBJECT-TYPE
+     SYNTAX DateAndTime
+     MAX-ACCESS accessible-for-notify
+     STATUS current
+     DESCRIPTION
+         "This object contains the time and date at the time that
+          the last notification event is detected, at the end of flap timer interval
+          and not the time of the first notification
+          generation.
+
+          This object is used only for notifications. The mechanism to set and keep
+          current the date and time is not specified.
+          "
+     ::= { jnxSoamPmNotificationObj 13 }
 
 -- *****************************************************************************
 -- NOTIFICATIONS (TRAPS)
@@ -4343,4 +6418,28 @@ jnxSoamPmThresholdCrossingAlarm NOTIFICATION-TYPE
 		 In such a case, another alarm interval period is started right away.
 		 "
 	 ::= { jnxSoamPmNotifications 3 } 
+
+jnxSoamPmThresholdFlapAlarm NOTIFICATION-TYPE
+         OBJECTS {
+                 jnxSoamPmNotificationObjThresholdId,
+                 jnxSoamPmNotificationObjThresholdConfig,
+                 jnxSoamPmNotificationObjThresholdLastValue,
+                 jnxSoamPmNotificationTotalFlaps,
+                 jnxSoamPmNotificationAccTotalFlaps,
+                 jnxSoamPmNotificationObjCurrentState,
+                 jnxSoamPmNotificationObjDestinationMep
+         }
+         STATUS current
+         DESCRIPTION
+                 " The jnxSoamPmThresholdFlapAlarm is sent when the CFM Threshold Flap 
+                   Notification feature is enabled which would dampen the 
+                   jnxSoamPmThresholdCrossingAlarm sent to NMS. The jnxSoamPmThresholdFlapAlarm
+                   gives details about Flaps occured during the time interval. The 
+                   jnxSoamPmThresholdFlapAlarm is sent for the follwing below conditions
+                   a) Trap is sent if  one flap sequence has occured
+                   b) Trap is sent if threshold or timer changes happens.
+                   c) Trap is sent when finite iterations counts expires.
+                 "
+
+         ::= { jnxSoamPmNotifications 4 }
 END

@@ -24,7 +24,7 @@ IMPORTS
 
 
 jnxSubscriberMIB  MODULE-IDENTITY
-       LAST-UPDATED "201312130000Z"  -- 20-Dec-13
+       LAST-UPDATED "201602160000Z"  -- 16-Feb-16
        ORGANIZATION "Juniper Networks, Inc."
        CONTACT-INFO
              " Juniper Technical Assistance Center
@@ -44,6 +44,13 @@ jnxSubscriberMIB  MODULE-IDENTITY
        REVISION    "201312130000Z"  -- 20-Dec-13
        DESCRIPTION
              "Added jnxSubscriberAccountingTable MIB."
+       REVISION    "201411030000Z"  -- 03-Nov-14
+       DESCRIPTION
+             "Added jnxSubscriberPicCountTable and jnxSubscriberSlotCountTable."
+       REVISION    "201602160000Z"  -- 16-Feb-2016
+       DESCRIPTION
+             "Added jnxSubscriberUnderlyingInterface and
+             jnxSubscriberPhysicalInterface objects."
        ::= { jnxSubscriberMibRoot  1 }
 
 
@@ -83,7 +90,14 @@ JnxSubscriberClientType  ::= TEXTUAL-CONVENTION
                 mobileIp            Mobile Ip clients only
                 vplsPw              VPLS pseudowires only
                 static              Static clients only
-                mlppp               MLPPP clients only "
+                mlppp               MLPPP clients only
+                xauth               XAUTH clients only
+                fwauth              FWAUTH clients only
+                dot1x               DOT1X clients only
+                essm                ESSM clients only
+                l2ald               L2ALD clients only
+                gre                 GRE clients only
+                vlanOob             Out-of-band VLAN clients only "
        SYNTAX      BITS {
              none(0),
              dhcp(1),
@@ -95,7 +109,14 @@ JnxSubscriberClientType  ::= TEXTUAL-CONVENTION
              ppppoe(7),
              l2tp(8),
              static(9),
-             mlppp(10) }
+             mlppp(10),
+             xauth(11),
+             fwauth(12),
+             dot1x(13),
+             essm(14),
+             l2ald(15),
+             gre(16),
+             vlanOob(17) }
 
 
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -160,6 +181,33 @@ jnxSubscriberAccountingTable OBJECT-TYPE
              "The entries in this table represent subscribers with accounting."
        ::= { jnxSubscriberGeneral 6 }
 
+jnxSubscriberAccountingTotalCount OBJECT-TYPE
+       SYNTAX      CounterBasedGauge64
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+             "Total number of subscribers with accounting."
+       ::= { jnxSubscriberGeneral 7 }
+
+jnxSubscriberPicCountTable  OBJECT-TYPE
+       SYNTAX      SEQUENCE OF JnxSubscriberPicCountEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+             " The entries in this table represent each PIC.
+               Each entry contains the PIC name and the number
+               of active subscribers present on that PIC."
+       ::= { jnxSubscriberGeneral 8 }
+
+jnxSubscriberSlotCountTable  OBJECT-TYPE
+       SYNTAX      SEQUENCE OF JnxSubscriberSlotCountEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+             " The entries in this table represent each slot.
+               Each entry contains the slot name and the number
+               of active subscribers present on that slot."
+       ::= { jnxSubscriberGeneral 9 }
 
 jnxSubscriberInterfaceHardwareIndexEntry OBJECT-TYPE
        SYNTAX      JnxSubscriberInterfaceHardwareIndexEntry
@@ -231,7 +279,9 @@ JnxSubscriberEntry ::= SEQUENCE {
        jnxSubscriberMacAddress           MacAddress,
        jnxSubscriberState                JnxSubscriberState,
        jnxSubscriberLoginTime            DisplayString,
-       jnxSubscriberAcctSessionId        DisplayString }
+       jnxSubscriberAcctSessionId        DisplayString,
+       jnxSubscriberUnderlyingInterface  DisplayString,
+       jnxSubscriberPhysicalInterface    DisplayString }
 
 jnxSubscriberHandleHiWord OBJECT-TYPE
        SYNTAX      Unsigned32(0..4294967295)
@@ -356,6 +406,22 @@ jnxSubscriberAcctSessionId OBJECT-TYPE
              "The accounting session id associated with this subscriber."
        ::= { jnxSubscriberEntry 14 }
 
+jnxSubscriberUnderlyingInterface OBJECT-TYPE
+       SYNTAX      DisplayString
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+             "The underlying interface associated with this subscriber interface."
+       ::= { jnxSubscriberEntry 15 }
+
+jnxSubscriberPhysicalInterface OBJECT-TYPE
+       SYNTAX      DisplayString
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+             "The physical interface associated with this subscriber interface."
+       ::= { jnxSubscriberEntry 16 }
+
 
 jnxSubscriberPortCountEntry OBJECT-TYPE
        SYNTAX      JnxSubscriberPortCountEntry
@@ -370,7 +436,8 @@ jnxSubscriberPortCountEntry OBJECT-TYPE
 JnxSubscriberPortCountEntry ::= SEQUENCE {
        jnxSubscriberPort                  DisplayString,
        jnxSubscriberPortTunneledCounter  CounterBasedGauge64, 
-       jnxSubscriberPortTerminatedCounter  CounterBasedGauge64 }
+       jnxSubscriberPortTerminatedCounter  CounterBasedGauge64,
+       jnxSubscriberPortL2CrossConnectCounter  CounterBasedGauge64 }
 
 jnxSubscriberPort  OBJECT-TYPE
        SYNTAX       DisplayString (SIZE(1..32))
@@ -396,6 +463,14 @@ jnxSubscriberPortTerminatedCounter OBJECT-TYPE
        DESCRIPTION
              "Number of active Tunneled subscribers present on the port"
        ::= { jnxSubscriberPortCountEntry 3  }
+
+jnxSubscriberPortL2CrossConnectCounter OBJECT-TYPE
+       SYNTAX       CounterBasedGauge64
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+             "Number of Layer-2 cross-connected subscribers present on the port"
+       ::= { jnxSubscriberPortCountEntry 4  }
 
 -- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 -- Subscriber information by logical system
@@ -721,5 +796,73 @@ jnxSubscriberAccountingAcctSessionId OBJECT-TYPE
        DESCRIPTION
              "The accounting session id associated with this subscriber."
        ::= { jnxSubscriberAccountingEntry 14 }
+
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- PIC Count Table
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+jnxSubscriberPicCountEntry OBJECT-TYPE
+       SYNTAX      JnxSubscriberPicCountEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+             "A specification of Pic containing the PIC name 
+              and the number of active subscribers on that PIC"
+       INDEX       { jnxSubscriberPic }
+       ::= { jnxSubscriberPicCountTable 1 }
+
+JnxSubscriberPicCountEntry ::= SEQUENCE {
+       jnxSubscriberPic                  DisplayString,
+       jnxSubscriberPicTotalCounter  CounterBasedGauge64 }
+
+jnxSubscriberPic  OBJECT-TYPE
+       SYNTAX       DisplayString (SIZE(1..32))
+       MAX-ACCESS   not-accessible
+       STATUS       current
+       DESCRIPTION
+             "Name of the PIC in string"
+       ::= { jnxSubscriberPicCountEntry 1  }
+
+jnxSubscriberPicTotalCounter OBJECT-TYPE
+       SYNTAX       CounterBasedGauge64
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+             "Number of active subscribers present on the PIC"
+       ::= { jnxSubscriberPicCountEntry 2  }
+
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-- Slot Count Table
+-- +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+jnxSubscriberSlotCountEntry OBJECT-TYPE
+       SYNTAX      JnxSubscriberSlotCountEntry
+       MAX-ACCESS  not-accessible
+       STATUS      current
+       DESCRIPTION
+             "A specification of Slot containing the slot name 
+              and the number of active subscribers on that slot"
+       INDEX       { jnxSubscriberSlot }
+       ::= { jnxSubscriberSlotCountTable 1 }
+
+JnxSubscriberSlotCountEntry ::= SEQUENCE {
+       jnxSubscriberSlot                  DisplayString,
+       jnxSubscriberSlotTotalCounter      CounterBasedGauge64 }
+
+jnxSubscriberSlot  OBJECT-TYPE
+       SYNTAX       DisplayString (SIZE(1..32))
+       MAX-ACCESS   not-accessible
+       STATUS       current
+       DESCRIPTION
+             "Name of the slot in string"
+       ::= { jnxSubscriberSlotCountEntry 1  }
+
+jnxSubscriberSlotTotalCounter OBJECT-TYPE
+       SYNTAX       CounterBasedGauge64
+       MAX-ACCESS   read-only
+       STATUS       current
+       DESCRIPTION
+             "Number of active subscribers present on the slot"
+       ::= { jnxSubscriberSlotCountEntry 2  }
 
 END
