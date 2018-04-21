@@ -3,7 +3,7 @@
 --   
 -- September 2013, Liang Mei
 --   
--- Copyright (c) 2013 by Cisco Systems, Inc.
+-- Copyright (c) 2013, 2016 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -15,6 +15,10 @@ IMPORTS
     Counter64,
     Integer32
         FROM SNMPv2-SMI
+    CounterBasedGauge64
+        FROM HCNUM-TC
+    QosQueueNumber
+        FROM CISCO-QOS-TC-MIB
     MODULE-COMPLIANCE,
     OBJECT-GROUP
         FROM SNMPv2-CONF
@@ -25,7 +29,7 @@ IMPORTS
 
 
 ciscoPfcExtMIB MODULE-IDENTITY
-    LAST-UPDATED    "201309260000Z"
+    LAST-UPDATED    "201604280000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -45,11 +49,14 @@ ciscoPfcExtMIB MODULE-IDENTITY
 
         The following terms are used throughout the MIB:
             PFC:  Priority Flow Control"
+    REVISION        "201604280000Z"
+    DESCRIPTION
+        "Added support for:
+         - ciscoPfcExtWatchdogIfQueueGroup"
     REVISION        "201309260000Z"
     DESCRIPTION
         "Initial version of this MIB module."
     ::= { ciscoMgmt 813 }
-
 
 ciscoPfcExtMIBNotifs  OBJECT IDENTIFIER
     ::= { ciscoPfcExtMIB 0 }
@@ -163,7 +170,97 @@ cpfcIfPriorityIndications OBJECT-TYPE
         "A count of the received indication primitives for a specific
         PFC priority of a particular interface." 
     ::= { cpfcIfPriorityEntry 3 }
- 
+
+---
+--- PFC watchdog timer informational objects
+---
+cpfcWatchdogIfQueueInfoTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CpfcWatchdogIfQueueInfoEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table provides PFC Watchdog Timer related information 
+        for each queue of each watchdog timer capable interface."
+    ::= { ciscoPfcExtMIBObjects 3 }
+
+cpfcWatchdogIfQueueInfoEntry OBJECT-TYPE
+    SYNTAX          CpfcWatchdogIfQueueInfoEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Each entry contains the PFC Watchdog Time information,
+        which are per interface and per queue."
+    INDEX           {
+                        ifIndex,
+                        cpfcWatchdogIfQueueNumber
+                    }
+    ::= { cpfcWatchdogIfQueueInfoTable 1 }
+
+CpfcWatchdogIfQueueInfoEntry ::= SEQUENCE {
+        cpfcWatchdogIfQueueNumber             QosQueueNumber,
+        cpfcWatchdogIfQueueState              INTEGER,
+        cpfcWatchdogIfQueueShutdowns          Counter64,
+        cpfcWatchdogIfQueueRestores           Counter64,
+        cpfcWatchdogIfQueueTotalDropPkts      Counter64,
+        cpfcWatchdogIfQueueDropPkts           CounterBasedGauge64
+}
+
+cpfcWatchdogIfQueueNumber OBJECT-TYPE
+    SYNTAX          QosQueueNumber 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the queue number of the interface." 
+    ::= { cpfcWatchdogIfQueueInfoEntry 1 }
+
+cpfcWatchdogIfQueueState OBJECT-TYPE
+    SYNTAX          INTEGER {
+                      active(1),
+                      shutdown(2),
+                      notApplicable(3) -- when watchdog timer is disabled
+                    } 
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the state of the PFC queue for the interface."
+    ::= { cpfcWatchdogIfQueueInfoEntry 2 }
+
+cpfcWatchdogIfQueueShutdowns OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current 
+    DESCRIPTION
+        "This object indicates the number of times a given PFC queue was 
+        shutdown for the interface."
+    ::= { cpfcWatchdogIfQueueInfoEntry 3 }
+
+cpfcWatchdogIfQueueRestores OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of times a given PFC queue was 
+        restored for the interface."
+    ::= { cpfcWatchdogIfQueueInfoEntry 4 }
+
+cpfcWatchdogIfQueueTotalDropPkts OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates total number of packets that were dropped
+        due to corrective action for a given PFC queue of the interface."
+    ::= { cpfcWatchdogIfQueueInfoEntry 5 }
+
+cpfcWatchdogIfQueueDropPkts OBJECT-TYPE
+    SYNTAX          CounterBasedGauge64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates total number of packets that have been
+        dropped due to corrective action since last shutdown action 
+        for a given PFC queue of the interface."
+    ::= { cpfcWatchdogIfQueueInfoEntry 6 }
 
 -- Conformance Information
 
@@ -177,7 +274,7 @@ ciscoPfcExtMIBGroups  OBJECT IDENTIFIER
 -- Compliance statements
 
 ciscoPfcExtMIBCompliance MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the
         CISCO-PFC-EXT-MIB."
@@ -192,6 +289,28 @@ ciscoPfcExtMIBCompliance MODULE-COMPLIANCE
         "This group is mandatory for devices in which interfaces
         are capable of providing such information."
     ::= { ciscoPfcExtMIBCompliances 1 }
+
+ciscoPfcExtMIBCompliance2 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the
+        CISCO-PFC-EXT-MIB."
+    MODULE          -- this module
+    GROUP           ciscoPfcExtIfGroup
+    DESCRIPTION
+        "This group is mandatory for devices in which interfaces
+        are capable of providing such information."
+
+    GROUP           ciscoPfcExtIfPriorityGroup
+    DESCRIPTION
+        "This group is mandatory for devices in which interfaces
+        are capable of providing such information."
+
+    GROUP           ciscoPfcExtWatchdogIfQueueGroup
+    DESCRIPTION
+        "This group is mandatory for devices in which interfaces
+        are capable of providing such information."
+    ::= { ciscoPfcExtMIBCompliances 2 }
 
 -- Units of Conformance
 
@@ -218,6 +337,19 @@ ciscoPfcExtIfPriorityGroup OBJECT-GROUP
         such information."
     ::= { ciscoPfcExtMIBGroups 2 }
 
+ciscoPfcExtWatchdogIfQueueGroup OBJECT-GROUP
+     OBJECTS          { 
+                        cpfcWatchdogIfQueueState,
+                        cpfcWatchdogIfQueueShutdowns,
+                        cpfcWatchdogIfQueueRestores,
+                        cpfcWatchdogIfQueueTotalDropPkts,
+                        cpfcWatchdogIfQueueDropPkts
+                       }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object(s) for PFC watchdog timer information of
+         each queue of an interface capable of providing such information."
+    ::= { ciscoPfcExtMIBGroups 3 }
 END
 
 

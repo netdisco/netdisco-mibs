@@ -3,7 +3,7 @@
 --   
 -- March 1996, Larry Metzger
 --   
--- Copyright (c) 1995-2012 by Cisco Systems, Inc.
+-- Copyright (c) 1995-2012, 2014-2016 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *****************************************************************
 --   
@@ -59,14 +59,15 @@ IMPORTS
     RttMonCodecType,
     RttMonLSPPingReplyMode,
     RttMonTargetAddress,
-    RttMonReactVar
+    RttMonReactVar,
+    RttMonScheduleStartType
         FROM CISCO-RTTMON-TC-MIB
     ciscoMgmt
         FROM CISCO-SMI;
 
 
 ciscoRttMonMIB MODULE-IDENTITY
-    LAST-UPDATED    "201208160000Z"
+    LAST-UPDATED    "201604140000Z"
     ORGANIZATION    "Cisco IOS"
     CONTACT-INFO
             "Cisco Systems, Inc.
@@ -226,6 +227,40 @@ ciscoRttMonMIB MODULE-IDENTITY
                will contain these responses, but the 
                Statistics capture table will omit them to
                prevent skewed results."
+    REVISION        "201604140000Z"
+    DESCRIPTION
+        "Refined rttMonCtrlAdminFrequency range in the new compliance
+        statement from Integer32 (0..604800) to (1..604800). This
+        change was advertised in revision 200405180000Z but was not
+        implemented.
+        Refined range for the following port objects to exclude value 0
+            rttMonEchoAdminTargetPort,
+            rttMonEchoAdminSourcePort,
+            rttMonEchoAdminEmulateSourcePort,
+            rttMonEchoAdminEmulateTargetPort
+        Added following objects to support random start-time feature
+        for scheduling group and sla probes. 
+            rttMonScheduleAdminStartType,
+            rttMonScheduleAdminStartDelay,
+            rttMonGrpScheduleAdminStartType,
+            rttMonGrpScheduleAdminStartDelay
+        Added following objects to report over threshold statistics
+        for jitter probes
+            rttMonLatestJitterOperNumOverThresh,
+            rttMonJitterStatsNumOverThresh
+        Deprecated rttMonCtrlAdminTag and replaced with
+        rttMonCtrlAdminLongTag
+        Added new compliance
+            ciscoRttMonMibComplianceRev23."
+    REVISION        "201404100000Z"
+    DESCRIPTION
+        "Added following objects for Fabric Path Echo
+        probe
+            rttMonEchoAdminTargetSwitchId,
+            rttMonEchoAdminProfileId,
+            rttMonEchoAdminOutputInterface
+        Added new compliance
+            ciscoRttMonMibComplianceRev22."
     REVISION        "201208160000Z"
     DESCRIPTION
         "Added following objects to support Y1731 Synthetic Loss
@@ -975,7 +1010,8 @@ RttMonCtrlAdminEntry ::= SEQUENCE {
         rttMonCtrlAdminVerifyData TruthValue,
         rttMonCtrlAdminStatus     RowStatus,
         rttMonCtrlAdminNvgen      TruthValue,
-        rttMonCtrlAdminGroupName  SnmpAdminString
+        rttMonCtrlAdminGroupName  SnmpAdminString,
+        rttMonCtrlAdminLongTag    SnmpAdminString
 }
 
 rttMonCtrlAdminIndex OBJECT-TYPE
@@ -1005,12 +1041,15 @@ rttMonCtrlAdminOwner OBJECT-TYPE
 rttMonCtrlAdminTag OBJECT-TYPE
     SYNTAX          DisplayString (SIZE  (0..16))
     MAX-ACCESS      read-create
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A string which is used by a managing application to
-        identify the RTT target.  This string is inserted into trap
+        identify the RTT target. This string is inserted into trap
         notifications, but has no other significance to the 
-        agent."
+        agent.
+
+        rttMonCtrlAdminTag object is superseded by
+        rttMonCtrlAdminLongTag."
     DEFVAL          { "" } 
     ::= { rttMonCtrlAdminEntry 3 }
 
@@ -1200,6 +1239,20 @@ rttMonCtrlAdminGroupName OBJECT-TYPE
         to which this operation is associated."
     DEFVAL          { "" } 
     ::= { rttMonCtrlAdminEntry 11 }
+
+rttMonCtrlAdminLongTag OBJECT-TYPE
+    SYNTAX          SnmpAdminString (SIZE  (0..128))
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object provides additional information about the Probe
+        and is inserted into trap notifications, but has no other
+        significance to the agent.
+
+        Setting this object will overwrite any description already set
+        by rttMonCtrlAdminTag and vice-versa."
+    DEFVAL          { "" } 
+    ::= { rttMonCtrlAdminEntry 12 }
  
 
 -- Echo Administration Table
@@ -1303,7 +1356,10 @@ RttMonEchoAdminEntry ::= SEQUENCE {
         rttMonEchoAdminAggBurstCycles       Integer32,
         rttMonEchoAdminLossRatioNumFrames   Integer32,
         rttMonEchoAdminAvailNumFrames       Integer32,
-        rttMonEchoAdminTstampOptimization   TruthValue
+        rttMonEchoAdminTstampOptimization   TruthValue,
+        rttMonEchoAdminTargetSwitchId       Unsigned32,
+        rttMonEchoAdminProfileId            Unsigned32,
+        rttMonEchoAdminOutputInterface      InterfaceIndexOrZero
 }
 
 rttMonEchoAdminProtocol OBJECT-TYPE
@@ -1326,6 +1382,7 @@ rttMonEchoAdminProtocol OBJECT-TYPE
         mplsLspPing      - mplsLspPingAppl
         voip             - voipAppl
         video            - videoAppl
+        fabricPathEcho   - fabricPathEchoAppl
 
         When this protocol does not support the type, a 'badValue'
         error will be returned."
@@ -1402,7 +1459,7 @@ rttMonEchoAdminTargetPort OBJECT-TYPE
     DESCRIPTION
         "This object represents the target's port number. This
         object is applicable to udpEcho, tcpConnect and jitter probes."
-    DEFVAL          { 0 } 
+    DEFVAL          { 1 } 
     ::= { rttMonEchoAdminEntry 5 }
 
 rttMonEchoAdminSourceAddress OBJECT-TYPE
@@ -1425,7 +1482,7 @@ rttMonEchoAdminSourcePort OBJECT-TYPE
         object is not specified, the application will get a 
         port allocated by the system. This object is applicable 
         to all probes except dns, dlsw and sna."
-    DEFVAL          { 0 } 
+    DEFVAL          { 1 } 
     ::= { rttMonEchoAdminEntry 7 }
 
 rttMonEchoAdminControlEnable OBJECT-TYPE
@@ -2186,7 +2243,8 @@ rttMonEchoAdminSourceMPID OBJECT-TYPE
         "This object indicates the source maintenance point ID.  It is
         only applicable to Y.1731 operation.  It will be set to zero for
         other types of opearations.  rttMonEchoAdminSourceMPID and
-        rttMonEchoAdminSourceMacAddress may not be used in conjunction." 
+        rttMonEchoAdminSourceMacAddress may not be used in
+        conjunction." 
     ::= { rttMonEchoAdminEntry 66 }
 
 rttMonEchoAdminEndPointListName OBJECT-TYPE
@@ -2214,7 +2272,8 @@ rttMonEchoAdminControlRetry OBJECT-TYPE
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
-        "This object specifies the maximum number of retries for control message."
+        "This object specifies the maximum number of retries for control
+        message."
     DEFVAL          { 3 } 
     ::= { rttMonEchoAdminEntry 69 }
 
@@ -2300,6 +2359,47 @@ rttMonEchoAdminTstampOptimization OBJECT-TYPE
         precision of microsecond."
     DEFVAL          { false } 
     ::= { rttMonEchoAdminEntry 76 }
+
+rttMonEchoAdminTargetSwitchId OBJECT-TYPE
+    SYNTAX          Unsigned32 (0 | 1..65535)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the destination Switch Id that
+        needed to send one TRILL/FB OAM Loopback request. This
+        object is applicable to Fabric Path Echo probe only.
+        Value 0 means not applicable."
+    DEFVAL          { 0 } 
+    ::= { rttMonEchoAdminEntry 77 }
+
+rttMonEchoAdminProfileId OBJECT-TYPE
+    SYNTAX          Unsigned32 (0 | 1..1023)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the destination Profile Id that
+        needed to send one TRILL/FB OAM Loopback request. This
+        object is applicable to Fabric Path Echo probe only.
+        Value 0 means not applicable."
+    DEFVAL          { 0 } 
+    ::= { rttMonEchoAdminEntry 78 }
+
+rttMonEchoAdminOutputInterface OBJECT-TYPE
+    SYNTAX          InterfaceIndexOrZero
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object represents the network interface on the
+        sender router where the packets are transmitted from the
+        emulated endpoint source.
+
+        The user can get the InterfaceIndex number from ifIndex object
+        by looking up in ifTable. In fact, it should be useful to first
+        get the entry by the augmented table ifXTable which has ifName
+        object which matches the interface name used on the router or
+        switch equipment console."
+    DEFVAL          { 0 } 
+    ::= { rttMonEchoAdminEntry 79 }
  
 
 -- FileIO Administration TABLE
@@ -2468,7 +2568,9 @@ RttMonScheduleAdminEntry ::= SEQUENCE {
         rttMonScheduleAdminRttStartTime       TimeTicks,
         rttMonScheduleAdminConceptRowAgeout   Integer32,
         rttMonScheduleAdminRttRecurring       TruthValue,
-        rttMonScheduleAdminConceptRowAgeoutV2 Integer32
+        rttMonScheduleAdminConceptRowAgeoutV2 Integer32,
+        rttMonScheduleAdminStartType          RttMonScheduleStartType,
+        rttMonScheduleAdminStartDelay         Integer32
 }
 
 rttMonScheduleAdminRttLife OBJECT-TYPE
@@ -2526,7 +2628,12 @@ rttMonScheduleAdminRttStartTime OBJECT-TYPE
         special value is defined to be a value of this object 
         that, when initially set, is smaller than the current
         sysUpTime. (With the exception of one, as defined in
-        the previous paragraph)"
+        the previous paragraph)
+
+        If rttMonScheduleAdminStartType is specified with this
+        object then rttMonScheduleAdminRttStartTime
+        is ignored and probe start time is configured based on
+        rttMonScheduleAdminStartType."
     DEFVAL          { 0 } 
     ::= { rttMonScheduleAdminEntry 2 }
 
@@ -2596,6 +2703,45 @@ rttMonScheduleAdminConceptRowAgeoutV2 OBJECT-TYPE
         never be aged out."
     DEFVAL          { 0 } 
     ::= { rttMonScheduleAdminEntry 5 }
+
+rttMonScheduleAdminStartType OBJECT-TYPE
+    SYNTAX          RttMonScheduleStartType
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the start-time option to be used for
+        scheduling the start time of RTT operation.
+        The following list defines the start-time options
+        that can be configured for the probe:
+
+        pending(1)      pending state.
+        now(2)          schedule to immediately start the
+                        probe.
+        random(3)       schedule start time of probe at random
+                        time over a range.
+        after(4)        schedule start time of probe after a
+                        certain amount of time from now.
+        specific(5)     schedule start time of probe at a given
+                        specific time interval"
+    DEFVAL          { pending } 
+    ::= { rttMonScheduleAdminEntry 6 }
+
+rttMonScheduleAdminStartDelay OBJECT-TYPE
+    SYNTAX          Integer32 (500..10000)
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the start time delay range in
+        milliseconds.
+        The value of this object is only effective with
+        rttMonScheduleAdminStartType value.
+
+        For rttMonScheduleAdminStartType with random option,
+        a random time is generated with in provided start delay
+        range and added to current time to generate the random
+        start time of the probe."
+    DEFVAL          { 500 } 
+    ::= { rttMonScheduleAdminEntry 7 }
  
 
 -- Reaction Administration Table
@@ -3903,7 +4049,8 @@ RttMonLatestJitterOperEntry ::= SEQUENCE {
         rttMonLatestJitterOperOWSumSDHigh         Gauge32,
         rttMonLatestJitterOperOWSum2SDHigh        Gauge32,
         rttMonLatestJitterOperOWSumDSHigh         Gauge32,
-        rttMonLatestJitterOperOWSum2DSHigh        Gauge32
+        rttMonLatestJitterOperOWSum2DSHigh        Gauge32,
+        rttMonLatestJitterOperNumOverThresh       Gauge32
 }
 
 rttMonLatestJitterOperNumOfRTT OBJECT-TYPE
@@ -4444,6 +4591,15 @@ rttMonLatestJitterOperOWSum2DSHigh OBJECT-TYPE
         source (high order 32 bits). The low order 32 bits are
         stored in rttMonLatestJitterOperOWSum2DS." 
     ::= { rttMonLatestJitterOperEntry 58 }
+
+rttMonLatestJitterOperNumOverThresh OBJECT-TYPE
+    SYNTAX          Gauge32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of RTTs that were over
+        the threshold value." 
+    ::= { rttMonLatestJitterOperEntry 59 }
  
 
 -- Reaction Trigger Administration Table
@@ -4677,19 +4833,21 @@ rttMonGrpScheduleAdminEntry OBJECT-TYPE
     ::= { rttMonGrpScheduleAdminTable 1 }
 
 RttMonGrpScheduleAdminEntry ::= SEQUENCE {
-        rttMonGrpScheduleAdminIndex     Integer32,
-        rttMonGrpScheduleAdminProbes    DisplayString,
-        rttMonGrpScheduleAdminPeriod    Integer32,
-        rttMonGrpScheduleAdminFrequency Integer32,
-        rttMonGrpScheduleAdminLife      Integer32,
-        rttMonGrpScheduleAdminAgeout    Integer32,
-        rttMonGrpScheduleAdminStatus    RowStatus,
-        rttMonGrpScheduleAdminFreqMax   Integer32,
-        rttMonGrpScheduleAdminFreqMin   Integer32,
-        rttMonGrpScheduleAdminStartTime Integer32,
-        rttMonGrpScheduleAdminAdd       TruthValue,
-        rttMonGrpScheduleAdminDelete    TruthValue,
-        rttMonGrpScheduleAdminReset     TruthValue
+        rttMonGrpScheduleAdminIndex      Integer32,
+        rttMonGrpScheduleAdminProbes     DisplayString,
+        rttMonGrpScheduleAdminPeriod     Integer32,
+        rttMonGrpScheduleAdminFrequency  Integer32,
+        rttMonGrpScheduleAdminLife       Integer32,
+        rttMonGrpScheduleAdminAgeout     Integer32,
+        rttMonGrpScheduleAdminStatus     RowStatus,
+        rttMonGrpScheduleAdminFreqMax    Integer32,
+        rttMonGrpScheduleAdminFreqMin    Integer32,
+        rttMonGrpScheduleAdminStartTime  Integer32,
+        rttMonGrpScheduleAdminAdd        TruthValue,
+        rttMonGrpScheduleAdminDelete     TruthValue,
+        rttMonGrpScheduleAdminReset      TruthValue,
+        rttMonGrpScheduleAdminStartType  RttMonScheduleStartType,
+        rttMonGrpScheduleAdminStartDelay Integer32
 }
 
 rttMonGrpScheduleAdminIndex OBJECT-TYPE
@@ -4862,7 +5020,12 @@ rttMonGrpScheduleAdminStartTime OBJECT-TYPE
     DESCRIPTION
         "This is the time in seconds after which the member probes of
         this group specified in rttMonGrpScheduleAdminProbes will
-        transition to active state"
+        transition to active state
+
+        If rttMonScheduleAdminStartType is specified with this
+        object then rttMonScheduleAdminRttStartTime
+        is ignored and group start time is configured based on
+        rttMonScheduleAdminStartType."
     DEFVAL          { 0 } 
     ::= { rttMonGrpScheduleAdminEntry 10 }
 
@@ -4897,6 +5060,47 @@ rttMonGrpScheduleAdminReset OBJECT-TYPE
         of this group will be stopped and rescheduled using the
         previously set values of this group." 
     ::= { rttMonGrpScheduleAdminEntry 13 }
+
+rttMonGrpScheduleAdminStartType OBJECT-TYPE
+    SYNTAX          RttMonScheduleStartType
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the start-time option to be used for
+        scheduling the start time of the group with
+        probes included in the object rttMonGrpScheduleAdminProbes.
+
+        The following list defines the start-time options
+        that can be configured for the group schedule:
+
+        pending(1)      pending state.
+        now(2)          schedule to immediately start the
+                        group with defined probes.
+        random(3)       schedule start time of group at random
+                        time over a range.
+        after(4)        schedule start time of group after a
+                        certain amount of time from now.
+        specific(5)     schedule start time of group at a given
+                        specific time interval."
+    DEFVAL          { pending } 
+    ::= { rttMonGrpScheduleAdminEntry 14 }
+
+rttMonGrpScheduleAdminStartDelay OBJECT-TYPE
+    SYNTAX          Integer32
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the start time delay range in
+        milliseconds.
+        The value of this object is only effective with
+        rttMonScheduleAdminStartType value.
+
+        For rttMonGrpScheduleAdminStartType with random option,
+        a random time is generated with in provided start delay 
+        range and added to current time to generate the random 
+        start time of the group with defined probes."
+    DEFVAL          { 0 } 
+    ::= { rttMonGrpScheduleAdminEntry 15 }
  
 
 -- Auto SAA L3 MPLS VPN Configuration Definitions
@@ -6324,7 +6528,7 @@ rttMonGeneratedOperTable OBJECT-TYPE
     DESCRIPTION
         "This table contains information about the generated
         operation id as part of a parent IP SLA operation. The parent
-        operation id is pseudo-random number, selected by the management 
+        operation id is pseudo-random number, selected by the management
         station based on an operation started by the management 
         station,when creating a row via the rttMonCtrlAdminStatus
         object in the rttMonCtrlAdminTable table."
@@ -7422,7 +7626,8 @@ RttMonJitterStatsEntry ::= SEQUENCE {
         rttMonJitterStatsUnSyncRTs           Counter32,
         rttMonJitterStatsRTTSumHigh          Counter32,
         rttMonJitterStatsOWSumSDHigh         Counter32,
-        rttMonJitterStatsOWSumDSHigh         Counter32
+        rttMonJitterStatsOWSumDSHigh         Counter32,
+        rttMonJitterStatsNumOverThresh       Counter32
 }
 
 rttMonJitterStatsStartTimeIndex OBJECT-TYPE
@@ -8060,6 +8265,15 @@ rttMonJitterStatsOWSumDSHigh OBJECT-TYPE
         (high order 32 bits). The low order 32 bits are stored
         in rttMonJitterStatsOWSumDS." 
     ::= { rttMonJitterStatsEntry 68 }
+
+rttMonJitterStatsNumOverThresh OBJECT-TYPE
+    SYNTAX          Counter32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the number of RTTs that were over
+        the threshold value." 
+    ::= { rttMonJitterStatsEntry 69 }
  
 
 -- Auto SAA L3 MPLS VPN LPD Group Stats Collection Table
@@ -8780,7 +8994,7 @@ rttMonNotification NOTIFICATION-TYPE
                         rttMonReactThresholdFalling,
                         rttMonEchoAdminLSPSelector
                     }
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "A rttMonNotification indicates the occurrence of a
         threshold violation, and it indicates the previous
@@ -8808,7 +9022,10 @@ rttMonNotification NOTIFICATION-TYPE
 
         The object rttMonEchoAdminLSPSelector will be valid only
         for the probes based on 'mplsLspPingAppl' RttMonProtocol. For
-        all other probes it will be null."
+        all other probes it will be null.
+
+        rttMonNotification object is superseded by
+        rttMonNotificationV2."
    ::= { rttMonNotifications 5 }
 
 rttMonLpdDiscoveryNotification NOTIFICATION-TYPE
@@ -8843,6 +9060,27 @@ rttMonLpdGrpStatusNotification NOTIFICATION-TYPE
         This has resulted in rttMonLpdGrpStatsGroupStatus changing
         value."
    ::= { rttMonNotifications 7 }
+
+rttMonNotificationV2 NOTIFICATION-TYPE
+    OBJECTS         {
+                        rttMonCtrlAdminLongTag,
+                        rttMonHistoryCollectionAddress,
+                        rttMonReactVar,
+                        rttMonReactOccurred,
+                        rttMonReactValue,
+                        rttMonReactThresholdRising,
+                        rttMonReactThresholdFalling,
+                        rttMonEchoAdminLSPSelector
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A rttMonNotification indicates the occurrence of a
+        threshold violation, and it indicates the previous
+        violation has subsided for a subsequent operation.
+
+        Enhanced version of rttMonNotification which replaces
+        rttMonCtrlAdminTag with rttMonCtrlAdminLongTag object."
+   ::= { rttMonNotifications 8 }
 -- Conformance Information
 
 ciscoRttMonMibConformance  OBJECT IDENTIFIER
@@ -9585,7 +9823,7 @@ ciscoRttMonMibComplianceRev20 MODULE-COMPLIANCE
     ::= { ciscoRttMonMibCompliances 20 }
 
 ciscoRttMonMibComplianceRev21 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "Please enter description here"
     MODULE          -- this module
@@ -9700,6 +9938,292 @@ ciscoRttMonMibComplianceRev21 MODULE-COMPLIANCE
         lower layer (Hardware /Packet Processor) timstamping. Currently
         supported only for udp jitter probe."
     ::= { ciscoRttMonMibCompliances 21 }
+
+ciscoRttMonMibComplianceRev22 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for CISCO-RTTMON-MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoStatsGroup,
+                        ciscoHistoryGroup,
+                        ciscoCtrlGroupRev1,
+                        ciscoCtrlGroupRev2,
+                        ciscoLatestOperGroupRev1,
+                        ciscoStatsGroupRev1,
+                        ciscoStatsGroupRev3,
+                        ciscoStatsGroupRev4,
+                        ciscoStatsGroupRev5,
+                        ciscoApplGroupRev2,
+                        ciscoApplGroupRev3,
+                        ciscoCtrlGroupRev4,
+                        ciscoCtrlGroupRev6,
+                        ciscoCtrlGroupRev7,
+                        ciscoCtrlGroupRev11,
+                        ciscoCtrlGroupRev14,
+                        ciscoNotificationGroupRev1,
+                        ciscoCtrlGroupRev9,
+                        ciscoStatsGroupRev8,
+                        ciscoCtrlGroupRev24,
+                        ciscoCtrlGroupRev25,
+                        ciscoCtrlGroupRev28,
+                        ciscoStatsGroupRev9,
+                        ciscoStatsGroupRev10
+                    }
+
+    GROUP           ciscoCtrlGroupRev19
+    DESCRIPTION
+        "ciscoCtrlGroupRev19 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection."
+
+    GROUP           ciscoCtrlGroupRev18
+    DESCRIPTION
+        "ciscoCtrlGroupRev18 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection ."
+
+    GROUP           ciscoCtrlGroupRev17
+    DESCRIPTION
+        "ciscoCtrlGroupRev17 is only mandatory for the devices
+        that support IP SLA auto measure feature."
+
+    GROUP           ciscoCtrlGroupRev16
+    DESCRIPTION
+        "ciscoCtrlGroupRev16 is only mandatory for the devices
+        that support LSP Ping over pseudowire."
+
+    GROUP           ciscoCtrlGroupRev15
+    DESCRIPTION
+        "ciscoCtrlGroupRev15 is only mandatory for the devices
+        that support Ethernet CFM."
+
+    GROUP           ciscoCtrlGroupRev8
+    DESCRIPTION
+        "ciscoCtrlGroupRev8 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoStatsGroupRev7
+    DESCRIPTION
+        "ciscoStatsGroupRev7 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev13
+    DESCRIPTION
+        "ciscoCtrlGroupRev13 is only mandatory for the device
+        that support MPLS."
+
+    GROUP           ciscoNotificationGroupRev2
+    DESCRIPTION
+        "ciscoNotificationGroupRev2 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoApplGroupRev4
+    DESCRIPTION
+        "ciscoApplGroupRev4 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev12
+    DESCRIPTION
+        "ciscoCtrlGroupRev12 is only mandatory for the devices
+        that support voice."
+
+    GROUP           ciscoCtrlGroupRev20
+    DESCRIPTION
+        "ciscoCtrlGroupRev20 is only mandatory for the devices
+        that support Video operations."
+
+    GROUP           ciscoCtrlGroupRev21
+    DESCRIPTION
+        "ciscoCtrlGroupRev21 is only mandatory for video operation with
+        DSCP, DSP reservation, and source interface support."
+
+    GROUP           ciscoCtrlGroupRev22
+    DESCRIPTION
+        "ciscoCtrlGroupRev22 is optional for video probes using emulate
+        source address, port, target address, and port."
+
+    GROUP           ciscoCtrlGroupRev23
+    DESCRIPTION
+        "ciscoCtrlGroupRev23 is mandatory for Y1731 operation."
+
+    GROUP           ciscoCtrlGroupRev26
+    DESCRIPTION
+        "ciscoCtrlGroupRev26 is optional for Y1731 Synthetic Loss
+        Measurement"
+
+    GROUP           ciscoCtrlGroupRev27
+    DESCRIPTION
+        "ciscoCtrlGroupRev27 is optional for jitter probes to utilize
+        lower layer (Hardware /Packet Processor) timstamping. Currently
+        supported only for udp jitter probe."
+
+    GROUP           ciscoCtrlGroupRev29
+    DESCRIPTION
+        "ciscoCtrlGroupRev29 is only mandatory for Fabric Path Echo
+        probe."
+    ::= { ciscoRttMonMibCompliances 22 }
+
+ciscoRttMonMibComplianceRev23 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for CISCO-RTTMON-MIB"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoStatsGroup,
+                        ciscoHistoryGroup,
+                        ciscoCtrlGroupRev1,
+                        ciscoCtrlGroupRev2,
+                        ciscoLatestOperGroupRev1,
+                        ciscoStatsGroupRev1,
+                        ciscoStatsGroupRev3,
+                        ciscoStatsGroupRev4,
+                        ciscoStatsGroupRev5,
+                        ciscoApplGroupRev2,
+                        ciscoApplGroupRev3,
+                        ciscoCtrlGroupRev4,
+                        ciscoCtrlGroupRev6,
+                        ciscoCtrlGroupRev7,
+                        ciscoCtrlGroupRev11,
+                        ciscoCtrlGroupRev14,
+                        ciscoNotificationGroupRev1,
+                        ciscoCtrlGroupRev9,
+                        ciscoStatsGroupRev8,
+                        ciscoCtrlGroupRev24,
+                        ciscoCtrlGroupRev25,
+                        ciscoCtrlGroupRev28,
+                        ciscoStatsGroupRev9,
+                        ciscoStatsGroupRev10
+                    }
+
+    GROUP           ciscoCtrlGroupRev19
+    DESCRIPTION
+        "ciscoCtrlGroupRev19 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection."
+
+    GROUP           ciscoCtrlGroupRev18
+    DESCRIPTION
+        "ciscoCtrlGroupRev18 is only mandatory for the devices
+        that support Ethernet CFM for Virtual Connection ."
+
+    GROUP           ciscoCtrlGroupRev17
+    DESCRIPTION
+        "ciscoCtrlGroupRev17 is only mandatory for the devices
+        that support IP SLA auto measure feature."
+
+    GROUP           ciscoCtrlGroupRev16
+    DESCRIPTION
+        "ciscoCtrlGroupRev16 is only mandatory for the devices
+        that support LSP Ping over pseudowire."
+
+    GROUP           ciscoCtrlGroupRev15
+    DESCRIPTION
+        "ciscoCtrlGroupRev15 is only mandatory for the devices
+        that support Ethernet CFM."
+
+    GROUP           ciscoCtrlGroupRev8
+    DESCRIPTION
+        "ciscoCtrlGroupRev8 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoStatsGroupRev7
+    DESCRIPTION
+        "ciscoStatsGroupRev7 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev13
+    DESCRIPTION
+        "ciscoCtrlGroupRev13 is only mandatory for the device
+        that support MPLS."
+
+    GROUP           ciscoNotificationGroupRev2
+    DESCRIPTION
+        "ciscoNotificationGroupRev2 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoApplGroupRev4
+    DESCRIPTION
+        "ciscoApplGroupRev4 is only mandatory for the devices
+        that support MPLS."
+
+    GROUP           ciscoCtrlGroupRev12
+    DESCRIPTION
+        "ciscoCtrlGroupRev12 is only mandatory for the devices
+        that support voice."
+
+    GROUP           ciscoCtrlGroupRev20
+    DESCRIPTION
+        "ciscoCtrlGroupRev20 is only mandatory for the devices
+        that support Video operations."
+
+    GROUP           ciscoCtrlGroupRev21
+    DESCRIPTION
+        "ciscoCtrlGroupRev21 is only mandatory for video operation with
+        DSCP, DSP reservation, and source interface support."
+
+    GROUP           ciscoCtrlGroupRev22
+    DESCRIPTION
+        "ciscoCtrlGroupRev22 is optional for video probes using emulate
+        source address, port, target address, and port."
+
+    GROUP           ciscoCtrlGroupRev23
+    DESCRIPTION
+        "ciscoCtrlGroupRev23 is mandatory for Y1731 operation."
+
+    GROUP           ciscoCtrlGroupRev26
+    DESCRIPTION
+        "ciscoCtrlGroupRev26 is optional for Y1731 Synthetic Loss
+        Measurement"
+
+    GROUP           ciscoCtrlGroupRev27
+    DESCRIPTION
+        "ciscoCtrlGroupRev27 is optional for jitter probes to utilize
+        lower layer (Hardware /Packet Processor) timstamping. Currently
+        supported only for udp jitter probe."
+
+    GROUP           ciscoCtrlGroupRev29
+    DESCRIPTION
+        "ciscoCtrlGroupRev29 is only mandatory for Fabric Path Echo
+        probe."
+
+    GROUP           ciscoCtrlGroupRev30
+    DESCRIPTION
+        "ciscoCtrlGroupRev30 is optional for classic and group sla
+        scheduler."
+
+    GROUP           ciscoCtrlGroupRev31
+    DESCRIPTION
+        "ciscoCtrlGroupRev31 is optional for specifying longer tag
+        values when creating a conceptual RTT control row."
+
+    GROUP           ciscoNotificationGroupRev3
+    DESCRIPTION
+        "ciscoNotificationGroupRev3 is optional for receiving
+        notifications containing rttMonCtrlAdminLongTag."
+
+    OBJECT          rttMonCtrlAdminFrequency
+    SYNTAX          Integer32 (1..604800)
+    DESCRIPTION
+        "Value 0 is not valid for frequency"
+
+    OBJECT          rttMonEchoAdminTargetPort
+    SYNTAX          Integer32 (1..65536)
+    DESCRIPTION
+        "Value 0 is not valid for port"
+
+    OBJECT          rttMonEchoAdminSourcePort
+    SYNTAX          Integer32 (1..65536)
+    DESCRIPTION
+        "Value 0 is not valid for port"
+
+    OBJECT          rttMonEchoAdminEmulateSourcePort
+    SYNTAX          Integer32 (1..65536)
+    DESCRIPTION
+        "Value 0 is not valid for port"
+
+    OBJECT          rttMonEchoAdminEmulateTargetPort
+    SYNTAX          Integer32 (1..65536)
+    DESCRIPTION
+        "Value 0 is not valid for port"
+    ::= { ciscoRttMonMibCompliances 23 }
 
 ciscoStatsGroup OBJECT-GROUP
     OBJECTS         {
@@ -10565,24 +11089,59 @@ ciscoStatsGroupRev9 OBJECT-GROUP
         information."
     ::= { ciscoRttMonMibGroups 53 }
 
+ciscoCtrlGroupRev29 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonEchoAdminTargetSwitchId,
+                        rttMonEchoAdminProfileId,
+                        rttMonEchoAdminOutputInterface
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing Fabric Path Echo probe
+        information."
+    ::= { ciscoRttMonMibGroups 54 }
+
+ciscoNotificationGroupRev3 NOTIFICATION-GROUP
+   NOTIFICATIONS    { rttMonNotificationV2 }
+    STATUS          current
+    DESCRIPTION
+        "Added notification rttMonNotificationV2 with the enhanced
+        rttMonCtrlAdminLongTag object"
+    ::= { ciscoRttMonMibGroups 55 }
+
+ciscoCtrlGroupRev30 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonScheduleAdminStartType,
+                        rttMonScheduleAdminStartDelay,
+                        rttMonGrpScheduleAdminStartType,
+                        rttMonGrpScheduleAdminStartDelay
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Object added to support Random Start-Time feature for
+        group and sla probes."
+    ::= { ciscoRttMonMibGroups 56 }
+
+ciscoCtrlGroupRev31 OBJECT-GROUP
+    OBJECTS         { rttMonCtrlAdminLongTag }
+    STATUS          current
+    DESCRIPTION
+        "Object rttMonCtrlAdminLongTag added to enhance current
+        tag object for capturing long descriptions."
+    ::= { ciscoRttMonMibGroups 57 }
+
+ciscoStatsGroupRev10 OBJECT-GROUP
+    OBJECTS         {
+                        rttMonLatestJitterOperNumOverThresh,
+                        rttMonJitterStatsNumOverThresh
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing over threshold statistics
+        for jitter probes."
+    ::= { ciscoRttMonMibGroups 58 }
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

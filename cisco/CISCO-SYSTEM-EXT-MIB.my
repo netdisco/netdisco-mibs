@@ -2,7 +2,7 @@
 -- CISCO-SYSTEM-EXT-MIB.my: System Extension MIB
 --   
 -- October 2002, Vinay Gaonkar
--- Copyright (c) 2002, 2003, 2005-2007 by cisco Systems Inc.
+-- Copyright (c) 2002, 2003, 2005-2007-2016 by cisco Systems Inc.
 -- All rights reserved.
 --   
 -- ********************************************************************
@@ -39,7 +39,7 @@ IMPORTS
 
 
 ciscoSystemExtMIB MODULE-IDENTITY
-    LAST-UPDATED    "200708060000Z"
+    LAST-UPDATED    "201606140000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -56,6 +56,25 @@ ciscoSystemExtMIB MODULE-IDENTITY
         system.
         GLOSSARY
         FIPS Federal Information Processing Standards Publication."
+    REVISION        "201607190000Z"
+    DESCRIPTION
+        "Added support for ciscoSysReloadGroup."
+    REVISION        "201606070000Z"
+    DESCRIPTION
+        "Added cseMaintModeState object.
+        Added new notifications cseNormalModeChangeNotify and 
+        cseMaintModeChangeNotify.
+        Added new group ciscoSystemMaintModeGroup.
+        Added new objects ciscoSystemNormalModeNotifEnable and 
+        ciscoSystemMaintModeNotifEnable.
+        Added new group ciscoSystemMaintModeNotifControl.
+        Added compilance ciscoSystemExtMIBComplianceRev10 to replace
+        ciscoSystemExtMIBComplianceRev9.
+        Added object group ciscoSystemMaintModeObjectsGroup and
+        notification group ciscoSystemMaintModeNotificationGroup."
+    REVISION        "201508190000Z"
+    DESCRIPTION
+        "Added support for ciscoSystemSwitchingModeObjectsGroup."
     REVISION        "200708060000Z"
     DESCRIPTION
         "-Added a scalar object 'cseSysUpTime'
@@ -138,6 +157,18 @@ ciscoSwFailureGroup  OBJECT IDENTIFIER
 ciscoSwFailureNotifControl  OBJECT IDENTIFIER
     ::= { ciscoSystemExtMIBObjects 5 }
 
+ciscoSystemSwitchingModeGroup  OBJECT IDENTIFIER
+    ::= { ciscoSystemExtMIBObjects 6 }
+
+ciscoSystemMaintModeGroup  OBJECT IDENTIFIER
+    ::= { ciscoSystemExtMIBObjects 7 }
+
+ciscoSystemMaintModeNotifControl  OBJECT IDENTIFIER
+    ::= { ciscoSystemExtMIBObjects 8 }
+
+ciscoSystemReloadGroup  OBJECT IDENTIFIER
+    ::= { ciscoSystemExtMIBObjects 9 }
+
 
 -- Textual Conventions
 
@@ -178,10 +209,23 @@ CseHaRestartReason ::= TEXTUAL-CONVENTION
                         serviceTimeout(14)
                     }
 
+CiscoMaintModeState ::= TEXTUAL-CONVENTION
+    STATUS          current
+    DESCRIPTION
+        "Maintenance Mode state for the system.
+        normal (1)            - normal operational state
+        maintenance (2)       - maintenance mode operational state
+        unplannedMaint (3)    - unplanned maintenance state"
+    SYNTAX          INTEGER  {
+                        normal(1),
+                        maintenance(2),
+                        unplannedMaint(3)
+                    }
+
 -- System Information Group
 
 cseSysCPUUtilization OBJECT-TYPE
-    SYNTAX          Gauge32 (0..100 )
+    SYNTAX          Gauge32 (0..100)
     UNITS           "%"
     MAX-ACCESS      read-only
     STATUS          current
@@ -193,7 +237,7 @@ cseSysCPUUtilization OBJECT-TYPE
 -- Memory utilization
 
 cseSysMemoryUtilization OBJECT-TYPE
-    SYNTAX          Gauge32 (0..100 )
+    SYNTAX          Gauge32 (0..100)
     UNITS           "%"
     MAX-ACCESS      read-only
     STATUS          current
@@ -605,6 +649,68 @@ cseSwCoresFileName OBJECT-TYPE
  
 
 
+ciscoSystemSwitchingModeAdmin OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        other(1),
+                        notApplicable(2),
+                        nexus3000(3),
+                        nexus9000(4)
+                    }
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "Object to specify system's switching mode.
+
+        'other'         - any other state not covered by below enumerations
+        'notApplicable' - switching mode configuration is not applicable
+                          for this system
+        'nexus3000'     - system switching mode is configured as Nexus 3000
+        'nexus9000'     - system switching mode is configured as Nexus 9000." 
+    ::= { ciscoSystemSwitchingModeGroup 1 }
+
+ciscoSystemSwitchingModeOper OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        other(1),
+                        notApplicable(2),
+                        nexus3000(3),
+                        nexus9000(4)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "Object indicate system's operational switching mode.
+
+        'other'         - any other state not covered by below enumerations
+        'notApplicable' - switching mode configuration is not applicable
+                          for this system
+        'nexus3000'     - system is opeerating in Nexus 3000 mode
+        'nexus9000'     - system is opeerating in Nexus 9000 mode." 
+    ::= { ciscoSystemSwitchingModeGroup 2 }
+
+-- System Maint Mode Group
+
+cseMaintModeState OBJECT-TYPE
+    SYNTAX          CiscoMaintModeState
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The maintenance mode operational state for the system." 
+    ::= { ciscoSystemMaintModeGroup 1 }
+
+-- System Reload Group
+
+cseSystemReloadPending OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object is used to indicate if a system reload is needed to
+        make feature configuration change effective.
+
+        The object returns 'true' if a system reload is required; it returns
+        'false' if no system reload is required." 
+    ::= { ciscoSystemReloadGroup 1 }
+
 -- Notification Control Group
 
 ciscoSwFailureNotifEnable OBJECT-TYPE
@@ -617,6 +723,26 @@ ciscoSwFailureNotifEnable OBJECT-TYPE
         cseFailSwCoreNotifyExtended notifications."
     DEFVAL          { false } 
     ::= { ciscoSwFailureNotifControl 1 }
+
+ciscoSystemNormalModeNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used for administratively
+        enabling/disabling the cseNormalModeChangeNotify."
+    DEFVAL          { false } 
+    ::= { ciscoSystemMaintModeNotifControl 1 }
+
+ciscoSystemMaintModeNotifEnable OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+        "This object is used for administratively
+        enabling/disabling the cseMaintModeChangeNotify."
+    DEFVAL          { false } 
+    ::= { ciscoSystemMaintModeNotifControl 2 }
 -- Notifications
 --   
 
@@ -679,6 +805,30 @@ cseFailSwCoreNotifyExtended NOTIFICATION-TYPE
         "A notification is generated whenever a software
         crash occurs and a core file is generated."
    ::= { cseFailNotificationPrefix 2 }
+-- Maint Mode Group Notifications
+
+cseMaintModeNotification  OBJECT IDENTIFIER
+    ::= { ciscoSystemMaintModeGroup 2 }
+
+cseMaintModeNotificationPrefix  OBJECT IDENTIFIER
+    ::= { cseMaintModeNotification 0 }
+
+
+cseNormalModeChangeNotify NOTIFICATION-TYPE
+    OBJECTS         { cseMaintModeState }
+    STATUS          current
+    DESCRIPTION
+        "A normal mode state change is generated when the system
+        is changed from maintenance mode to normal mode."
+   ::= { cseMaintModeNotificationPrefix 1 }
+
+cseMaintModeChangeNotify NOTIFICATION-TYPE
+    OBJECTS         { cseMaintModeState }
+    STATUS          current
+    DESCRIPTION
+        "A maintenance mode state change is generated when the system
+        is changed from normal mode to maintenance mode."
+   ::= { cseMaintModeNotificationPrefix 2 }
 -- Conformance
 
 ciscoSystemExtMIBCompliances  OBJECT IDENTIFIER
@@ -912,7 +1062,7 @@ ciscoSystemExtMIBComplianceRev7 MODULE-COMPLIANCE
     ::= { ciscoSystemExtMIBCompliances 8 }
 
 ciscoSystemExtMIBComplianceRev8 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for entities which
         implement the CISCO-SYTEM-EXT-MIB."
@@ -948,6 +1098,96 @@ ciscoSystemExtMIBComplianceRev8 MODULE-COMPLIANCE
         "Implementation of this group is optional."
     ::= { ciscoSystemExtMIBCompliances 9 }
 
+ciscoSystemExtMIBComplianceRev9 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for entities which
+        implement the CISCO-SYTEM-EXT-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoSystemExtInfoGroupRev3,
+                        ciscoSystemExtInfoGroupRev2,
+                        ciscoSystemExtErrorGroup,
+                        ciscoSystemExtHaGroup,
+                        ciscoSystemExtNotificationGroup,
+                        ciscoSystemExtNotificationGroupSup1,
+                        ciscoSystemExtHaGroupRev1
+                    }
+
+    GROUP           ciscoSystemExtInfoGroupOptional
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtSwFailureGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtSwFailureGroup2
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtInfoTelnetGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtInfoFIPSGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemSwitchingModeObjectsGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+    ::= { ciscoSystemExtMIBCompliances 11 }
+
+ciscoSystemExtMIBComplianceRev10 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for entities which
+        implement the CISCO-SYTEM-EXT-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoSystemExtInfoGroupRev3,
+                        ciscoSystemExtInfoGroupRev2,
+                        ciscoSystemExtErrorGroup,
+                        ciscoSystemExtHaGroup,
+                        ciscoSystemExtNotificationGroup,
+                        ciscoSystemExtNotificationGroupSup1,
+                        ciscoSystemExtHaGroupRev1
+                    }
+
+    GROUP           ciscoSystemExtInfoGroupOptional
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtSwFailureGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtSwFailureGroup2
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtInfoTelnetGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemExtInfoFIPSGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemSwitchingModeObjectsGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemMaintModeObjectsGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+
+    GROUP           ciscoSystemMaintModeNotificationGroup
+    DESCRIPTION
+        "Implementation of this group is optional."
+    ::= { ciscoSystemExtMIBCompliances 12 }
+
 -- Units of Conformance
 
 ciscoSystemExtInfoGroup OBJECT-GROUP
@@ -958,7 +1198,8 @@ ciscoSystemExtInfoGroup OBJECT-GROUP
                     }
     STATUS          deprecated
     DESCRIPTION
-        "A collection of objects for system information."
+        "A collection of objects for system information.
+        ciscoSystemExtInfoGroup object is superseded by ciscoSystemExtInfoGroupRev1."
     ::= { ciscoSystemExtMIBGroups 1 }
 
 ciscoSystemExtErrorGroup OBJECT-GROUP
@@ -1000,7 +1241,8 @@ ciscoSystemExtInfoGroupRev1 OBJECT-GROUP
                     }
     STATUS          deprecated
     DESCRIPTION
-        "A collection of objects for system information."
+        "A collection of objects for system information.
+        ciscoSystemExtInfoGroupRev1 object is superseded by ciscoSystemExtInfoGroupRev3."
     ::= { ciscoSystemExtMIBGroups 5 }
 
 ciscoSystemExtInfoGroupOptional OBJECT-GROUP
@@ -1109,5 +1351,46 @@ ciscoSystemExtInfoGroupRev3 OBJECT-GROUP
         "A collection of objects for system information."
     ::= { ciscoSystemExtMIBGroups 17 }
 
+ciscoSystemSwitchingModeObjectsGroup OBJECT-GROUP
+    OBJECTS         {
+                        ciscoSystemSwitchingModeAdmin,
+                        ciscoSystemSwitchingModeOper
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects to support Switching Mode feature."
+    ::= { ciscoSystemExtMIBGroups 18 }
+
+ciscoSystemMaintModeObjectsGroup OBJECT-GROUP
+    OBJECTS         {
+                        cseMaintModeState,
+                        ciscoSystemNormalModeNotifEnable,
+                        ciscoSystemMaintModeNotifEnable
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects to support Maint mode state feature."
+    ::= { ciscoSystemExtMIBGroups 19 }
+
+ciscoSystemMaintModeNotificationGroup NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        cseNormalModeChangeNotify,
+                        cseMaintModeChangeNotify
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of notification related to core file
+        creation."
+    ::= { ciscoSystemExtMIBGroups 20 }
+
+ciscoSystemReloadObjectsGroup OBJECT-GROUP
+    OBJECTS         { cseSystemReloadPending }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects to support system reload."
+    ::= { ciscoSystemExtMIBGroups 21 }
+
 END
+
+
 
