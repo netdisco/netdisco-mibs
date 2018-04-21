@@ -69,6 +69,7 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
         2) ethernetJitter Stats:
           |-- ipslaEtherJitterLatestStatsTable
           |-- ipslaEtherJitterAggStatsTable
+          |-- ipslaEtherJitterAggBinTable
 
         The first part defines a mechanism to manage IP SLA 
         Auto-Ethernet-CFM operation.  
@@ -167,6 +168,14 @@ ciscoIpSlaEthernetMIB MODULE-IDENTITY
         REFERENCE:
             IEEE 802.1ag Draft 6.0 'Virtual Briged Local Area Networks 
              - Amendments 5: Connectivity Fault Management' July 2006"
+    REVISION        "201802270000Z"
+    DESCRIPTION
+        "Added object ipslaEtherJAggLossMeasurementRate and
+         ipslaEtherJitterAggBinTable."
+    REVISION        "201208240000Z"
+    DESCRIPTION
+        "Added objects ipslaEtherJitterLatestNumOverThresh and
+        ipslaEtherJAggMeasuredNumOverThresh."
     REVISION        "201205150000Z"
     DESCRIPTION
         "Added new object group ciscoIpSlaEthernetY1731Group.
@@ -1162,7 +1171,8 @@ IpslaEtherJitterLatestStatsEntry ::= SEQUENCE {
         ipslaEtherJitterLatestOWAvgDS    Gauge32,
         ipslaEtherJitterLatestIAJOut     Gauge32,
         ipslaEtherJitterLatestIAJIn      Gauge32,
-        ipslaEtherJLatestFrmUnProcessed  Gauge32
+        ipslaEtherJLatestFrmUnProcessed  Gauge32,
+        ipslaEtherJitterLatestNumOverThresh  Gauge32
 }
 
 ipslaEtherJitterLatestNumRTT OBJECT-TYPE
@@ -1669,6 +1679,15 @@ ipslaEtherJLatestFrmUnProcessed OBJECT-TYPE
         "The number of frames in the operation that could not be
         processed due to high CPU load." 
     ::= { ipslaEtherJitterLatestStatsEntry 51 }
+    
+ipslaEtherJitterLatestNumOverThresh OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "packets"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of RTT's that were over the threshold value." 
+    ::= { ipslaEtherJitterLatestStatsEntry 52 }
  
 
 -- Ethernet Jitter Statistics Table
@@ -1802,7 +1821,9 @@ IpslaEtherJitterAggStatsEntry ::= SEQUENCE {
         ipslaEtherJAggMeasuredCumulativeLossNumeratorDS      Gauge32,
         ipslaEtherJAggMeasuredCumulativeLossDenominatorDS    Gauge32,
         ipslaEtherJAggMeasuredCumulativeAvgLossNumeratorDS   Gauge32,
-        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS Gauge32
+        ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS Gauge32,
+        ipslaEtherJAggMeasuredNumOverThresh  Gauge32,
+        ipslaEtherJAggLossMeasurementRate  Counter32
 }
 
 ipslaEtherJAggStatsStartTimeId OBJECT-TYPE
@@ -2694,6 +2715,134 @@ ipslaEtherJAggMeasuredCumulativeAvgLossDenominatorDS OBJECT-TYPE
         the destination to source direction.  This value is 
         cumulative over the period of this interval." 
     ::= { ipslaEtherJitterAggStatsEntry 88 }
+
+ipslaEtherJAggMeasuredNumOverThresh OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "frames"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of RTTs that were over the threshold value." 
+    ::= { ipslaEtherJitterAggStatsEntry 89 }
+
+ipslaEtherJAggLossMeasurementRate OBJECT-TYPE
+    SYNTAX          Counter32
+    UNITS			"packets per second"
+    MAX-ACCESS		read-only
+    STATUS			current
+    DESCRIPTION
+        "Loss Measurement rate from source to destination"
+    ::= { ipslaEtherJitterAggStatsEntry 90 }
+
+-- Ethernet Delay Bin Statistics Table
+
+ipslaEtherJitterAggBinTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF IpslaEtherJitterAggBinEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table contains summarized information of the 
+        forward/backward/two-way delay bin and forward positive/negative, 
+        backward positive/negative and two-way positive/negative bin 
+        results for a conceptual control row.  A rolling accumulated 
+        history of this information is maintained in a series of history 
+        interval 'group(s)'.
+
+        When ipslaEtherJAggStatsStartTimeId groups exceeds 
+        the number of the history intervals, the oldest corresponding 
+        history interval will be deleted and will be replaced with the 
+        new history interval group."
+    ::= { ipslaEthernetStats 2 }
+
+ipslaEtherJitterAggBinEntry OBJECT-TYPE
+    SYNTAX          IpslaEtherJitterAggBinEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This entry contains the objects which accumulate the
+        results of a series of ethernet delay operation over the aggregate 
+        interval time period or a time period stored
+        in rttMonScheduleAdminRttLife, whichever is smaller.
+
+        An entry is created only if when the following
+        objects are valid.
+        - rttMonCtrlAdminRttType
+        - rttMonEchoAdminProtocol
+
+        The entry will start to collect data when rttMonCtrlAdminStatus
+        is in 'active' state.  The entry will be removed when the
+        rttMonCtrlAdminStatus is changed to 'destroy' state."
+    INDEX           {
+                        rttMonCtrlAdminIndex,
+                        ipslaEtherJAggStatsBinStartTimeId,
+	                    ipslaEtherJAggStatsBinType,
+	                    ipslaEtherJAggStatsBinLowerRange,
+	                    ipslaEtherJAggStatsBinUpperRange
+                    } 
+    ::= { ipslaEtherJitterAggBinTable 1 }
+
+IpslaEtherJitterAggBinEntry ::= SEQUENCE {
+        ipslaEtherJAggStatsBinStartTimeId   TimeStamp,
+        ipslaEtherJAggStatsBinType   INTEGER,
+        ipslaEtherJAggStatsBinLowerRange   Gauge32,
+        ipslaEtherJAggStatsBinUpperRange   Gauge32,
+        ipslaEtherJAggStatsBinObservation   Counter32
+}
+
+ipslaEtherJAggStatsBinStartTimeId OBJECT-TYPE
+    SYNTAX          TimeStamp
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The value of sysUpTime at the time when this
+         row was created." 
+    ::= { ipslaEtherJitterAggBinEntry 1 }
+
+ipslaEtherJAggStatsBinType OBJECT-TYPE
+    SYNTAX          INTEGER {
+      forwardDelayBin(1),
+	  backwardDelayBin(2),
+	  twoWayDelayBin(3),
+	  forwardPositiveBin(4),
+	  forwardNegativeBin(5),
+	  backwardPositiveBin(6),
+	  backwardNegativeBin(7),
+	  twoWayPositiveBin(8),
+	  twoWayNegativeBin(9)
+	 }
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The type of the jitter statistics bin." 
+    ::= { ipslaEtherJitterAggBinEntry 2 }
+
+ipslaEtherJAggStatsBinLowerRange OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The lower range of the bin in microseconds." 
+    ::= { ipslaEtherJitterAggBinEntry 3 }
+
+ipslaEtherJAggStatsBinUpperRange OBJECT-TYPE
+    SYNTAX          Gauge32
+    UNITS           "microseconds"
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "The upper range of the bin in microseconds." 
+    ::= { ipslaEtherJitterAggBinEntry 4 }
+
+ipslaEtherJAggStatsBinObservation OBJECT-TYPE
+    SYNTAX          Counter32
+    UNITS           "occurrences"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of observations with in the lower 
+         and upper bin range." 
+    ::= { ipslaEtherJitterAggBinEntry 5 }
  
 
 -- Conformance Information
@@ -2709,7 +2858,7 @@ ciscoIpSlaEthernetMIBGroups  OBJECT IDENTIFIER
 
 
 -- ciscoIpSlaEthernetCompliance is superceded by
--- ciscoIpSlaEthernetComplianceRev2
+-- ciscoIpSlaEthernetComplianceRev5
 
 ciscoIpSlaEthernetCompliance MODULE-COMPLIANCE
     STATUS          deprecated
@@ -2765,6 +2914,44 @@ ciscoIpSlaEthernetComplianceRev3 MODULE-COMPLIANCE
         "ciscoIpSlaEthernetAutoEVCGroup is only mandatory for devices
         that support Ethernet CFM with Virtual Connection."
     ::= { ciscoIpSlaEthernetCompliances 3 }
+
+ciscoIpSlaEthernetComplianceRev4 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statement for
+        (1) Ethernet Jitter operation and statistics
+        (2) supporting IP SLA Y1731"
+    MODULE          -- this module
+    MANDATORY-GROUPS {                 
+                        ciscoIpSlaEthernetStatsGroup,
+                        ciscoIpSlaEthernetOverThreshGroup
+                    }
+
+    GROUP           ciscoIpSlaEthernetY1731Group
+    DESCRIPTION
+        "ciscoIpSlaEthernetY1731Group is only mandatory
+        for the devices that support Ethernet CFM  with
+        Virtual Connection."
+    ::= { ciscoIpSlaEthernetCompliances 4 }
+
+ciscoIpSlaEthernetComplianceRev5 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for
+        (1) Ethernet Jitter operation and statistics
+        (2) supporting IP SLA Y1731
+        (3) supporting IP SLA Y1731 Bin statistics"
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoIpSlaEthernetStatsGroup
+                     }
+
+    GROUP           ciscoIpSlaEthernetY1731BinStatsGroup 
+    DESCRIPTION
+        "ciscoIpSlaEthernetY1731BinStatsGroup is only 
+         mandatory for the devices that support 
+         Ethernet CFM  with Virtual Connection."
+    ::= { ciscoIpSlaEthernetCompliances 5 }
 
 ciscoIpSlaEthernetAutoGroup OBJECT-GROUP
     OBJECTS         {
@@ -2972,405 +3159,26 @@ ciscoIpSlaEthernetY1731Group OBJECT-GROUP
         Virtual Connection."
     ::= { ciscoIpSlaEthernetMIBGroups 4 }
 
+ciscoIpSlaEthernetOverThreshGroup OBJECT-GROUP
+    OBJECTS         {
+                        ipslaEtherJitterLatestNumOverThresh,
+                        ipslaEtherJAggMeasuredNumOverThresh
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects which provides the support for
+        Over Threshold statistics for Ethernet Jitter."
+    ::= { ciscoIpSlaEthernetMIBGroups 5 }
+
+ciscoIpSlaEthernetY1731BinStatsGroup OBJECT-GROUP
+    OBJECTS         {
+                        ipslaEtherJAggLossMeasurementRate,
+                        ipslaEtherJAggStatsBinObservation
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects which provides the support for
+        Y1731 Statistics Bin."
+    ::= { ciscoIpSlaEthernetMIBGroups 6 }
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

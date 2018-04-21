@@ -5,7 +5,7 @@
 --   
 -- October 2005, Gunnar Lovblom
 --   
--- Copyright (c) 2005, 2008-2011 by Cisco Systems Inc.
+-- Copyright (c) 2005, 2008-2012,2016 by Cisco Systems, Inc.
 -- All rights reserved.
 -- ******************************************************************
 
@@ -36,9 +36,8 @@ IMPORTS
     ciscoMgmt
         FROM CISCO-SMI;
 
-
 ciscoStackWiseMIB MODULE-IDENTITY
-    LAST-UPDATED    "201112120000Z"
+    LAST-UPDATED    "201604160000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -108,6 +107,29 @@ ciscoStackWiseMIB MODULE-IDENTITY
         SRLS        - System Ring Load Shedding
 
         SSLS        - System Star Load Shedding"
+     REVISION        "201604160000Z"
+     DESCRIPTION
+        "Added following objects in cswGlobals
+        - cswStackDomainNum
+        - cswStackType
+        - cswStackBandWidth
+        Created following tables
+        - cswDistrStackLinkInfoTable
+        -cswDistrStackPhyPortInfoTable
+        Added cswStatusGroupRev2
+        Deprecated cswStatusGroupRev1
+        Added cswDistrStackLinkStatusGroup
+        Added cswDistrStackPhyPortStatusGroup
+        Added cswStackWiseMIBComplianceRev4 MIB COMPLIANCE
+        Deprecated cswStackWiseMIBComplianceRev3 MIB COMPLIANCE."
+    REVISION        "201511240000Z"
+    DESCRIPTION
+        "Added following Objects in cswSwitchInfoTable
+        - cswSwitchPowerAllocated
+        Added following OBJECT-GROUP
+        - cswStackPowerAllocatedGroup
+        Deprecated cswStackWiseMIBComplianceRev2 MODULE-COMPLIANCE.
+        Added cswStackWiseMIBComplianceRev3 MODULE-COMPLIANCE."
     REVISION        "201112120000Z"
     DESCRIPTION
         "Modified 'cswSwitchRole' object."
@@ -127,8 +149,6 @@ ciscoStackWiseMIB MODULE-IDENTITY
     DESCRIPTION
         "Initial version of this MIB module."
     ::= { ciscoMgmt 500 }
-
-
 
 CswPowerStackMode ::= TEXTUAL-CONVENTION
     STATUS          current
@@ -194,7 +214,6 @@ cswStackInfo  OBJECT IDENTIFIER
 
 cswStackPowerInfo  OBJECT IDENTIFIER
     ::= { ciscoStackWiseMIBObjects 3 }
-
 
 -- Textual Conventions
 
@@ -378,7 +397,6 @@ cswStackPowerName OBJECT-TYPE
     ::= { cswStackPowerInfoEntry 7 }
  
 
-
 cswStackPowerPortInfoTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CswStackPowerPortInfoEntry 
     MAX-ACCESS      not-accessible
@@ -494,7 +512,6 @@ cswStackPowerPortName OBJECT-TYPE
     ::= { cswStackPowerPortInfoEntry 7 }
  
 
-
 cswEnableStackNotifications OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-write
@@ -608,6 +625,36 @@ cswEnableIndividualStackNotifications OBJECT-TYPE
          stackMemberToBeReloadedForUpgrade(22): enables/disables 
                    cswStackMemberToBeReloadedForUpgrade notification." 
     ::= { cswGlobals 5 }
+
+cswStackDomainNum OBJECT-TYPE
+    SYNTAX             Unsigned32
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+        "This object indicates distributed domain of the switch.Only
+        Switches with the same domain number can be in the same dist
+        ributed domain.0 means no switch domain configured."
+    ::= { cswGlobals 6 }
+
+cswStackType        OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates type of switch stack. value
+        of Switch virtual domain determines if switch is
+        distributed or conventional stack. 0 means stack
+        is conventional back side stack."
+    ::= { cswGlobals 7 }
+
+cswStackBandWidth        OBJECT-TYPE
+    SYNTAX               Unsigned32
+    MAX-ACCESS           read-only
+    STATUS               current
+    DESCRIPTION
+        "This object indicates stack bandwidth."
+    ::= { cswGlobals 8 }
+
 -- Switch Information Table
 
 cswSwitchInfoTable OBJECT-TYPE
@@ -644,7 +691,8 @@ CswSwitchInfoEntry ::= SEQUENCE {
         cswSwitchPowerCommited          Unsigned32,
         cswSwitchSystemPowerPriority    Unsigned32,
         cswSwitchPoeDevicesLowPriority  Unsigned32,
-        cswSwitchPoeDevicesHighPriority Unsigned32
+        cswSwitchPoeDevicesHighPriority Unsigned32,
+        cswSwitchPowerAllocated         Unsigned32
 }
 
 cswSwitchNumCurrent OBJECT-TYPE
@@ -672,7 +720,7 @@ cswSwitchNumNextReload OBJECT-TYPE
     ::= { cswSwitchInfoEntry 2 }
 
 cswSwitchRole OBJECT-TYPE
-    SYNTAX          INTEGER {
+    SYNTAX          INTEGER  {
                         master(1),
                         member(2),
                         notMember(3),
@@ -852,6 +900,15 @@ cswSwitchPoeDevicesHighPriority OBJECT-TYPE
         cswSwitchPoeDevicesLowPriority." 
     ::= { cswSwitchInfoEntry 13 }
  
+cswSwitchPowerAllocated OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "Watts"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the power committed to the POE devices
+        connected to the switch." 
+    ::= { cswSwitchInfoEntry 14 }
 
 -- StackPort Information Table
 
@@ -909,13 +966,132 @@ cswStackPortNeighbor OBJECT-TYPE
         switch's chassis to which this stackport is connected to.  If
         the stackport is not connected, the value 0 is returned." 
     ::= { cswStackPortInfoEntry 2 }
- 
+
+-- Distributed Stack Link Information Table
+
+cswDistrStackLinkInfoTable  OBJECT-TYPE
+    SYNTAX                 SEQUENCE OF CswDistrStackLinkInfoEntry
+    MAX-ACCESS             not-accessible
+    STATUS                 current
+    DESCRIPTION
+         "Distributed Stack Link Information."
+    ::= { cswStackInfo 3  }
+
+cswDistrStackLinkInfoEntry     OBJECT-TYPE
+     SYNTAX                 CswDistrStackLinkInfoEntry
+     MAX-ACCESS             not-accessible
+     STATUS                 current
+     DESCRIPTION
+            "An Entry containing information about DSL link."
+     INDEX        { entPhysicalIndex ,
+                    cswDSLindex }
+     ::= { cswDistrStackLinkInfoTable 1   }
+
+CswDistrStackLinkInfoEntry  ::= SEQUENCE {
+    cswDSLindex                                Unsigned32,
+    cswDistrStackLinkBundleOperStatus          INTEGER
+
+}
+
+cswDSLindex          OBJECT-TYPE
+   SYNTAX            Unsigned32 (1..2)
+   MAX-ACCESS        not-accessible
+   STATUS            current
+   DESCRIPTION
+        "This is  index of the distributed stack link 
+         with respect to each interface port"
+    ::= { cswDistrStackLinkInfoEntry 1  }
+
+cswDistrStackLinkBundleOperStatus   OBJECT-TYPE
+    SYNTAX                        INTEGER  {
+                                   up(1),
+                                   down(2)
+                                 }
+    MAX-ACCESS                read-only
+    STATUS                    current
+    DESCRIPTION
+       "The state of the stackLink.
+        up         - Connected and operational.
+        down       - Not connected or administrative down."
+    ::= { cswDistrStackLinkInfoEntry 2  }
+
+-- Distributed Stack Port Information Table
+
+cswDistrStackPhyPortInfoTable  OBJECT-TYPE
+    SYNTAX                 SEQUENCE OF CswDistrStackPhyPortInfoEntry
+    MAX-ACCESS             not-accessible
+    STATUS                 current
+    DESCRIPTION
+        "This table contains  objects for Distributed stack
+          Link information Table."
+    ::= { cswStackInfo 4  }
+
+cswDistrStackPhyPortInfoEntry OBJECT-TYPE
+    SYNTAX                    CswDistrStackPhyPortInfoEntry
+    MAX-ACCESS                not-accessible
+    STATUS                    current
+    DESCRIPTION
+         "An Entry containing information about stack port that
+         is part of Distributed Stack Link."
+    INDEX    { entPhysicalIndex,
+               cswDSLindex,
+               ifIndex
+             }
+    ::= { cswDistrStackPhyPortInfoTable 1 }
+
+CswDistrStackPhyPortInfoEntry ::= SEQUENCE {
+        cswDistrStackPhyPort                SnmpAdminString,
+        cswDistrStackPhyPortOperStatus      INTEGER,
+        cswDistrStackPhyPortNbr             SnmpAdminString,
+        cswDistrStackPhyPortNbrsw           EntPhysicalIndexOrZero 
+         
+}
+
+cswDistrStackPhyPort  OBJECT-TYPE
+    SYNTAX            SnmpAdminString 
+    MAX-ACCESS        read-only
+    STATUS            current
+    DESCRIPTION
+        "This object indicates the name of distributed stack port."
+    ::= { cswDistrStackPhyPortInfoEntry 1 }
+
+cswDistrStackPhyPortOperStatus  OBJECT-TYPE
+    SYNTAX                      INTEGER  {
+                                up(1),
+                                down(2)
+                           
+                               }
+    MAX-ACCESS                 read-only
+    STATUS                     current
+    DESCRIPTION
+        "The state of the distributed stackport.
+        up         - Connected and operational.
+        down       - Not connected to a neighboring switch or
+                     administrative down."
+    ::= { cswDistrStackPhyPortInfoEntry 2 }
+
+cswDistrStackPhyPortNbr  OBJECT-TYPE
+    SYNTAX               SnmpAdminString
+    MAX-ACCESS           read-only
+    STATUS               current
+    DESCRIPTION
+        "This object indicates the name of 
+           distributed stack port's neighbor."
+    ::= { cswDistrStackPhyPortInfoEntry 3 }
+
+cswDistrStackPhyPortNbrsw  OBJECT-TYPE
+    SYNTAX                 EntPhysicalIndexOrZero 
+    MAX-ACCESS             read-only
+    STATUS                 current
+    DESCRIPTION
+        "This object indicates the EntPhysicalIndex of
+         the distributed stack port's neigbor switch."
+    ::= { cswDistrStackPhyPortInfoEntry 4 }
 
 -- Notifications
 
 cswMIBNotifications  OBJECT IDENTIFIER
     ::= { ciscoStackWiseMIBNotifs 0 }
-
 
 cswStackPortChange NOTIFICATION-TYPE
     OBJECTS         {
@@ -1193,7 +1369,6 @@ cswStackWiseMIBCompliances  OBJECT IDENTIFIER
 cswStackWiseMIBGroups  OBJECT IDENTIFIER
     ::= { ciscoStackWiseMIBConform 2 }
 
-
 cswStackWiseMIBCompliance MODULE-COMPLIANCE
     STATUS          deprecated
     DESCRIPTION
@@ -1251,7 +1426,7 @@ cswStackWiseMIBComplianceRev1 MODULE-COMPLIANCE
     ::= { cswStackWiseMIBCompliances 2 }
 
 cswStackWiseMIBComplianceRev2 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statements for entities described in
         CISCO-STACKWISE-MIB. Stack Power entities are added in this
@@ -1284,6 +1459,187 @@ cswStackWiseMIBComplianceRev2 MODULE-COMPLIANCE
         "This group is only mandatory for systems which support stack
         power."
     ::= { cswStackWiseMIBCompliances 3 }
+
+cswStackWiseMIBComplianceRev3 MODULE-COMPLIANCE
+    STATUS          deprecated
+    DESCRIPTION
+        "The compliance statements for entities described in
+        CISCO-STACKWISE-MIB. Stack Power entities are added in this
+        revision."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cswNotificationGroup,
+                        cswNotificationGroupSup1,
+                        cswStatusGroupRev1,
+                        cswStackPowerEnableNotificationGroup
+                    }
+
+    GROUP           cswStackPowerStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerSwitchStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+  
+     GROUP           cswStackPowerPortStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerNotificationGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerAllocatedGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power allocation information."
+    OBJECT          cswStackPowerMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswStackPowerName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswStackPowerPortOperStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswStackPowerPortOverCurrentThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswEnableIndividualStackNotifications
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchNumNextReload
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchSwPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchSystemPowerPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchPoeDevicesLowPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchPoeDevicesHighPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { cswStackWiseMIBCompliances 4 }
+
+cswStackWiseMIBComplianceRev4 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statements for entities described in
+        CISCO-STACKWISE-MIB. Stack Global entities are added in this
+        revision."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cswNotificationGroup,
+                        cswNotificationGroupSup1,
+                        cswStatusGroupRev2,
+                        cswStackPowerEnableNotificationGroup,
+                        cswDistrStackLinkStatusGroup,
+                        cswDistrStackPhyPortStatusGroup
+                    }
+
+    GROUP           cswStackPowerStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerSwitchStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerPortStatusGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerNotificationGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power."
+
+    GROUP           cswStackPowerAllocatedGroup
+    DESCRIPTION
+        "This group is only mandatory for systems which support stack
+        power allocation information."
+
+    OBJECT          cswStackPowerMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswStackPowerName
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswStackPowerPortOperStatus
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswStackPowerPortOverCurrentThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswEnableIndividualStackNotifications
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswSwitchNumNextReload
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswSwitchSwPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswSwitchSystemPowerPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cswSwitchPoeDevicesLowPriority
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+   OBJECT          cswSwitchPoeDevicesHighPriority
+   MIN-ACCESS      read-only
+   DESCRIPTION
+        "Write access is not required."
+    ::= { cswStackWiseMIBCompliances 5 }
 
 -- units of conformance
 
@@ -1430,9 +1786,57 @@ cswNotificationGroupSup1 NOTIFICATION-GROUP
         "Additional notification required for data stack."
     ::= { cswStackWiseMIBGroups 9 }
 
+cswStackPowerAllocatedGroup OBJECT-GROUP
+    OBJECTS         { cswSwitchPowerAllocated }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects providing the stack power allocation
+        information of a switch."
+    ::= { cswStackWiseMIBGroups 10 }
+
+cswStatusGroupRev2 OBJECT-GROUP
+    OBJECTS         {
+                        cswMaxSwitchNum,
+                        cswMaxSwitchConfigPriority,
+                        cswRingRedundant,
+                        cswSwitchNumCurrent,
+                        cswSwitchNumNextReload,
+                        cswSwitchRole,
+                        cswSwitchSwPriority,
+                        cswSwitchHwPriority,
+                        cswSwitchState,
+                        cswSwitchMacAddress,
+                        cswStackDomainNum,
+                        cswStackType,
+                        cswStackBandWidth
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects that are used for control and
+        status."
+    ::= { cswStackWiseMIBGroups 11 }
+
+cswDistrStackLinkStatusGroup OBJECT-GROUP
+    OBJECTS                 { cswDistrStackLinkBundleOperStatus }
+    STATUS                  current
+    DESCRIPTION
+        "A collection object(s) for control and status of the
+        distributed Stack Link."
+    ::= { cswStackWiseMIBGroups 12 }
+
+cswDistrStackPhyPortStatusGroup OBJECT-GROUP
+    OBJECTS                 {
+                               cswDistrStackPhyPort,
+                               cswDistrStackPhyPortOperStatus,
+                               cswDistrStackPhyPortNbr,
+                               cswDistrStackPhyPortNbrsw
+                            }
+    STATUS          current
+    DESCRIPTION
+        "A collection of objects for control and status of the
+        distributed stack port"
+    ::= { cswStackWiseMIBGroups 13 }
+
 END
-
-
-
 
 
