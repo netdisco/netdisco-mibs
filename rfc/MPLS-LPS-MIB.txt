@@ -1,0 +1,1484 @@
+MPLS-LPS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+   MODULE-IDENTITY, NOTIFICATION-TYPE, OBJECT-TYPE,
+   Counter32, Unsigned32
+      FROM SNMPv2-SMI             -- RFC 2578
+
+   MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+      FROM SNMPv2-CONF            -- RFC 2580
+
+   TEXTUAL-CONVENTION, RowStatus, TimeStamp, StorageType, TruthValue
+      FROM SNMPv2-TC              -- RFC 2579
+
+   SnmpAdminString
+      FROM SNMP-FRAMEWORK-MIB     -- RFC 3411
+
+   IndexIntegerNextFree
+      FROM DIFFSERV-MIB           -- RFC 3289
+
+   mplsStdMIB
+       FROM MPLS-TC-STD-MIB       -- RFC 3811
+
+   mplsOamIdMegIndex, mplsOamIdMeIndex, mplsOamIdMeMpIndex
+       FROM MPLS-OAM-ID-STD-MIB;  -- RFC 7697
+
+mplsLpsMIB MODULE-IDENTITY
+   LAST-UPDATED  "201704040000Z"  -- April 4, 2017
+   ORGANIZATION  "Multiprotocol Label Switching (MPLS) Working Group"
+   CONTACT-INFO
+      "
+      Kingston Smiler Selvaraj
+      IP Infusion
+      RMZ Centennial
+      Mahadevapura Post
+      Bangalore  560048
+      India
+      Email: kingstonsmiler@gmail.com
+
+      Venkatesan Mahalingam
+      Dell Technologies
+      5450 Great America Parkway
+      Santa Clara, CA  95054
+      United States of America
+      Email: venkat.mahalingams@gmail.com
+
+      Daniel King
+      Old Dog Consulting
+      United Kingdom
+      Email: daniel@olddog.co.uk
+
+      Sam Aldrin
+      Google, Inc.
+      1600 Amphitheatre Parkway
+      Mountain View, CA  94043
+      United States of America
+      Email: aldrin.ietf@gmail.com
+
+      Jeong-dong Ryoo
+      ETRI
+      218 Gajeong-ro
+      Yuseong-gu, Daejeon  34129
+      South Korea
+      Email: ryoo@etri.re.kr
+      "
+DESCRIPTION
+   "This MIB module supports the configuration and management of
+    MPLS-TP linear protection domains.
+
+    Copyright (c) 2017 IETF Trust and the persons identified as
+    authors of the code.  All rights reserved.
+
+    Redistribution and use in source and binary forms, with or
+    without modification, is permitted pursuant to, and subject to
+    the license terms contained in, the Simplified BSD License
+    set forth in Section 4.c of the IETF Trust's Legal Provisions
+    Relating to IETF Documents
+    (http://trustee.ietf.org/license-info)."
+
+REVISION
+   "201704040000Z"  -- April 4, 2017
+   DESCRIPTION
+      "MPLS-TP protection domain objects for
+       LSP MEG End Points (MEPs)."
+   ::= { mplsStdMIB 22 }
+
+   -- Top-level components of this MIB module.
+   -- Notifications
+   mplsLpsNotifications
+      OBJECT IDENTIFIER ::= { mplsLpsMIB 0 }
+
+   -- Tables, scalars
+   mplsLpsObjects
+      OBJECT IDENTIFIER ::= { mplsLpsMIB 1 }
+
+   -- Conformance
+   mplsLpsConformance
+      OBJECT IDENTIFIER ::= { mplsLpsMIB 2 }
+
+MplsLpsReq ::= TEXTUAL-CONVENTION
+   STATUS      current
+   DESCRIPTION
+      "This textual convention describes an object that stores
+       the PSC Request field of the PSC control packet.  The values
+       are as follows:
+
+       noRequest
+       No Request
+
+       doNotRevert
+       Do-not-Revert
+
+       reverseRequest
+       Reverse Request
+
+       exercise
+       Exercise
+
+       waitToRestore
+       Wait-to-Restore
+
+       manualSwitch
+       Manual Switch
+
+       signalDegrade
+       Signal Degrade (SD)
+
+       signalFail
+       Signal Fail (SF)
+
+       forcedSwitch
+       Forced Switch
+
+       lockoutOfProtection
+       Lockout of Protection."
+   REFERENCE
+      "Section 4.2.2 of RFC 6378 and Section 8 of RFC 7271"
+   SYNTAX  INTEGER {
+              noRequest(0),
+              doNotRevert(1),
+              reverseRequest(2),
+              exercise(3),
+              waitToRestore(4),
+              manualSwitch(5),
+              signalDegrade(7),
+              signalFail(10),
+              forcedSwitch(12),
+              lockoutOfProtection(14)
+              }
+
+MplsLpsFpathPath ::= TEXTUAL-CONVENTION
+   DISPLAY-HINT "1x:"
+   STATUS      current
+   DESCRIPTION
+      "This textual convention describes an object that stores
+       the Fault Path (FPath) field and Data Path (Path) field of
+       the PSC control packet.
+
+       FPath is located in the first octet, and Path is
+       located in the second octet.
+
+       The value and the interpretation of the FPath field are
+       as follows:
+
+       2-255
+       for future extensions
+
+       1
+       the anomaly condition is on the working path
+
+       0
+       the anomaly condition is on the protection path
+
+       The value and the interpretation of the Path field are
+       as follows:
+
+       2-255
+       for future extensions
+
+       1
+       protection path is transporting user data traffic
+
+       0
+       protection path is not transporting user data traffic."
+   REFERENCE
+      "Sections 4.2.5 and 4.2.6 of RFC 6378"
+   SYNTAX      OCTET STRING (SIZE (2))
+
+MplsLpsCommand ::= TEXTUAL-CONVENTION
+   STATUS      current
+   DESCRIPTION
+      "This command allows a user to perform any action over a
+       protection domain.  If the protection command cannot be
+       executed because a request of equal or higher priority is
+       in effect, an inconsistentValue error is returned.
+
+       The command values are as follows:
+
+       noCmd
+       This value should be returned by a read request when no
+       command has been written to the object in question since
+       initialization.  This value may not be used in a write
+       operation.  If noCmd is used in a write operation, a
+       wrongValue error is returned.
+
+       clear
+       Clears all of the commands listed below for the protection
+       domain.
+
+       lockoutOfProtection
+       Prevents switching traffic to the protection path.
+
+       forcedSwitch
+       Switches traffic from the working path to the protection path.
+
+       manualSwitchToWork
+       Switches traffic from the protection path to the working path.
+
+       manualSwitchToProtect
+       Switches traffic from the working path to the protection path.
+
+       exercise
+       Used to verify the correct operation of the PSC communication
+       and the integrity of the protection path.  This command is not
+       applicable to the PSC mode.
+
+       freeze
+       This command freezes the protection state and is a local
+       command that is not signaled to the remote node.
+       This command is not applicable to the PSC mode.
+
+       clearfreeze
+       Clears the local freeze.  This command is not applicable to
+       the PSC mode."
+   REFERENCE
+      "Sections 3.1 and 3.2 of RFC 6378 and Sections 4.3 and 6 of
+       RFC 7271"
+   SYNTAX   INTEGER {
+               noCmd(1),
+               clear(2),
+               lockoutOfProtection(3),
+               forcedSwitch(4),
+               manualSwitchToWork(5),
+               manualSwitchToProtect(6),
+               exercise(7),
+               freeze(8),
+               clearfreeze(9)
+               }
+
+MplsLpsState ::= TEXTUAL-CONVENTION
+   STATUS      current
+   DESCRIPTION
+      "This textual convention describes an object that stores
+       the current state of the PSC state machine.  The values
+       are as follows:
+
+       normal
+       Normal state.
+
+       unavLOlocal
+       Unavailable state due to local LO command.
+
+       unavSFPlocal
+       Unavailable state due to local SF-P.
+
+       unavSDPlocal
+       Unavailable state due to local SD-P.
+
+       unavLOremote
+       Unavailable state due to remote LO message.
+
+       unavSFPremote
+       Unavailable state due to remote SF-P message.
+
+       unavSDPremote
+       Unavailable state due to remote SD-P message.
+
+       protfailSFWlocal
+       Protecting Failure state due to local SF-W.
+
+       protfailSDWlocal
+       Protecting Failure state due to local SD-W.
+
+       protfailSFWremote
+       Protecting Failure state due to remote SF-W message.
+
+       protfailSDWremote
+       Protecting Failure state due to remote SD-W message.
+
+       switadmFSlocal
+       Switching Administrative state due to local FS command.
+       Same as Protecting Administrative state due to local FS
+       command in the PSC mode.
+
+       switadmMSWlocal
+       Switching Administrative state due to local MS-W command.
+
+       switadmMSPlocal
+       Switching Administrative state due to local MS-P command.
+       Same as Protecting Administrative state due to local MS
+       command in the PSC mode.
+
+       switadmFSremote
+       Switching Administrative state due to remote FS message.
+       Same as Protecting Administrative state due to remote FS
+       message in the PSC mode.
+
+       switadmMSWremote
+       Switching Administrative state due to remote MS-W message.
+
+       switadmMSPremote
+       Switching Administrative state due to remote MS-P message.
+       Same as Protecting Administrative state due to remote MS
+       message in the PSC mode.
+
+       wtr
+       Wait-to-Restore state.
+
+       dnr
+       Do-not-Revert state.
+
+       exerLocal
+       Exercise state due to local EXER command.
+
+       exerRemote
+       Exercise state due to remote EXER message."
+   REFERENCE
+      "Sections 3 and 11 of RFC 7271"
+   SYNTAX   INTEGER {
+               normal(1),
+               unavLOlocal(2),
+               unavSFPlocal(3),
+               unavSDPlocal(4),
+               unavLOremote(5),
+               unavSFPremote(6),
+               unavSDPremote(7),
+               protfailSFWlocal(8),
+               protfailSDWlocal(9),
+               protfailSFWremote(10),
+               protfailSDWremote(11),
+               switadmFSlocal(12),
+               switadmMSWlocal(13),
+               switadmMSPlocal(14),
+               switadmFSremote(15),
+               switadmMSWremote(16),
+               switadmMSPremote(17),
+               wtr(18),
+               dnr(19),
+               exerLocal(20),
+               exerRemote(21)
+               }
+
+-- Start of
+-- MPLS-TP Linear Protection Switching Configuration Table.
+-- This table supports the addition, configuration, and deletion
+-- of MPLS-TP linear protection domains.
+
+mplsLpsConfigDomainIndexNext OBJECT-TYPE
+   SYNTAX      IndexIntegerNextFree (0..4294967295)
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object contains an unused value for
+       mplsLpsConfigDomainIndex, or a zero to indicate that
+       the number of unassigned entries has been exhausted.
+       Negative values are not allowed, as they do not correspond
+       to valid values of mplsLpsConfigDomainIndex."
+   ::= { mplsLpsObjects 1 }
+
+mplsLpsConfigTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF MplsLpsConfigEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "This table lists the MPLS-TP linear protection domains that
+       have been configured on the system.
+       An entry is created by a network operator who wants to run
+       the MPLS-TP linear protection protocol for the protection
+       domain."
+   ::= { mplsLpsObjects 2 }
+
+mplsLpsConfigEntry OBJECT-TYPE
+   SYNTAX      MplsLpsConfigEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "A conceptual row in the mplsLpsConfigTable."
+   INDEX { mplsLpsConfigDomainIndex }
+   ::= { mplsLpsConfigTable 1 }
+
+MplsLpsConfigEntry ::= SEQUENCE {
+   mplsLpsConfigDomainIndex         Unsigned32,
+   mplsLpsConfigDomainName          SnmpAdminString,
+   mplsLpsConfigMode                INTEGER,
+   mplsLpsConfigProtectionType      INTEGER,
+   mplsLpsConfigRevertive           INTEGER,
+   mplsLpsConfigSdThreshold         Unsigned32,
+   mplsLpsConfigSdBadSeconds        Unsigned32,
+   mplsLpsConfigSdGoodSeconds       Unsigned32,
+   mplsLpsConfigWaitToRestore       Unsigned32,
+   mplsLpsConfigHoldOff             Unsigned32,
+   mplsLpsConfigContinualTxInterval Unsigned32,
+   mplsLpsConfigRapidTxInterval     Unsigned32,
+   mplsLpsConfigCommand             MplsLpsCommand,
+   mplsLpsConfigCreationTime        TimeStamp,
+   mplsLpsConfigRowStatus           RowStatus,
+   mplsLpsConfigStorageType         StorageType
+}
+
+mplsLpsConfigDomainIndex OBJECT-TYPE
+   SYNTAX      Unsigned32 (1..4294967295)
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "Index for the conceptual row identifying a protection domain.
+       Operators should obtain new values for row creation in this
+       table by reading mplsLpsConfigDomainIndexNext.
+
+       When the value of this object is the same as the value of
+       mplsLpsMeConfigDomain, the mplsLpsMeConfigDomain is defined
+       as either the working path or the protection path for this
+       protection domain."
+   ::= { mplsLpsConfigEntry 1 }
+
+mplsLpsConfigDomainName OBJECT-TYPE
+   SYNTAX      SnmpAdminString (SIZE (0..32))
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "Textual name that represents the MPLS-TP linear protection
+       domain.  It facilitates easy administrative identification of
+       each protection domain."
+   DEFVAL {""}
+   ::= { mplsLpsConfigEntry 2 }
+
+mplsLpsConfigMode OBJECT-TYPE
+   SYNTAX INTEGER {
+             psc(1),
+             aps(2)
+             }
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The mode of the MPLS-TP linear protection mechanism.  This can
+       be either PSC or APS, as follows:
+
+       PSC
+       The Protection State Coordination mode as described in
+       RFC 6378.
+
+       APS
+       The Automatic Protection Switching mode as described in
+       RFC 7271.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1).
+
+       The value of this object is not supposed to be changed
+       during operation.  When the value should be changed,
+       the protection processes in both LERs MUST be
+       restarted with the same new value.
+
+       If this value is changed at one LER during operation,
+       the LER will generate PSC packets with a new
+       Capabilities TLV value.  This will result in
+       mplsLpsEventCapabilitiesMismatch notifications at both LERs."
+   REFERENCE
+      "Sections 9.2 and 10 of RFC 7271"
+   DEFVAL {psc}
+   ::= { mplsLpsConfigEntry 3 }
+
+mplsLpsConfigProtectionType OBJECT-TYPE
+   SYNTAX INTEGER {
+             onePlusOneUnidirectional(1),
+             oneColonOneBidirectional(2),
+             onePlusOneBidirectional(3)
+             }
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The protection architecture type of the protection domain.
+       This object represents both the bridge type, which can be
+       either a permanent bridge (1+1) or a selector bridge (1:1);
+       and the switching scheme, which can be either unidirectional
+       or bidirectional.
+
+       1+1
+       In the 1+1 protection scheme, a fully dedicated protection
+       path is allocated.  Data traffic is copied and fed at the
+       source to both the working path and the protection path.
+       The traffic on the working path and protection path is
+       transmitted simultaneously to the sink of the protection
+       domain, where selection between the working path and the
+       protection path is performed.
+
+       1:1
+       In the 1:1 protection scheme, a protection path is allocated
+       to protect against a defect, failure, or degradation on the
+       working path.  In normal conditions, data traffic is
+       transmitted over the working path, while the protection path
+       functions in the idle state.  If there is a defect on the
+       working path or a specific administrative request,
+       traffic is switched to the protection path.
+
+       bidirectional
+       In the bidirectional protection scheme, both directions
+       will be switched simultaneously even if the fault applies
+       to only one direction of the path.
+
+       unidirectional
+       In the unidirectional protection scheme, protection switching
+       will be performed independently for each direction of a
+       bidirectional transport path.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 4.2.3 of RFC 6378"
+   DEFVAL {oneColonOneBidirectional}
+   ::= { mplsLpsConfigEntry 4 }
+
+mplsLpsConfigRevertive OBJECT-TYPE
+   SYNTAX      INTEGER { nonrevertive(1), revertive(2) }
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object represents the reversion mode of the linear
+       protection domain.  The reversion mode of the protection
+       mechanism may be either revertive or non-revertive.
+
+       nonrevertive
+       In the non-revertive mode, after a service has been recovered,
+       traffic will be forwarded on the protection path.
+
+       revertive
+       In the revertive mode, after a service has been recovered,
+       traffic will be redirected back onto the original working
+       path.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 4.2.4 of RFC 6378"
+   DEFVAL { revertive }
+   ::= { mplsLpsConfigEntry 5 }
+
+mplsLpsConfigSdThreshold OBJECT-TYPE
+   SYNTAX      Unsigned32 (0..100)
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object holds the threshold value of the Signal Degrade
+       (SD) defect in percent.  In order to detect the SD defect,
+       the MPLS-TP packet loss measurement (LM) is performed
+       every second.
+
+       If either the packet loss is negative (i.e., there are more
+       packets received than transmitted) or the packet loss ratio
+       (lost packets/transmitted packets) in percent is greater than
+       this threshold value, a Bad Second is declared.
+       Otherwise, a Good Second is declared.
+
+       The SD defect is detected if there are
+       mplsLpsConfigSdBadSeconds consecutive Bad Seconds
+       and cleared if there are
+       mplsLpsConfigSdGoodSeconds consecutive Good Seconds.
+
+       This object may be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Clause 6.1.3.3 of ITU-T Recommendation G.8121/Y.1381 and
+       Table 8-1 of ITU-T Recommendation G.8151/Y.1374"
+   DEFVAL { 30 }
+   ::= { mplsLpsConfigEntry 6 }
+
+mplsLpsConfigSdBadSeconds OBJECT-TYPE
+   SYNTAX      Unsigned32 (2..10)
+   UNITS       "seconds"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object holds the number of Bad Seconds to detect the SD.
+
+       If the number of consecutive Bad Seconds reaches this value,
+       the SD defect is detected and used as an input to
+       the protection switching process.
+
+       This object may be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Clause 6.1.3.3 of ITU-T Recommendation G.8121/Y.1381 and
+       Table 8-1 of ITU-T Recommendation G.8151/Y.1374"
+   DEFVAL { 10 }
+   ::= { mplsLpsConfigEntry 7 }
+
+mplsLpsConfigSdGoodSeconds OBJECT-TYPE
+   SYNTAX      Unsigned32 (2..10)
+   UNITS       "seconds"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object holds the number of Good Seconds to declare
+       the clearance of an SD defect.
+
+       After an SD defect occurs on a path, if the number of
+       consecutive Good Seconds reaches this value for the
+       degraded path, the clearance of the SD defect is declared
+       and used as an input to the protection switching process.
+
+       This object may be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Clause 6.1.3.3 of ITU-T Recommendation G.8121/Y.1381 and
+       Table 8-1 of ITU-T Recommendation G.8151/Y.1374"
+   DEFVAL { 10 }
+   ::= { mplsLpsConfigEntry 8 }
+
+mplsLpsConfigWaitToRestore OBJECT-TYPE
+   SYNTAX      Unsigned32 (5..12)
+   UNITS       "minutes"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object holds the Wait-to-Restore timer value in minutes
+       and can be configured in 1-minute intervals between 5 and
+       12 minutes.
+
+       The WTR timer is used to delay the reversion of the PSC state
+       to the Normal state when recovering from a failure condition
+       on the working path when the protection domain is configured
+       for revertive behavior.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 3.5 of RFC 6378"
+   DEFVAL { 5 }
+   ::= { mplsLpsConfigEntry 9 }
+
+mplsLpsConfigHoldOff OBJECT-TYPE
+   SYNTAX      Unsigned32 (0..100)
+   UNITS       "deciseconds"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The hold-off time in deciseconds.  Represents the time
+       between SF/SD condition detection and declaration of
+       an SF/SD request to the protection switching logic.
+       It is intended to avoid unnecessary switching when a
+       lower-layer protection mechanism is in place.
+       Can be configured in intervals of 100 milliseconds.
+
+       When a new defect or a more severe defect occurs on
+       the active path (the path from which the selector selects
+       the user data traffic) and this value is non-zero,
+       the hold-off timer will be started.  A defect on the standby
+
+       path (the path from which the selector does not select the
+       user data traffic) does not trigger the start of the hold-off
+       timer, as there is no need for a traffic switchover.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 3.1 of RFC 6378"
+   DEFVAL { 0 }
+   ::= { mplsLpsConfigEntry 10 }
+
+mplsLpsConfigContinualTxInterval OBJECT-TYPE
+   SYNTAX      Unsigned32 (1..20)
+   UNITS       "seconds"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The Continual Tx Time in seconds.  Represents the time
+       interval to send the continual PSC packet to the other
+       end, based on the current state.
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 4.1 of RFC 6378"
+   DEFVAL { 5 }
+   ::= { mplsLpsConfigEntry 11 }
+
+mplsLpsConfigRapidTxInterval OBJECT-TYPE
+   SYNTAX      Unsigned32 (1000..20000)
+   UNITS       "microseconds"
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The Rapid Tx interval in microseconds.  Represents the time
+       interval to send the PSC packet to the other end, when
+       there is a change in the state of the linear protection domain
+       due to local input.  The default value is 3.3 milliseconds
+       (3300 microseconds).
+
+       This object may not be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Section 4.1 of RFC 6378"
+   DEFVAL { 3300 }
+   ::= { mplsLpsConfigEntry 12 }
+
+mplsLpsConfigCommand OBJECT-TYPE
+   SYNTAX      MplsLpsCommand
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "Allows the initiation of an operator command on
+       the protection domain.
+
+       When read, this object returns the last command written
+       or noCmd if no command has been written since initialization.
+       The return of the last command written does not imply that
+       this command is currently in effect.  This request may have
+       been preempted by a higher-priority local or remote request.
+
+       This object may be modified if the associated
+       mplsLpsConfigRowStatus object is equal to active(1)."
+   REFERENCE
+      "Sections 3.1 and 3.2 of RFC 6378 and Sections 4.3 and 6 of
+       RFC 7271"
+   DEFVAL { noCmd }
+   ::= { mplsLpsConfigEntry 13 }
+
+mplsLpsConfigCreationTime OBJECT-TYPE
+   SYNTAX      TimeStamp
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The value of sysUpTime at the time the row was created."
+   ::= { mplsLpsConfigEntry 14 }
+
+mplsLpsConfigRowStatus OBJECT-TYPE
+   SYNTAX      RowStatus
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object represents the status of the MPLS-TP linear
+       protection domain entry.  This variable is used to
+       create, modify, and/or delete a row in this table."
+   ::= { mplsLpsConfigEntry 15 }
+
+mplsLpsConfigStorageType OBJECT-TYPE
+   SYNTAX      StorageType
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "The storage type for this conceptual row.
+       Conceptual rows having the value 'permanent' need not
+       allow write access to any columnar objects in the row."
+   DEFVAL      { nonVolatile }
+   ::= { mplsLpsConfigEntry 16 }
+
+--
+-- MPLS-TP Linear Protection Switching Status Table.
+-- This table provides protection domain statistics.
+--
+
+mplsLpsStatusTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF MplsLpsStatusEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "This table provides status information about MPLS-TP
+       linear protection domains that have been configured
+       on the system."
+   ::= { mplsLpsObjects 3 }
+
+mplsLpsStatusEntry OBJECT-TYPE
+   SYNTAX      MplsLpsStatusEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "A conceptual row in the mplsLpsStatusTable."
+   AUGMENTS { mplsLpsConfigEntry }
+   ::= { mplsLpsStatusTable 1 }
+
+MplsLpsStatusEntry ::= SEQUENCE {
+   mplsLpsStatusState                 MplsLpsState,
+   mplsLpsStatusReqRcv                MplsLpsReq,
+   mplsLpsStatusReqSent               MplsLpsReq,
+   mplsLpsStatusFpathPathRcv          MplsLpsFpathPath,
+   mplsLpsStatusFpathPathSent         MplsLpsFpathPath,
+   mplsLpsStatusRevertiveMismatch     TruthValue,
+   mplsLpsStatusProtecTypeMismatch    TruthValue,
+   mplsLpsStatusCapabilitiesMismatch  TruthValue,
+   mplsLpsStatusPathConfigMismatch    TruthValue,
+   mplsLpsStatusFopNoResponses        Counter32,
+   mplsLpsStatusFopTimeouts           Counter32
+}
+
+mplsLpsStatusState OBJECT-TYPE
+   SYNTAX      MplsLpsState
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The current state of the PSC state machine."
+   REFERENCE
+      "Section 11 of RFC 7271"
+   ::= { mplsLpsStatusEntry 1 }
+
+mplsLpsStatusReqRcv OBJECT-TYPE
+   SYNTAX      MplsLpsReq
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The current value of the PSC Request field received on
+       the most recent PSC packet."
+   REFERENCE
+      "Section 4.2 of RFC 6378"
+   ::= { mplsLpsStatusEntry 2 }
+
+mplsLpsStatusReqSent OBJECT-TYPE
+   SYNTAX      MplsLpsReq
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The current value of the PSC Request field sent on the
+       most recent PSC packet."
+   REFERENCE
+      "Section 4.2 of RFC 6378"
+   ::= { mplsLpsStatusEntry 3 }
+
+mplsLpsStatusFpathPathRcv OBJECT-TYPE
+   SYNTAX      MplsLpsFpathPath
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The current value of the FPath and Path fields received
+       on the most recent PSC packet."
+   REFERENCE
+      "Section 4.2 of RFC 6378"
+   ::= { mplsLpsStatusEntry 4 }
+
+mplsLpsStatusFpathPathSent OBJECT-TYPE
+   SYNTAX      MplsLpsFpathPath
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The current value of the FPath and Path fields sent
+       on the most recent PSC packet."
+   REFERENCE
+      "Section 4.2 of RFC 6378"
+   ::= { mplsLpsStatusEntry 5 }
+
+mplsLpsStatusRevertiveMismatch OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates a provisioning mismatch in the
+       revertive mode across the protection domain endpoints.
+       The value of this object becomes true when a PSC message with
+       an incompatible Revertive field is received or false when a
+       PSC message with a compatible Revertive field is received."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 6 }
+
+mplsLpsStatusProtecTypeMismatch OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates a provisioning mismatch in the
+       protection type, representing both the bridge type and the
+       switching type, across the protection domain endpoints.
+       The value of this object becomes true when a PSC message with
+       an incompatible Protection Type (PT) field is received or
+       false when a PSC message with a compatible PT field is
+       received."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 7 }
+
+mplsLpsStatusCapabilitiesMismatch OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates a provisioning mismatch in
+       Capabilities TLVs across the protection domain endpoints.
+       The value of this object becomes true when a PSC message with
+       an incompatible Capabilities TLV field is received or false
+       when a PSC message with a compatible Capabilities TLV field is
+       received.
+
+       The Capabilities TLV with 0xF8000000 indicates that the APS
+       mode is used for the MPLS-TP linear protection mechanism,
+       whereas the PSC mode either (1) uses the Capabilities TLV
+       with a value of 0x0 or (2) does not use the Capabilities TLV
+       because the TLV does not exist."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 8 }
+
+mplsLpsStatusPathConfigMismatch OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates a provisioning mismatch in the
+       protection path configuration for PSC communication across
+       the protection domain endpoints.
+
+       The value of this object becomes true when a PSC message is
+       received from the working path or false when a PSC message
+       is received from the protection path."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 9 }
+
+mplsLpsStatusFopNoResponses OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object holds the number of occurrences of protocol
+       failure due to a lack of response to a traffic
+       switchover request within 50 ms.
+
+       When there is a traffic switchover due to a local request,
+       a 50 ms timer is started to detect protocol failure due to
+       no response.  If there is no PSC message received with the
+       same Path value as the Path value in the transmitted
+       PSC message until the 50 ms timer expires, protocol failure
+       due to no response occurs."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 10 }
+
+mplsLpsStatusFopTimeouts OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object holds the number of occurrences of protocol
+       failure due to no PSC message being received during
+       at least 3.5 times the long PSC message interval.
+
+       When no PSC message is received on the protection path during
+       at least 3.5 times the long PSC message interval and there
+       is no defect on the protection path, protocol failure due to
+       no PSC message occurs."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   ::= { mplsLpsStatusEntry 11 }
+
+-- MPLS-TP Linear Protection ME Association Configuration Table.
+-- This table supports the addition, configuration, and deletion
+-- of MPLS-TP linear protection MEs in protection domains.
+
+mplsLpsMeConfigTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF MplsLpsMeConfigEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "This table lists ME associations that have been configured
+       in protection domains."
+   ::= { mplsLpsObjects 4 }
+
+mplsLpsMeConfigEntry OBJECT-TYPE
+   SYNTAX      MplsLpsMeConfigEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "A conceptual row in the mplsLpsMeConfigTable.  There is
+       a sparse relationship between the conceptual rows of
+       this table and the mplsOamIdMeTable.
+
+       Each time that an entry is created in the mplsOamIdMeTable
+       for which the LER supports MPLS-TP linear protection,
+       a row is created automatically in the mplsLpsMeConfigTable.
+
+       An entry in this table is related to a single entry in
+       the mplsOamIdMeTable.  When a point-to-point transport path
+       needs to be monitored, one ME is needed for the path,
+       and one entry in the mplsOamIdMeTable will be created.
+       But the ME entry in the mplsOamIdMeTable may or may not
+       participate in protection switching.
+
+       If an ME participates in protection switching, an entry in
+       the mplsLpsMeConfigTable MUST be created, and the objects
+       in the entry indicate which protection domain this ME
+       belongs to and whether this ME is for the working path or
+       the protection path.
+
+       If the ME does not participate in protection switching,
+       an entry in the mplsLpsMeConfigTable does not need
+       to be created."
+   INDEX {mplsOamIdMegIndex, mplsOamIdMeIndex, mplsOamIdMeMpIndex}
+   ::= { mplsLpsMeConfigTable 1 }
+
+MplsLpsMeConfigEntry ::= SEQUENCE {
+   mplsLpsMeConfigDomain                Unsigned32,
+   mplsLpsMeConfigPath                  INTEGER
+}
+
+mplsLpsMeConfigDomain OBJECT-TYPE
+   SYNTAX      Unsigned32 (0..4294967295)
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object holds the mplsLpsConfigDomainIndex value for
+       the protection domain in which this ME is included.
+       If this ME is not part of any protection domain, then
+       this object contains the value 0.
+
+       When the value of this object is the same as the value of
+       mplsLpsConfigDomainIndex, the object is defined as either
+       the working path or the protection path of the
+       protection domain corresponding to mplsLpsConfigDomainIndex."
+   DEFVAL { 0 }
+   ::= { mplsLpsMeConfigEntry 1 }
+
+mplsLpsMeConfigPath OBJECT-TYPE
+   SYNTAX      INTEGER { working(1), protection(2) }
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      "This object represents whether the ME is configured
+       as the working path or the protection path."
+   REFERENCE
+      "Section 4.3 of RFC 6378"
+   ::= { mplsLpsMeConfigEntry 2 }
+
+--
+-- MPLS Linear Protection ME Status Table.
+-- This table provides protection switching ME statistics.
+--
+
+mplsLpsMeStatusTable OBJECT-TYPE
+   SYNTAX      SEQUENCE OF MplsLpsMeStatusEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "This table contains status information of all the MEs
+       that are included in MPLS-TP linear protection domains."
+   ::= { mplsLpsObjects 5 }
+
+mplsLpsMeStatusEntry OBJECT-TYPE
+   SYNTAX      MplsLpsMeStatusEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "A conceptual row in the mplsLpsMeStatusTable."
+   AUGMENTS { mplsLpsMeConfigEntry }
+   ::= { mplsLpsMeStatusTable 1 }
+
+MplsLpsMeStatusEntry ::= SEQUENCE {
+   mplsLpsMeStatusCurrent               BITS,
+   mplsLpsMeStatusSignalDegrades        Counter32,
+   mplsLpsMeStatusSignalFailures        Counter32,
+   mplsLpsMeStatusSwitchovers           Counter32,
+   mplsLpsMeStatusLastSwitchover        TimeStamp,
+   mplsLpsMeStatusSwitchoverSeconds     Counter32
+}
+
+mplsLpsMeStatusCurrent OBJECT-TYPE
+   SYNTAX      BITS {
+               localSelectTraffic(0),
+               localSD(1),
+               localSF(2)
+               }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "Indicates the current state of the ME.
+
+       localSelectTraffic
+       This bit indicates that traffic is being selected from
+       this ME.
+
+       localSD
+       This bit implies that a local Signal Degrade condition is
+       in effect on this ME/path.
+
+       localSF
+       This bit implies that a local Signal Fail condition is
+       in effect on this ME/path."
+   REFERENCE
+      "Section 4.3 of RFC 6378 and Section 7 of RFC 7271"
+   ::= { mplsLpsMeStatusEntry 1 }
+
+mplsLpsMeStatusSignalDegrades OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "Represents the count of Signal Degrade conditions.
+       For the detection and clearance of Signal Degrade,
+       see the description of mplsLpsConfigSdThreshold."
+   REFERENCE
+      "Section 7 of RFC 7271"
+   ::= { mplsLpsMeStatusEntry 2 }
+
+mplsLpsMeStatusSignalFailures OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "Represents the count of Signal Fail conditions.
+       This condition occurs when the OAM running on this ME
+       detects the Signal Fail event."
+   REFERENCE
+      "Section 4.3 of RFC 6378"
+   ::= { mplsLpsMeStatusEntry 3 }
+
+mplsLpsMeStatusSwitchovers OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "Represents the count of switchovers that happened in this ME.
+
+       When the mplsLpsMeConfigPath value is 'working', this object
+       will return the number of times that traffic has been
+       switched from this working path to the protection path.
+
+       When the mplsLpsMeConfigPath value is 'protection', this
+       object will return the number of times that traffic has been
+       switched back to the working path from this protection path."
+   REFERENCE
+      "Section 4.3 of RFC 6378"
+   ::= { mplsLpsMeStatusEntry 4 }
+
+mplsLpsMeStatusLastSwitchover OBJECT-TYPE
+   SYNTAX      TimeStamp
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object holds the value of sysUpTime at the time that
+       the last switchover happened.
+
+       When the mplsLpsMeConfigPath value is 'working', this object
+       will return the value of sysUpTime when traffic was switched
+       from this path to the protection path.
+
+       If traffic has never switched to the protection path, the
+       value 0 will be returned.
+
+       When the mplsLpsMeConfigPath value is 'protection', this
+       object will return the value of sysUpTime the last time that
+       traffic was switched back to the working path from this path.
+       If no traffic has ever switched back to the working path from
+       this protection path, the value 0 will be returned."
+   REFERENCE
+      "Section 4.3 of RFC 6378"
+   ::= { mplsLpsMeStatusEntry 5 }
+
+mplsLpsMeStatusSwitchoverSeconds OBJECT-TYPE
+   SYNTAX      Counter32
+   UNITS       "seconds"
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "The cumulative Protection Switching Duration (PSD) time
+       in seconds.
+
+       For the working path, this is the cumulative number of
+       seconds that traffic was selected from the protection path.
+
+       For the protection path, this is the cumulative number
+       of seconds that the working path has been used to
+       select traffic."
+   REFERENCE
+      "Section 4.3 of RFC 6378"
+   ::= { mplsLpsMeStatusEntry 6 }
+
+mplsLpsNotificationEnable OBJECT-TYPE
+   SYNTAX      BITS {
+               switchover(0),
+               revertiveMismatch(1),
+               protecTypeMismatch(2),
+               capabilitiesMismatch(3),
+               pathConfigMismatch(4),
+               fopNoResponse(5),
+               fopTimeout(6)
+               }
+   MAX-ACCESS  read-write
+   STATUS      current
+   DESCRIPTION
+      "Provides the ability to enable and disable notifications
+       defined in this MIB module.
+
+       switchover
+       Indicates that mplsLpsEventSwitchover notifications should be
+       generated.
+
+       revertiveMismatch
+       Indicates that mplsLpsEventRevertiveMismatch notifications
+       should be generated.
+
+       protecTypeMismatch
+       Indicates that mplsLpsEventProtecTypeMismatch notifications
+       should be generated.
+
+       capabilitiesMismatch
+       Indicates that mplsLpsEventCapabilitiesMismatch notifications
+       should be generated.
+
+       pathConfigMismatch
+       Indicates that mplsLpsEventPathConfigMismatch notifications
+       should be generated.
+
+       fopNoResponse
+       Indicates that mplsLpsEventFopNoResponse notifications should
+       be generated.
+
+       fopTimeout
+       Indicates that mplsLpsEventFopTimeout notifications should be
+       generated."
+   REFERENCE
+      "Section 12 of RFC 7271"
+   DEFVAL { { } }
+   ::= { mplsLpsObjects 6 }
+
+-- MPLS Linear Protection EVENTS.
+
+mplsLpsEventSwitchover NOTIFICATION-TYPE
+   OBJECTS { mplsLpsMeStatusSwitchovers, mplsLpsMeStatusCurrent }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventSwitchover notification is sent when the
+       value of an instance of mplsLpsMeStatusSwitchovers
+       increments."
+   ::= { mplsLpsNotifications 1 }
+
+mplsLpsEventRevertiveMismatch NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusRevertiveMismatch }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventRevertiveMismatch notification is sent when
+       the value of mplsLpsStatusRevertiveMismatch changes."
+   ::= { mplsLpsNotifications 2 }
+
+mplsLpsEventProtecTypeMismatch NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusProtecTypeMismatch }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventProtecTypeMismatch notification is sent
+       when the value of mplsLpsStatusProtecTypeMismatch changes."
+   ::= { mplsLpsNotifications 3 }
+
+mplsLpsEventCapabilitiesMismatch NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusCapabilitiesMismatch }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventCapabilitiesMismatch notification is sent
+       when the value of mplsLpsStatusCapabilitiesMismatch changes."
+   ::= { mplsLpsNotifications 4 }
+
+mplsLpsEventPathConfigMismatch NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusPathConfigMismatch }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventPathConfigMismatch notification is sent
+       when the value of mplsLpsStatusPathConfigMismatch changes."
+   ::= { mplsLpsNotifications 5 }
+
+mplsLpsEventFopNoResponse NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusFopNoResponses }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventFopNoResponse notification is sent when the
+       value of mplsLpsStatusFopNoResponses increments."
+   ::= { mplsLpsNotifications 6 }
+
+mplsLpsEventFopTimeout NOTIFICATION-TYPE
+   OBJECTS { mplsLpsStatusFopTimeouts }
+   STATUS  current
+   DESCRIPTION
+      "An mplsLpsEventFopTimeout notification is sent when the
+       value of mplsLpsStatusFopTimeouts increments."
+   ::= { mplsLpsNotifications 7 }
+
+-- End of Notifications.
+
+-- Module Compliance.
+
+mplsLpsCompliances
+   OBJECT IDENTIFIER ::= { mplsLpsConformance 1 }
+
+mplsLpsGroups
+   OBJECT IDENTIFIER ::= { mplsLpsConformance 2 }
+
+-- Compliance requirement for fully compliant implementations.
+
+mplsLpsModuleFullCompliance MODULE-COMPLIANCE
+   STATUS      current
+   DESCRIPTION
+      "Compliance statement for agents that provide full support for
+       the MPLS-LPS-MIB module.  Such devices can provide linear
+       protection and also be configured using this MIB module."
+   MODULE -- this module
+   MANDATORY-GROUPS {
+      mplsLpsScalarGroup,
+      mplsLpsTableGroup,
+      mplsLpsMeTableGroup
+   }
+   GROUP        mplsLpsNotificationGroup
+   DESCRIPTION
+      "This group is only mandatory for those
+       implementations that can efficiently implement
+       the notifications contained in this group."
+   ::= { mplsLpsCompliances 1 }
+
+-- Compliance requirement for read-only implementations.
+
+mplsLpsModuleReadOnlyCompliance MODULE-COMPLIANCE
+   STATUS      current
+   DESCRIPTION
+      "Compliance statement for agents that only provide
+       read-only support for the MPLS-LPS-MIB module."
+   MODULE -- this module
+   MANDATORY-GROUPS {
+      mplsLpsScalarGroup,
+      mplsLpsTableGroup,
+      mplsLpsMeTableGroup
+   }
+   GROUP        mplsLpsNotificationGroup
+   DESCRIPTION
+      "This group is only mandatory for those
+       implementations that can efficiently implement
+       the notifications contained in this group."
+
+   -- mplsLpsConfigTable
+
+   OBJECT      mplsLpsConfigMode
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigProtectionType
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigRevertive
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigSdThreshold
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigSdBadSeconds
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigSdGoodSeconds
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigWaitToRestore
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigContinualTxInterval
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigRapidTxInterval
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigCommand
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigRowStatus
+   SYNTAX      RowStatus { active(1) }
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsConfigStorageType
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   -- mplsLpsMeConfigTable
+
+   OBJECT      mplsLpsMeConfigDomain
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+
+   OBJECT      mplsLpsMeConfigPath
+   MIN-ACCESS  read-only
+   DESCRIPTION
+      "Write access is not required."
+   ::= { mplsLpsCompliances 2 }
+
+-- Units of conformance.
+
+mplsLpsScalarGroup OBJECT-GROUP
+   OBJECTS {
+           mplsLpsConfigDomainIndexNext,
+           mplsLpsNotificationEnable
+           }
+   STATUS  current
+   DESCRIPTION
+      "Collection of objects needed for MPLS linear protection."
+   ::= { mplsLpsGroups 1 }
+
+mplsLpsTableGroup OBJECT-GROUP
+   OBJECTS {
+      mplsLpsConfigDomainName,
+      mplsLpsConfigRowStatus,
+      mplsLpsConfigMode,
+      mplsLpsConfigProtectionType,
+      mplsLpsConfigRevertive,
+      mplsLpsConfigSdThreshold,
+      mplsLpsConfigSdBadSeconds,
+      mplsLpsConfigSdGoodSeconds,
+      mplsLpsConfigWaitToRestore,
+      mplsLpsConfigHoldOff,
+      mplsLpsConfigContinualTxInterval,
+      mplsLpsConfigRapidTxInterval,
+      mplsLpsConfigCommand,
+      mplsLpsConfigCreationTime,
+      mplsLpsConfigStorageType,
+      mplsLpsStatusState,
+      mplsLpsStatusReqRcv,
+      mplsLpsStatusReqSent,
+      mplsLpsStatusFpathPathRcv,
+      mplsLpsStatusFpathPathSent,
+      mplsLpsStatusRevertiveMismatch,
+      mplsLpsStatusProtecTypeMismatch,
+      mplsLpsStatusCapabilitiesMismatch,
+      mplsLpsStatusPathConfigMismatch,
+      mplsLpsStatusFopNoResponses,
+      mplsLpsStatusFopTimeouts
+      }
+   STATUS  current
+   DESCRIPTION
+      "Collection of objects needed for MPLS linear protection
+       configuration and statistics."
+   ::= { mplsLpsGroups 2 }
+
+mplsLpsMeTableGroup OBJECT-GROUP
+   OBJECTS {
+      mplsLpsMeConfigDomain,
+      mplsLpsMeConfigPath,
+      mplsLpsMeStatusCurrent,
+      mplsLpsMeStatusSignalDegrades,
+      mplsLpsMeStatusSignalFailures,
+      mplsLpsMeStatusSwitchovers,
+      mplsLpsMeStatusLastSwitchover,
+      mplsLpsMeStatusSwitchoverSeconds
+      }
+   STATUS  current
+   DESCRIPTION
+      "Collection of objects needed for MPLS linear protection
+       ME configuration and statistics."
+   ::= { mplsLpsGroups 3 }
+
+mplsLpsNotificationGroup NOTIFICATION-GROUP
+   NOTIFICATIONS {
+      mplsLpsEventSwitchover,
+      mplsLpsEventRevertiveMismatch,
+      mplsLpsEventProtecTypeMismatch,
+      mplsLpsEventCapabilitiesMismatch,
+      mplsLpsEventPathConfigMismatch,
+      mplsLpsEventFopNoResponse,
+      mplsLpsEventFopTimeout
+      }
+   STATUS  current
+   DESCRIPTION
+      "Collection of objects needed to implement notifications."
+   ::= { mplsLpsGroups 4 }
+
+-- MPLS-LPS-MIB module ends
+END
