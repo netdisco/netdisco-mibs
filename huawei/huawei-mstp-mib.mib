@@ -1,9 +1,9 @@
 -- ==================================================================
--- Copyright (C) 2002 by  HUAWEI TECHNOLOGIES. All rights reserved.
+-- Copyright (C) 2015 by  HUAWEI TECHNOLOGIES. All rights reserved.
 -- 
 -- Description: HUAWEI MSTP MIB
 -- Reference:
--- Version:     V3.2
+-- Version:     V2.08
 -- History:     2008-06-14  MSTP Process
 -- History:     2008-10-08  MSTP Process- v3     
 -- History:     2009-3-01  MSTP Process- v4
@@ -14,8 +14,6 @@
 -- Variables and types be imported
 --
 -- ==================================================================
--- ------------------------------------------------------------------
--- ------------------------------------------------------------------
 
         HUAWEI-MSTP-MIB DEFINITIONS ::= BEGIN
 
@@ -39,7 +37,7 @@
         
         
                 hwMstp MODULE-IDENTITY
-                        LAST-UPDATED "201303191000Z"
+                        LAST-UPDATED "201511261000Z"
                         ORGANIZATION
                                 "Huawei Technologies Co.,Ltd."
                         CONTACT-INFO
@@ -54,6 +52,45 @@
                                 "This module include the information about MSTP protocol in the bridge.
                                 The information can be read and some of them can be set."
 
+                        REVISION    "201511261000Z"
+                        DESCRIPTION "modified for:hwMstpDiameter 
+                                                                            hwMstpProDiameter 
+                                                                            hwMstpiStpTransLimit
+                                                                            hwMstpTransmitLimitDefault
+                                                                            hwMstpProNewPortStpTransLimit."
+                       
+                        REVISION    "201505291000Z"
+                        DESCRIPTION "Add for: hwMstpProFlushCapability."
+
+                        REVISION     "201408140000Z"
+                        DESCRIPTION  "Add table node for port count trap. 
+	                                Add for : hwMstpPortCountUpperThreshold
+                                                                   hwMstpPortCountLowerThreshold
+                                                                   hwMstpPortCountExceedThreshold
+                                                                   hwMstpPortCountExceedThresholdResume"
+
+                        REVISION     "201405280000Z"
+                        DESCRIPTION  "Add table node for tc-snooping notify trill. 
+                                                    Add for : hwMstpPortTcSnoopingTable"
+
+                        REVISION     "201402130000Z"
+                        DESCRIPTION  "Add leaf node for pw name. 
+	                                Add for : hwMstpiEdgePortChanged
+			       hwMstpProNewEdgePortChanged"
+
+                        REVISION     "201401270000Z"
+                        DESCRIPTION  "Add leaf node for pw name. 
+	                                Add for : hwMstpiPortStateForwarding
+			        hwMstpiPortStateDiscarding
+			        hwMstpiPortRootGuarded
+			        hwMstpiPortLoopGuarded
+			        hwMstpProNewPortStateForwarding
+			        hwMstpProNewPortStateDiscarding
+			        hwMstpProNewPortRootGuarded
+			        hwMstpProNewPortLoopGuarded
+			        hwMstpProLoopbackDetected"
+	     REVISION     "201309070000Z"
+                        DESCRIPTION  "Fix the errors checked by a tool."
                         REVISION    "201303191000Z"
                         DESCRIPTION "Modify bpdu encapsulation enum value."
 
@@ -120,9 +157,7 @@
                                 forward delay time, maxage. Every bridge can set
                                 the diameter of Bridge, and it is effective when
                                 the bridge is root bridge. Effective in the CIST
-                                By default, the diameter is 7.
-                                The value of hwMstpDiameter is only unused(65535) when it is 
-                                read."                        
+                                By default, the diameter is 7."                        
                         ::= { hwMstpObjects 3 }
                 
                 hwMstpBridgeMaxHops OBJECT-TYPE
@@ -771,7 +806,6 @@
                                 "The value is used to set BPDU maximum transmission rate of the port .
                                  When the value is set, the hwMstpInstanceID must be 0.
                                  If value is set 0, the transmit limit of the port is equal to the hwMstpTransmitLimitDefault value."
-                        DEFVAL { 147 }
                         ::= { hwMstpPortEntry 12 }
                 
                 hwMstpiStpRXStpBPDU OBJECT-TYPE
@@ -1130,7 +1164,9 @@
                                 hwMstpProRowStatus
                                         RowStatus,
                                 hwMstpProTcGuardInterval
-                                        Integer32
+                                        Integer32,
+                               hwMstpProFlushCapability
+                                        HwMSTPEnabledStatus
                                 
                          }
 
@@ -1206,9 +1242,7 @@
                         STATUS current
                         DESCRIPTION
                                 "The Spanning-Tree diameter of a MSTP process, the default value
-                                 is 7.
-                                 The value of hwMstpProDiameter is only unused(65535) when it is 
-                                 read."
+                                 is 7."
                         DEFVAL { 7 }
                         ::= { hwMstpProEntry 9 }
                 
@@ -1423,7 +1457,15 @@
                                 "The value is the tc-protection interval time. 
                                 If the value is set 0, the tc guard interval value is euqal to the hello time."
                         ::= { hwMstpProEntry 31 }
-                
+
+                hwMstpProFlushCapability OBJECT-TYPE
+                        SYNTAX HwMSTPEnabledStatus
+                        MAX-ACCESS read-create
+                        STATUS current
+                        DESCRIPTION
+                                "Whether FLUSH capability is enabled or not on a MSTP process."
+                        DEFVAL { disabled }
+                        ::= { hwMstpProEntry 32 }
                 
                 
                 hwMstpPortBindTable OBJECT-TYPE
@@ -2359,7 +2401,6 @@
                         DESCRIPTION
                                 "The value is used to set BPDU maximum transmission rate of the port. 
                                  If value is set 0, the transmit limit of the port is equal to the wMstpTransmitLimitDefault value "
-                        DEFVAL { 147 }
                         ::= { hwMstpProNewPortEntry 11 }
                 
                 hwMstpProNewPortStpRXStpBPDU OBJECT-TYPE
@@ -2623,8 +2664,79 @@
                         STATUS current
                         DESCRIPTION
                                 "The value is used to set BPDU maximum transmission rate of all port in the device."
+                        DEFVAL { 6 }
                         ::= { hwMstpObjects 32 }           
-                                    
+
+                hwMstpPwName OBJECT-TYPE
+                        SYNTAX OCTET STRING (SIZE (0..16))
+                        MAX-ACCESS accessible-for-notify
+                        STATUS current
+                        DESCRIPTION
+                                "Pw name"
+                        ::= { hwMstpObjects 33 }
+						
+                hwMstpPortTcSnoopingTable OBJECT-TYPE
+                        SYNTAX SEQUENCE OF HwMstpPortTcSnoopingEntry
+                        MAX-ACCESS not-accessible
+                        STATUS current
+                        DESCRIPTION
+                                "The table includes the information of the port 
+                                of the STP TC snooping. "
+                        ::= { hwMstpObjects 34 }
+
+                -- 1.3.6.1.4.1.2011.5.25.42.4.1.35
+                hwMstpPortCountUpperThreshold OBJECT-TYPE                        
+                        SYNTAX Integer32 (0..65535)
+                        MAX-ACCESS accessible-for-notify
+                        STATUS current
+                        DESCRIPTION
+                                "The value of this object identifies the upper threshold for the number of Up STP-capable interfaces."
+                        ::= { hwMstpObjects 35 } 
+                
+                -- 1.3.6.1.4.1.2011.5.25.42.4.1.36
+                hwMstpPortCountLowerThreshold OBJECT-TYPE                        
+                        SYNTAX Integer32 (0..65535)
+                        MAX-ACCESS accessible-for-notify
+                        STATUS current
+                        DESCRIPTION
+                                "The value of this object identifies the lower threshold for the number of Up STP-capable interfaces."
+                        ::= { hwMstpObjects 36 } 
+                
+                hwMstpPortTcSnoopingEntry OBJECT-TYPE
+                        SYNTAX HwMstpPortTcSnoopingEntry
+                        MAX-ACCESS not-accessible
+                        STATUS current
+                        DESCRIPTION
+                                "The entry of the MSTP TC snooping port information table. "
+                        INDEX { hwMstpPortIfIndex }
+                        ::= { hwMstpPortTcSnoopingTable 1 }
+                
+                HwMstpPortTcSnoopingEntry ::=
+                        SEQUENCE { 
+                                hwMstpPortIfIndex
+                                        Integer32,                                
+                                hwMstpPortTcSnoopingNotifyTrill
+                                        HwMSTPEnabledStatus
+                        }
+                
+                hwMstpPortIfIndex OBJECT-TYPE
+                        SYNTAX Integer32
+                        MAX-ACCESS not-accessible
+                        STATUS current
+                        DESCRIPTION
+                                "The ifIndex of the port."
+                        ::= { hwMstpPortTcSnoopingEntry 1 }
+                        
+                hwMstpPortTcSnoopingNotifyTrill OBJECT-TYPE
+                        SYNTAX HwMSTPEnabledStatus
+                        MAX-ACCESS read-write
+                        STATUS current
+                        DESCRIPTION
+                                "This object indicates whether the TC snooping notify TRILL function is enabled on the port:
+                                1: enabled
+                                2: disabled
+                                By default, the function is not enabled. In other words, the default value is disabled(2)."
+                        ::= { hwMstpPortTcSnoopingEntry 2 }                             
 
                 hwMstpTraps OBJECT-IDENTITY
                         STATUS current
@@ -2633,7 +2745,7 @@
                         ::= { hwMstp 2 }
                 
                 hwMstpiPortStateForwarding NOTIFICATION-TYPE
-                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName }
+                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName, hwMstpPwName }
                         STATUS current
                         DESCRIPTION
                                 "The SNMP trap that is generated when a port turns into 
@@ -2641,7 +2753,7 @@
                         ::= { hwMstpTraps 1 }
                 
                 hwMstpiPortStateDiscarding NOTIFICATION-TYPE
-                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName }
+                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName, hwMstpPwName }
                         STATUS current
                         DESCRIPTION
                                 "The SNMP trap that is generated when a port turns into 
@@ -2658,7 +2770,7 @@
                         ::= { hwMstpTraps 3 }
                 
                 hwMstpiPortRootGuarded NOTIFICATION-TYPE
-                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName }
+                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName, hwMstpPwName }
                         STATUS current
                         DESCRIPTION
                                 "The SNMP trap that is generated when a root-guard port 
@@ -2674,7 +2786,7 @@
                         ::= { hwMstpTraps 5 }
                 
                 hwMstpiPortLoopGuarded NOTIFICATION-TYPE
-                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName  }
+                        OBJECTS { hwMstpInstanceID, hwMstpiPortIndex, ifName, hwMstpPwName }
                         STATUS current
                         DESCRIPTION
                                 "The SNMP trap that is generated when an Alternate-Port 
@@ -2682,7 +2794,7 @@
                         ::= { hwMstpTraps 6 }
                 
                 hwMstpiEdgePortChanged NOTIFICATION-TYPE
-                        OBJECTS { hwMstpiStpPortEdgeport, ifName}
+                        OBJECTS { hwMstpiStpPortEdgeport, ifName, hwMstpPwName}
                         STATUS current
                         DESCRIPTION
                                 "When the edged-port receives a BPDU packet, the edged-port attribute will be disabled.
@@ -2771,14 +2883,14 @@
                         ::= { hwMstpTraps 17 }
                 
                 hwMstpProNewPortStateForwarding NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "Specify that the status of the port STP becomes Forwarding in MSTP process."
                         ::= { hwMstpTraps 18 }
                 
                 hwMstpProNewPortStateDiscarding NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "Specify that the status of the port STP becomes Discarding in MSTP process."
@@ -2792,7 +2904,7 @@
                         ::= { hwMstpTraps 20 }
                 
                 hwMstpProNewPortRootGuarded NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "Specify that a designated port receives a BPDU packet with the priority higher than that of the root bridge when root bridge protection is enabled in MSTP process."
@@ -2806,26 +2918,42 @@
                         ::= { hwMstpTraps 22 }
                 
                 hwMstpProNewPortLoopGuarded NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "Specify that the root port has not received any BPDU packets for a long time when loop protection is enabled in MSTP process."
                         ::= { hwMstpTraps 23 }
                 
                 hwMstpProNewEdgePortChanged NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "Specify that the edge port is invalid because of receiving a BPDU packet."
                         ::= { hwMstpTraps 24 }
                         
                 hwMstpProLoopbackDetected NOTIFICATION-TYPE
-                        OBJECTS { hwMstpProNewPortState, ifName  }
+                        OBJECTS { hwMstpProNewPortState, ifName, hwMstpPwName  }
                         STATUS current
                         DESCRIPTION
                                 "When port detected loopback, block the port and arise trap."
                         ::= { hwMstpTraps 25 }                
-                        
+                 
+               -- 1.3.6.1.4.1.2011.5.25.42.4.2.26
+                hwMstpPortCountExceedThreshold NOTIFICATION-TYPE
+                        OBJECTS { hwMstpPortCountUpperThreshold   }
+                        STATUS current
+                        DESCRIPTION
+                                "This notification indicates that the number of Up STP-capable interfaces exceeded the upper threshold."
+                        ::= { hwMstpTraps 26 }   
+                
+                -- 1.3.6.1.4.1.2011.5.25.42.4.2.27
+                hwMstpPortCountExceedThresholdResume NOTIFICATION-TYPE
+                        OBJECTS { hwMstpPortCountLowerThreshold  }
+                        STATUS current
+                        DESCRIPTION
+                                "This notification indicates that the number of Up STP-capable interfaces fell below the lower threshold."
+                        ::= { hwMstpTraps 27 } 
+
                 hwMstpConformance OBJECT IDENTIFIER ::= { hwMstp 3 }
                 
                 hwMstpGroups OBJECT IDENTIFIER ::= { hwMstpConformance 1 }
@@ -2835,7 +2963,7 @@
                                 hwMstpMasterPathCost, hwMstpBpduGuard, hwMstpAdminFormatSelector, hwMstpAdminRegionName, hwMstpAdminRevisionLevel, 
                                 hwMstpOperFormatSelector, hwMstpOperRegionName, hwMstpOperRevisionLevel, hwMstpRegionConfActive, hwMstpDefaultVlanAllo, 
                                 hwMstpDefaultRegionName, hwMstpPathCostStandard, hwMstpSnooping, hwMstpTcGuard, hwMstpTcGuardThreshold, hwMstpEdgedPortDefault, 
-                                hwMstpBpduFilterPortDefault, hwMstpTransmitLimitDefault }
+                                hwMstpBpduFilterPortDefault, hwMstpTransmitLimitDefault, hwMstpPortCountUpperThreshold, hwMstpPortCountLowerThreshold }
                         STATUS current
                         DESCRIPTION
                                 "A collection of objects indicating the necessary
@@ -2886,7 +3014,8 @@
                 hwMstpNotificationGroup NOTIFICATION-GROUP
                         NOTIFICATIONS { hwMstpiPortStateForwarding, hwMstpiPortStateDiscarding, hwMstpiBridgeLostRootPrimary, hwMstpiPortRootGuarded, hwMstpiPortBpduGuarded, 
                                 hwMstpiPortLoopGuarded, hwMstpiEdgePortChanged, hwMstpiTcGuarded, hwMstpProPortLoopGuarded, hwMstpProPortRootGuarded, hwMstpProBridgeLostRootPrimary,
-                                hwMstpProPortStateDiscarding, hwMstpProPortStateForwarding, hwMstpProLoopbackDetected, hwMstpProEdgePortChanged, hwMstpProPortBpduGuarded  }
+                                hwMstpProPortStateDiscarding, hwMstpProPortStateForwarding, hwMstpProLoopbackDetected, hwMstpProEdgePortChanged, hwMstpProPortBpduGuarded, 
+                                hwMstpPortCountExceedThreshold, hwMstpPortCountExceedThresholdResume }
                         STATUS current
                         DESCRIPTION
                                 "Notification."
@@ -2935,7 +3064,14 @@
                         DESCRIPTION
                                 "MSTP process instance group."
                         ::= { hwMstpGroups 10 }
-                
+
+                hwMstpPortTcSnoopingGroup OBJECT-GROUP
+                        OBJECTS { hwMstpPortTcSnoopingNotifyTrill }
+                        STATUS current
+                        DESCRIPTION
+                                "MSTP TC snooping group"
+                        ::= { hwMstpGroups 11 }   
+
                 hwMstpCompliances OBJECT IDENTIFIER ::= { hwMstpConformance 2 }
                 
                 hwMstpCompliance MODULE-COMPLIANCE

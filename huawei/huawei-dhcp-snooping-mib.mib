@@ -1,15 +1,19 @@
 -- =================================================================
--- Copyright (C) 2006 by HUAWEI TECHNOLOGIES. All rights reserved
+-- Copyright (C) 2016 by HUAWEI TECHNOLOGIES. All rights reserved
 -- 
 -- Description:HUAWEI DHCP SNOOPING MIB
 -- Reference:
--- Version: V2.01
+-- Version: V2.05
 -- History:
 --    wangcheng 60005987 initial    16/02/2006
 --  hexiaoqin 60020960 modified   25/12/2006
 --      wangcheng 64651    modified   1/3/2007  
 --      modified by huangjun 2009-12-08
 --      modified by xiazhaolin 2013-06-19
+--      modified by huangxiaomin 221241 2014/01/27
+--      modified by caojingyun 00273809 2014/07/18
+--      modified by liangyun 00353956 2016/10/11
+--      modified by liangyun 00353956 2016/10/28 
 -- =================================================================
     
     HUAWEI-DHCP-SNOOPING-MIB DEFINITIONS ::= BEGIN
@@ -17,9 +21,11 @@
         IMPORTS
             hwDatacomm            
                 FROM HUAWEI-MIB
-            MODULE-IDENTITY, IpAddress, OBJECT-TYPE,TEXTUAL-CONVENTION,
-            NOTIFICATION-TYPE,OBJECT-GROUP,Integer32,Counter32, NOTIFICATION-GROUP,MODULE-COMPLIANCE        
-                FROM SNMPv2-SMI    
+            NOTIFICATION-GROUP,OBJECT-GROUP,MODULE-COMPLIANCE        
+                FROM SNMPv2-CONF
+            MODULE-IDENTITY, IpAddress, OBJECT-TYPE,
+            NOTIFICATION-TYPE,Integer32,Counter32                 
+               FROM SNMPv2-SMI    
             InterfaceIndexOrZero
                 FROM IF-MIB
             VlanId     
@@ -28,9 +34,9 @@
                 FROM Q-BRIDGE-MIB
             EnabledStatus
                 FROM P-BRIDGE-MIB                                             
-            RowStatus,MacAddress,DisplayString            
+            RowStatus,MacAddress,DisplayString,TEXTUAL-CONVENTION            
                 FROM SNMPv2-TC;
-
+            
                     
 --
 -- Textual conventions                
@@ -76,15 +82,28 @@
 -- Module Identifier                
 --
     hwDhcpSnpMib MODULE-IDENTITY 
-        LAST-UPDATED "201306191800Z"            -- Jun19th, 2013 at 18:00 GMT
+        LAST-UPDATED "201610280000Z"            -- Oct 28th, 2016 at 21:00 GMT
         ORGANIZATION 
              "Huawei Technologies Co.,Ltd."
         CONTACT-INFO 
 "Huawei Industrial Base  Bantian, Longgang   Shenzhen 518129   People's Republic of China   Website: http://www.huawei.com   Email: support@huawei.com "
+
+       DESCRIPTION
+            "Change the DHCP Snooping Conformance."
+       REVISION "201610280000Z" 
+	
+       DESCRIPTION
+            "Change the DHCP Snooping Conformance."
+       REVISION "201610110000Z" 
+       DESCRIPTION
+            "This MIB describes objects used for DHCP Snooping."
+       REVISION "201407180000Z"      
        DESCRIPTION 
             "This MIB describes objects used for DHCP Snooping."
+       REVISION "201401270000Z"         -- Jan 1st, 2014 at 20:00 GMT
+       DESCRIPTION
+            "This revision adds MIB trap of bridge domain."
         REVISION "201306191800Z"            -- Sep 19th, 2013 at 18:00 GMT
-
         DESCRIPTION 
             "This MIB describes objects used for DHCP Snooping,including
             configuring snooping,creating snooping bind table and collecting
@@ -436,6 +455,7 @@
         DESCRIPTION
             "How to deal with the ARP packets that do not match the DHCP snooping 
              bind table in port/VLAN view. "
+        DEFVAL { discard }
         ::= { hwDhcpSnpCfgEntry 13 }
            
            
@@ -489,6 +509,7 @@
         DESCRIPTION
             "How to deal with the Ip packets that do not match the DHCP snooping 
              bind table in port/VLAN view. "
+        DEFVAL { discard }
         ::= { hwDhcpSnpCfgEntry 17 }
     
            
@@ -1322,6 +1343,100 @@
               "This object indicates whether detection against the pseudo DHCP server is enabled.
                  The default value is disabled(2)."
               ::= { hwDhcpSnpObjects 24 }
+
+        hwDhcpSnpBdFalsePktTable OBJECT-TYPE
+            SYNTAX SEQUENCE OF HwDhcpSnpBdFalsePktEntry
+            MAX-ACCESS not-accessible
+            STATUS current
+            DESCRIPTION
+            "The false packets statistic information table."
+           ::= { hwDhcpSnpObjects 25 }
+           
+    hwDhcpSnpBdFalsePktEntry OBJECT-TYPE
+           SYNTAX HwDhcpSnpBdFalsePktEntry
+           MAX-ACCESS not-accessible
+           STATUS current
+           DESCRIPTION
+           "An entry in the snooping false packets statistic information table."
+           INDEX { hwDhcpSnpBdIndex }
+           ::= { hwDhcpSnpBdFalsePktTable 1 }
+
+    HwDhcpSnpBdFalsePktEntry ::=
+            SEQUENCE {
+                hwDhcpSnpBdIndex         Integer32,
+                hwBdNomatchSnpBindTblDhcpPktNum    Counter32,
+                hwBdChaddrNomatchSrcMacDhcpPktNum     Counter32,
+                hwBdArpNomatchSnpBindTblPktNum    Counter32,
+                hwBdIpNomatchSnpBindTblPktNum        Counter32,
+                hwBdUntrustedReplyPktNum        Counter32,
+                hwBdSnpBindingItemNum                 Counter32,
+                hwBdSnpCfgMaxUserNum               Counter32
+                }
+    
+    hwDhcpSnpBdIndex OBJECT-TYPE
+            SYNTAX Integer32 (1..32768)
+            MAX-ACCESS not-accessible
+            STATUS current
+            DESCRIPTION
+            "Bridge-domain ID."
+           ::= { hwDhcpSnpBdFalsePktEntry 1 }
+              
+    hwBdNomatchSnpBindTblDhcpPktNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The DHCP request packets do not match the snooping bind table of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 2 }
+     
+     hwBdChaddrNomatchSrcMacDhcpPktNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The false packets(chaddr in DHCP packets is not same with source Mac-address in
+                   Ethernet frame) count of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 3 }
+    
+    hwBdArpNomatchSnpBindTblPktNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The false ARP packets match in snooping bind table count of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 4 }
+    
+    hwBdIpNomatchSnpBindTblPktNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The false IP packets do not match snooping bind table count of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 5 }
+    
+    hwBdUntrustedReplyPktNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The distrusted port DHCP reply packets count of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 6 }
+  
+    hwBdSnpBindingItemNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The number of current binding-table items of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 7 }
+
+    hwBdSnpCfgMaxUserNum OBJECT-TYPE
+          SYNTAX Counter32
+          MAX-ACCESS read-only
+          STATUS current
+          DESCRIPTION
+          "The limitation of the user number of the bridge domain."
+          ::= { hwDhcpSnpBdFalsePktEntry 8 }
               
                           
 --
@@ -1439,23 +1554,86 @@
             DESCRIPTION 
                 "The number of ND global user descends to alarm threshold."
             ::= {hwDhcpSnpTraps 17 }
-       
+   hwBdNomatchSnpBindTblDhcpPktAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdNomatchSnpBindTblDhcpPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "There are Dhcp request packets do not match the snooping bind table on the bridge domain."
+            ::= {hwDhcpSnpTraps 18 }
+    hwBdDhcpSnpChaddrAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdChaddrNomatchSrcMacDhcpPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "CHADDR in Dhcp packets do not match source Mac-address in Ethernet frame on the bridge domain."
+            ::= { hwDhcpSnpTraps 19 }                 
+    hwBdArpNomatchSnpBindTblPktAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdArpNomatchSnpBindTblPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "Arp packets do not match the snooping bind table on the bridge domain."
+            ::= { hwDhcpSnpTraps 20 }                
+    hwBdIpNomatchSnpBindTblPktAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdIpNomatchSnpBindTblPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "Ip packets do not match the snooping bind table on the bridge domain."
+            ::= { hwDhcpSnpTraps 21 }                 
+    hwBdUntrustedReplyPktAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdUntrustedReplyPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "Untrusted ports have received the Dhcp reply packets on the bridge domain."
+            ::= { hwDhcpSnpTraps 22 } 
+    hwBdSnpUserNumberAlarm NOTIFICATION-TYPE
+            OBJECTS { hwBdSnpBindingItemNum,hwBdSnpCfgMaxUserNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the binding items exceeds the threshold of user-limit on the bridge domain."
+            ::= {hwDhcpSnpTraps 23 }
+       hwDhcpSnpChaddrAlarmResume NOTIFICATION-TYPE
+             OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwChaddrNomatchSrcMacDhcpPktNum }
+             STATUS current
+            DESCRIPTION
+               "The number of the discarded DHCP packets in which the CHADDR field is inconsistent with the source MAC address descends to the threshold on the interface."
+            ::= { hwDhcpSnpTraps 24 }
+    hwArpNomatchSnpBindTblPktAlarmResume NOTIFICATION-TYPE
+            OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwArpNomatchSnpBindTblPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the discarded ARP packets that do not match the binding table descends to the threshold on the interface."
+            ::= { hwDhcpSnpTraps 25 }    
+    hwIpNomatchSnpBindTblPktAlarmResume NOTIFICATION-TYPE
+            OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwIpNomatchSnpBindTblPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the discarded IP packets that do not match the binding table descends to the threshold on the interface."
+            ::= { hwDhcpSnpTraps 26 } 
+    hwUntrustedReplyPktAlarmResume NOTIFICATION-TYPE
+            OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwUntrustedReplyPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the discarded DHCP reply packets on the untrusted interface descends to the threshold."
+            ::= { hwDhcpSnpTraps 27 }  
+    hwNomatchSnpBindTblDhcpPktAlarmResume NOTIFICATION-TYPE
+            OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwNomatchSnpBindTblDhcpPktNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the discarded DHCP request packets that do not match the binding table descends to the threshold on the interface."
+            ::= { hwDhcpSnpTraps 28 }    
+    hwSnpUserNumberAlarmResume NOTIFICATION-TYPE
+            OBJECTS { hwDhcpSnpStatisticIfDescr,hwDhcpSnpStatisticVlanId,hwSnpBindingItemNum,hwSnpCfgMaxUserNum } 
+            STATUS current     
+            DESCRIPTION 
+                "The number of the binding items descends to the threshold of user-limit on the interface."
+            ::= { hwDhcpSnpTraps 29 } 
+            
     
     hwDhcpSnpCompliance OBJECT IDENTIFIER ::= { hwDhcpSnpMib 3 }
-        
-        hwDhcpSnpMibGroups MODULE-COMPLIANCE
-               STATUS      current
-               DESCRIPTION
-                   "The compliance statement for systems supporting 
-                this module."
-
-               MODULE    
-               MANDATORY-GROUPS    { hwDhcpSnpCfgGroup,hwDhcpSnpBindGroup, hwDhcpSnpStatisticGroup,hwDhcpSnpTrapGroup }  
-                                               
-              ::= { hwDhcpSnpCompliance 1 }
-              
-              
-              
+    
+    
+	
+    hwDhcpSnpMibGroups OBJECT IDENTIFIER ::= { hwDhcpSnpCompliance 1 }
+             
     hwDhcpSnpCfgGroup OBJECT-GROUP
             OBJECTS { hwDhcpSnpGlobal, hwDhcpPktRateCheck, hwDhcpPktRate, hwDhcpPktRateAlarmThreshold, 
             hwDhcpPktRateAlarmEnable, hwDhcpSnpBindTblNomatchedArpGlobalAction, hwDhcpSnpBindTblNomatchedIpGlobalAction,
@@ -1504,11 +1682,35 @@
             hwUntrustedReplyPktAlarm, hwNomatchSnpBindTblDhcpPktAlarm, hwDhcpPktRateAlarm, hwSnpUserNumberAlarm,
             hwSnpUserNumberAlarmIf, hwSnpUserNumberAlarmIfResume, hwSnpUserNumberAlarmVlan, hwSnpUserNumberAlarmVlanResume,
             hwSnpUserNumberAlarmGlobal, hwSnpUserNumberAlarmGlobalResume, hwNdSnpUserNumberAlarmIf, hwNdSnpUserNumberAlarmIfResume,
-            hwNdSnpUserNumberAlarmGlobal, hwNdSnpUserNumberAlarmGlobalResume}
+            hwNdSnpUserNumberAlarmGlobal, hwNdSnpUserNumberAlarmGlobalResume, hwBdNomatchSnpBindTblDhcpPktAlarm, hwBdDhcpSnpChaddrAlarm,
+            hwBdArpNomatchSnpBindTblPktAlarm, hwBdIpNomatchSnpBindTblPktAlarm, hwBdUntrustedReplyPktAlarm, hwBdSnpUserNumberAlarm,
+            hwDhcpSnpChaddrAlarmResume, hwArpNomatchSnpBindTblPktAlarmResume, hwIpNomatchSnpBindTblPktAlarmResume,
+            hwUntrustedReplyPktAlarmResume, hwNomatchSnpBindTblDhcpPktAlarmResume, hwSnpUserNumberAlarmResume}
             STATUS current
             DESCRIPTION 
                 "The DHCPSNP's Notification group."
             ::= { hwDhcpSnpMibGroups 4 } 
-                                                                               
+
+    hwDhcpSnpBdStatisticGroup OBJECT-GROUP
+            OBJECTS { hwBdNomatchSnpBindTblDhcpPktNum,hwBdChaddrNomatchSrcMacDhcpPktNum,
+                hwBdArpNomatchSnpBindTblPktNum,hwBdIpNomatchSnpBindTblPktNum,hwBdUntrustedReplyPktNum,hwBdSnpBindingItemNum, 
+                hwBdSnpCfgMaxUserNum }
+            STATUS current
+            DESCRIPTION 
+                "The DHCPSNP's Statistic group on the bridge domain ."
+            ::= { hwDhcpSnpMibGroups 5 }
+
+    hwDhcpSnpCompliances OBJECT IDENTIFIER ::= { hwDhcpSnpCompliance 2 }
+	
+        hwDhcpSnpMibCompliance MODULE-COMPLIANCE
+               STATUS      current
+               DESCRIPTION
+                   "The compliance statement for systems supporting 
+                this module."
+
+               MODULE    
+               MANDATORY-GROUPS    { hwDhcpSnpCfgGroup, hwDhcpSnpBindGroup, hwDhcpSnpStatisticGroup, hwDhcpSnpTrapGroup}  
+                                               
+              ::= { hwDhcpSnpCompliances 1 }                                                                           
 
         END
