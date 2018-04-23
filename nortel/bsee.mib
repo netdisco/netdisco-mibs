@@ -8,7 +8,7 @@ IMPORTS
         FROM SNMPv2-TC
     InterfaceIndex
         FROM IF-MIB
-    VlanId, VlanIdOrNone, VlanIdOrAny
+    VlanId, VlanIdOrNone, VlanIdOrAny, PortList
         FROM Q-BRIDGE-MIB
     bayStackMibs
         FROM SYNOPTICS-ROOT-MIB
@@ -18,7 +18,7 @@ IMPORTS
         FROM RAPID-CITY;
 
 bayStackEapExtMib MODULE-IDENTITY
-    LAST-UPDATED    "201509100000Z"
+    LAST-UPDATED    "201605170000Z"
     ORGANIZATION    "Avaya"
     CONTACT-INFO    "Avaya"
     DESCRIPTION
@@ -35,7 +35,23 @@ bayStackEapExtMib MODULE-IDENTITY
          This Specification is supplied 'AS IS,' and Avaya makes
          no warranty, either express or implied, as to the use,
          operation, condition, or performance of the Specification."
+
+    REVISION "201605170000Z" -- 17 May 2016
+    DESCRIPTION "v041:  Added new value to bseeUnauthenticatedStatusRadiusStatus to support traking of delayed authentification MACs."
+		 
+    REVISION "201604040000Z" -- 04 April 2016
+    DESCRIPTION "v040:  Added bseeMultiHostRadiusNonEapDelay to support delayed Non-EAP MAC authentication."
+
+    REVISION "201603150000Z" -- 15 March 2016
+    DESCRIPTION "v039:  Added bseeUnauthenticatedStatusTable to support tracking all MACs."
+
+	REVISION "201601210000Z" -- 21 January 2016
+    DESCRIPTION "v038:  Added bseePortConfigCloneSettingsAction, bseePortConfigCloneSettingsDestPortList - support for cloning EAP configuration from a source port to a port list.
+	                    Added bseeMultiHostStatusPacpState in bseeMultiHostStatusTable to support new state machine needed for 802.1X/2010. "
     
+    REVISION "201601110000Z" -- 11 January 2016
+    DESCRIPTION "v037:  Extended the range for bseeMultiHostNonEapStatusState with the value radiusHeld(8)"
+
 	REVISION "201509100000Z" -- 10 September 2015
     DESCRIPTION "v036:  Added bseeAutoPortConfigModeSwitchToMHMV, bseeAutoPortConfigModeSwitchToMHMVAction, bseeAutoPortConfigModeSwitchToMHMVResult"
     
@@ -604,6 +620,15 @@ bseeAutoPortConfigModeSwitchToMHMVStatus OBJECT-TYPE
         "This object specifies the action result on the indicated port"
     ::= { bseeObjects 37 }	
 
+bseeMultiHostRadiusNonEapDelay OBJECT-TYPE
+    SYNTAX      Integer32 (0..20)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object specifies the delay (in seconds) before sending Radius Access Request for Non-EAP MACs."
+    DEFVAL      { 0 }
+    ::= { bseeObjects 38 }
+
 -- ===========================================================================
 -- EAP Multi-Host Configuration Table
 -- ===========================================================================
@@ -654,7 +679,9 @@ BseePortConfigEntry ::=
         bseePortConfigMultiHostSingleAuthNoLimit                TruthValue,
         bseePortConfigFailOpenVlanId                            Integer32,
         bseePortConfigFailOpenVlanEnabled                       TruthValue,
-        bseePortConfigFailOpenVlanUBP                           OCTET STRING
+        bseePortConfigFailOpenVlanUBP                           OCTET STRING,
+        bseePortConfigCloneSettingsAction                       INTEGER,
+        bseePortConfigCloneSettingsDestPortList                 PortList
     }
 
 bseePortConfigPortNumber OBJECT-TYPE
@@ -947,6 +974,34 @@ bseePortConfigFailOpenVlanUBP OBJECT-TYPE
         "This object represents the UBP filter name of the fail-open policy"
     ::= { bseePortConfigEntry 27 }
 		
+bseePortConfigCloneSettingsAction OBJECT-TYPE
+    SYNTAX       INTEGER
+                 {
+                     none(1),
+                     start(2)
+                 }
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object starts the action of copying eap settings from current ifIndex to the list of ports specified in bseePortConfigCloneSettingsDestPortList.
+         The default value will be returned by all read opperations.
+         The write operation must contain both bseePortConfigCloneSettingsAction and bseePortConfigCloneSettingsDestPortList.
+        "
+    DEFVAL       { none }
+    ::= { bseePortConfigEntry 28 }
+
+bseePortConfigCloneSettingsDestPortList OBJECT-TYPE
+    SYNTAX       PortList
+    MAX-ACCESS   read-write
+    STATUS       current
+    DESCRIPTION
+        "This object represents the destination port list on which the EAP port configuration will be copied.
+         The default value will be returned by all read opperations.
+         The write operation must contain both bseePortConfigCloneSettingsAction and bseePortConfigCloneSettingsDestPortList.
+        "
+    DEFVAL       { ''H }
+    ::= { bseePortConfigEntry 29 }
+
 -- ===========================================================================
 -- EAP Multi-Host Status Table
 -- ===========================================================================
@@ -978,7 +1033,8 @@ BseeMultiHostStatusEntry ::=
         bseeMultiHostStatusReauthenticate INTEGER,
         bseeMultiHostStatusVid VlanIdOrAny,
         bseeMultiHostStatusPri Integer32,
-        bseeMultiHostStatusFaBindings OCTET STRING
+        bseeMultiHostStatusFaBindings OCTET STRING,
+        bseeMultiHostStatusPacpState INTEGER
     }
 
 bseeMultiHostStatusPortNumber OBJECT-TYPE
@@ -1077,6 +1133,20 @@ bseeMultiHostStatusFaBindings OBJECT-TYPE
 	    OctetString:    VLAN0 ISID0 VLAN1 ISID1  ...   ...  VLAN15 ISID15 .
 	There are no spaces between VLANx and ISIDx."
     ::= { bseeMultiHostStatusEntry 8 }
+
+bseeMultiHostStatusPacpState OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    initialize(1),
+                    unauthenticated(2),
+                    authenticating(3),
+                    authenticated(4),
+                    held(5)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The current value of the Authenticator PACP state machine."
+    ::= { bseeMultiHostStatusEntry 9 }
 
 -- ===========================================================================
 -- EAP Multi-Host Session Statistics Table
@@ -1305,7 +1375,8 @@ bseeMultiHostNonEapStatusState OBJECT-TYPE
                     radiusAuthenticated(4),
                     adacAuthenticated(5),
                     mhsaAuthenticated(6),
-                    lldpAuthenticated(7)
+                    lldpAuthenticated(7),
+                    radiusHeld(8)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -1332,7 +1403,9 @@ bseeMultiHostNonEapStatusState OBJECT-TYPE
                          of an EAP client
 
            lldpAuthenticated(7) - the MAC address was authenticated using
-		                 the LLDP mechanism"
+                         the LLDP mechanism
+           radiusHeld(8) - the MAC address was authenticated by a RADIUS
+                           server and rejected after"
 		   
     ::= { bseeMultiHostNonEapStatusEntry 3 }
 
@@ -1579,5 +1652,79 @@ bseeMultiHostDhcpAuthPhoneUserName OBJECT-TYPE
     DESCRIPTION
         "The user name currently in use by the DHCP authenticated IP phone."
     ::= { bseeMultiHostDhcpAuthPhoneEntry 3 }    
+
+
+-- ===========================================================================
+-- Non-EAP  Unauthenticated  Status Table
+-- ===========================================================================
+
+bseeUnauthenticatedStatusTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF BseeMultiHostUnauthenticatedStatusEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table provides the session status per-MAC address
+         per-port for unauthenticated MACs."
+    ::= { bayStackEapExtMib 12 }
+
+bseeUnauthenticatedStatusEntry OBJECT-TYPE
+    SYNTAX BseeMultiHostUnauthenticatedStatusEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The status of authentication of clients for a port."
+    INDEX { bseeUnauthenticatedStatusPortNumber, bseeUnauthenticatedStatusClientMACAddr }
+    ::= { bseeUnauthenticatedStatusTable 1 }
+
+BseeMultiHostUnauthenticatedStatusEntry ::=
+    SEQUENCE {
+        bseeUnauthenticatedStatusPortNumber InterfaceIndex,
+        bseeUnauthenticatedStatusClientMACAddr MacAddress,
+        bseeUnauthenticatedStatusType INTEGER,
+        bseeUnauthenticatedStatusRadiusStatus INTEGER
+    }
+
+bseeUnauthenticatedStatusPortNumber OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The Port number associated with this client."
+    ::= { bseeUnauthenticatedStatusEntry 1 }
+
+bseeUnauthenticatedStatusClientMACAddr OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The MAC address of the client."
+    ::= { bseeUnauthenticatedStatusEntry 2 }
+    
+bseeUnauthenticatedStatusType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    intruders(1),
+                    guest(2),
+                    failOpen(3),
+                    mhsa(4)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The reason for unauthentication: intruder MAC (failed authentication), MAC is in guest VLAN, MAC is in fail-open VLAN or it is stored directly after a single authentication (MHSA)."
+    ::= { bseeUnauthenticatedStatusEntry 3 }
+
+bseeUnauthenticatedStatusRadiusStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    noRequest(1),
+                    pending(2),
+                    timeout(3),
+                    reject(4),
+                    delayed(5)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Status for clients who attempted authentication by a Radius server."
+    ::= { bseeUnauthenticatedStatusEntry 4 }
 
 END

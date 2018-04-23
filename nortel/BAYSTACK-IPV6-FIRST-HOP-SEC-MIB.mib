@@ -13,7 +13,7 @@ IMPORTS
         FROM IPV6-TC;
 
 bayStackIpv6FirstHopSecMib  MODULE-IDENTITY
-      LAST-UPDATED "201504080000Z"
+      LAST-UPDATED "201611030000Z"
       ORGANIZATION "Avaya"
       CONTACT-INFO "avaya.com"
       DESCRIPTION
@@ -21,6 +21,37 @@ bayStackIpv6FirstHopSecMib  MODULE-IDENTITY
                The purpose of First Hop Security feature is to take care of the treats 
                caused by the immediate node to another immediate node attached to the same 
                First Hop Security device."
+
+      REVISION    "201611030000Z"  -- November 3, 2016
+      DESCRIPTION 
+              "Ver 10:  Added objects bsIpv6FHSSourceGuardDropCount and bsIpv6FHSSourceGuardClearDropCount."
+
+      REVISION    "201507020000Z"  -- July 02, 2015
+      DESCRIPTION 
+              "Ver 9:  Added value none(3) for FhsRaGuardDeviceRole and
+	      	       FhsDhcpv6GuardDeviceRole.
+		       Requested by Amit Choudhary (submit 24712)
+		       for FHS on VOSS (Prem)."
+
+      REVISION    "201506300000Z"  -- June 30, 2015
+      DESCRIPTION 
+              "Ver 8:  Added bsIpv6FHSPolicyPortMapDhcpv6gDeviceRole and
+	      	       bsIpv6FHSPolicyPortMapRagDeviceRole
+		       Requested by Amit Choudhary (submit 24712)
+		       for FHS on VOSS (Prem)."
+
+      REVISION    "201506090000Z"  -- June 9th, 2015
+      DESCRIPTION 
+              "Ver 8:  Added bsIpv6FHSTrapNotificationObjects, which consists of bsIpv6FHSTrapClientMACAddr,
+                       bsIpv6FHSTrapInterfaceIndex, bsIpv6FHSTrapClientIpv6Address and bsIpv6FHSTrapVlanID.
+                       Also added bsIpv6FHSTrapMsgType, bsIpv6FhsTrapPktDropReason, as well as new trap
+                       notification types for FHS: bsIpv6NDNotificationSBTTableFull, bsIpv6NDNotificationUntrustedPort,
+                       bsIpv6RAGuardNotification and bsIpv6DHCPGuardNotification.
+
+                       The following objects have thus become obsolete: bsIpv6NDTrapNotificationObjects,
+                       bsIpv6NDInspectionNotificationClientMACAddr, bsIpv6NDInspectionNotificationMsgType,
+                       bsIpv6FHSNDInterfaceIndex, bsIpv6FHSNDIpv6Address, bsIpv6FHSNDVlanID, bsIpv6NDSBTTableFull and
+                       bsIpv6NDNotificationsUntrustedPort."
 
       REVISION    "201504080000Z"  -- April 8, 2015
       DESCRIPTION 
@@ -73,7 +104,8 @@ FhsRaGuardDeviceRole ::= TEXTUAL-CONVENTION
                     "A value indicating a role of ra-guard device."
     SYNTAX          INTEGER {
                         router(1),
-                        host(2)
+                        host(2),
+			none(3)
                     }
 
 FhsRaManagedConfigFlag ::= TEXTUAL-CONVENTION
@@ -103,7 +135,8 @@ FhsDhcpv6GuardDeviceRole ::= TEXTUAL-CONVENTION
                     "A value indicating dhcp-guard device role."
     SYNTAX          INTEGER {
                         server(1),
-                        client(2)
+                        client(2),
+                        none(3)
                     }
 
 FhsListName ::= TEXTUAL-CONVENTION
@@ -450,7 +483,9 @@ BsIpv6FHSPolicyPortMapEntry ::=
                      bsIpv6FHSPolicyPortMapClearDhcpGuardStats      TruthValue,
                      bsIpv6FHSPolicyPortMapClearRaGuardStats        TruthValue,
                      bsIpv6FHSPolicyPortMapClearNDInspectStats      TruthValue,
-                     bsIpv6FHSPolicyPortMapRowStatus                RowStatus 
+                     bsIpv6FHSPolicyPortMapRowStatus                RowStatus,
+		     bsIpv6FHSPolicyPortMapDhcpv6gDeviceRole        FhsDhcpv6GuardDeviceRole,
+		     bsIpv6FHSPolicyPortMapRagDeviceRole            FhsRaGuardDeviceRole 
         }
  
 bsIpv6FHSPolicyPortMapIfIndex OBJECT-TYPE
@@ -574,6 +609,32 @@ bsIpv6FHSPolicyPortMapRowStatus OBJECT-TYPE
         STATUS        current
         DESCRIPTION   "First Hop security row status"
         ::= { bsIpv6FHSPolicyPortMapEntry 15 }
+
+bsIpv6FHSPolicyPortMapDhcpv6gDeviceRole OBJECT-TYPE
+        SYNTAX        FhsDhcpv6GuardDeviceRole
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This is the device role of the received port. If 
+	    	       the device role is client and if it receives DHCPv6 
+		       reply then those packets should be dropped.
+                       This object is currently used in VOSS platforms only
+                       and is equivalent to bsIpv6FHSDhcpv6gDeviceRole object
+                       in other platforms."
+        DEFVAL        { server } 
+        ::= { bsIpv6FHSPolicyPortMapEntry 16 }
+
+bsIpv6FHSPolicyPortMapRagDeviceRole OBJECT-TYPE
+        SYNTAX        FhsRaGuardDeviceRole
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This is the device role to the received port. If the 
+		       device role is host and if it receives RAs then those
+		       packets should be dropped.
+		       This object is currently used in VOSS platforms only 
+		       and is equivalent to bsIpv6FHSRagDeviceRole object 
+		       in other platforms."
+        DEFVAL        { router } 
+        ::= { bsIpv6FHSPolicyPortMapEntry 17 }
 
 -- End Definition for First Hop Security port Vs policy mapping
 
@@ -989,7 +1050,9 @@ BsIpv6FHSSourceGuardInterfaceConfigEntry ::=
             bsIpv6FHSSourceGuardInterfaceState     TruthValue,
             bsIpv6FHSSourceGuardMaxAddr            Integer32,
             bsIpv6FHSSourceGuardOverflowCount      Counter32,
-            bsIpv6FHSSourceGuardClearOverflowCount TruthValue
+            bsIpv6FHSSourceGuardClearOverflowCount TruthValue,
+            bsIpv6FHSSourceGuardDropCount          Counter32,
+            bsIpv6FHSSourceGuardClearDropCount     TruthValue
 	  }               
 	
 bsIpv6FHSSourceGuardIfIndex   OBJECT-TYPE
@@ -1019,9 +1082,9 @@ bsIpv6FHSSourceGuardMaxAddr OBJECT-TYPE
     ::= { bsIpv6FHSSourceGuardInterfaceConfigEntry 3 }
 
 bsIpv6FHSSourceGuardOverflowCount OBJECT-TYPE
-    SYNTAX  Counter32
+    SYNTAX      Counter32
     MAX-ACCESS  read-only
-    STATUS  current
+    STATUS      current
     DESCRIPTION
                 "Number of times the SBT entries could not be added 
 				 to the allowed list."
@@ -1034,6 +1097,22 @@ bsIpv6FHSSourceGuardClearOverflowCount OBJECT-TYPE
     DESCRIPTION
                 "This object clears counter object bsIpv6FHSSourceGuardOverflowCount."
     ::= { bsIpv6FHSSourceGuardInterfaceConfigEntry 5 }
+
+bsIpv6FHSSourceGuardDropCount  OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+                "Number of dropped packets per port of source guard."
+    ::= { bsIpv6FHSSourceGuardInterfaceConfigEntry 6 }
+
+bsIpv6FHSSourceGuardClearDropCount  OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+                "This object clears counter object: bsIpv6FHSSourceGuardDropCount."
+    ::= { bsIpv6FHSSourceGuardInterfaceConfigEntry 7 }
 
 -- End Definition for First Hop Security Source Guard Interface Config
 
@@ -1090,6 +1169,8 @@ bsIpv6FHSSourceGuardEntryIpv6Addr	OBJECT-TYPE
 -- Notification Objects
 -- ============================================================================
 
+-- Obsoleted Definitions - Objects
+
 bsIpv6NDTrapNotificationObjects
     OBJECT IDENTIFIER ::= { bsIpv6FirstHopSecObjects 8 }
 
@@ -1097,7 +1178,7 @@ bsIpv6NDTrapNotificationObjects
 bsIpv6NDInspectionNotificationClientMACAddr  OBJECT-TYPE
     SYNTAX      MacAddress
     MAX-ACCESS  accessible-for-notify
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
         "This value indicates the source MAC Address of a dropped ND inspection packet."
     ::= { bsIpv6NDTrapNotificationObjects 1 }
@@ -1112,7 +1193,7 @@ bsIpv6NDInspectionNotificationMsgType  OBJECT-TYPE
                     ipv6NDRedir(5)                
                 }
     MAX-ACCESS  accessible-for-notify
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
         "This value indicates the message type of a dropped ND packet."
     ::= { bsIpv6NDTrapNotificationObjects 2 }
@@ -1120,7 +1201,7 @@ bsIpv6NDInspectionNotificationMsgType  OBJECT-TYPE
 bsIpv6FHSNDInterfaceIndex  OBJECT-TYPE
     SYNTAX      InterfaceIndex
     MAX-ACCESS  accessible-for-notify
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
         "This value indicates the unit and port number of a dropped ND inspection packet."
     ::= { bsIpv6NDTrapNotificationObjects 3 }
@@ -1128,7 +1209,7 @@ bsIpv6FHSNDInterfaceIndex  OBJECT-TYPE
 bsIpv6FHSNDIpv6Address OBJECT-TYPE
      SYNTAX      Ipv6Address
      MAX-ACCESS  accessible-for-notify
-     STATUS      current
+     STATUS      obsolete
      DESCRIPTION
         "This value indicates the Ipv6 source address of a dropped ND inspection packet."
    ::= { bsIpv6NDTrapNotificationObjects 4 }
@@ -1136,15 +1217,88 @@ bsIpv6FHSNDIpv6Address OBJECT-TYPE
 bsIpv6FHSNDVlanID OBJECT-TYPE
      SYNTAX      Integer32 (1..4094)
      MAX-ACCESS  accessible-for-notify
-     STATUS      current
+     STATUS      obsolete
      DESCRIPTION
         "This value indicates the Vlan ID of a dropped ND inspection packet."
    ::= { bsIpv6NDTrapNotificationObjects 5 }
+
+-- End of Obsoleted Definitions - Objects
+
+bsIpv6FHSTrapNotificationObjects
+    OBJECT IDENTIFIER ::= { bsIpv6FirstHopSecObjects 11 }
+
+
+bsIpv6FHSTrapClientMACAddr  OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This value indicates the source MAC Address of a dropped ND/RS/RA/DHCP packet."
+    ::= { bsIpv6FHSTrapNotificationObjects 1 }
+
+
+bsIpv6FHSTrapInterfaceIndex  OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This value indicates the unit and port number of a dropped ND/RS/RA/DHCP inspection packet."
+    ::= { bsIpv6FHSTrapNotificationObjects 2 }
+
+bsIpv6FHSTrapClientIpv6Address OBJECT-TYPE
+     SYNTAX      Ipv6Address
+     MAX-ACCESS  accessible-for-notify
+     STATUS      current
+     DESCRIPTION
+        "This value indicates the Ipv6 source address of a dropped ND/RS/RA/DHCP inspection packet."
+   ::= { bsIpv6FHSTrapNotificationObjects 3 }
+
+bsIpv6FHSTrapVlanID OBJECT-TYPE
+     SYNTAX      Integer32 (1..4094)
+     MAX-ACCESS  accessible-for-notify
+     STATUS      current
+     DESCRIPTION
+        "This value indicates the Vlan ID of a dropped ND/RS/RA/DHCP inspection packet."
+   ::= { bsIpv6FHSTrapNotificationObjects 4 }
+
+bsIpv6FHSTrapMsgType  OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    ipv6NDNS(1),
+                    ipv6NDNA(2),
+                    ipv6NDRS(3),
+                    ipv6NDRA(4),
+                    ipv6NDRedir(5),
+		    ipv6DHCPReq(6),
+		    ipv6DHCPReply(7)
+                }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This value indicates the message type of a dropped ND/RS/RA/DHCP packet."
+    ::= { bsIpv6FHSTrapNotificationObjects 5 }
+
+bsIpv6FhsTrapPktDropReason 	OBJECT-TYPE
+    SYNTAX      INTEGER {
+		    ipv6PortRoleMismatch(1),
+		    ipv6MacMismatch(2),
+		    ipv6PrefixMismatch(3),
+		    ipv6IpMismatch(4),
+		    ipv6ManagedFlagMismatch(5),
+		    ipv6RouterPrefMismatch(6),
+		    ipv6HopLimitMismatch(7),
+		    ipv6LenMismatch(8)
+                }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This value indicates reason for dropped packet in FHS."
+    ::= { bsIpv6FHSTrapNotificationObjects 6}
 
 --
 -- Notifications
 --
 
+-- Obsoleted Definitions - Notifications
 
 bsIpv6NDSBTTableFull NOTIFICATION-TYPE
     OBJECTS {
@@ -1154,7 +1308,7 @@ bsIpv6NDSBTTableFull NOTIFICATION-TYPE
         bsIpv6FHSNDIpv6Address,
         bsIpv6FHSNDVlanID
     }
-    STATUS current
+    STATUS obsolete
     DESCRIPTION
         "This notification is generated when an attempt is made to add a new
         SBT entry when the Secure Binding Table is full.  The value of
@@ -1174,10 +1328,78 @@ bsIpv6NDNotificationsUntrustedPort NOTIFICATION-TYPE
         bsIpv6FHSNDIpv6Address,
         bsIpv6FHSNDVlanID
     }
-    STATUS current
+    STATUS obsolete
     DESCRIPTION
         "This notification is generated when an ND message is suspected
          to be generated by the untrusted system/host."
     ::= { bsIpv6FirstHopSecNotifications 2 }
 
+-- End of Obsoleted Definitions - Notifications
+
+bsIpv6NDNotificationSBTTableFull NOTIFICATION-TYPE
+    OBJECTS {
+        bsIpv6FHSTrapClientMACAddr,
+	bsIpv6FHSTrapClientIpv6Address,
+        bsIpv6FHSTrapMsgType,
+        bsIpv6FHSTrapInterfaceIndex,
+        bsIpv6FHSTrapVlanID 
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is generated when an attempt is made to add a new
+        SBT entry when the Secure Binding Table is full.  The value of
+        bsIpv6NDInspectionNotificationClientMACAddr represents the MAC address that
+        could not be added to the SBT table.  This notification also
+        indicates that additional packets will not be added to
+        the SBT and will be dropped."
+    ::= { bsIpv6FirstHopSecNotifications 3 }
+
+
+
+bsIpv6NDNotificationUntrustedPort       NOTIFICATION-TYPE
+    OBJECTS {
+        bsIpv6FHSTrapClientMACAddr,
+	bsIpv6FHSTrapClientIpv6Address,
+        bsIpv6FHSTrapMsgType,
+        bsIpv6FHSTrapInterfaceIndex,
+        bsIpv6FHSTrapVlanID 
+    }
+    STATUS current
+    DESCRIPTION
+        "This notification is generated when an ND message is suspected
+         to be generated by the untrusted system/host."
+    ::= { bsIpv6FirstHopSecNotifications 4 }
+
+
+bsIpv6RAGuardNotification	NOTIFICATION-TYPE
+	OBJECTS {
+		bsIpv6FHSTrapClientMACAddr,
+        	bsIpv6FHSTrapClientIpv6Address,
+		bsIpv6FHSTrapMsgType,
+        	bsIpv6FHSTrapInterfaceIndex,
+        	bsIpv6FHSTrapVlanID,
+		bsIpv6FhsTrapPktDropReason
+    	}
+    	STATUS current
+    		DESCRIPTION
+        	"This notification is generated when an RA message comes in that does not
+		 match the RA Guard configuration"
+    	::= { bsIpv6FirstHopSecNotifications 5 }
+
+bsIpv6DHCPGuardNotification	NOTIFICATION-TYPE
+	OBJECTS {
+		bsIpv6FHSTrapClientMACAddr,
+		bsIpv6FHSTrapClientIpv6Address,
+		bsIpv6FHSTrapMsgType,
+        	bsIpv6FHSTrapInterfaceIndex,
+        	bsIpv6FHSTrapVlanID,
+		bsIpv6FhsTrapPktDropReason
+    	}
+    	STATUS current
+    		DESCRIPTION
+        	"This notification is generated when an DHCPv6 message comes in that does not
+		 match the DHCPv6 Guard configuration"
+    	::= { bsIpv6FirstHopSecNotifications 6 }
+
 END
+

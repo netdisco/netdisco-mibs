@@ -2,23 +2,35 @@
 BAY-STACK-IGMP-EXT-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Counter32, Gauge32
+    OBJECT-TYPE, MODULE-IDENTITY, Integer32, Counter32, Gauge32, IpAddress
         FROM SNMPv2-SMI
-    RowStatus
+    RowStatus, TruthValue
         FROM SNMPv2-TC
     InetAddressType, InetAddress
         FROM INET-ADDRESS-MIB
-    PortList
+    PortList, VlanId
         FROM Q-BRIDGE-MIB
     bayStackMibs
         FROM SYNOPTICS-ROOT-MIB;
 
 bayStackIgmpExtMib MODULE-IDENTITY
-    LAST-UPDATED "200910260000Z"
+    LAST-UPDATED "201603090000Z"
     ORGANIZATION "Nortel Ltd."
     CONTACT-INFO "nortel.com"
     DESCRIPTION
         "This MIB module is an extension to the standard IGMP MIBs."
+
+    REVISION    "201603090000Z"  -- March 9, 2016
+    DESCRIPTION "Ver 6:  Added Multicast IGMP stream and group count:
+                         bsIgmpExtStreamCount, bsIgmpExtGroupCount."
+
+    REVISION    "201512210000Z"  -- December 21, 2015
+    DESCRIPTION "Ver 5:  Added Multicast VLAN Registration support:
+                         bsIgmpExtMvrGlobal, bsIgmpExtMvrGroupRangeTable,
+                         bsIgmpExtMvrReceiversTable groups."
+
+    REVISION    "201508100000Z"  -- August 10, 2015
+    DESCRIPTION "Ver 4:  Added bsIgmpExtStreamFlushAll."
 
     REVISION    "200910260000Z"  -- October 26, 2009
     DESCRIPTION "Ver 3:  Added bsIgmpExtAvailableHardwareResources."
@@ -232,5 +244,156 @@ bsIgmpExtHardwareCompatibilityMode OBJECT-TYPE
         "This object is used to set the 5510 hardware compatilibity mode for IGMP."
     ::= { bsIgmpExtScalars 2 }
 
+bsIgmpExtStreamFlushAll OBJECT-TYPE
+    SYNTAX      INTEGER {
+                          none(1),
+                          flushAllGroup(2),
+                          flushAllStream(3),
+			  flushAllMrouter(4),
+                          flushAll(5)
+                        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object is required when flushing the multicast information on all vlans.
+         At retrieval, the object has the value none(1).
+         flushAllGroup - Flushes the multicast groups learned on all vlans.
+         flushAllStream - Flushes the multicast streams received on all vlans.
+         flushAllMrouter - Deletes all the multicast mrouters.
+         flushAll - Flushes all the multicast groups, streams and mrouters on all vlans."
+    ::= { bsIgmpExtScalars 3 }
+
+bsIgmpExtStreamCount OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object returns the number of streams for IGMP."
+    ::= { bsIgmpExtScalars 4 }
+
+bsIgmpExtGroupCount OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object returns the number of groups for IGMP."
+    ::= { bsIgmpExtScalars 5 }
+
+-- ===========================================================================
+-- IGMP Multicast VLAN Registration scalar objects
+-- ===========================================================================
+
+bsIgmpExtMvrGlobal OBJECT IDENTIFIER ::= { bsIgmpExtObjects 5 }
+
+bsIgmpExtMvrGlobalEnable OBJECT-TYPE
+    SYNTAX        TruthValue
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This objects controls whether Multicast VLAN Registration
+         is enabled globally."
+    ::= { bsIgmpExtMvrGlobal 1 }
+
+bsIgmpExtMvrGlobalSourceVlan OBJECT-TYPE
+    SYNTAX        VlanId
+    MAX-ACCESS    read-write
+    STATUS        current
+    DESCRIPTION
+        "This objects specifies the MVR source VLAN ID."
+    ::= { bsIgmpExtMvrGlobal 2 }
+
+-- ===========================================================================
+-- IGMP Multicast VLAN Registration Group Range Table
+-- ===========================================================================
+
+bsIgmpExtMvrGroupRangeTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF BsIgmpExtMvrGroupRangeEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "A table listing the Multicast VLAN Registration groups."
+    ::= { bsIgmpExtObjects 6 }
+
+bsIgmpExtMvrGroupRangeEntry OBJECT-TYPE
+    SYNTAX     BsIgmpExtMvrGroupRangeEntry 
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "An entry representing an IGMP MVR address group."
+    INDEX      { bsIgmpExtMvrGroupRangeAddress, bsIgmpExtMvrGroupRangeMask }
+    ::= { bsIgmpExtMvrGroupRangeTable 1 }
+
+BsIgmpExtMvrGroupRangeEntry ::= SEQUENCE {
+    bsIgmpExtMvrGroupRangeAddress      IpAddress,
+    bsIgmpExtMvrGroupRangeMask         IpAddress,
+    bsIgmpExtMvrGroupRangeRowStatus    RowStatus
+}
+
+bsIgmpExtMvrGroupRangeAddress OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The IGMP MVR group's multicast IP address."
+    ::= { bsIgmpExtMvrGroupRangeEntry 1 }
+
+bsIgmpExtMvrGroupRangeMask OBJECT-TYPE
+    SYNTAX     IpAddress
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The IGMP MVR group's netmask."
+    ::= { bsIgmpExtMvrGroupRangeEntry 2 }
+
+bsIgmpExtMvrGroupRangeRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+        "This object controls creation and deletion of rows in this table."
+    ::= { bsIgmpExtMvrGroupRangeEntry 3 }
+
+-- ===========================================================================
+-- IGMP Multicast VLAN Registration VLAN Receivers Table
+-- ===========================================================================
+
+bsIgmpExtMvrReceiversTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF BsIgmpExtMvrReceiversEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "A table listing the Multicast VLAN Registration VLAN receivers."
+    ::= { bsIgmpExtObjects 7 }
+
+bsIgmpExtMvrReceiversEntry OBJECT-TYPE
+    SYNTAX     BsIgmpExtMvrReceiversEntry 
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "An entry representing an IGMP MVR VLAN receiver group."
+    INDEX      { bsIgmpExtMvrReceiversVlanId }
+    ::= { bsIgmpExtMvrReceiversTable 1 }
+
+BsIgmpExtMvrReceiversEntry ::= SEQUENCE {
+    bsIgmpExtMvrReceiversVlanId         VlanId,
+    bsIgmpExtMvrReceiversRowStatus      RowStatus
+}
+
+bsIgmpExtMvrReceiversVlanId OBJECT-TYPE
+    SYNTAX     VlanId
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+            "This objects specifies the ID of a VLAN receiver that bounds to MVR."
+    ::= { bsIgmpExtMvrReceiversEntry 1 }
+
+bsIgmpExtMvrReceiversRowStatus OBJECT-TYPE
+    SYNTAX        RowStatus
+    MAX-ACCESS    read-create
+    STATUS        current
+    DESCRIPTION   "This object controls creation and deletion of rows in this table."
+    ::= { bsIgmpExtMvrReceiversEntry 2 }
+
 END
+
 
