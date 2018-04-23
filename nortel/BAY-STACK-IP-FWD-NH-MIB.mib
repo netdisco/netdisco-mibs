@@ -2,7 +2,7 @@
 BAY-STACK-IP-FWD-NH-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    OBJECT-TYPE, MODULE-IDENTITY
+    OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE
         FROM SNMPv2-SMI
     RowStatus, TruthValue
         FROM SNMPv2-TC
@@ -16,7 +16,7 @@ IMPORTS
         FROM SYNOPTICS-ROOT-MIB;
 
 bayStackIpFwdNhMib MODULE-IDENTITY
-    LAST-UPDATED    "200909300000Z"
+    LAST-UPDATED    "201104150000Z"
     ORGANIZATION    "Nortel Networks"
     CONTACT-INFO    "Nortel Networks"
     DESCRIPTION
@@ -33,6 +33,17 @@ bayStackIpFwdNhMib MODULE-IDENTITY
          This Specification is supplied 'AS IS,' and Nortel Networks
          makes no warranty, either express or implied, as to the use,
          operation, condition, or performance of the Specification."
+
+    REVISION "201104150000Z" -- 15 April 2011
+    DESCRIPTION "v6:  Added bsifnPolicyInterfaceAdminStatus."
+
+    REVISION "201010220000Z" -- 22 October 2010
+    DESCRIPTION "v5:  Clarified policy L4 port match usage and added
+                      bsifnPolicyMatchPortType object. Added support
+                      for the definition of secondary next hop data
+                      through the bsifnPolicySetSecondNextHopInetAddressType
+                      and bsifnPolicySetSecondNextHopInetAddress objects.
+                      Defined bsifnInstallationFailure trap."
 
     REVISION "200909300000Z" -- 30 September 2009
     DESCRIPTION "v4:  Added IMPLIED to INDEX clauses."
@@ -103,15 +114,18 @@ bsifnPolicyEntry OBJECT-TYPE
 
 BsifnPolicyEntry ::=
     SEQUENCE {
-        bsifnPolicyName                      SnmpAdminString,
-        bsifnPolicyMatchInetAddressType      InetAddressType,
-        bsifnPolicyMatchInetAddress          InetAddress,
-        bsifnPolicyMatchInetAddressMask      InetAddressPrefixLength,
-        bsifnPolicyMatchPortMin              InetPortNumber,
-        bsifnPolicyMatchPortMax              InetPortNumber,
-        bsifnPolicySetNextHopInetAddressType InetAddressType,
-        bsifnPolicySetNextHopInetAddress     InetAddress,
-        bsifnPolicyRowStatus                 RowStatus
+        bsifnPolicyName                            SnmpAdminString,
+        bsifnPolicyMatchInetAddressType            InetAddressType,
+        bsifnPolicyMatchInetAddress                InetAddress,
+        bsifnPolicyMatchInetAddressMask            InetAddressPrefixLength,
+        bsifnPolicyMatchPortMin                    InetPortNumber,
+        bsifnPolicyMatchPortMax                    InetPortNumber,
+        bsifnPolicySetNextHopInetAddressType       InetAddressType,
+        bsifnPolicySetNextHopInetAddress           InetAddress,
+        bsifnPolicyRowStatus                       RowStatus,
+        bsifnPolicyMatchPortType                   INTEGER,
+        bsifnPolicySetSecondNextHopInetAddressType InetAddressType,
+        bsifnPolicySetSecondNextHopInetAddress     InetAddress
     }
 
 bsifnPolicyName OBJECT-TYPE
@@ -155,6 +169,7 @@ bsifnPolicyMatchPortMin OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "Minimum port number to match."
+    DEFVAL { 0 }
     ::= { bsifnPolicyEntry 5 }
 
 bsifnPolicyMatchPortMax OBJECT-TYPE
@@ -163,6 +178,7 @@ bsifnPolicyMatchPortMax OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "Maximum port number to match."
+    DEFVAL { 65535 }
     ::= { bsifnPolicyEntry 6 }
 
 bsifnPolicySetNextHopInetAddressType OBJECT-TYPE
@@ -189,6 +205,45 @@ bsifnPolicyRowStatus OBJECT-TYPE
     DESCRIPTION
         "Used to create/delete entries."
     ::= { bsifnPolicyEntry 9 }
+
+bsifnPolicyMatchPortType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    tcp(1),
+                    udp(2),
+                    bothTcpAndUdp(3)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The type of L4 port to match. A value of tcp(1) indicates
+         that TCP packets are targeted while a value of ubp(2)
+         indicates that UDP packets are targeted. The default value
+         of bothTcpAndUdp(3) indicates that both TCP and UDP packets
+         are examined for matching purposes."
+    DEFVAL { bothTcpAndUdp }
+    ::= { bsifnPolicyEntry 10 }
+
+bsifnPolicySetSecondNextHopInetAddressType OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The type of address contained in the corresponding instances of
+         bsifnPolicySetSecondNextHopInetAddress."
+    DEFVAL { ipv4 }
+    ::= { bsifnPolicyEntry 11 }
+
+bsifnPolicySetSecondNextHopInetAddress OBJECT-TYPE
+    SYNTAX      InetAddress
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The secondary next hop address. This address is used in place
+         of the primary next hop address (bsifnPolicySetNextHopInetAddress)
+         if the primary address is unresolved but the secondary address
+         is resolved."
+    DEFVAL { '00000000'h }
+    ::= { bsifnPolicyEntry 12 }
 
 -- ============================================================================
 -- bsifnPolicyInterfaceTable
@@ -218,7 +273,8 @@ BsifnPolicyInterfaceEntry ::=
         bsifnPolicyInterfaceMode              INTEGER,
         bsifnPolicyInterfaceOperationalStatus INTEGER,
         bsifnPolicyInterfaceAction            INTEGER,
-        bsifnPolicyInterfaceRowStatus         RowStatus
+        bsifnPolicyInterfaceRowStatus         RowStatus,
+        bsifnPolicyInterfaceAdminStatus       INTEGER
     }
 
 bsifnPolicyInterfaceIndex OBJECT-TYPE
@@ -281,6 +337,17 @@ bsifnPolicyInterfaceRowStatus OBJECT-TYPE
         "Used to create/delete entries in this table."
     ::= { bsifnPolicyInterfaceEntry 6 }
 
+bsifnPolicyInterfaceAdminStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    enabled(1),
+                    disabled(2)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Used to enable/disable an entry."
+    ::= { bsifnPolicyInterfaceEntry 7 }
+
 -- ============================================================================
 -- Notification Objects
 -- ============================================================================
@@ -288,6 +355,14 @@ bsifnPolicyInterfaceRowStatus OBJECT-TYPE
 -- ============================================================================
 -- Notifications
 -- ============================================================================
+
+bsifnInstallationFailure NOTIFICATION-TYPE
+    STATUS         current
+    DESCRIPTION
+            "Signifies that filter data associated with the
+            IP fwd-nh functionality could not be installed due
+            current resource limitations."
+    ::= { bayStackIpFwdNhNotifications 1 }
 
 END
 
