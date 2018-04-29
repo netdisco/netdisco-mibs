@@ -1,0 +1,3620 @@
+TIMETRA-GMPLS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+        MODULE-IDENTITY, OBJECT-TYPE,
+        NOTIFICATION-TYPE, 
+        Unsigned32, IpAddress, Counter64,
+        Counter32, Integer32, Gauge32                   FROM SNMPv2-SMI
+ 
+        MODULE-COMPLIANCE, OBJECT-GROUP, 
+        NOTIFICATION-GROUP                              FROM SNMPv2-CONF
+
+        DisplayString,
+        RowStatus, RowPointer,
+        TruthValue, TimeStamp,
+        TimeInterval, TestAndIncr,
+        TEXTUAL-CONVENTION                              FROM SNMPv2-TC
+
+        timetraSRMIBModules, tmnxSRObjs, 
+        tmnxSRNotifyPrefix, tmnxSRConfs                 FROM TIMETRA-GLOBAL-MIB
+                
+        vRtrID, vRtrIfIndex, tmnxSrlgGrpName            FROM TIMETRA-VRTR-MIB
+
+        TItemDescription, TmnxAdminState, TmnxOperState,
+        TNamedItem, TNamedItemOrEmpty,
+        TmnxEnabledDisabled, TmnxPortID                 FROM TIMETRA-TC-MIB
+
+        InetAddressType, InetAddress                    FROM INET-ADDRESS-MIB
+
+        tmnxLmpVRtrTeLinkId, tmnxLmpVRtrPeerNodeId      FROM TIMETRA-LMP-MIB
+        ;
+
+timetraGmplsMIBModule MODULE-IDENTITY
+        LAST-UPDATED "201404020000Z"
+        ORGANIZATION "Nokia"
+        CONTACT-INFO
+            "Nokia SROS Support
+             Web: http://www.nokia.com"
+        DESCRIPTION
+        "This document is the SNMP MIB module to manage and provision the 
+        GMPLS extensions for the Nokia SROS device.
+         
+        Copyright 2003-2016 Nokia. All rights reserved.
+        Reproduction of this document is authorized on the condition that
+        the foregoing copyright notice is included.
+
+        This SNMP MIB module (Specification) embodies Nokia's
+        proprietary intellectual property.  Nokia retains 
+        all title and ownership in the Specification, including any 
+        revisions.
+
+        Nokia grants all interested parties a non-exclusive 
+        license to use and distribute an unmodified copy of this 
+        Specification in connection with management of Nokia 
+        products, and without fee, provided this copyright notice and 
+        license appear on all copies.
+
+        This Specification is supplied 'as is', and Nokia 
+        makes no warranty, either express or implied, as to the use, 
+        operation, condition, or performance of the Specification."
+
+--
+--  Revision History
+--
+   REVISION        "201404020000Z"
+   DESCRIPTION     "Rev 0.1                02 April 2014 00:00
+                    Initial version of the TIMETRA-GMPLS-MIB."
+   
+   ::= { timetraSRMIBModules 97 }
+
+-- ----------------------------------------------------------------------------
+--  MIB structure
+-- ----------------------------------------------------------------------------
+
+tmnxGmplsObjs            OBJECT IDENTIFIER ::= { tmnxSRObjs         97 }
+tmnxGmplsConformance      OBJECT IDENTIFIER ::= { tmnxSRConfs        97 }
+  tmnxGmplsCompliances    OBJECT IDENTIFIER ::= { tmnxGmplsConformance  1 }
+  tmnxGmplsGroups         OBJECT IDENTIFIER ::= { tmnxGmplsConformance  2 }
+tmnxGmplsNotifyPrefix     OBJECT IDENTIFIER ::= { tmnxSRNotifyPrefix 97 }
+  tmnxGmplsNotifications  OBJECT IDENTIFIER ::= { tmnxGmplsNotifyPrefix 0 }
+
+--
+-- Textual conventions
+--
+TmnxGmplsRouterId ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT    "d"
+    STATUS          current
+    DESCRIPTION 
+        "This value provides a 32-bit, unsigned integer 
+         uniquely identifying the router in the Autonomous System. To ensure 
+         uniqueness, this may default to the value of one of the router's 
+         IPv4 host addresses if IPv4 is configured on the router." 
+    SYNTAX      Unsigned32 (0..'FFFFFFFF'h)
+
+TmnxGmplsTunGrpMemberList        ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "The TmnxGmplsTunGrpMemberList specifies a bit-mask of the members
+         associated with a particular object. Each bit represents a specific
+         tmnxGmplsTunGrpMemberEntry. Bit 0 (first bit) represents the member
+         with the tmnxGmplsTunGrpMemberId value of 1. Bit 1, represents the
+         member with the tmnxGmplsTunGrpMemberId value of 2, and so forth.
+                 member1 (0)  -- represents member 1.
+                 member2 (1)  -- represents member 2.
+                 etc."
+    SYNTAX      BITS {
+                    member1  (0),
+                    member2  (1),
+                    member3  (2),
+                    member4  (3),
+                    member5  (4),
+                    member6  (5),
+                    member7  (6),
+                    member8  (7),
+                    member9  (8),
+                    member10 (9),
+                    member11 (10),
+                    member12 (11),
+                    member13 (12),
+                    member14 (13),
+                    member15 (14),
+                    member16 (15)
+                }
+
+TmnxGmplsSessionOperState  ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "The TmnxGmplsSessionOperState specifies the current operational state 
+         for this GMPLS session."
+    SYNTAX  INTEGER {
+                unknown (1),
+                inService (2),
+                outOfService (3),
+                inProgress (4),
+                failed (5),
+                restored (6),
+                protected (7)
+            }
+
+TmnxGmplsARHopAddressType   ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "The TmnxGmplsARHopAddressType specifies the type of address for a
+         Traffic Engineered tunnel hop."
+    SYNTAX  INTEGER {
+                unknown (0),
+                ipv4 (1),
+                ipv6 (2),
+                asNumber (3),
+                unnum (4),
+                lspid (5)
+            }
+
+TmnxGmplsLspPathFailCode    ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "TmnxGmplsLspPathFailCode specifies the reason for GMPLS LSP Path
+         failure."
+    SYNTAX  INTEGER {
+                noError (0),
+                noResourcesAvailable (1),
+                gmplsDown (2),
+                lspAdminDown (3),
+                pathAdminDown (4),
+                lspPathAdminDown (5),
+                noTunGrpMapping (6),
+                noWorkingPathIsUp (7),
+                conflictingTunGrpMode (8),
+                conflictingFarEnd (9),
+                retryExceeded (10),
+                noResponseToPath (11),
+                admissionControlError (12),
+                policyControlError (13),
+                unknownObjectClass (14),
+                unknownCType (15),
+                trafficControlError (16),
+                trafficControlSystemError (17),
+                routingError (18),
+                noRouteToDestination (19),
+                routingLoop (20),
+                badNode (21),
+                badLabel (22),
+                labelAllocationError (23),
+                unsupportedL3Pid (24),
+                unsupportedSwitchingType (25),
+                unsupportedEncoding (26),
+                unsupportedLspProtection (27),
+                unknownAttributesTlv (28),
+                unknownAttributesBit (29),
+                localLinkMaintenance (30),
+                localNodeMaintenance (31),
+                awaitForSrlgDiversity (32),
+                lspLocallyFailed (33),
+                peerDown (34),
+                teLinkDown (35),
+                dbLinkDown (36),
+                resvTimeout (37),
+                resvTearReceived (38),
+                peerNodeIdNotConfigured (39),
+                peerNodeIdPathDefnMismatch (40),
+                alarmUnavailable (41),
+                alarmPerformanceDegraded (42),
+                sbrHardRerouted (43),
+                memberPortAdminDown (44),
+                memberPortResourceFailure (45),
+                noFreeLinkAvailable (46),
+                bwReqMismatch (47),
+                tunGrpBwMismatch (48),
+                peerInvalid (49)
+            }
+
+TmnxGmplsSessionBWSignalType    ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "TmnxGmplsSessionBWSignalType specifies the bandwidth type for GMPLS
+         LSP Path."
+    SYNTAX  INTEGER {
+                none    (0),
+                ds0     (1),
+                ds1     (2),
+                e1      (3),
+                ds2     (4),
+                e2      (5),
+                ethernet    (6),
+                e3      (7),
+                ds3     (8),
+                sts1    (9),
+                fastEthernet    (10),
+                e4      (11),
+                fc0133m (12),
+                oc3stm1 (13),
+                fc0266m (14),
+                fc0531m (15),
+                oc12stm4 (16),
+                gige    (17),
+                fc01062m (18),
+                oc48stm16   (19),
+                oc192stm64  (20),
+                tengigeIeee (21),
+                oc768stm256 (22),
+                hundredgigeIeee (23)
+            }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) General Table
+-- ----------------------------------------------------------------------------
+
+vRtrGmplsGeneralTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsGeneralTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 1 } 
+
+vRtrGmplsGeneralTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsGeneralEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsGeneralTable contains objects for general control and
+        management of GMPLS protocol instance within a virtual router."
+    ::= { tmnxGmplsObjs 2 }
+
+vRtrGmplsGeneralEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsGeneralEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsGeneralEntry contains configuration items for the GMPLS 
+         protocol running within a virtual router."
+    INDEX { vRtrID }
+    ::= { vRtrGmplsGeneralTable 1 }
+ 
+ VRtrGmplsGeneralEntry  ::= SEQUENCE {
+     vRtrGmplsGeneralRowStatus        RowStatus,
+     vRtrGmplsGeneralLastChange       TimeStamp,
+     vRtrGmplsGeneralAdminState       TmnxAdminState,
+     vRtrGmplsGeneralOperState        TmnxOperState,
+     vRtrGmplsGeneralKeepMultiplier   Unsigned32,
+     vRtrGmplsGenLspInitRetryTimeout  Unsigned32,
+     vRtrGmplsGeneralRefreshTime      Unsigned32,
+     vRtrGmplsGenRapidRetransmitTime  Unsigned32,
+     vRtrGmplsGenRapidRetryLimit      Unsigned32,
+     vRtrGmplsGenGrHlprMaxRcvryTm     Unsigned32,
+     vRtrGmplsGenGrHlprMaxRstrtTm     Unsigned32,
+     vRtrGmplsGenOperDownReasonCode   INTEGER,
+     vRtrGmplsGeneralLocalNodeId      Unsigned32
+    }
+
+vRtrGmplsGeneralRowStatus   OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsGeneralTable entries."
+    ::= { vRtrGmplsGeneralEntry 1 }
+
+vRtrGmplsGeneralLastChange  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralLastChange indicates the sysUpTime when 
+         this row was last modified."
+    ::= { vRtrGmplsGeneralEntry 2 }
+
+vRtrGmplsGeneralAdminState   OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralAdminState specifies whether GMPLS
+         protocol is enabled or disabled.
+ 
+         When vRtrGmplsGeneralAdminState is set to 'inService', the agent
+         attempts to enable the GMPLS protocol instance on this router.
+             
+         When vRtrGmplsGeneralAdminState is set to 'outOfService', the
+         agent attempts to disable the GMPLS protocol instance on this
+         router."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsGeneralEntry 3 }
+                   
+vRtrGmplsGeneralOperState    OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralOperState indicates the current operating
+         state of this GMPLS protocol instance on this router."
+    ::= { vRtrGmplsGeneralEntry 4 }
+
+vRtrGmplsGeneralKeepMultiplier  OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..255)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralKeepMultiplier specifies if it is used by 
+         GMPLS to declare either a reservation down or the neighbor as down."
+    DEFVAL { 3 }
+    ::= { vRtrGmplsGeneralEntry 5 }
+
+vRtrGmplsGenLspInitRetryTimeout    OBJECT-TYPE
+    SYNTAX      Unsigned32 (10..600)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenLspInitRetryTimeout specifies the amount of
+         time in seconds the software waits for an LSP path to come up after
+         sending out the initial Path message. If the initial retry timeout
+         period expires and the LSP path is not up, it is torn down and the LSP
+         retry timer is started to schedule a new retry cycle using a new
+         LSP-id."
+    DEFVAL { 30 }
+    ::= { vRtrGmplsGeneralEntry 6 }
+
+vRtrGmplsGeneralRefreshTime     OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralRefreshTime controls the interval
+         between the successive Path and Resv refresh messages.  
+         
+         GMPLS declares the session down after it misses
+         ((keep-multiplier + 0.5) * 1.5 * refresh-time)) consecutive 
+         refresh messages." 
+    DEFVAL { 30 }
+    ::= { vRtrGmplsGeneralEntry 7 }
+
+vRtrGmplsGenRapidRetransmitTime     OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..100)
+    UNITS       "hundred-milliseconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenRapidRetransmitTime specifies the value 
+         of the rapid retransmission interval. This is used in the 
+         retransmission mechanism based on an exponential backoff timer 
+         in order to handle unacknowledged message objects.  
+         
+         vRtrGmplsGenRapidRetransmitTime must be smaller than the regular 
+         refresh interval vRtrGmplsGeneralRefreshTime." 
+    DEFVAL { 5 }
+    ::= { vRtrGmplsGeneralEntry 8 }
+
+vRtrGmplsGenRapidRetryLimit     OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..6)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenRapidRetryLimit specifies the rapid retry 
+         limit.  This is used in the retransmission mechanism based on an 
+         exponential backoff timer in order to handle unacknowledged message 
+         objects.  The node stops retransmission of unacknowledged GMPLS 
+         messages whenever the updated backoff interval exceeds the value of 
+         vRtrGmplsGeneralRefreshTime or the number of retransmissions reaches 
+         the value of the vRtrGmplsGenRapidRetryLimit, whichever comes first." 
+    DEFVAL { 3 }
+    ::= { vRtrGmplsGeneralEntry 9 }
+
+vRtrGmplsGenGrHlprMaxRcvryTm    OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..1800)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenGrHlprMaxRcvryTm specifies the maximum
+         time in seconds, a graceful helper will wait for session recovery.
+         This value is compared with the neighbor's advertised recovery time
+         and the minimum of the two is used.  This value is used to cap the
+         recovery time advertised by the neighbor."
+    DEFVAL { 300 }
+    ::= { vRtrGmplsGeneralEntry 10 }
+
+vRtrGmplsGenGrHlprMaxRstrtTm    OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..300)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenGrHlprMaxRstrtTm specifies the maximum
+         time in seconds a graceful helper will wait for session restart after
+         it has determined that the neighbor is down. This value is compared
+         with the neighbor's advertised restart time and the minimum of the two
+         is used. This is used to cap the restart time advertised by the
+         neighbor."
+    DEFVAL { 180 }
+    ::= { vRtrGmplsGeneralEntry 11 }
+
+vRtrGmplsGenOperDownReasonCode  OBJECT-TYPE
+    SYNTAX  INTEGER {
+                up (0),
+                adminDown (1),
+                noResources (2),
+                nodeIdDown (3)
+            }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenOperDownReasonCode indicates the reason that
+         the GMPLS instance is operationally down."
+    ::= { vRtrGmplsGeneralEntry 12 }
+
+vRtrGmplsGeneralLocalNodeId OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGeneralLocalNodeId indicates the local Node ID
+         of this GMPLS instance."
+    ::= { vRtrGmplsGeneralEntry 13 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Path Table
+-- ----------------------------------------------------------------------------
+vRtrGmplsPathIndexNext  OBJECT-TYPE
+    SYNTAX      Integer32(0..65535)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathIndexNext indicates the next appropriate
+         value to be used for vRtrGmplsPathIndex when creating entries in the
+         vRtrGmplsPathTable. If the number of unassigned entries is exhausted, a
+         retrival operation will return a value of 0. To obtain the value of
+         vRtrGmplsPathIndex for a new entry, the manager must first issue a 
+         management protocol retrieval operation to obtain the current value of 
+         this object. The agent should modify the value to reflect the next 
+         unassigned index after each retrieval operation. After a manager 
+         retrieves a value the agent will determine through its local policy 
+         when this index value will be made available for reuse."
+    ::= { tmnxGmplsObjs 3 }
+
+vRtrGmplsPathTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsPathTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 4 } 
+
+vRtrGmplsPathTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsPathEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPathTable contains objects for GMPLS path table."
+    ::= { tmnxGmplsObjs 5 }
+
+vRtrGmplsPathEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsPathEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry in vRtrGmplsPathEntry represents a GMPLS Path configured 
+         for a virtual router in the system. Entries can be created and deleted 
+         via SNMP SET operations. Setting RowStatus to 'active' requires 
+         vRtrGmplsPathName to have been assigned a valid value."
+    INDEX { vRtrID, vRtrGmplsPathIndex }
+    ::= { vRtrGmplsPathTable 1 }
+ 
+VRtrGmplsPathEntry  ::= SEQUENCE {
+     vRtrGmplsPathIndex             Integer32,
+     vRtrGmplsPathRowStatus         RowStatus,
+     vRtrGmplsPathLastChange        TimeStamp,
+     vRtrGmplsPathName              TNamedItemOrEmpty,
+     vRtrGmplsPathAdminState        TmnxAdminState,
+     vRtrGmplsPathOperState         TmnxOperState
+    }
+
+vRtrGmplsPathIndex      OBJECT-TYPE
+    SYNTAX      Integer32(1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of object vRtrGmplsPathIndex indicates the unique value which 
+         identifies this GMPLS Path for this virtual router in the 
+         Nokia SROS system. It is a unique value among entries with the
+         same value of vRtrID."
+    ::= { vRtrGmplsPathEntry 1 }
+
+vRtrGmplsPathRowStatus  OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathRowStatus specifies the row status used for
+         creation, deletion, or control of vRtrGmplsPathTable entries."
+    ::= { vRtrGmplsPathEntry 2 }
+
+vRtrGmplsPathLastChange OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathLastChange indicates the sysUpTime when this 
+         row was last modified."
+    ::= { vRtrGmplsPathEntry 3 }
+
+vRtrGmplsPathName       OBJECT-TYPE
+    SYNTAX      TNamedItemOrEmpty
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathName specifies administrative name for this 
+         GMPLS Path. The vRtrGmplsPathName must be unique within a virtual 
+         router instance.
+         
+         The value of vRtrGmplsPathName needs to be specified when creating 
+         a new entry in this table."
+    ::= { vRtrGmplsPathEntry 4 }
+
+vRtrGmplsPathAdminState OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathAdminState specifies the desired 
+         administrative state for this GMPLS path."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsPathEntry 5 }
+                   
+vRtrGmplsPathOperState  OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathOperState indicates the current operational 
+         state of this GMPLS path."
+    ::= { vRtrGmplsPathEntry 6 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Path Hop Table
+-- ----------------------------------------------------------------------------
+vRtrGmplsPathHopTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsPathHopTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 6 } 
+
+vRtrGmplsPathHopTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsPathHopEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPathHopTable is used to indicate the hops, strict or
+        loose, for a GMPLS path defined in vRtrGmplsPathTable. Each row in this
+        table is indexed primarily by the same index vRtrGmplsPathIndex, as the
+        row of the corresponding table in vRtrGmplsPathTable. Each row also has
+        a secondary index vRtrGmplsPathHopIndex corresponding to the next hop
+        that this row corresponds to."
+    ::= { tmnxGmplsObjs 7 }
+
+vRtrGmplsPathHopEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsPathHopEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPathHopEntry contains configuration items for GMPLS path
+         hop table."
+    INDEX { vRtrID, vRtrGmplsPathIndex, vRtrGmplsPathHopIndex }
+    ::= { vRtrGmplsPathHopTable 1 }
+
+VRtrGmplsPathHopEntry   ::= SEQUENCE {
+     vRtrGmplsPathHopIndex              Integer32,
+     vRtrGmplsPathHopRowStatus          RowStatus,
+     vRtrGmplsPathHopLastChange         TimeStamp,
+     vRtrGmplsPathHopNodeId             TmnxGmplsRouterId,
+     vRtrGmplsPathHopTeLinkId           Unsigned32,
+     vRtrGmplsPathHopStrictOrLoose      INTEGER
+    }
+
+vRtrGmplsPathHopIndex       OBJECT-TYPE
+    SYNTAX      Integer32(1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopIndex indicates the unique value which 
+         identifies the GMPLS Path Hop for this virtual router in the 
+         Nokia SROS system. It is a unique value among entries with the
+         same value of vRtrID."
+    ::= { vRtrGmplsPathHopEntry 1 }
+
+vRtrGmplsPathHopRowStatus   OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsPathHopTable entries."
+    ::= { vRtrGmplsPathHopEntry 2 }
+
+vRtrGmplsPathHopLastChange  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopLastChange indicates the sysUpTime when 
+         this row was last modified."
+    ::= { vRtrGmplsPathHopEntry 3 }
+
+vRtrGmplsPathHopNodeId      OBJECT-TYPE
+    SYNTAX      TmnxGmplsRouterId
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopNodeId specifies a 32-bit unique node
+         identifier for the Path Hop entry." 
+    ::= { vRtrGmplsPathHopEntry 4 }
+
+vRtrGmplsPathHopTeLinkId    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPathHopTeLinkId specifies the te-link id
+        associated with this Path Hop entry."
+    DEFVAL { 0 }
+    ::= { vRtrGmplsPathHopEntry 5 }
+
+vRtrGmplsPathHopStrictOrLoose   OBJECT-TYPE
+   SYNTAX        INTEGER {
+          strict(1),
+          loose(2)
+      }
+   MAX-ACCESS    read-create
+   STATUS        current
+   DESCRIPTION
+        "The value of vRtrGmplsPathHopStrictOrLoose specifies whether this path 
+         hop is routed in a  strict or loose fashion."
+   ::= { vRtrGmplsPathHopEntry 6 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Peer Table
+-- ----------------------------------------------------------------------------
+vRtrGmplsPeerTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsPeerTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 8 } 
+
+vRtrGmplsPeerTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsPeerEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPeerTable is used to indicate the neighbor peer(s) to 
+         which control channels may be established. "
+    ::= { tmnxGmplsObjs 9 }
+
+vRtrGmplsPeerEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsPeerEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPeerEntry contains an entry that is created for every pair
+         of peer that can establish control channels."
+    INDEX { vRtrID, tmnxLmpVRtrPeerNodeId }
+    ::= { vRtrGmplsPeerTable 1 }
+
+VRtrGmplsPeerEntry   ::= SEQUENCE {
+    vRtrGmplsPeerRowStatus          RowStatus,
+    vRtrGmplsPeerLastChange         TimeStamp,
+    vRtrGmplsPeerHelloInterval      Unsigned32,
+    vRtrGmplsPeerAdminState         TmnxAdminState,
+    vRtrGmplsPeerOperState          TmnxOperState,
+    vRtrGmplsPeerOperDownReason     INTEGER,
+    vRtrGmplsPeerLastOperChange     TimeInterval,
+    vRtrGmplsPeerHelloState         TmnxOperState,
+    vRtrGmplsPeerSourceInstance     Unsigned32,
+    vRtrGmplsPeerDestInstance       Unsigned32,
+    vRtrGmplsPeerHelloTimeoutCount  Counter32,
+    vRtrGmplsPeerInstMismatchCount  Counter32,
+    vRtrGmplsPeerDestIpAddrType     InetAddressType,
+    vRtrGmplsPeerDestIpAddr         InetAddress,
+    vRtrGmplsPeerNextHopIpAddrType  InetAddressType,
+    vRtrGmplsPeerNextHopIpAddr      InetAddress,
+    vRtrGmplsPeerIfIndex            Unsigned32,
+    vRtrGmplsPeerNHOperState        TmnxOperState,
+    vRtrGmplsPeerMTU                Unsigned32,
+    vRtrGmplsPeerNHChangedCnt       Unsigned32,
+    vRtrGmplsPeerGrRestartTime      Unsigned32,
+    vRtrGmplsPeerGrRecoveryTime     Unsigned32,
+    vRtrGmplsPeerGrInvokedCount     Counter32,
+    vRtrGmplsPeerGrRestartCap       TruthValue,
+    vRtrGmplsPeerGrState            INTEGER,
+    vRtrGmplsPeerGrHelperTimeRem    Unsigned32,
+    vRtrGmplsPeerFlags              BITS,
+    vRtrGmplsPeerSrefreshTimeRem    Unsigned32,
+    vRtrGmplsPeerEpochNum           Unsigned32,
+    vRtrGmplsPeerMaxMsgId           Unsigned32,
+    vRtrGmplsPeerOutofOrderMsgs     Counter32,
+    vRtrGmplsPeerRetransmittedMsgs  Counter32,
+    vRtrGmplsPeerDnStreamSessCnt    Gauge32,
+    vRtrGmplsPeerUpStreamSessCnt    Gauge32,
+    vRtrGmplsPeerPathTimeouts       Counter32,
+    vRtrGmplsPeerResvTimeouts       Counter32,
+    vRtrGmplsPeerLspHoldTimer       Unsigned32
+    }
+
+vRtrGmplsPeerRowStatus   OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsPeerTable entries."
+    ::= { vRtrGmplsPeerEntry 1 }
+
+vRtrGmplsPeerLastChange  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerLastChange indicates the sysUpTime when 
+         this row was last modified."
+    ::= { vRtrGmplsPeerEntry 2 }
+
+vRtrGmplsPeerHelloInterval   OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..65535)
+    UNITS       "milliseconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerHelloInterval specifies the length of time
+         in milliseconds, between the hello packets that the router sends on the
+         interface.
+         
+         When the value of vRtrGmplsPeerHelloInterval is set to 0, the
+         sending of hello messages is disabled."
+    DEFVAL { 3000 }
+    ::= { vRtrGmplsPeerEntry 3 }
+
+vRtrGmplsPeerAdminState  OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerAdminState specifies the desired 
+         administrative state for this Peer."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsPeerEntry 4 }
+
+vRtrGmplsPeerOperState  OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerOperState indicates the current operational 
+         state for this GMPLS Peer."
+    ::= { vRtrGmplsPeerEntry 5 }
+
+vRtrGmplsPeerOperDownReason OBJECT-TYPE
+    SYNTAX      INTEGER {
+                none (0),
+                adminDown (1),
+                gmplsDown (2),
+                nextHopDown (3)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerOperDownReason indicates the operational down
+         reason for the GMPLS peer."
+    ::= { vRtrGmplsPeerEntry 6 }
+
+vRtrGmplsPeerLastOperChange OBJECT-TYPE
+    SYNTAX      TimeInterval 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerLastOperChange indicates the time interval
+         which has elapsed since the GMPLS peer's operational state last 
+         changed."
+    ::= { vRtrGmplsPeerEntry 7 }
+
+vRtrGmplsPeerHelloState OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerHelloState indicates the hello state for this
+         GMPLS peer."
+    ::= { vRtrGmplsPeerEntry 8 }
+
+vRtrGmplsPeerSourceInstance     OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerSourceInstance indicates the source instance
+         for this GMPLS peer."
+    ::= { vRtrGmplsPeerEntry 9 }
+
+vRtrGmplsPeerDestInstance   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerDestInstance indicates the destination 
+         instance for this GMPLS peer."
+    ::= { vRtrGmplsPeerEntry 10 }
+
+vRtrGmplsPeerHelloTimeoutCount  OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerHelloTimeoutCount indicates number of times 
+         the Hello timeout timer expired for the peer." 
+    ::= { vRtrGmplsPeerEntry 11 }
+
+vRtrGmplsPeerInstMismatchCount  OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerInstMismatchCount indicates number of 
+         times the source and destination instances received in a Hello 
+         message did not match the destination and source instance for 
+         this GMPLS peer." 
+    ::= { vRtrGmplsPeerEntry 12 }
+
+vRtrGmplsPeerDestIpAddrType OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerDestIpAddrType indicates the address type of
+         vRtrGmplsPeerDestIpAddr."
+    ::= { vRtrGmplsPeerEntry 13 }
+
+vRtrGmplsPeerDestIpAddr OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(0|4))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerDestIpAddr indicates the destination ip 
+         address of this GMPLS Peer."
+    ::= { vRtrGmplsPeerEntry 14 }
+
+vRtrGmplsPeerNextHopIpAddrType  OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerNextHopIpAddrType indicates the address type
+         of vRtrGmplsPeerNextHopIpAddr."
+    ::= { vRtrGmplsPeerEntry 15 }
+
+vRtrGmplsPeerNextHopIpAddr  OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(0|4))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerNextHopIpAddr indicates the next-hop address
+         for this GMPLS Peer."
+    ::= { vRtrGmplsPeerEntry 16 }
+
+vRtrGmplsPeerIfIndex    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerIfIndex indicates the interface index 
+         associated with vRtrGmplsPeerNextHopIpAddr for this GMPLS Peer."
+    ::= { vRtrGmplsPeerEntry 17 }
+
+vRtrGmplsPeerNHOperState    OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerNHOperState indicates the next-hop 
+         operational state for this peer."
+    ::= { vRtrGmplsPeerEntry 18 }
+
+vRtrGmplsPeerMTU    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerMTU indicates the maximum transmission unit
+         allowed for this peer."
+    ::= { vRtrGmplsPeerEntry 19 }
+
+vRtrGmplsPeerNHChangedCnt   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerNHChangedCnt indicates the number of changes
+         in active next-hop address."
+    ::= { vRtrGmplsPeerEntry 20 }
+
+vRtrGmplsPeerGrRestartTime    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrRestartTime indicates the restart time 
+         required for the peer to change its operational state from outOfService
+         to inService."
+    ::= { vRtrGmplsPeerEntry 21 }
+
+vRtrGmplsPeerGrRecoveryTime   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "milliseconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrRecoveryTime indicates the recovery time
+         required for the peer to recover from operationally down state."
+    ::= { vRtrGmplsPeerEntry 22 }
+
+vRtrGmplsPeerGrInvokedCount   OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrInvokedCount indicates the total number of
+         times Graceful Restart helper procedure has been invoked for this 
+         peer."
+    ::= { vRtrGmplsPeerEntry 23 }
+
+vRtrGmplsPeerGrRestartCap   OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrRestartCap indicates whether or not the
+         neighbor supports graceful restart."
+    ::= { vRtrGmplsPeerEntry 24 }
+
+vRtrGmplsPeerGrState    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    none           (0),
+                    restartInProg  (1),
+                    recoveryInProg (2),
+                    cleanup        (3)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrState indicates the current state of the
+         peer after loss of communication.
+         
+         none            - phase info not available.
+         restartInProg   - indicates restart phase is in progress
+         recoveryInProg  - indicates recovery phase is in progress
+         cleanup         - indicates cleanup in progress."
+    ::= { vRtrGmplsPeerEntry 25 }
+
+    
+vRtrGmplsPeerGrHelperTimeRem   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerGrHelperTimeRem indicates the amount of time
+         remaining in seconds, for the restart phase or recovery phase to 
+         timeout. If the timer expires, the RSVP session not recovered will be
+         torn down."
+    ::= { vRtrGmplsPeerEntry 26 }
+
+vRtrGmplsPeerFlags  OBJECT-TYPE
+    SYNTAX      BITS {
+                    localRefreshReduction (0),
+                    localReliableDelivery (1),
+                    remoteRefreshReduction (2),
+                    remoteMessageId (3),
+                    localGrHelper (4)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerFlags indicates the set of properties for 
+         this GMPLS peer. The bits are defined as follows :
+
+         localRefreshReduction  - If set, implies that refresh reduction is 
+                                  configured locally for this peer.
+         localReliableDelivery  - If set, implies that reliable delivery is 
+                                  configured locally for this peer.
+         remoteRefreshReduction - If set, implies that the refresh reduction 
+                                  is supported on the remote end.
+         remoteMessageId        - If set, implies that message ID object is 
+                                  supported on the remote end.
+         localGrHelper          - If set, implies that Graceful Restart Helper
+                                  mode is enabled locally for this peer."
+    ::= { vRtrGmplsPeerEntry 27 }
+
+vRtrGmplsPeerSrefreshTimeRem    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerSrefreshTimeRem indicates the time remaining
+         in the Srefresh timer. An Srefresh message is sent when this timer 
+         expires."
+    ::= { vRtrGmplsPeerEntry 28 }
+
+vRtrGmplsPeerEpochNum   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerEpochNum indicates the epoch number received
+         from the peer."
+    ::= { vRtrGmplsPeerEntry 29 }
+
+vRtrGmplsPeerMaxMsgId   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerMaxMsgId indicates the highest message ID 
+         received from this peer."
+    ::= { vRtrGmplsPeerEntry 30 }
+
+vRtrGmplsPeerOutofOrderMsgs OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerOutofOrderMsgs indicates the number of out 
+         of order messages received from this peer."
+    ::= { vRtrGmplsPeerEntry 31 }
+
+vRtrGmplsPeerRetransmittedMsgs  OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRetransmittedMsgs indicates the number of 
+         times messages have been retransmitted to the peer because the 
+         peer did not acknowledge that it received the message."
+    ::= { vRtrGmplsPeerEntry 32 }
+
+vRtrGmplsPeerDnStreamSessCnt    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerDnStreamSessCnt indicates the number of
+         session associated with this peer which are currently down."
+    ::= { vRtrGmplsPeerEntry 33 }
+
+vRtrGmplsPeerUpStreamSessCnt    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerUpStreamSessCnt indicates the number of
+         session associated with this peer which are currently up."
+    ::= { vRtrGmplsPeerEntry 34 }
+
+vRtrGmplsPeerPathTimeouts   OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerPathTimeouts indicates the number of PATH
+         message timeout for this peer."
+    ::= { vRtrGmplsPeerEntry 35 }
+
+vRtrGmplsPeerResvTimeouts   OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerResvTimeouts indicates the number of RESV
+         message timeout for this peer."
+    ::= { vRtrGmplsPeerEntry 36 }
+
+vRtrGmplsPeerLspHoldTimer   OBJECT-TYPE
+    SYNTAX      Unsigned32 (5..300)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerLspHoldTimer specifies the time, in seconds,
+         that the software waits after a session for this peer to become
+         operationally up before activating data transmission on the session."
+    DEFVAL { 60 }
+    ::= { vRtrGmplsPeerEntry 37 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) LSP Table
+-- ----------------------------------------------------------------------------
+vRtrGmplsLspTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsLspTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 10 } 
+
+vRtrGmplsLspTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsLspEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsLspTable is used to indicate entry for each Labeled Switch 
+         Path (LSP) configured for a virtual router in the system."
+    ::= { tmnxGmplsObjs 11 }
+
+vRtrGmplsLspEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsLspEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry in vRtrGmplsLspEntry represents a Labeled Switch Path
+         (LSP) configured for a virtual router in the system. Entries can be
+         created and deleted via SNMP SET operations. Setting RowStatus to
+         'active' requires vRtrGmplsLspName to have been assigned a valid
+         value."
+    INDEX { vRtrID, vRtrGmplsLspIndex }
+    ::= { vRtrGmplsLspTable 1 }
+
+VRtrGmplsLspEntry ::= SEQUENCE {
+    vRtrGmplsLspIndex               Unsigned32,
+    vRtrGmplsLspRowStatus           RowStatus,
+    vRtrGmplsLspLastChange          TimeStamp,
+    vRtrGmplsLspName                TNamedItemOrEmpty,
+    vRtrGmplsLspType                INTEGER,
+    vRtrGmplsLspAdminState          TmnxAdminState,
+    vRtrGmplsLspOperState           TmnxOperState,
+    vRtrGmplsLspSwitchingType       INTEGER,
+    vRtrGmplsLspEncodingType        INTEGER,
+    vRtrGmplsLspGeneralizedPid      INTEGER,
+    vRtrGmplsLspE2EProtection       INTEGER,
+    vRtrGmplsLspRevertTimer         Unsigned32,
+    vRtrGmplsLspRetryLimit          Unsigned32,
+    vRtrGmplsLspRetryTimer          Unsigned32,
+    vRtrGmplsLspToAddrType          InetAddressType,
+    vRtrGmplsLspToAddr              InetAddress,
+    vRtrGmplsLspNumWorkingPath      Gauge32,
+    vRtrGmplsLspNumProtectPath      Gauge32,
+    vRtrGmplsLspNumWorkingPathUp    Gauge32,
+    vRtrGmplsLspNumProtectPathUp    Gauge32,
+    vRtrGmplsLspLastOperChange      TimeInterval
+    }
+
+vRtrGmplsLspIndex OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspIndex indicates the unique value which 
+         identifies the GMPLS Labeled Switch Path (LSP) for this virtual router
+         in the Nokia SROS system. It is a unique value among entries 
+         with the same value of vRtrID."
+    ::= { vRtrGmplsLspEntry 1 }
+
+vRtrGmplsLspRowStatus   OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsLspTable entries."
+    ::= { vRtrGmplsLspEntry 2 }
+
+vRtrGmplsLspLastChange       OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspLastChange indicates the sysUpTime when 
+         this row was last modified."
+    ::= { vRtrGmplsLspEntry 3 }
+
+vRtrGmplsLspName     OBJECT-TYPE
+    SYNTAX      TNamedItemOrEmpty
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspName specifies the name for this Labeled
+         Switch Path. The vRtrGmplsLspName must be unique within a virtual
+         router instance. The value of vRtrGmplsLspName needs to be set at row
+         creation time."
+    ::= { vRtrGmplsLspEntry 4 }
+
+vRtrGmplsLspType    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                gmplsUni(1)
+            }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspType specifies the type of GMPLS Labeled
+         Switch Path (LSP).
+         
+         When the value of vRtrGmplsLspType is 'gmplsUni' it indicates that the
+         Labeled Switch Path (LSP) is an RSVP signalled GMPLS LSP.
+         
+         The value of vRtrGmplsLspType needs to be set at row creation time."
+    ::= { vRtrGmplsLspEntry 5 }
+
+vRtrGmplsLspAdminState  OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspAdminState specifies the desired 
+         administrative state for this GMPLS Labeled Switch Path (LSP)."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsLspEntry 6 }
+
+vRtrGmplsLspOperState   OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspOperState indicates the current operational 
+         state of this GMPLS Labeled Switch Path (LSP)."
+    ::= { vRtrGmplsLspEntry 7 }
+
+vRtrGmplsLspSwitchingType   OBJECT-TYPE
+    SYNTAX      INTEGER {
+                dcsc(125)               
+            }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspSwitchingType specifies the type of switching
+         that should be performed on a particular link."
+    DEFVAL { dcsc }
+    ::= { vRtrGmplsLspEntry 8 }
+
+vRtrGmplsLspEncodingType    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                line (14)
+            }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspEncodingType specifies the encoding type of 
+         the payload carried by the GMPLS Label Switch Path (LSP)."
+    DEFVAL { line }
+    ::= { vRtrGmplsLspEntry 9 }
+
+vRtrGmplsLspGeneralizedPid  OBJECT-TYPE
+    SYNTAX      INTEGER {
+                ethernet (33)
+            }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspGeneralizedPid specifies the type of payload 
+         carried by the GMPLS LSP."
+     DEFVAL { ethernet }
+     ::= { vRtrGmplsLspEntry 10 }
+
+vRtrGmplsLspE2EProtection   OBJECT-TYPE
+    SYNTAX      INTEGER {
+                unprotected (1),
+                oneToN (2),
+                sbr (3)
+            }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspE2EProtection specifies the end to end 
+         protection type for this GMPLS LSP.
+         
+         When the value of vRtrGmplsLspE2EProtection is set to 'unprotected', 
+         the GMPLS LSP is not protected. The GMPLS LSP is a single working path.
+         A protect path cannot be configured.
+
+         When the value of vRtrGmplsLspE2EProtection is set to 'oneToN', a 
+         single protect path protects the working paths of one or more GMPLS 
+         LSPs.
+
+         When the value of vRtrGmplsLspE2EProtection is set to 'sbr', full LSP
+         rerouting is allowed for a failed working path."
+     DEFVAL { unprotected }
+     ::= { vRtrGmplsLspEntry 11 }
+     
+vRtrGmplsLspRevertTimer    OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..1800)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspRevertTimer specifies a revert timer for a
+         Labeled Switch Path (LSP). The Labeled Switch Path (LSP) will be
+         switched to the primary path only after the revert interval is over.
+         
+         When the value of vRtrGmplsLspRevertTimer is set to '0', the LSP will
+         revert immediately."
+     DEFVAL { 0 }
+     ::= { vRtrGmplsLspEntry 12 }
+    
+vRtrGmplsLspRetryLimit  OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..10000)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspRetryLimit specifies the maximum number of 
+         attempts the software should make to establish an LSP.
+         
+         A value of zero(0) specifies that an infinite number of retry attempts
+         should be made."
+     DEFVAL { 0 }
+     ::= { vRtrGmplsLspEntry 13 }
+     
+vRtrGmplsLspRetryTimer  OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..600)
+    UNITS       "seconds"
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspRetryTimer specifies the time in seconds the
+         software will wait before attempting to establish the failed LSP."
+     DEFVAL { 30 }
+     ::= { vRtrGmplsLspEntry 14 }
+     
+vRtrGmplsLspToAddrType  OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspToAddrType specifies the destination address
+         type of the Labeled Switch Path (LSP)."
+    DEFVAL { unknown }
+    ::= { vRtrGmplsLspEntry 15 }
+
+vRtrGmplsLspToAddr  OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(0|4|16))
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspToAddr specifies the destination address of
+         this LSP."
+    DEFVAL { ''H }
+    ::= { vRtrGmplsLspEntry 16 }
+
+vRtrGmplsLspNumWorkingPath OBJECT-TYPE
+    SYNTAX      Gauge32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspNumWorkingPath indicates the total number of 
+        working-paths for this GMPLS Labeled Switch Path (LSP)."
+    ::= { vRtrGmplsLspEntry 17 }
+
+vRtrGmplsLspNumProtectPath OBJECT-TYPE
+    SYNTAX      Gauge32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspNumProtectPath indicates the total number of 
+        protect-paths for this GMPLS Labeled Switch Path (LSP)."
+    ::= { vRtrGmplsLspEntry 18 }
+
+vRtrGmplsLspNumWorkingPathUp OBJECT-TYPE
+    SYNTAX      Gauge32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspNumWorkingPathUp indicates the total number of 
+        working-paths that are operationally up for this GMPLS Labeled Switch 
+        Path (LSP)."
+    ::= { vRtrGmplsLspEntry 19 }
+
+vRtrGmplsLspNumProtectPathUp OBJECT-TYPE
+    SYNTAX      Gauge32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspNumProtectPathUp indicates the total number of 
+        protect-paths that are operationally up for this GMPLS Labeled Switch 
+        Path (LSP)."
+    ::= { vRtrGmplsLspEntry 20 }
+
+vRtrGmplsLspLastOperChange  OBJECT-TYPE
+    SYNTAX      TimeInterval
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspLastOperChange indicates the time interval
+         which has elapsed since the GMPLS LSP's operational state last 
+         changed."
+    ::= { vRtrGmplsLspEntry 21 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) LSP Path Table
+-- ----------------------------------------------------------------------------
+
+vRtrGmplsLspPathTblLastChanged  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathTblLastChanged indicates the
+         sysUpTime at the time of the last modification to 
+         vRtrGmplsLspPathTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 12 }
+
+vRtrGmplsLspPathTable           OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsLspPathEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsLspPathTable is used to indicate entry for each LSP Path 
+         configured for a virtual router in the system."
+    ::= { tmnxGmplsObjs 13 }
+
+vRtrGmplsLspPathEntry OBJECT-TYPE
+    SYNTAX      VRtrGmplsLspPathEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry in vRtrGmplsLspPathEntry represents a protecting or a 
+         working path configured corresponding to a LSP for a virtual router in
+         the system. Entries can be created and deleted via SNMP SET 
+         operations."
+    INDEX       {
+                    vRtrID,
+                    vRtrGmplsLspIndex,
+                    vRtrGmplsLspPathType,
+                    vRtrGmplsPathIndex
+                }
+    ::= { vRtrGmplsLspPathTable 1 }
+
+VRtrGmplsLspPathEntry           ::= SEQUENCE {
+    vRtrGmplsLspPathType            INTEGER,
+    vRtrGmplsLspPathRowStatus       RowStatus,
+    vRtrGmplsLspPathLastChangedTime TimeStamp,
+    vRtrGmplsLspPathAdminState      TmnxAdminState,
+    vRtrGmplsLspPathOperState       TmnxGmplsSessionOperState,
+    vRtrGmplsLspPathBWSignalType    TmnxGmplsSessionBWSignalType,
+    vRtrGmplsLspPathSegProtType     INTEGER,
+    vRtrGmplsLspPathLspId           Unsigned32,
+    vRtrGmplsLspPathPeerNodeId      Unsigned32,
+    vRtrGmplsLspPathRetryAttempts   Unsigned32,
+    vRtrGmplsLspPathFailNodeAddrType InetAddressType,
+    vRtrGmplsLspPathFailNodeAddr    InetAddress,
+    vRtrGmplsLspPathFailCode        TmnxGmplsLspPathFailCode,
+    vRtrGmplsLspPathNextRetryIn     Unsigned32,
+    vRtrGmplsLspPathTimeoutIn       Unsigned32,
+    vRtrGmplsLspPathARHopListIndex  Unsigned32,
+    vRtrGmplsLspPathLastOperChange  TimeInterval
+    }
+
+vRtrGmplsLspPathType    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    working (1),
+                    protecting (2)
+                }
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathType specifies the path type for the GMPLS
+         LSP path.
+         
+         When the value of vRtrGmplsLspPathType is set to 'working', the path is
+         used a primary path for the LSP.
+         
+         When the value of vRtrGmplsLspPathType is set to 'protecting', the path
+         is used as a secondary path for the LSP."
+    ::= { vRtrGmplsLspPathEntry 1 }
+
+vRtrGmplsLspPathRowStatus       OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsLspPathTable entries."
+    ::= { vRtrGmplsLspPathEntry 2 }
+
+vRtrGmplsLspPathLastChangedTime OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathLastChangedTime indicates the last time,
+         since system startup, that a writable object in this table was
+         modified."
+    ::= { vRtrGmplsLspPathEntry 3 }
+
+vRtrGmplsLspPathAdminState      OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathAdminState specifies the administrative
+         state of the GMPLS LSP Path."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsLspPathEntry 4 }
+
+vRtrGmplsLspPathOperState       OBJECT-TYPE
+    SYNTAX      TmnxGmplsSessionOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathOperState indicates the operational state
+         of the GMPLS LSP Path."
+    ::= { vRtrGmplsLspPathEntry 5 }
+
+vRtrGmplsLspPathBWSignalType    OBJECT-TYPE
+    SYNTAX      TmnxGmplsSessionBWSignalType
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathBWSignalType specifies the bandwith 
+         associated with this GMPLS LSP path. The bit-rate and values 
+         corresponding to the signal-type are :
+            
+        Signal Type   (Bit-rate)              Value (Bytes/Sec)
+                                             (IEEE Floating point)
+       --------------  ---------------       ---------------------
+                  DS0  (0.064 Mbps)              0x45FA0000
+                  DS1  (1.544 Mbps)              0x483C7A00
+                   E1  (2.048 Mbps)              0x487A0000
+                  DS2  (6.312 Mbps)              0x4940A080
+                   E2  (8.448 Mbps)              0x4980E800
+             Ethernet  (10.00 Mbps)              0x49989680
+                   E3  (34.368 Mbps)             0x4A831A80
+                  DS3  (44.736 Mbps)             0x4AAAA780
+                STS-1  (51.84 Mbps)              0x4AC5C100
+        Fast Ethernet  (100.00 Mbps)             0x4B3EBC20
+                   E4  (139.264 Mbps)            0x4B84D000
+            FC-0 133M                            0x4B7DAD68
+           OC-3/STM-1  (155.52 Mbps)             0x4B9450C0
+            FC-0 266M                            0x4BFDAD68
+            FC-0 531M                            0x4C7D3356
+          OC-12/STM-4  (622.08 Mbps)             0x4C9450C0
+                 GigE  (1000.00 Mbps)            0x4CEE6B28
+           FC-0 1062M                            0x4CFD3356
+         OC-48/STM-16  (2488.32 Mbps)            0x4D9450C0
+        OC-192/STM-64  (9953.28 Mbps)            0x4E9450C0
+           10GigE-LAN  (10000.00 Mbps)           0x4E9502F9
+       OC-768/STM-256  (39813.12 Mbps)           0x4F9450C0
+         "
+     DEFVAL { none }
+     ::= { vRtrGmplsLspPathEntry 6 }
+
+vRtrGmplsLspPathSegProtType     OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unprotected (1),
+                    sbr (2),
+                    gr (3),
+                    sncp (4),
+                    prc (5)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathSegProtType specifies the segment
+         protection type for this GMPLS LSP path.
+         
+         When the value of vRtrGmplsLspPathSegProtType is set to 'unprotected',
+         the GMPLS LSP path is not protected against any failures.
+
+         When the value of vRtrGmplsLspPathSegProtType is set to 'sbr' (source 
+         based reroute), a path will be restored after a failure.
+         
+         When the value of vRtrGmplsLspPathSegProtType is set to 'gr' 
+         (guaranteed restoration), a shared backup is assigned to the path, and
+         recovery resources are reserved.
+         
+         When the value of vRtrGmplsLspPathSegProtType is set to 'sncp' 
+         (sub-network connection protection), it provides a 50ms protection in
+         case of a single failure.
+        
+         When the value of vRtrGmplsLspPathSegProtType is set to 'prc' (path 
+         restoration combined), it provides a 50ms protection even in the case 
+         of multiple failures."
+     DEFVAL { unprotected }
+    ::= { vRtrGmplsLspPathEntry 7 }
+
+vRtrGmplsLspPathLspId   OBJECT-TYPE
+    SYNTAX      Unsigned32 (0|1..65535)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathLspId indicates the LSP ID for the GMPLS 
+         LSP Path.
+         
+         When the value is set to '0' it indicates that there is no LSP ID 
+         assigned for this LSP Path."
+    ::= { vRtrGmplsLspPathEntry 8 }
+
+vRtrGmplsLspPathPeerNodeId   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathPeerNodeId specifies the unique peer node
+         identifier to be used for signalling the GMPLS LSP Path."
+    DEFVAL { 0 }
+    ::= { vRtrGmplsLspPathEntry 9 }
+
+vRtrGmplsLspPathRetryAttempts  OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathRetryAttempts indicates the total number of
+         signalling attempts that have been made to change the operational state
+         for this LSP Path to inService."
+    ::= { vRtrGmplsLspPathEntry 10 }
+
+vRtrGmplsLspPathFailNodeAddrType  OBJECT-TYPE
+    SYNTAX      InetAddressType 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value vRtrGmplsLspPathFailNodeAddrType indicates the address type 
+         for vRtrGmplsLspPathFailNodeAddr."
+    ::= { vRtrGmplsLspPathEntry 11 }
+ 
+vRtrGmplsLspPathFailNodeAddr  OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE (0|4))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathFailNodeAddr indicates the address of the
+         node at which this GMPLS LSP Path failed. When no failure has occurred,
+         this value is 0."
+    ::= { vRtrGmplsLspPathEntry 12 }
+ 
+vRtrGmplsLspPathFailCode    OBJECT-TYPE
+    SYNTAX      TmnxGmplsLspPathFailCode
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathFailCode indicates the reason for which
+         this GMPLS LSP Path failed. A value of 0 indicates that no failure has
+         occurred."
+    ::= { vRtrGmplsLspPathEntry 13 }
+ 
+vRtrGmplsLspPathNextRetryIn OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathNextRetryIn indicates the time remaining
+         in seconds before the next retry for this GMPLS LSP Path is attempted."
+    ::= { vRtrGmplsLspPathEntry 14 }
+ 
+vRtrGmplsLspPathTimeoutIn   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathTimeoutIn indicates the amount of time in
+         seconds the software waits for an LSP Path to come up after
+         sending out the initial PATH message. If the timer expires
+         and the LSP path is not operationally up, it is torn down and the LSP
+         retry timer is started to schedule a new retry cycle."
+    ::= { vRtrGmplsLspPathEntry 15 }
+
+vRtrGmplsLspPathARHopListIndex  OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..65535)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathARHopListIndex indicates the primary index 
+         into the vRtrGmplsARHopTable identifying the actual hop list recorded 
+         for the LSP Path. 
+         
+         A value of 0 implies that there is no recorded hop list associated with
+         this LSP path."
+    ::= { vRtrGmplsLspPathEntry 16 }
+
+vRtrGmplsLspPathLastOperChange OBJECT-TYPE
+    SYNTAX      TimeInterval 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsLspPathLastOperChange indicates the time interval
+         which has elapsed since the GMPLS LSP Path's operational state last 
+         changed."
+    ::= { vRtrGmplsLspPathEntry 17 }
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Tunnel Group Table
+-- ----------------------------------------------------------------------------
+
+tmnxGmplsTunGrpTableLastChanged  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpTableLastChanged indicates the time, since system
+         startup, when tmnxGmplsTunGrpEntry last changed configuration."
+    ::= { tmnxGmplsObjs 14 }
+
+tmnxGmplsTunGrpTable         OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TmnxGmplsTunGrpEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpTable consists of the GMPLS Tunnel
+         Group configuration information."
+    ::= { tmnxGmplsObjs 15 }
+
+tmnxGmplsTunGrpEntry         OBJECT-TYPE
+    SYNTAX      TmnxGmplsTunGrpEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpEntry contains information pertaining to an
+         individual GMPLS Tunnel Group.
+
+         Rows in this table are created and destroyed using the
+         tmnxGmplsTunGrpRowStatus object.
+
+         A corresponding row in the tmnxPortTable will exist for each row in
+         this table, based on tmnxGmplsTunGrpIfIndex.
+
+         The tmnxPortEntry corresponding to this entry manages the
+         administration, description, MAC address and other port related
+         configuration."
+    INDEX       { tmnxGmplsTunGrpId }
+    ::= { tmnxGmplsTunGrpTable 1 }
+
+TmnxGmplsTunGrpEntry             ::= SEQUENCE {
+    tmnxGmplsTunGrpId                Unsigned32,
+    tmnxGmplsTunGrpRowStatus         RowStatus,
+    tmnxGmplsTunGrpLastChanged       TimeStamp,
+    tmnxGmplsTunGrpType              INTEGER,
+    tmnxGmplsTunGrpMode              INTEGER,
+    tmnxGmplsTunGrpFarEndAddrType    InetAddressType,
+    tmnxGmplsTunGrpFarEndAddress     InetAddress,
+    tmnxGmplsTunGrpIfIndex           TmnxPortID,
+    tmnxGmplsTunGrpActiveMembers     TmnxGmplsTunGrpMemberList,
+    tmnxGmplsTunGrpMemberThreshold   Unsigned32
+}
+
+tmnxGmplsTunGrpId                OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..1024)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpId specifies a unique identifier for this
+         GMPLS Tunnel Group.
+
+         tmnxGmplsTunGrpId and tmnxEthTunnelIndex share the same number space
+         and must be unique. For example, if a GMPLS Tunnel Group exists with
+         tmnxGmplsTunGrpId = 1, an Ethernet Tunnel cannot be created with
+         tmnxEthTunnelIndex = 1."
+    ::= { tmnxGmplsTunGrpEntry 1 }
+
+tmnxGmplsTunGrpRowStatus         OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpRowStatus specifies the row status. It
+         allows the creation and deletion of rows in tmnxGmplsTunGrpTable.
+
+         A corresponding row in the tmnxPortTable is created by the system when
+         a tmnxGmplsTunGrpRowStatus value of 'createAndGo (4)' is issued on a
+         new row in the tmnxGmplsTunGrpTable. The corresponding row in the
+         tmnxPortTable will be destroyed by the system when the
+         tmnxGmplsTunGrpRowStatus value of 'destroy (6)' is issued."
+    ::= { tmnxGmplsTunGrpEntry 2 }
+
+tmnxGmplsTunGrpLastChanged       OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpLastChanged indicates the time, since
+         system startup, that the configuration of this GMPLS Tunnel Group was
+         created or modified."
+    ::= { tmnxGmplsTunGrpEntry 3 }
+
+tmnxGmplsTunGrpType              OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    headEnd (1),
+                    tailEnd (2)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpType specifies the GMPLS Tunnel Group type.
+
+         Code points:
+         headEnd (1) - the head end of the GMPLS tunnel group (ingress node
+                       endpoint)
+         tailEnd (2) - the tail end of the GMPLS tunnel group (egress node
+                       endpoint)"
+    DEFVAL      { headEnd }
+    ::= { tmnxGmplsTunGrpEntry 4 }
+
+tmnxGmplsTunGrpMode              OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    activeStandby (1),
+                    loadSharing   (2)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMode specifies the mode of the GMPLS Tunnel
+         Group.
+
+         Code points:
+         activeStandby (1) - only 1 member can be configured, with
+                             tmnxGmplsTunGrpMemberId = 1
+                           - the member gLSP can be either unprotected (with
+                             only working-path) or protected (working-path and
+                             protection-path)
+                           - only one member path can be active at a time
+         loadSharing   (2) - maximum of 16 members can be configured
+                           - the member gLSP must be unprotected (with only
+                             working-path)
+                           - multiple member paths can be active at a time"
+    DEFVAL      { loadSharing }
+    ::= { tmnxGmplsTunGrpEntry 5 }
+
+tmnxGmplsTunGrpFarEndAddrType    OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpFarEndAddrType specifies the address type
+         of tmnxGmplsTunGrpFarEndAddress."
+    DEFVAL      { unknown }
+    ::= { tmnxGmplsTunGrpEntry 6 }
+
+tmnxGmplsTunGrpFarEndAddress     OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(0|4|16))
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpFarEndAddress specifies the far-end address
+         of this GMPLS Tunnel Group.
+
+         If the value of tmnxGmplsTunGrpType is 'head-end(1)', this object
+         represents the address of the receiver.
+
+         If the value of tmnxGmplsTunGrpType is 'tail-end(1)', this object
+         represents the address of the sender."
+    DEFVAL      { ''H }
+    ::= { tmnxGmplsTunGrpEntry 7 }
+
+tmnxGmplsTunGrpIfIndex           OBJECT-TYPE
+    SYNTAX      TmnxPortID
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpIfIndex indicates the tmnxPortPortID
+         for the GMPLS Tunnel Group."
+    ::= { tmnxGmplsTunGrpEntry 8 }
+
+tmnxGmplsTunGrpActiveMembers     OBJECT-TYPE
+    SYNTAX      TmnxGmplsTunGrpMemberList
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpActiveMembers indicates which members are
+         actively receiving and transmitting data for this GMPLS Tunnel
+         Group."
+    ::= { tmnxGmplsTunGrpEntry 9 }
+
+tmnxGmplsTunGrpMemberThreshold OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..15)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberThreshold specifies the threshold
+         for the GMPLS Tunnel Group. This object is only valid when
+         tmnxGmplsTunGrpMode is set to 'loadSharing (2)'.
+
+         When a member's operational state changes and the number of operational
+         members is less than or equal to tmnxGmplsTunGrpMemberThreshold, the
+         GMPLS Tunnel Group is set operationally down.
+
+         When the number of operational members become greater than
+         tmnxGmplsTunGrpMemberThreshold, the GMPLS Tunnel Group is set
+         operationally up.
+
+         The value of zero specifies to bring the GMPLS Tunnel Group
+         operationally down only when all members are operationally down, and
+         bring the GMPLS Tunnel Group operationally up when at least one
+         member is operationally up."
+    DEFVAL      { 0 }
+    ::= { tmnxGmplsTunGrpEntry 10 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Tunnel Group Member
+-- Table
+-- ----------------------------------------------------------------------------
+
+tmnxGmplsTunGrpMemTblLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpMemTblLastChanged indicates the time, since system
+         startup, when tmnxGmplsTunGrpMemberEntry last changed configuration."
+    ::= { tmnxGmplsObjs 16 }
+
+tmnxGmplsTunGrpMemberTable       OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TmnxGmplsTunGrpMemberEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpMemberTable consists of the members associated with
+         the corresponding tmnxGmplsTunGrpEntry."
+    ::= { tmnxGmplsObjs 17 }
+
+tmnxGmplsTunGrpMemberEntry       OBJECT-TYPE
+    SYNTAX      TmnxGmplsTunGrpMemberEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpMemberEntry contains information pertaining to an
+         individual member interface associated with a
+         tmnxGmplsTunGrpEntry.
+
+         Rows in this table are created and destroyed using the
+         tmnxGmplsTunGrpMemberRowStatus object."
+    INDEX { tmnxGmplsTunGrpId, tmnxGmplsTunGrpMemberId }
+    ::= { tmnxGmplsTunGrpMemberTable 1 }
+
+TmnxGmplsTunGrpMemberEntry       ::= SEQUENCE {
+    tmnxGmplsTunGrpMemberId          Unsigned32,
+    tmnxGmplsTunGrpMemberRowStatus   RowStatus,
+    tmnxGmplsTunGrpMemberLastChanged TimeStamp,
+    tmnxGmplsTunGrpMemberAdminStatus TmnxAdminState,
+    tmnxGmplsTunGrpMemberOperStatus  TmnxOperState,
+    tmnxGmplsTunGrpMemberGlspSesName TItemDescription,
+    tmnxGmplsTunGrpMemberRsnDnFlgs   BITS,
+    tmnxGmplsTunGrpMemberWpIfIndex   TmnxPortID,
+    tmnxGmplsTunGrpMemberPpIfIndex   TmnxPortID
+}
+
+tmnxGmplsTunGrpMemberId          OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..16)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberId specifies a unique identifier
+         for this member in the given GMPLS Tunnel Group.
+
+         When the value of tmnxGmplsTunGrpMode is 'activeStandby (1)', only a
+         value of 1 is supported for this object."
+    ::= { tmnxGmplsTunGrpMemberEntry 1 }
+
+tmnxGmplsTunGrpMemberRowStatus   OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The tmnxGmplsTunGrpMemberRowStatus controls the creation and deletion
+         of rows in the tmnxGmplsTunGrpMemberTable."
+    ::= { tmnxGmplsTunGrpMemberEntry 2 }
+
+tmnxGmplsTunGrpMemberLastChanged OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberLastChanged indicates the time, since
+         system startup, that the configuration of this member was created or
+         modified."
+    ::= { tmnxGmplsTunGrpMemberEntry 3 }
+
+tmnxGmplsTunGrpMemberAdminStatus OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberAdminStatus specifies the
+         administrative status of this member."
+    DEFVAL      { outOfService }
+    ::= { tmnxGmplsTunGrpMemberEntry 4 }
+
+tmnxGmplsTunGrpMemberOperStatus  OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberOperStatus indicates the operational
+         status of this member."
+    ::= { tmnxGmplsTunGrpMemberEntry 5 }
+
+tmnxGmplsTunGrpMemberGlspSesName OBJECT-TYPE
+    SYNTAX      TItemDescription
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberGlspSesName specifies the GMPLS
+         LSP working path's session name of this member.
+
+         This object is only valid for LSPs where the vRtrGmplsLspPathType is
+         set to 'working (1)'."
+    DEFVAL      { ''H }
+    ::= { tmnxGmplsTunGrpMemberEntry 6 }
+
+tmnxGmplsTunGrpMemberRsnDnFlgs   OBJECT-TYPE
+    SYNTAX      BITS {
+                    unknown      (0),
+                    adminDn      (1),
+                    wpLspDn      (2),
+                    wpPortDn     (3),
+                    wpPortNoRsrc (4),
+                    ppLspDn      (5),
+                    ppPortDn     (6),
+                    ppPortNoRsrc (7)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberRsnDnFlgs indicates the reason(s) why
+         this member is operationally down.
+
+         The recognized BIT values are:
+             unknown      (0) - unspecified or unknown
+             adminDn      (1) - the member or related GMPLS tunnel group is
+                                administratively down
+             wpLspDn      (2) - the associated working LSP path is operationally
+                                down
+             wpPortDn     (3) - the DB link port associated with the working
+                                LSP path is operationally down
+             wpPortNoRsrc (4) - the DB link port associated with the working LSP
+                                path does not have enough resources to support
+                                the services over the logical port of the GMPLS
+                                tunnel group
+             ppLspDn      (5) - the associated protect LSP path is operationally
+                                down
+             ppPortDn     (6) - the DB link port associated with the protect LSP
+                                path is operationally down
+             ppPortNoRsrc (7) - the DB link port associated with the protect LSP
+                                path does not have enough resources to support
+                                the services over the logical port of the GMPLS
+                                tunnel group"
+    ::= { tmnxGmplsTunGrpMemberEntry 7 }
+
+tmnxGmplsTunGrpMemberWpIfIndex   OBJECT-TYPE
+    SYNTAX      TmnxPortID
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberWpIfIndex indicates the
+         tmnxPortPortID for the working path of the member."
+    ::= { tmnxGmplsTunGrpMemberEntry 8 }
+
+tmnxGmplsTunGrpMemberPpIfIndex   OBJECT-TYPE
+    SYNTAX      TmnxPortID
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxGmplsTunGrpMemberPpIfIndex indicates the
+         tmnxPortPortID for the protect path of the member.
+
+         This object is only valid for GMPLS tunnel groups with
+         tmnxGmplsTunGrpMode set to 'activeStandby (2)'."
+    ::= { tmnxGmplsTunGrpMemberEntry 9 }
+
+-- ----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) TE-Link Table
+-- ----------------------------------------------------------------------------
+
+vRtrGmplsTeLinkTblLastChanged   OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsTeLinkTblLastChanged indicates the sysUpTime at 
+         the time of the last modification to vRtrGmplsTeLinkTable by adding, 
+         deleting an entry or change to a writable object in the table.
+
+         If no changes were made to the table since the last 
+         re-initialization of the local network management subsystem, 
+         then this object contains a zero value."
+    ::= { tmnxGmplsObjs 18 }
+
+vRtrGmplsTeLinkTable    OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsTeLinkEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsTeLinkTable is used to indicate entry for each Traffic 
+         Engineering (TE) Link configured for a virtual router in the system."
+    ::= { tmnxGmplsObjs 19 }
+
+vRtrGmplsTeLinkEntry OBJECT-TYPE
+    SYNTAX      VRtrGmplsTeLinkEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry in vRtrGmplsTeLinkEntry represents a TE link on a given
+         virtual router in the system. Entries can be created and deleted via 
+         SNMP SET operations."
+    INDEX{
+            vRtrID,
+            tmnxLmpVRtrTeLinkId     
+          }
+    ::= { vRtrGmplsTeLinkTable 1 }
+
+VRtrGmplsTeLinkEntry    ::= SEQUENCE {
+    vRtrGmplsTeLinkRowStatus        RowStatus,
+    vRtrGmplsTeLinkLastChanged      TimeStamp,
+    vRtrGmplsTeLinkAdminState       TmnxAdminState,
+    vRtrGmplsTeLinkOperState        TmnxOperState
+    }
+
+vRtrGmplsTeLinkRowStatus    OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsTeLinkRowStatus specifies the row status used 
+         for creation, deletion, or control of vRtrGmplsTeLinkTable entries."
+    ::= { vRtrGmplsTeLinkEntry 1 }
+
+vRtrGmplsTeLinkLastChanged  OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsTeLinkLastChanged indicates the sysUpTime when 
+         this row was last modified."
+    ::= { vRtrGmplsTeLinkEntry 2 }
+
+vRtrGmplsTeLinkAdminState   OBJECT-TYPE
+    SYNTAX      TmnxAdminState
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsTeLinkAdminState specifies the administrative
+         state of this TE link."
+    DEFVAL { outOfService }
+    ::= { vRtrGmplsTeLinkEntry 3 }
+
+vRtrGmplsTeLinkOperState   OBJECT-TYPE
+    SYNTAX      TmnxOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsTeLinkOperState indicates the operational state
+         of this TE link."
+    ::= { vRtrGmplsTeLinkEntry 4 }
+
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Exclude SRLG Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsLspPathExSrlgTblLastCh OBJECT-TYPE
+   SYNTAX      TimeStamp
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+       "The value of the object vRtrGmplsLspPathExSrlgTblLastCh indicates the 
+        time of the last change to any row of vRtrGmplsLspPathExclSrlgTable."
+   ::= { tmnxGmplsObjs 20 }
+
+vRtrGmplsLspPathExclSrlgTable   OBJECT-TYPE
+    SYNTAX     SEQUENCE OF VRtrGmplsLspPathExclSrlgEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The vRtrGmplsLspPathExclSrlgTable table contains the Exclude SRLG 
+         groups that are mapped to this GMPLS Lsp Path."
+    ::= { tmnxGmplsObjs 21 }
+
+vRtrGmplsLspPathExclSrlgEntry   OBJECT-TYPE
+    SYNTAX     VRtrGmplsLspPathExclSrlgEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "Each row entry represents a mapping between Gmpls LSP Path and an 
+         SRLG Group."
+    INDEX {
+            vRtrID,
+            vRtrGmplsLspIndex,
+            vRtrGmplsLspPathType,
+            vRtrGmplsPathIndex,
+            IMPLIED tmnxSrlgGrpName
+        }
+    ::= { vRtrGmplsLspPathExclSrlgTable 1 }
+
+VRtrGmplsLspPathExclSrlgEntry ::= SEQUENCE {
+    vRtrGmplsLspPathExclSrlgRowStat RowStatus
+   }
+
+vRtrGmplsLspPathExclSrlgRowStat OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object vRtrGmplsLspPathExclSrlgRowStat specifies the
+         Row status of this table row. This object is used to create or
+         delete rows in this table."
+    ::= { vRtrGmplsLspPathExclSrlgEntry 1 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Instance Statistics Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsGeneralStatTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsGeneralStatEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsGeneralStatTable contains statistics for a GMPLS protocol
+         instance within a virtual router."
+    ::= { tmnxGmplsObjs 22 }
+
+vRtrGmplsGeneralStatEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsGeneralStatEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents a collection of statistics for an instance
+         of the GMPLS protocol running within a virtual router.
+         
+         Entries cannot be created and deleted via SNMP SET operations."
+    AUGMENTS { vRtrGmplsGeneralEntry }
+    ::= { vRtrGmplsGeneralStatTable 1 }
+
+VRtrGmplsGeneralStatEntry ::= SEQUENCE {
+        vRtrGmplsGenWorkingPathOriginate    Gauge32,
+        vRtrGmplsGenWorkingPathTerminate    Gauge32,
+        vRtrGmplsGenProtectPathOriginate    Gauge32,
+        vRtrGmplsGenProtectPathTerminate    Gauge32
+    }
+
+vRtrGmplsGenWorkingPathOriginate    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenWorkingPathOriginate indicates the number of 
+         working path LSPs that originate at this virtual router."
+    ::= { vRtrGmplsGeneralStatEntry 1 }
+
+vRtrGmplsGenWorkingPathTerminate    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenWorkingPathTerminate indicates the number of 
+         working path LSPs that terminate at this virtual router."
+    ::= { vRtrGmplsGeneralStatEntry 2 }
+
+vRtrGmplsGenProtectPathOriginate    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenProtectPathOriginate indicates the number of 
+         protect path LSPs that originate at this virtual router."
+    ::= { vRtrGmplsGeneralStatEntry 3 }
+
+vRtrGmplsGenProtectPathTerminate    OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsGenProtectPathTerminate indicates the number of 
+         protect path LSPs that terminate at this virtual router."
+    ::= { vRtrGmplsGeneralStatEntry 4 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Peer Statistics Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsPeerStatTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsPeerStatEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsPeerStatTable contains statistics for GMPLS peer."
+    ::= { tmnxGmplsObjs 23 }
+
+vRtrGmplsPeerStatEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsPeerStatEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents a collection of statistics for GMPLS peer.
+         
+         Entries cannot be created and deleted via SNMP SET operations."
+    AUGMENTS { vRtrGmplsPeerEntry }
+    ::= { vRtrGmplsPeerStatTable 1 }
+
+VRtrGmplsPeerStatEntry  ::= SEQUENCE {
+        vRtrGmplsPeerRxBadPktCount      Counter64,
+        vRtrGmplsPeerTxHello            Counter64,
+        vRtrGmplsPeerRxHello            Counter64,
+        vRtrGmplsPeerTxPaths            Counter64,
+        vRtrGmplsPeerRxPaths            Counter64,
+        vRtrGmplsPeerTxPathErr          Counter64,
+        vRtrGmplsPeerRxPathErr          Counter64,
+        vRtrGmplsPeerTxPathTear         Counter64,
+        vRtrGmplsPeerRxPathTear         Counter64,
+        vRtrGmplsPeerTxResv             Counter64,
+        vRtrGmplsPeerRxResv             Counter64,
+        vRtrGmplsPeerTxResvErr          Counter64,
+        vRtrGmplsPeerRxResvErr          Counter64,
+        vRtrGmplsPeerTxResvTear         Counter64,
+        vRtrGmplsPeerRxResvTear         Counter64,
+        vRtrGmplsPeerTxNotify           Counter64,
+        vRtrGmplsPeerRxNotify           Counter64,
+        vRtrGmplsPeerTxSRefreshes       Counter64,
+        vRtrGmplsPeerRxSRefreshes       Counter64,
+        vRtrGmplsPeerTxAcks             Counter64,
+        vRtrGmplsPeerRxAcks             Counter64
+    }
+
+vRtrGmplsPeerRxBadPktCount  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxBadPktCount indicates the total number of 
+         bad packets received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 1 }
+
+vRtrGmplsPeerTxHello    OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxHello indicates the number of RSVP HELLO 
+         messages transmitted by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 2 }
+
+vRtrGmplsPeerRxHello    OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxHello indicates the number of RSVP HELLO 
+         messages received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 3 }
+
+vRtrGmplsPeerTxPaths    OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxPaths indicates the total number of RSVP 
+         PATH messages that have been transmitted by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 4 }
+
+vRtrGmplsPeerRxPaths    OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxPaths indicates the total number of RSVP 
+         PATH messages that have been received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 5 }
+
+vRtrGmplsPeerTxPathErr  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxPathErr indicates the total number of RSVP
+         PATH ERROR messages that have been transmitted by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 6 }
+
+vRtrGmplsPeerRxPathErr  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxPathErr indicates the total number of RSVP
+         PATH ERROR messages that have been received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 7 }
+
+vRtrGmplsPeerTxPathTear  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxPathTear indicates the number of RSVP PATH
+         TEAR messages that have been transmitted from this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 8 }
+
+vRtrGmplsPeerRxPathTear OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxPathTear indicates the number of RSVP PATH
+         TEAR messages that have been received from this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 9 }
+
+vRtrGmplsPeerTxResv OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxResv indicates the total number of 
+         RSVP RESV messages that have been transmitted by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 10 }
+
+vRtrGmplsPeerRxResv OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxResv indicates the total number of 
+         RSVP RESV messages that have been received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 11 }
+
+vRtrGmplsPeerTxResvErr  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxResvErr indicates the total number of 
+         RSVP RESV ERROR messages that have been transmiited by this GMPLS 
+         Peer."
+    ::= { vRtrGmplsPeerStatEntry 12 }
+
+vRtrGmplsPeerRxResvErr  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxResvErr indicates the total number of 
+         RSVP RESV ERROR messages that have been received on this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 13 }
+
+vRtrGmplsPeerTxResvTear OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxResvTear indicates the total number of RSVP 
+         RESV TEAR messages that have been transmitted from this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 14 }
+
+vRtrGmplsPeerRxResvTear OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxResvTear indicates the total number of RSVP 
+         RESV TEAR messages that have been received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 15 }
+
+vRtrGmplsPeerTxNotify   OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxNotify indicates the total number of
+         notification messages transmitted by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 16 }
+
+vRtrGmplsPeerRxNotify   OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxNotify indicates the total number of
+         notification messages received by this GMPLS Peer."
+    ::= { vRtrGmplsPeerStatEntry 17 }
+
+vRtrGmplsPeerTxSRefreshes   OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxSRefreshes indicates the total number of 
+         summary refresh, SREFRESH, messages that have been transmitted on this
+         RSVP interface."
+    ::= { vRtrGmplsPeerStatEntry 18 }
+
+vRtrGmplsPeerRxSRefreshes   OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxSRefreshes indicates the total number of 
+         summary refresh, SREFRESH, messages that have been received on this
+         RSVP interface."
+    ::= { vRtrGmplsPeerStatEntry 19 }
+
+vRtrGmplsPeerTxAcks OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerTxAcks indicates the total number of RSVP 
+         ACK messages that have been transmitted on this RSVP interface when 
+         refresh reduction is enabled."
+    ::= { vRtrGmplsPeerStatEntry 20 }
+    
+vRtrGmplsPeerRxAcks OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsPeerRxAcks indicates the total number of RSVP 
+         ACK messages that have been received on this RSVP interface when 
+         refresh reduction is enabled."
+    ::= { vRtrGmplsPeerStatEntry 21 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Session Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsSessionTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsSessionEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsSessionTable contains objects for reporting sessions
+         associated with the GMPLS protocol running in a virtual router."
+    ::= { tmnxGmplsObjs 24 }
+
+vRtrGmplsSessionEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsSessionEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents a session of the GMPLS protocol within a 
+         virtual router.
+         
+         Entries in this table cannot be created and deleted via SNMP SET 
+         operations. An entry in this table is created be the agent when the
+         GMPLS protocol establishes a session. The entry is destroyed when the
+         GMPLS session is removed."
+    INDEX { vRtrID,
+            vRtrGmplsSessEndpointType,
+            vRtrGmplsSessEndpoint,
+            vRtrGmplsLspIndex,
+            vRtrGmplsSessExtTunnelIdType,
+            vRtrGmplsSessExtTunnelId,
+            vRtrGmplsSessSenderType,
+            vRtrGmplsSessSender, 
+            vRtrGmplsLspPathLspId }
+    ::= { vRtrGmplsSessionTable 1 }
+
+VRtrGmplsSessionEntry   ::= SEQUENCE {
+        vRtrGmplsSessEndpointType       InetAddressType,
+        vRtrGmplsSessEndpoint           InetAddress,
+        vRtrGmplsSessExtTunnelIdType    InetAddressType,
+        vRtrGmplsSessExtTunnelId        InetAddress,
+        vRtrGmplsSessSenderType         InetAddressType,
+        vRtrGmplsSessSender             InetAddress,
+        vRtrGmplsSessionOperState       TmnxGmplsSessionOperState,
+        vRtrGmplsSessionIsProtectPath   TruthValue,
+        vRtrGmplsSessionType            INTEGER,
+        vRtrGmplsSessionName            DisplayString,
+        vRtrGmplsSessionSetupPriority   Unsigned32,
+        vRtrGmplsSessionHoldPriority    Unsigned32,
+        vRtrGmplsSessUpStreamPeer       Unsigned32,
+        vRtrGmplsSessUpStreamTeLink     Unsigned32,
+        vRtrGmplsSessUpStreamDbLinkId   Unsigned32,
+        vRtrGmplsSessUpStrmRmtDbLinkId  Unsigned32,
+        vRtrGmplsSessDnStreamPeer       Unsigned32,
+        vRtrGmplsSessDnStreamTeLink     Unsigned32,
+        vRtrGmplsSessDnStreamDbLinkId   Unsigned32,
+        vRtrGmplsSessDnStrmRmtDbLinkId  Unsigned32,
+        vRtrGmplsSessLastOperChange     TimeInterval,
+        vRtrGmplsSessDataPathIsActive   TruthValue,
+        vRtrGmplsSessionOperBandwidth   TmnxGmplsSessionBWSignalType,
+        vRtrGmplsSessionHoldTimerRem    Unsigned32,
+        vRtrGmplsSessionNumWP           Unsigned32
+}
+
+vRtrGmplsSessEndpointType  OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessEndpointType indicates the address type of
+         vRtrGmplsSessEndpoint"
+    ::= { vRtrGmplsSessionEntry 1 }
+
+vRtrGmplsSessEndpoint  OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(4|16))
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessEndpoint indicates the endpoint address of 
+         of this session."
+    ::= { vRtrGmplsSessionEntry 2 }
+
+vRtrGmplsSessExtTunnelIdType    OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessExtTunnelIdType indicates the address type
+         of vRtrGmplsSessExtTunnelId."
+    ::= { vRtrGmplsSessionEntry 3 }
+
+vRtrGmplsSessExtTunnelId  OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(4|16))
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessExtTunnelId indicates the extended tunnel id
+         for this session."
+    ::= { vRtrGmplsSessionEntry 4 }
+
+vRtrGmplsSessSenderType OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessSenderType indicates the address type of
+         vRtrGmplsSessSender."
+    ::= { vRtrGmplsSessionEntry 5 }
+
+vRtrGmplsSessSender OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(4|16))
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessSender indicates the sender address for this
+         session."
+    ::= { vRtrGmplsSessionEntry 6 }
+
+vRtrGmplsSessionOperState   OBJECT-TYPE
+    SYNTAX      TmnxGmplsSessionOperState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionOperState indicates the current 
+         operational state of this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 7 }
+
+vRtrGmplsSessionIsProtectPath   OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionIsProtectPath when 'true' indicates that 
+         this session is for a protecting LSP."
+    ::= { vRtrGmplsSessionEntry 8 }
+
+vRtrGmplsSessionType    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unknown (1),
+                    originating (2),
+                    terminating (3)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionType indicates this node's position in 
+         the path of this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 9 }
+
+vRtrGmplsSessionName    OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE(0..80))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionName indicates the session name for this
+         GMPLS session."
+    ::= { vRtrGmplsSessionEntry 10 }
+
+vRtrGmplsSessionSetupPriority   OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..7)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionSetupPriority indicates the setup
+         priority used for this GMPLS session.
+
+         A value of zero (0) is the highest priority and a value of seven (7) 
+         is the lowest priority."
+    ::= { vRtrGmplsSessionEntry 11 }
+
+vRtrGmplsSessionHoldPriority    OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..7)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionHoldPriority indicates the hold priority
+         to be used for this GMPLS session.
+         
+         A value of zero (0) is the highest priority and a value of seven (7) 
+         is the lowest priority."
+    ::= { vRtrGmplsSessionEntry 12 }
+
+vRtrGmplsSessUpStreamPeer    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessUpStreamPeer indicates the upstream peer 
+         node-id for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 13 }
+
+vRtrGmplsSessUpStreamTeLink    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessUpStreamTeLink indicates the upstream TE link
+         ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 14 }
+
+vRtrGmplsSessUpStreamDbLinkId    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessUpStreamDbLinkId indicates the upstream 
+         data-bearer link ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 15 }
+
+vRtrGmplsSessUpStrmRmtDbLinkId    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessUpStrmRmtDbLinkId indicates the upstream
+        remote data-bearer link ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 16 }
+
+vRtrGmplsSessDnStreamPeer    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessDnStreamPeer indicates the downstream peer
+         node-id for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 17 }
+
+vRtrGmplsSessDnStreamTeLink    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessDnStreamTeLink indicates the downstream
+         TE link ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 18 }
+
+vRtrGmplsSessDnStreamDbLinkId    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessDnStreamDbLinkId indicates the downstream
+         data-bearer link ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 19 }
+
+vRtrGmplsSessDnStrmRmtDbLinkId    OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessDnStrmRmtDbLinkId indicates the downstream
+         remote data-bearer link ID for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 20 }
+
+vRtrGmplsSessLastOperChange OBJECT-TYPE
+    SYNTAX      TimeInterval
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessLastOperChange indicates the time interval
+         which has elapsed since the GMPLS session's operational state last 
+         changed."
+    ::= { vRtrGmplsSessionEntry 21 }
+
+vRtrGmplsSessDataPathIsActive   OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessDataPathIsActive indicates whether the data
+         path is active or not for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 22 }
+
+vRtrGmplsSessionOperBandwidth   OBJECT-TYPE
+    SYNTAX      TmnxGmplsSessionBWSignalType
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionOperBandwidth indicates the operational
+         bandwidth for this GMPLS session."
+    ::= { vRtrGmplsSessionEntry 23 }
+
+vRtrGmplsSessionHoldTimerRem OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "seconds"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionHoldTimerRem indicates the time remaining, 
+         in seconds that the software waits after a session for this peer to 
+         become operationally up before activating data transmission on the 
+         session."
+    ::= { vRtrGmplsSessionEntry 24 }
+
+vRtrGmplsSessionNumWP OBJECT-TYPE
+    SYNTAX      Unsigned32 
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessionNumWP indicates the total number of 
+         working path associated with this protect path.
+
+         The value of vRtrGmplsSessionNumWP is valid only when 
+         vRtrGmplsSessionIsProtectPath is set to 'true', otherwise the value 
+         of vRtrGmplsSessionNumWP is 0."
+    ::= { vRtrGmplsSessionEntry 25 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Session Stats Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsSessionStatsTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsSessionStatsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsSessionStatsTable contains objects for reporting 
+         statistics for the sessions associated with the GMPLS protocol running
+         in a virtual router."
+    ::= { tmnxGmplsObjs 25 }
+
+vRtrGmplsSessionStatsEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsSessionStatsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents statistics for a session of the GMPLS 
+         protocol within a virtual router.
+         
+         Entries in this table cannot be created and deleted via SNMP SET 
+         operations. An entry in this table is created be the agent when the
+         GMPLS protocol establishes a session. The entry is destroyed when the
+         GMPLS session is removed."
+    AUGMENTS { vRtrGmplsSessionEntry }
+    ::= { vRtrGmplsSessionStatsTable 1 }
+
+VRtrGmplsSessionStatsEntry  ::= SEQUENCE {
+        vRtrGmplsSessStatRxPaths        Counter64,
+        vRtrGmplsSessStatTxPaths        Counter64,
+        vRtrGmplsSessStatRxResv         Counter64,
+        vRtrGmplsSessStatTxResv         Counter64,
+        vRtrGmplsSessStatSummRxPath     Counter64,
+        vRtrGmplsSessStatSummTxPath     Counter64,
+        vRtrGmplsSessStatSummRxResv     Counter64,
+        vRtrGmplsSessStatSummTxResv     Counter64
+    }
+
+vRtrGmplsSessStatRxPaths    OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatRxPaths indicates the total number of
+         PATH messages received for this GMPLS sessio."
+    ::= { vRtrGmplsSessionStatsEntry 1 }
+
+vRtrGmplsSessStatTxPaths  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatTxPaths indicates the total number of
+         PATH messages transmitted for this GMPLS sessio."
+    ::= { vRtrGmplsSessionStatsEntry 2 }
+ 
+vRtrGmplsSessStatRxResv OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatRxResv indicates the total number of
+         RESV messages received for this GMPLS session."
+    ::= { vRtrGmplsSessionStatsEntry 3 }
+
+vRtrGmplsSessStatTxResv  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatTxResv indicates the total number of
+         RESV messages transmitted for this GMPLS session."
+    ::= { vRtrGmplsSessionStatsEntry 4 }
+ 
+vRtrGmplsSessStatSummRxPath  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatSummRxPath indicates the total number
+         of summary PATH messages received."
+    ::= { vRtrGmplsSessionStatsEntry 5 }
+ 
+vRtrGmplsSessStatSummTxPath  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatSummTxPath indicates the total number
+         of summary PATH messages transmitted."
+    ::= { vRtrGmplsSessionStatsEntry 6 }
+ 
+vRtrGmplsSessStatSummRxResv  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSessStatSummRxResv indicates the total number
+         of summary RESV messages received."
+    ::= { vRtrGmplsSessionStatsEntry 7 }
+ 
+vRtrGmplsSessStatSummTxResv  OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+            "The value of vRtrGmplsSessStatSummTxResv indicates the total 
+             number of summary RESV messages transmitted."
+    ::= { vRtrGmplsSessionStatsEntry 8 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) AR Hop Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsARHopTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsARHopEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsARHopTable contains objects for actual-hop associated with
+         the GMPLS protocol running in a virtual router."
+    ::= { tmnxGmplsObjs 26 }
+
+vRtrGmplsARHopEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsARHopEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents actual-hop information for the GMPLS 
+         protocol within a virtual router.
+         
+         Entries in this table cannot be created and deleted via SNMP SET 
+         operations. An entry in this table is created be the agent when the
+         GMPLS protocol establishes a session. The entry is destroyed when the
+         GMPLS session is removed."
+    INDEX { vRtrID, 
+            vRtrGmplsARHopListIndex,
+            vRtrGmplsARHopIndex }
+    ::= { vRtrGmplsARHopTable 1 }
+
+VRtrGmplsARHopEntry  ::= SEQUENCE {
+        vRtrGmplsARHopListIndex         Unsigned32,
+        vRtrGmplsARHopIndex             Unsigned32,
+        vRtrGmplsARHopAddrType          TmnxGmplsARHopAddressType,
+        vRtrGmplsARHopRouterId          TmnxGmplsRouterId,
+        vRtrGmplsARHopUnnumIfId         Unsigned32,
+        vRtrGmplsARHopSrlgListIndex     Unsigned32,
+        vRtrGmplsARHopDownStreamLabel   Unsigned32,
+        vRtrGmplsARHopUpStreamLabel     Unsigned32
+    }
+
+vRtrGmplsARHopListIndex OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopListIndex indicates the list index 
+         identifying the actual hop list for this GMPLS."
+    ::= { vRtrGmplsARHopEntry 1 }
+
+vRtrGmplsARHopIndex OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopIndex indicates the secondary index 
+         identifying the particular hop within the list."
+    ::= { vRtrGmplsARHopEntry 2 }
+
+vRtrGmplsARHopAddrType  OBJECT-TYPE
+    SYNTAX      TmnxGmplsARHopAddressType
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopAddrType indicates the address type of
+         the particular hop."
+    ::= { vRtrGmplsARHopEntry 3 }
+
+vRtrGmplsARHopRouterId  OBJECT-TYPE
+    SYNTAX      TmnxGmplsRouterId
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopRouterId indicates the router ID for the 
+         node corresponding to this hop."
+    ::= { vRtrGmplsARHopEntry 4 }
+
+vRtrGmplsARHopUnnumIfId OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopUnnumIfId indicates the unnumbered 
+         interface identifier of this hop.
+
+         This object should be used in conjunction with vRtrGmplsARHopRouterId 
+         which would contain the Router ID for the unnumbered interface."
+    ::= { vRtrGmplsARHopEntry 5 }
+
+vRtrGmplsARHopSrlgListIndex OBJECT-TYPE
+    SYNTAX      Unsigned32(0|1..65535)      
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopSrlgListIndex indicates the SRLG list index
+         corresponding to this hop."
+    ::= { vRtrGmplsARHopEntry 6 }
+
+vRtrGmplsARHopDownStreamLabel   OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopDownStreamLabel indicates the downstream
+         label for this hop."
+    ::= { vRtrGmplsARHopEntry 7 }
+
+vRtrGmplsARHopUpStreamLabel OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsARHopUpStreamLabel indicates the upstream
+         label for this hop."
+    ::= { vRtrGmplsARHopEntry 8 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) SRLG List Table
+-- -------------------------------------------------------------------------
+
+vRtrGmplsSrlgListTable  OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsSrlgListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsSrlgListTable contains objects for an srlg-list associated
+         with the GMPLS protocol running in a virtual router."
+    ::= { tmnxGmplsObjs 27 }
+
+vRtrGmplsSrlgListEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsSrlgListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each row entry represents SRLG List information for the GMPLS 
+         protocol within a virtual router.
+         
+         Entries in this table cannot be created and deleted via SNMP SET 
+         operations. An entry in this table is created be the agent when the
+         GMPLS protocol establishes a session. The entry is destroyed when the
+         GMPLS session is removed."
+    INDEX { vRtrID, 
+            vRtrGmplsSrlgListIndex,
+            vRtrGmplsSrlgValue }
+    ::= { vRtrGmplsSrlgListTable 1 }
+
+VRtrGmplsSrlgListEntry  ::= SEQUENCE {
+        vRtrGmplsSrlgListIndex         Unsigned32,
+        vRtrGmplsSrlgValue             Unsigned32,
+        vRtrGmplsSrlgListType          INTEGER
+    }
+
+vRtrGmplsSrlgListIndex OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSrlgListIndex indicates the SRLG list index 
+         for this GMPLS."
+    ::= { vRtrGmplsSrlgListEntry 1 }
+
+vRtrGmplsSrlgValue OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSrlgValue indicates the SRLG value for this row."
+    ::= { vRtrGmplsSrlgListEntry 2 }
+
+vRtrGmplsSrlgListType   OBJECT-TYPE
+    SYNTAX      INTEGER {
+                record (1)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsSrlgListType indicates the type of SRLG list.
+         
+         If the value for vRtrGmplsSrlgListType is record(1), the SRLG list 
+         represents the SRLGs recorded for a hop in the Record Route 
+         Object(RRO)."
+    ::= { vRtrGmplsSrlgListEntry 3 }
+
+----------------------------------------------------------------------------
+-- The Generalized Multi-Protocol Labeled Switch (GMPLS) Command Configuration
+-- Objects
+--
+tmnxGmplsCmdObjs            OBJECT IDENTIFIER ::= { tmnxGmplsObjs   28 }
+
+-- -------------------------------------------------------------------------
+--
+-- TIMETRA-GMPLS-MIB Action Objects
+--
+
+-- GMPLS Command Table
+vRtrGmplsCommandTable   OBJECT-TYPE
+    SYNTAX      SEQUENCE OF VRtrGmplsCommandEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsCommandTable maintains the one-shot action commands
+         that effect the state of the GMPLS operation."
+    REFERENCE "RFC 4872"
+    ::= { tmnxGmplsCmdObjs 1 }
+
+vRtrGmplsCommandEntry   OBJECT-TYPE
+    SYNTAX      VRtrGmplsCommandEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The vRtrGmplsCommandEntry contains the command available to execute
+         on an existing GMPLS LSP Path."
+    AUGMENTS { vRtrGmplsLspPathEntry }
+    ::= { vRtrGmplsCommandTable 1 }
+
+VRtrGmplsCommandEntry   ::= SEQUENCE {
+    vRtrGmplsCommandSwitch  INTEGER
+}
+
+vRtrGmplsCommandSwitch   OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    noCmd (0),
+                    clearLockout (1),
+                    forceSwitch (2),
+                    manualSwitch (3),
+                    revertSwitch (4),
+                    lockout (5)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of vRtrGmplsCommandSwitch specifies the switch command to
+         initiate on GMPLS LSP Path.
+
+         When read, this object returns the last command written or 'noCmd (0)'
+         if no command has been written to this GMPLS LSP Path since
+         initialization. The return of the last command written does not imply
+         that this command is currently in effect. This request may be preempted
+         by a higher priority local or remote request.
+
+         The value 'noCmd (0)' may not be used in a write command.
+
+         The value 'clearLockout (1)' clears the lockout on the protection path.
+
+         The value of 'forceSwitch (2)' switches the active path to the
+         protection path.
+
+         The value of 'manualSwitch (3)' switches the active path to the
+         protection path.
+
+         The value of 'revertSwitch (4)' switches the active path to the
+         working path.
+
+         The value of 'lockout (5)' prevents the working path from switching to
+         the protection path."
+    DEFVAL { noCmd }
+    ::= { vRtrGmplsCommandEntry 1 }
+--
+-- Notification Information
+--
+
+vRtrGmplsLspPathStateChange  NOTIFICATION-TYPE
+    OBJECTS {
+        vRtrGmplsLspPathAdminState,
+        vRtrGmplsLspPathOperState
+    }
+    STATUS current 
+    DESCRIPTION
+        "A vRtrGmplsLspPathStateChange notification is generated when the 
+         operational state of the GMPLS LSP Path changes."
+    ::= { tmnxGmplsNotifications 1 }
+    
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-GMPLS-MIB Compliance Statements
+--
+
+tmnxGmplsV13v0Compliance  MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "The compliance statement for management of origin validation
+        instances on Nokia SROS series systems release 13.0."
+    MODULE  -- this module
+    MANDATORY-GROUPS {
+        tmnxGmplsGeneralV13v0Group,
+        tmnxGmplsPathV13v0Group,
+        tmnxGmplsPeerV13v0Group,
+        tmnxGmplsLspV13v0Group,
+        tmnxGmplsTunGrpV13v0Group,
+        tmnxGmplsTunGrpMemberV13v0Group,
+        tmnxGmplsTeLinkV13v0Group,
+        tmnxGmplsSessionV13v0Group,
+        tmnxGmplsARHopV13v0Group,
+        tmnxGmplsNotificationV13v0Group,
+        tmnxGmplsCommandGroup,
+        tmnxGmplsV13v1Group
+    }
+    ::= { tmnxGmplsCompliances 1 }  
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-GMPLS-MIB Group Statements
+--
+
+-- SROS series systems release 13.0 groups
+tmnxGmplsGeneralV13v0Group OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsGeneralTblLastChanged,
+        vRtrGmplsGeneralRowStatus,
+        vRtrGmplsGeneralLastChange,
+        vRtrGmplsGenGrHlprMaxRcvryTm,
+        vRtrGmplsGenGrHlprMaxRstrtTm,
+        vRtrGmplsGeneralAdminState,
+        vRtrGmplsGeneralOperState,
+        vRtrGmplsGeneralKeepMultiplier,
+        vRtrGmplsGeneralRefreshTime,
+        vRtrGmplsGenRapidRetransmitTime,
+        vRtrGmplsGenRapidRetryLimit,
+        vRtrGmplsGenLspInitRetryTimeout,
+        vRtrGmplsGenOperDownReasonCode,
+        vRtrGmplsGeneralLocalNodeId,
+        vRtrGmplsGenWorkingPathOriginate,
+        vRtrGmplsGenWorkingPathTerminate,
+        vRtrGmplsGenProtectPathOriginate,
+        vRtrGmplsGenProtectPathTerminate
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting the management of GMPLS
+        protocol in version 13.0 of Nokia SROS series systems."
+    ::= { tmnxGmplsGroups 1 }
+
+tmnxGmplsPathV13v0Group OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsPathIndexNext,
+        vRtrGmplsPathTblLastChanged,
+        vRtrGmplsPathRowStatus,
+        vRtrGmplsPathLastChange,
+        vRtrGmplsPathName,
+        vRtrGmplsPathAdminState,
+        vRtrGmplsPathOperState,
+        vRtrGmplsPathHopTblLastChanged,
+        vRtrGmplsPathHopRowStatus,
+        vRtrGmplsPathHopLastChange,
+        vRtrGmplsPathHopNodeId,
+        vRtrGmplsPathHopTeLinkId,
+        vRtrGmplsPathHopStrictOrLoose
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS Path objects on
+         Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 2 }
+
+tmnxGmplsPeerV13v0Group  OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsPeerTblLastChanged,
+        vRtrGmplsPeerRowStatus,
+        vRtrGmplsPeerLastChange,
+        vRtrGmplsPeerHelloInterval,
+        vRtrGmplsPeerAdminState,
+        vRtrGmplsPeerOperState,
+        vRtrGmplsPeerOperDownReason,
+        vRtrGmplsPeerLastOperChange,
+        vRtrGmplsPeerHelloState,
+        vRtrGmplsPeerSourceInstance,
+        vRtrGmplsPeerDestInstance,
+        vRtrGmplsPeerHelloTimeoutCount,
+        vRtrGmplsPeerInstMismatchCount,
+        vRtrGmplsPeerDestIpAddrType,
+        vRtrGmplsPeerDestIpAddr,
+        vRtrGmplsPeerNextHopIpAddrType,
+        vRtrGmplsPeerNextHopIpAddr,
+        vRtrGmplsPeerIfIndex,
+        vRtrGmplsPeerNHOperState,
+        vRtrGmplsPeerMTU,
+        vRtrGmplsPeerNHChangedCnt,
+        vRtrGmplsPeerGrRestartTime,
+        vRtrGmplsPeerGrRecoveryTime,
+        vRtrGmplsPeerGrInvokedCount,
+        vRtrGmplsPeerGrRestartCap,
+        vRtrGmplsPeerGrState,
+        vRtrGmplsPeerGrHelperTimeRem,
+        vRtrGmplsPeerFlags,
+        vRtrGmplsPeerSrefreshTimeRem,
+        vRtrGmplsPeerEpochNum,
+        vRtrGmplsPeerMaxMsgId,
+        vRtrGmplsPeerOutofOrderMsgs,
+        vRtrGmplsPeerRetransmittedMsgs,
+        vRtrGmplsPeerDnStreamSessCnt,
+        vRtrGmplsPeerUpStreamSessCnt,
+        vRtrGmplsPeerPathTimeouts,
+        vRtrGmplsPeerResvTimeouts,
+        vRtrGmplsPeerLspHoldTimer,
+        vRtrGmplsPeerRxBadPktCount,
+        vRtrGmplsPeerTxHello,
+        vRtrGmplsPeerRxHello,
+        vRtrGmplsPeerTxPaths,
+        vRtrGmplsPeerRxPaths,
+        vRtrGmplsPeerTxPathErr,
+        vRtrGmplsPeerRxPathErr,
+        vRtrGmplsPeerTxPathTear,
+        vRtrGmplsPeerRxPathTear,
+        vRtrGmplsPeerTxResv,
+        vRtrGmplsPeerRxResv,
+        vRtrGmplsPeerTxResvErr,
+        vRtrGmplsPeerRxResvErr,
+        vRtrGmplsPeerTxResvTear,
+        vRtrGmplsPeerRxResvTear,
+        vRtrGmplsPeerTxNotify,
+        vRtrGmplsPeerRxNotify,
+        vRtrGmplsPeerTxSRefreshes,
+        vRtrGmplsPeerRxSRefreshes,
+        vRtrGmplsPeerTxAcks,
+        vRtrGmplsPeerRxAcks
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of Peer objects for GMPLS 
+         on Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 3 }
+
+tmnxGmplsLspV13v0Group  OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsLspTblLastChanged,
+        vRtrGmplsLspRowStatus,
+        vRtrGmplsLspLastChange,
+        vRtrGmplsLspName,
+        vRtrGmplsLspType,
+        vRtrGmplsLspSwitchingType,
+        vRtrGmplsLspEncodingType,
+        vRtrGmplsLspAdminState,
+        vRtrGmplsLspOperState,
+        vRtrGmplsLspSwitchingType,
+        vRtrGmplsLspEncodingType,
+        vRtrGmplsLspGeneralizedPid,
+        vRtrGmplsLspE2EProtection,
+        vRtrGmplsLspRevertTimer,
+        vRtrGmplsLspRetryLimit,
+        vRtrGmplsLspRetryTimer,
+        vRtrGmplsLspToAddrType,
+        vRtrGmplsLspToAddr,
+        vRtrGmplsLspNumWorkingPath,
+        vRtrGmplsLspNumProtectPath,
+        vRtrGmplsLspNumWorkingPathUp,
+        vRtrGmplsLspNumProtectPathUp,
+        vRtrGmplsLspLastOperChange,
+        vRtrGmplsLspPathTblLastChanged,
+        vRtrGmplsLspPathRowStatus,
+        vRtrGmplsLspPathLastChangedTime,
+        vRtrGmplsLspPathAdminState,
+        vRtrGmplsLspPathOperState,
+        vRtrGmplsLspPathBWSignalType,
+        vRtrGmplsLspPathSegProtType,
+        vRtrGmplsLspPathLspId,
+        vRtrGmplsLspPathPeerNodeId,
+        vRtrGmplsLspPathRetryAttempts,
+        vRtrGmplsLspPathFailNodeAddrType,
+        vRtrGmplsLspPathFailNodeAddr,
+        vRtrGmplsLspPathFailCode,
+        vRtrGmplsLspPathNextRetryIn,
+        vRtrGmplsLspPathTimeoutIn,
+        vRtrGmplsLspPathARHopListIndex,
+        vRtrGmplsLspPathLastOperChange,
+        vRtrGmplsLspPathExSrlgTblLastCh,
+        vRtrGmplsLspPathExclSrlgRowStat
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of Labeled Switch Path (LSP)
+         objects for GMPLS on Nokia SROS series systems in version
+         13.0."
+    ::= { tmnxGmplsGroups 4 }
+
+tmnxGmplsTunGrpV13v0Group        OBJECT-GROUP
+    OBJECTS {
+        tmnxGmplsTunGrpTableLastChanged,
+        tmnxGmplsTunGrpRowStatus,
+        tmnxGmplsTunGrpLastChanged,
+        tmnxGmplsTunGrpType,
+        tmnxGmplsTunGrpMode,
+        tmnxGmplsTunGrpFarEndAddrType,
+        tmnxGmplsTunGrpFarEndAddress,
+        tmnxGmplsTunGrpIfIndex,
+        tmnxGmplsTunGrpActiveMembers,
+        tmnxGmplsTunGrpMemberThreshold
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS Tunnel Group
+         objects on Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 5 }
+
+tmnxGmplsTunGrpMemberV13v0Group  OBJECT-GROUP
+    OBJECTS {
+        tmnxGmplsTunGrpMemTblLastChanged,
+        tmnxGmplsTunGrpMemberRowStatus,
+        tmnxGmplsTunGrpMemberLastChanged,
+        tmnxGmplsTunGrpMemberAdminStatus,
+        tmnxGmplsTunGrpMemberOperStatus,
+        tmnxGmplsTunGrpMemberGlspSesName,
+        tmnxGmplsTunGrpMemberRsnDnFlgs,
+        tmnxGmplsTunGrpMemberWpIfIndex,
+        tmnxGmplsTunGrpMemberPpIfIndex
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS Tunnel Group
+         Member objects on Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 6 }
+
+tmnxGmplsTeLinkV13v0Group  OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsTeLinkTblLastChanged,
+        vRtrGmplsTeLinkRowStatus,
+        vRtrGmplsTeLinkLastChanged,
+        vRtrGmplsTeLinkAdminState,
+        vRtrGmplsTeLinkOperState
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS Traffic Engineering
+        (TE) Link objects on Nokia SROS series systems in version 13.0"
+    ::= { tmnxGmplsGroups 7 }
+
+tmnxGmplsSessionV13v0Group  OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsSessionOperState,
+        vRtrGmplsSessionIsProtectPath,
+        vRtrGmplsSessionType,
+        vRtrGmplsSessionName,
+        vRtrGmplsSessionSetupPriority,
+        vRtrGmplsSessionHoldPriority,
+        vRtrGmplsSessUpStreamPeer,
+        vRtrGmplsSessUpStreamTeLink,
+        vRtrGmplsSessUpStreamDbLinkId,
+        vRtrGmplsSessUpStrmRmtDbLinkId,
+        vRtrGmplsSessDnStreamPeer,
+        vRtrGmplsSessDnStreamTeLink,
+        vRtrGmplsSessDnStreamDbLinkId,
+        vRtrGmplsSessDnStrmRmtDbLinkId,
+        vRtrGmplsSessLastOperChange,
+        vRtrGmplsSessDataPathIsActive,
+        vRtrGmplsSessionOperBandwidth,
+        vRtrGmplsSessionHoldTimerRem,
+        vRtrGmplsSessStatRxPaths,
+        vRtrGmplsSessStatTxPaths,
+        vRtrGmplsSessStatRxResv,
+        vRtrGmplsSessStatTxResv,
+        vRtrGmplsSessStatSummRxPath,
+        vRtrGmplsSessStatSummTxPath,
+        vRtrGmplsSessStatSummRxResv,
+        vRtrGmplsSessStatSummTxResv,
+        vRtrGmplsSrlgListType
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS session objects on
+         Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 8 }
+
+tmnxGmplsARHopV13v0Group    OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsARHopAddrType,
+        vRtrGmplsARHopRouterId,
+        vRtrGmplsARHopUnnumIfId,
+        vRtrGmplsARHopSrlgListIndex,
+        vRtrGmplsARHopDownStreamLabel,
+        vRtrGmplsARHopUpStreamLabel
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS actual hops on
+         Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 9 }
+
+tmnxGmplsNotificationV13v0Group NOTIFICATION-GROUP
+    NOTIFICATIONS {
+        vRtrGmplsLspPathStateChange
+    }
+    STATUS current
+    DESCRIPTION
+        "The group of notifications supporting management of objects for GMPLS 
+         on Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 10 }
+
+tmnxGmplsCommandGroup   OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsCommandSwitch
+    }
+    STATUS  current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS command switch
+         objects on Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 11 }
+
+tmnxGmplsV13v1Group  OBJECT-GROUP
+    OBJECTS {
+        vRtrGmplsSessionNumWP
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of GMPLS objects on
+         Nokia SROS series systems in version 13.0."
+    ::= { tmnxGmplsGroups 12 }    
+END
