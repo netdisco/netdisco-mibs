@@ -1,0 +1,841 @@
+TIMETRA-OES-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    SnmpAdminString                         FROM SNMP-FRAMEWORK-MIB
+
+    MODULE-IDENTITY, OBJECT-TYPE,
+    NOTIFICATION-TYPE, Unsigned32           FROM SNMPv2-SMI
+
+    MODULE-COMPLIANCE, OBJECT-GROUP,
+    NOTIFICATION-GROUP                      FROM SNMPv2-CONF
+
+    TEXTUAL-CONVENTION, 
+    DisplayString, RowStatus,
+    TruthValue, DateAndTime                 FROM SNMPv2-TC
+
+    TmnxDisplayStringURL, TmnxOperState,
+    TmnxActionType, TNamedItemOrEmpty       FROM TIMETRA-TC-MIB
+
+    tmnxSRObjs,tmnxSRConfs,
+    tmnxSRNotifyPrefix, timetraSRMIBModules FROM TIMETRA-GLOBAL-MIB
+
+    tmnxHwClass, TmnxHwIndexOrZero,
+    TmnxDeviceState                         FROM TIMETRA-CHASSIS-MIB
+
+    InetAddressPrefixLength,
+    InetAddressType, InetAddress            FROM INET-ADDRESS-MIB
+
+    ;
+
+timetraOesMIBModule              MODULE-IDENTITY
+        LAST-UPDATED "201601010000Z"
+        ORGANIZATION "Nokia"
+        CONTACT-INFO
+            "Nokia SROS Support
+             Web: http://www.nokia.com"
+        DESCRIPTION
+        "This document is the SNMP MIB module to manage and provision the
+        Optical Extension Shelf (OES) components of the Nokia SROS
+        device.
+
+        Copyright (c) 2013-2016 Nokia.  All rights reserved.
+        Reproduction of this document is authorized on the condition that
+        the foregoing copyright notice is included.
+
+        This SNMP MIB module (Specification) embodies Nokia's
+        proprietary intellectual property.  Nokia retains
+        all title and ownership in the Specification, including any
+        revisions.
+
+        Nokia grants all interested parties a non-exclusive
+        license to use and distribute an unmodified copy of this
+        Specification in connection with management of Nokia
+        products, and without fee, provided this copyright notice and
+        license appear on all copies.
+
+        This Specification is supplied 'as is', and Nokia
+        makes no warranty, either express or implied, as to the use,
+        operation, condition, or performance of the Specification."
+
+--
+-- Revision History
+--
+        REVISION                 "201601010000Z"
+        DESCRIPTION              "Rev 14.0               01 Jan 2016 00:00
+                                  14.0 release of the TIMETRA-OES-MIB."
+
+        REVISION                 "201308010000Z"
+        DESCRIPTION              "Rev 1.0                01 Aug 2013 00:00
+                                  Initial release of the TIMETRA-OES-MIB."
+
+    ::= { timetraSRMIBModules 98 }
+
+tmnxOesObjs            OBJECT IDENTIFIER ::= { tmnxSRObjs 98 }
+tmnxOesMIBNotifyPrefix OBJECT IDENTIFIER ::= { tmnxSRNotifyPrefix 98 }
+tmnxOesConformance     OBJECT IDENTIFIER ::= { tmnxSRConfs 98 }
+
+-- Object Groups in the Nokia OES MIB Module
+tmnxOesConfigObjs      OBJECT IDENTIFIER ::= { tmnxOesObjs 1 }
+tmnxOesStatObjs        OBJECT IDENTIFIER ::= { tmnxOesObjs 2 }
+tmnxOesNotifyObjs      OBJECT IDENTIFIER ::= { tmnxOesObjs 3 }
+
+-- Notification Groups in the Nokia OES MIB Module
+tmnxOesNotifications   OBJECT IDENTIFIER ::= { tmnxOesMIBNotifyPrefix 0 }
+
+-- Compliance Groups in the Nokia OES MIB module
+tmnxOesCompliances     OBJECT IDENTIFIER ::= { tmnxOesConformance 1 }
+tmnxOesGroups          OBJECT IDENTIFIER ::= { tmnxOesConformance 2 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-OES-MIB Textual Conventions
+--
+TmnxOesSWMgmtStatus        ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "TmnxOesSWMgmtStatus indicates the status of the check or the upgrade
+         of OES software."
+    SYNTAX      INTEGER {
+                    none        (0),
+                    unknown     (1),
+                    inProgress  (2),
+                    successful  (3),
+                    failed      (4),
+                    paused      (5)
+                }
+
+TmnxOesEventReason               ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "TmnxOesEventReason indicates the reason for occurrence of the event
+         it is associated with."
+    SYNTAX      OCTET STRING (SIZE(0..80))
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-OES-MIB Global Config Objects
+--
+tmnxOesCfCache                   OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    cf1 (1),
+                    cf2 (2),
+                    cf3 (3)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCfCache specifies the compact flash device
+         that holds the cache space used by OES. This cache space holds
+         OES artifacts (e.g. configuration database, software)."
+    DEFVAL { cf3 }
+    ::= { tmnxOesConfigObjs 1 }
+
+tmnxOesReboot                    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    notApplicable    (0),
+                    coldReset        (1)
+                }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesReboot specifies if the OES system will perform
+         a reboot :
+         notApplicable (0) - No action will be performed.
+         coldReset     (1) - Causes a cold reset of the OES system in which
+         the hardware and software will be reinitialized on all EC(Equipment
+         Controller) and line cards. It is a service affecting action."
+    DEFVAL { notApplicable }
+    ::= { tmnxOesConfigObjs 2 }
+
+tmnxOesSwUpgrade                 OBJECT-TYPE
+    SYNTAX      TmnxActionType
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesSwUpgrade specifies an OES software upgrade where
+         the location of the software is specified by
+         tmnxSysSwReposPrimaryLocation, tmnxSysSwReposSecondaryLocation or
+         tmnxSysSwReposTertiaryLocation. This is a service affecting upgrade."
+    DEFVAL { notApplicable }
+    ::= { tmnxOesConfigObjs 3 }
+
+tmnxOesSoftwareRepository        OBJECT-TYPE
+    SYNTAX      TNamedItemOrEmpty
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesSoftwareRepository specifies the software
+         repository to be used by OES.
+
+         An empty string indicates this object has not been configured."
+    DEFVAL  { ''H }
+    ::= { tmnxOesConfigObjs 4 }
+
+tmnxOesCtlCommsVRtrName          OBJECT-TYPE
+    SYNTAX      TNamedItemOrEmpty
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsVRtrName specifies the name of the virtual
+         router instance used in OES control communications.
+
+         An empty string indicates this object has not been configured."
+     DEFVAL     { ''H }
+    ::= { tmnxOesConfigObjs 5 }
+
+tmnxOesCtlCommsAddressType       OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsAddressType specifies the address
+         type of tmnxOesCtlCommsAddress."
+     DEFVAL     { unknown }
+    ::= { tmnxOesConfigObjs 6 }
+
+tmnxOesCtlCommsAddress           OBJECT-TYPE
+    SYNTAX      InetAddress (SIZE(0|4|16))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsAddress specifies the destination address
+         of the master OES used in OES control communications."
+     DEFVAL     { ''H }
+    ::= { tmnxOesConfigObjs 7 }
+
+tmnxOesCtlCommsTimeout           OBJECT-TYPE
+    SYNTAX      Unsigned32 (5..3600)
+    UNITS       "seconds"
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsTimeout specifies the maximum amount
+         of time, in seconds, before declaring an individual request to 
+         the OES has timeout.  Such a failed request is retried a number 
+         of times as specified by tmnxOesCtlCommsRetryLimit and the OES is 
+         declared unreachable if all retries also timeout."
+    DEFVAL { 20 }
+    ::= { tmnxOesConfigObjs 8 }
+
+tmnxOesCtlCommsRetryLimit        OBJECT-TYPE
+    SYNTAX      Unsigned32 (0..7)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsRetryLimit specifies the maximum 
+         number of times the system will retry an attempt to communicate 
+         with the OES chassis before declaring the OES as unreachable.
+         See also tmnxOesCtlCommsTimeout."
+    DEFVAL { 2 }
+    ::= { tmnxOesConfigObjs 9 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-OES-MIB Global Stat Objects
+--
+tmnxOesRunningSwImage            OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesRunningSwImage indicates the version of the
+         software image running on PSS-1830."
+    ::= { tmnxOesStatObjs 1 }
+
+tmnxOesCtlCommsStatus            OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    up   (0),
+                    down (1)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsStatus indicates the status of the
+          communication link with PSS-1830."
+    ::= { tmnxOesStatObjs 2 }
+
+tmnxOesStatus                    OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unprovisioned       (0),
+                    discovering         (1),
+                    active              (2),
+                    inactive            (3),
+                    provInProgress      (4),
+                    swUpgradeInProgress (5)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesStatus indicates the operational status of the OES:
+         unprovisioned       (0) - OES master chassis (oes-1) is not provisioned
+         discovering         (1) - OES discovery is in progress
+         active              (2) - OES is ready for operation
+         inactive            (3) - OES control communication is down
+         provInProgress      (4) - OES provisioning is in progress
+         swUpgradeInProgress (5) - OES software upgrade is in progress" 
+    ::= { tmnxOesStatObjs 3 }
+
+tmnxOesNtpStatus                 OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unknown  (1),
+                    freerun  (2),
+                    holdover (3),
+                    sync     (4)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesNtpStatus indicates the status of the Network
+         Timing Protocol (NTP) for the OES."
+    ::= { tmnxOesStatObjs 4 }
+
+tmnxOesUserPanelHwIndex          OBJECT-TYPE
+    SYNTAX      TmnxHwIndexOrZero
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesUserPanelHwIndex indicates the hardware index of
+         the OES user panel entry in the tmnxHwTable. This value will be 0
+         when the master OES chassis is not configured."
+    ::= { tmnxOesStatObjs 5 }
+
+tmnxOesUserPanelState            OBJECT-TYPE
+    SYNTAX      TmnxDeviceState
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesUserPanelState indicates the OES USERPNL's
+         operational state."
+    ::= { tmnxOesStatObjs 6 }
+
+tmnxOesCtlCommsDownReason        OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    unknownReason     (0),
+                    adminReboot       (1),
+                    noResponse        (2),
+                    configFailed      (3),
+                    invalidSystem     (4),
+                    invalidSoftware   (5),
+                    oesUnreachable    (6),
+                    adminEcSwitchOver (7),
+                    ctlCommsUnprov    (8),
+                    clearActiveEcCard (9)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesCtlCommsDownReason indicates the reason for the
+         last time a loss of communication with the OES was detected.
+
+         Values:
+             unknownReason     (0) - control communication failure for unknown
+                                     reason
+             adminReboot       (1) - OES is rebooted via tmnxOesReboot
+             noResponse        (2) - no response was received for SNMP packet
+             configFailed      (3) - a SNMP SET, GET or GETNEXT during a
+                                     configuration action did not complete
+                                     correctly
+             invalidSystem     (4) - the OES sysObjectID does not contain the
+                                     object identifier for a supported system
+             invalidSoftware   (5) - the OES software version is below the
+                                     minimum supported version
+             oesUnreachable    (6) - OES is unreachable          
+             adminEcSwitchOver (7) - OES EC activity switch via
+                                     tmnxOesChassisActivitySwitch
+             ctlCommsUnprov    (8) - missing or incomplete OES control
+                                     communications provisioning
+             clearActiveEcCard (9) - OES active EC clear via tmnxOesCardReboot"
+    ::= { tmnxOesStatObjs 7 }
+
+tmnxOesSwUpgradeLastStatus       OBJECT-TYPE
+    SYNTAX      TmnxOesSWMgmtStatus
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesSwUpgradeLastStatus indicates the status of the
+         last OES software upgrade command tmnxOesSwUpgrade."
+    ::= { tmnxOesStatObjs 10 }
+
+tmnxOesSwUpgradeLastTime         OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesSwUpgradeLastTime indicates the time when the last
+         OES software upgrade tmnxOesSwUpgrade
+         was initiated."
+    ::= { tmnxOesStatObjs 11 }
+
+tmnxOesSwUpgradeCleanupLstStatus OBJECT-TYPE
+    SYNTAX      TmnxOesSWMgmtStatus
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesSwUpgradeCleanupLstStatus indicates the status of
+         the most recent OES software upgrade cleanup process initiated by
+         the system due to upgrade failure on the remote node."
+    ::= { tmnxOesStatObjs 12 }
+
+tmnxOesSwUpgradeLastCompleteTime OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+    "The value of tmnxOesSwUpgradeLastCompleteTime indicates the time when
+    the last OES software upgrade tmnxOesSwUpgrade was completed."
+    ::= { tmnxOesStatObjs 13 }
+    
+tmnxOesExpectedSwImage             OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesExpectedSwImage indicates the version of the
+         software image expected on PSS-1830."
+    ::= { tmnxOesStatObjs 14 }    
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--  TIMETRA-OES-MIB Notification Objects 
+--
+tmnxOesEventReason               OBJECT-TYPE
+    SYNTAX      TmnxOesEventReason
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "The value of tmnxOesEventReason indicates the reason for which
+         the notification is being triggered."
+    ::= { tmnxOesNotifyObjs 1 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--  TIMETRA-OES-MIB Notifications 
+--
+tmnxOesCtlCommsDown              NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass,
+        tmnxOesCtlCommsDownReason
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesCtlCommsDown notification is generated when the
+         active CPM can't reach the OES master chassis.
+
+         [EFFECT] The OES can't be managed by the router.
+
+         [RECOVERY] Ensure that all control communications ports between the 
+         router and the OES master chassis are correctly connected and test 
+         the cables."
+    ::= { tmnxOesNotifications 1 }
+
+tmnxOesCtlCommsUp                NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesCtlCommsUp notification is generated when the 
+         active CPM can reach the OES master chassis.
+
+         [EFFECT] The OES can be managed by the router.
+
+         [RECOVERY] No recovery required."
+    ::= { tmnxOesNotifications 2 }
+
+tmnxOesDbSyncFailure             NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "The active Equipment Controller is unable to synchronize its database 
+         with the inactive Equipment Controller. 
+
+         [CAUSE] The tmnxOesDbSyncFailure notification may be raised under the 
+         following conditions:
+           1) An incorrectly seated Equipment Controller;
+           2) The software versions on the active and inactive Equipment 
+              Controllers are not compatible;
+           3) A hardware problem with one or both controllers.
+
+         [EFFECT] The OES does not have redundancy protection between the two 
+         Equipment Controller cards.  
+
+         [RECOVERY] Proceed as follows to clear the Database Synchronization 
+         Failed alarm:
+           1) Remove the Equipment Controller with the condition and examine 
+              the connector on the back of the card for damage, including bent 
+              or broken pins;
+           2) Examine the connector on the backplane for damage. If there is 
+              damage to the backplane of the shelf, contact your service 
+              representative;
+           3) Re-insert the Equipment Controller into its original slot and 
+              allow the card to initialize;
+           4) Repeat Step 2) through Step 4) for the second Equipment 
+              Controller;
+           5) Replace the Equipment Controller with the alarm condition with a 
+              new unit. If the condition is not cleared, replace the second 
+              Equipment Controller with a new unit.
+         Follow the return and repair process to return the faulty card to 
+         an authorized repair center for replacement."
+    ::= { tmnxOesNotifications 3 }
+
+tmnxOesDbSyncFailureClear        NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesDbSyncFailureClear notification is generated when 
+         the active Equipment Controller is able to synchronize its database 
+         with the inactive Equipment Controller.
+
+         [EFFECT] The active and inactive Equipment Controller's databases 
+         are now synchronized.
+
+         [RECOVERY] No recovery required."
+    ::= { tmnxOesNotifications 4 }
+
+tmnxOesDbInvalid                 NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesDbInvalid notification may be raised under the 
+         following conditions:
+           1) During initial installation, if the OES is not properly 
+              commissioned;
+           2) The serial number in the database does not match that of the OES 
+              either because the controller was replaced or the alarm card was 
+              replaced;
+           3) A downgrade of OES software has occurred;
+           4) Equipment Controller is removed/reseated during a system process, 
+              causing file corruption;
+           5) The database audit failed indicating some type of corruption of 
+              the database.
+
+         [EFFECT] The OES is not in a normal operating mode. It does not have 
+         the correct configuration and the state of its cards is unpredictable.
+         As a result, the OES will not boot normally and not all commands are 
+         allowed.
+
+         [RECOVERY] A database corruption on the OES requires that the OES be 
+         re-commissioned. The correct database is held in the host system so 
+         it will be restored to the shelf once the existing database is cleared 
+         and the host re-establishes communication with the OES."
+    ::= { tmnxOesNotifications 5 }
+
+tmnxOesDbInvalidClear            NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesDbInvalidClear notification is generated when the
+         active Equipment Controller previously under tmnxOesDbInvalid 
+         condition now contains a valid database.
+
+         [EFFECT] The OES active Equipment Controller's database is now valid.
+
+         [RECOVERY] No recovery is required."
+    ::= { tmnxOesNotifications 6 }
+
+tmnxOesDbUnsync                  NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesDbUnsync notification is generated when the active 
+         and standby Equipment Controllers are not in sync.
+
+         [EFFECT] The OES does not have redundancy protection between the two 
+         Equipment Controller cards. If a switchover were to occur, then the 
+         database of the newly active controller might not reflect the latest 
+         configuration.
+
+         [RECOVERY] Proceed as follows to clear the Database Unsynchronization 
+         alarm:
+           1) Perform a warm reset of the standby controller;
+           2) If step 1 does not clear the alarm condition, then contact the 
+              next level of technical support for help."
+    ::= { tmnxOesNotifications 7 }
+
+tmnxOesDbUnsyncClear             NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesDbUnsyncClear notification is generated when the
+         previously out of sync database is now synchronized between the 
+         active and standby Equipment Controller cards.
+
+         [EFFECT] The database is synchronized between the active and standby 
+         Equipment Controller cards.
+
+         [RECOVERY] No recovery is required."
+    ::= { tmnxOesNotifications 8 }
+
+    
+tmnxOesSwUpgdFailed              NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxOesEventReason,
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesSwUpgdFailed notification is generated when a 
+         failure occurs in upgrading a component in the OES. This notification 
+         is applicable at the NE (Network Element) level and/or the card level. 
+        
+         [EFFECT] The component is not upgraded.
+          
+         [RECOVERY]
+         1) Determine the reason the upgrade failed by checking the
+            tmnxOesEventReason. First clear the condition indicated by the
+            reason in the object tmnxOesEventReason.
+         2) Perform a soft reset on the card that failed to upgrade and try
+            the upgrade procedure again.
+         3) Perform a hard reset on the card that failed to upgrade and try
+            the upgrade procedure again.
+         4) Remove and re-insert the card that failed to upgrade and try the
+            upgrade procedure again.
+         5) Replace the card that failed to upgrade and try the upgrade
+            procedure again.
+         6) Inform the Nokia technical support team."
+    ::= { tmnxOesNotifications 9 }      
+    
+tmnxOesNtpOutOfSync              NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesNtpOutOfSync notification is generated when NTP time 
+         on the OES is not synchronized to the host router. The host router must 
+         have NTP enabled and have recovered time from external time sources 
+         (NTP to PTP). If there is no NTP time source for the router, it will 
+         not serve time to the OES. In addition, once the NE is power cycled, 
+         it takes approximately 20-30 minutes to initialize.  Thereafter, time 
+         synchronization will be completed, with a maximum delay time of 2-3 
+         minutes.
+        
+         [EFFECT] Timestamp of each event occurring on the OES may not be 
+         exactly aligned with the host router.
+        
+         [RECOVERY] Ensure the host router has NTP configured and a reachable 
+         time source.  Allow 40 minutes for the condition to clear."
+    ::= { tmnxOesNotifications 10 }     
+
+tmnxOesNtpSync                   NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesNtpSync notification is generated when NTP on the 
+         OES is synchronized to the host router. The host router is serving 
+         acceptable time toward the OES and the OES has completed initial 
+         acquisition of time from the host.
+        
+         [EFFECT] None.
+        
+         [RECOVERY] No recovery is required."
+    ::= { tmnxOesNotifications 11 }
+    
+tmnxOesSwBelowMinRev             NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass,
+        tmnxOesRunningSwImage,
+        tmnxOesExpectedSwImage
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesSwBelowMinRev notification is generated when the 
+         version of the running OES software image is below the minimum expected 
+         version.
+        
+         [EFFECT] The OES may not be operating as expected.
+        
+         [RECOVERY] Upgrade the OES to a software image that is equal to or 
+         greater than the minimum expected version."
+    ::= { tmnxOesNotifications 12 }
+
+tmnxOesFirmwareCondition         NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass,
+        tmnxOesEventReason
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesFirmwareCondition notification is generated when the 
+         firmware on the card has a condition that needs to be notified to 
+         network administrator. The value of tmnxOesEventReason object specifies 
+         the reason.
+         
+         [EFFECT] Not all the features may be available.
+         
+         [RECOVERY] Perform a hard reset of the card. If the condition 
+         persists, then contact Nokia customer support."
+    ::= { tmnxOesNotifications 13 }
+
+tmnxOesCfgFailNoMemory           NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE] The tmnxOesCfgFailNoMemory notification is generated when a 
+         request to obtain dynamic memory to download a configuration to the 
+         OES has failed.  
+        
+         [EFFECT] The configuration is not active in the OES.
+        
+         [RECOVERY] This may be a temporary issue and the condition may clear 
+         on its own. If the event is raised periodically, then there is a 
+         permanent memory issue and the support organization should be 
+         informed."
+    ::= { tmnxOesNotifications 14 }    
+
+tmnxOesCfgBlocked                NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass
+    }
+    STATUS      current
+    DESCRIPTION
+    "[CAUSE]  This event tmnxOesCfgBlocked notification is generated when a 
+    configuration being made in the OES is blocked. 
+    
+    [EFFECT] The configuration is not active in the OES.
+    
+    [RECOVERY] 
+    One possible reason for this configuration failure is if there is a card
+    present in the OES that is a supported card type but the router was not yet
+    aware of its presence. This condition should clear as soon as the router
+    becomes aware of the card. A second reason is when the supported card is
+    present and is misaligned with the configuration (e.g. card present in slot
+    3 and 4, yet configuration is oes-1/2 where the width of card is two slots).
+    This condition cannot be cleared automatically as the card has to be moved
+    to the correct slot (or the configuration has to be removed for card oes-1/3
+    via cli command ). A third reason is when there is an unsupported card type
+    in the OES that the router cannot manage. This condition cannot be cleared
+    automatically and the OES will need to be recommissioned to clear the
+    condition.
+    Note: services on cards not impacted by the unknown card type are not
+    affected."
+    ::= { tmnxOesNotifications 15 }
+
+tmnxOesSwUpgdCleanupFailed       NOTIFICATION-TYPE
+    OBJECTS {
+        tmnxHwClass,
+        tmnxOesEventReason
+    }
+    STATUS      current
+    DESCRIPTION
+        "[CAUSE]  This event tmnxOesSwUpgdCleanupFailed notification is 
+         generated when the operation to clean-up a failed software upgrade 
+         fails. The reason for the failure is specified in the object 
+         tmnxOesEventReason.
+        
+         [EFFECT] The OES software revision cannot be determined and so
+         the operational state of the respective OES or OES card is 
+         indeterminate.
+        
+         [RECOVERY] 
+         1) Determine the reason for the upgrade failure from 
+         tmnxOesEventReason in the notification.  First clear the 
+         condition indicated by the reason.  
+         2) Re-try the upgrade procedure.
+         3) Contact the Nokia technical support team if the re-try does
+         not fix the problem."
+    ::= { tmnxOesNotifications 16 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-OES-MIB Compliance Statements
+--
+tmnxOesV14v0Compliance           MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for management of OES
+         on Nokia SROS series systems for release 14.0."
+    MODULE -- this module
+        MANDATORY-GROUPS {
+            tmnxOesGroupV14v0,
+            tmnxOesNotificationGroupV14v0,
+            tmnxOesNotifyObjsGroupV14v0
+        }
+    ::= { tmnxOesCompliances 1 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+--  TIMETRA-OES-MIB Group Statements
+--
+tmnxOesV14v0Groups OBJECT IDENTIFIER ::= { tmnxOesGroups 1 }
+
+tmnxOesGroupV14v0                OBJECT-GROUP
+    OBJECTS {
+        tmnxOesCfCache,
+        tmnxOesRunningSwImage,
+        tmnxOesCtlCommsStatus,
+        tmnxOesReboot,
+        tmnxOesStatus,
+        tmnxOesUserPanelHwIndex,
+        tmnxOesUserPanelState,
+        tmnxOesCtlCommsDownReason,
+        tmnxOesNtpStatus,
+        tmnxOesCtlCommsVRtrName,
+        tmnxOesCtlCommsAddressType,
+        tmnxOesCtlCommsAddress,
+        tmnxOesCtlCommsTimeout,
+        tmnxOesCtlCommsRetryLimit,
+        tmnxOesSwUpgrade,
+        tmnxOesSwUpgradeLastStatus,
+        tmnxOesSwUpgradeLastTime,
+        tmnxOesSwUpgradeCleanupLstStatus,
+        tmnxOesSoftwareRepository,
+        tmnxOesSwUpgradeLastCompleteTime,
+        tmnxOesExpectedSwImage
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of objects supporting management of OES on
+         Nokia SROS series systems in release 14.0."
+    ::= { tmnxOesV14v0Groups 1 }
+
+tmnxOesNotificationGroupV14v0    NOTIFICATION-GROUP
+    NOTIFICATIONS {
+        tmnxOesCtlCommsDown,
+        tmnxOesCtlCommsUp,
+        tmnxOesDbSyncFailure,
+        tmnxOesDbSyncFailureClear,
+        tmnxOesDbInvalid,
+        tmnxOesDbInvalidClear,
+        tmnxOesDbUnsync,
+        tmnxOesDbUnsyncClear,
+        tmnxOesSwUpgdCleanupFailed,
+        tmnxOesSwUpgdFailed,
+        tmnxOesNtpOutOfSync,  
+        tmnxOesNtpSync,  
+        tmnxOesSwBelowMinRev,
+        tmnxOesCfgFailNoMemory,  
+        tmnxOesCfgBlocked, 
+        tmnxOesFirmwareCondition
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of notifications supporting management of OES on
+         Nokia SROS series systems in release 14.0."
+    ::= { tmnxOesV14v0Groups 2 }
+
+tmnxOesNotifyObjsGroupV14v0      OBJECT-GROUP
+    OBJECTS {
+        tmnxOesEventReason
+    }
+    STATUS      current
+    DESCRIPTION
+        "The group of notification objects supporting management of OES on
+         Nokia SROS series systems in release 14.0."
+    ::= { tmnxOesV14v0Groups 3 }
+
+END

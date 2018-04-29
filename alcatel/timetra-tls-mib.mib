@@ -1,0 +1,670 @@
+TIMETRA-TLS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE,
+    NOTIFICATION-TYPE, Unsigned32, Integer32,
+    Counter32, Gauge32, IpAddress             FROM SNMPv2-SMI
+
+    MODULE-COMPLIANCE, OBJECT-GROUP,
+    NOTIFICATION-GROUP                        FROM SNMPv2-CONF
+
+    TEXTUAL-CONVENTION, RowStatus,
+    TruthValue, TimeStamp, DisplayString      FROM SNMPv2-TC
+
+    timetraSRMIBModules, tmnxSRObjs,
+    tmnxSRNotifyPrefix, tmnxSRConfs           FROM TIMETRA-GLOBAL-MIB
+
+    TNamedItem,
+    TmnxAdminState, TmnxOperState,
+    TNamedItemOrEmpty
+                                              FROM TIMETRA-TC-MIB
+
+    ;
+
+timetraTlsMIBModule MODULE-IDENTITY
+        LAST-UPDATED "201510050000Z"
+        ORGANIZATION "Nokia"
+        CONTACT-INFO
+            "Nokia SROS Support
+             Web: http://www.nokia.com"
+        DESCRIPTION
+             "This document is the SNMP MIB module for the Nokia SROS
+             implementation of the TLS protocol.
+
+             Copyright 2008-2016 Nokia. All rights reserved.
+             Reproduction of  this document is authorized  on the condition
+             that the foregoing copyright notice is included.
+
+             This SNMP MIB module (Specification) embodies Nokia's
+             proprietary  intellectual  property. Nokia retains all
+             title and ownership in the Specification, including any revisions.
+
+             Nokia grants all interested parties a non-exclusive
+             license to use and distribute an unmodified copy of this
+             Specification in connection with management of Nokia
+             products, and without fee, provided this copyright notice and
+             license appear on all copies.
+
+             This  Specification  is supplied `as is', and Nokia
+             makes no warranty, either express or implied, as to the use,
+             operation, condition, or performance of the Specification."
+
+--
+--  Revision History
+--
+
+        REVISION        "201510050000Z"
+        DESCRIPTION     "Rev 0.1                05 Oct 2015 00:00
+                         Initial version of the TIMETRA-TLS-MIB."
+
+        ::= { timetraSRMIBModules 107 }
+
+tmnxTlsObjs             OBJECT IDENTIFIER ::= { tmnxSRObjs         107 }
+tmnxTlsConformance      OBJECT IDENTIFIER ::= { tmnxSRConfs        107 }
+  tmnxTlsCompliances    OBJECT IDENTIFIER ::= { tmnxTlsConformance   1 }
+  tmnxTlsGroups         OBJECT IDENTIFIER ::= { tmnxTlsConformance   2 }
+tmnxTlsNotifyPrefix     OBJECT IDENTIFIER ::= { tmnxSRNotifyPrefix 107 }
+  tmnxTlsNotifications  OBJECT IDENTIFIER ::= { tmnxTlsNotifyPrefix  0 }
+
+-- Object Groups in the Nokia TLS MIB Module
+tmnxTlsScalarObjs       OBJECT IDENTIFIER ::= { tmnxTlsObjs 1 }
+tmnxTlsConfigObjs       OBJECT IDENTIFIER ::= { tmnxTlsObjs 2 }
+tmnxTlsStatistics       OBJECT IDENTIFIER ::= { tmnxTlsObjs 3 }
+tmnxTlsNotifyObjects    OBJECT IDENTIFIER ::= { tmnxTlsObjs 10 }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+-- Textual conventions
+--
+
+TTlsCipherSuiteCode ::= TEXTUAL-CONVENTION
+    STATUS current
+    DESCRIPTION
+        "This textual convention specifies the cipher suite codes supported by
+         the SR-OS which are used in the TLS Client Hello and
+         TLS Server Hello messages.
+
+         A cipher suite defines a cipher specification supported in a given
+         version of the TLS protocol. You can find a detailed description of
+         cipher suite codes and cipher suite definitions for the TLS protocol
+         respectively in appendix A.5 and C of RFC 5246"
+    SYNTAX INTEGER {
+        tlsRsaWithNullMd5 (1),                 -- { 0x00,0x01 }
+        tlsRsaWithNullSha (2),                 -- { 0x00,0x02 }
+        tlsRsaWithNullSha256 (59),             -- { 0x00,0x3B }
+        tlsRsaWith3desEdeCbcSha (10),          -- { 0x00,0x0A }
+        tlsRsaWithAes128CbcSha (47),           -- { 0x00,0x2F }
+        tlsRsaWithAes256CbcSha (53),           -- { 0x00,0x35 }
+        tlsRsaWithAes128CbcSha256 (60),        -- { 0x00,0x3C }
+        tlsRsaWithAes256CbcSha256 (61)         -- { 0x00,0x3D }
+    }
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+--
+-- SCALARS
+--
+tmnxTlsConfigTimeStamps OBJECT IDENTIFIER ::= { tmnxTlsScalarObjs 1 }
+
+--
+-- TABLES
+--
+
+
+-- --------------------------------------------------------
+-- tTlsTrustAnchorProfTable
+-- --------------------------------------------------------
+tTlsTrustAnchorProfTblLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorProfTblLastChgd indicates the
+         sysUpTime at the time of the last modification to
+         tTlsTrustAnchorProfTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last
+         re-initialization of the local network management subsystem,
+         then this object contains a zero value."
+    ::= { tmnxTlsConfigTimeStamps 4 }
+
+tTlsTrustAnchorProfTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TTlsTrustAnchorProfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsTrustAnchorProfTable stores configuration and status
+         information related to TLS trust anchor profiles."
+    ::= { tmnxTlsConfigObjs 5 }
+
+tTlsTrustAnchorProfEntry OBJECT-TYPE
+    SYNTAX      TTlsTrustAnchorProfEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsTrustAnchorProfEntry is an entry (conceptual row) in the
+         tTlsTrustAnchorProfTable. Each entry contains information pertaining
+         to a TLS trust anchor profile.
+
+         Entries in this table can be created and deleted via
+         SNMP SET operations to tTlsTrustAnchorProfRowStatus."
+    INDEX { tTlsTrustAnchorProfName }
+    ::= { tTlsTrustAnchorProfTable 1 }
+
+TTlsTrustAnchorProfEntry ::= SEQUENCE {
+    tTlsTrustAnchorProfName         TNamedItem,
+    tTlsTrustAnchorProfLastChgd     TimeStamp,
+    tTlsTrustAnchorProfRowStatus    RowStatus,
+    tTlsTrustAnchorCAProfDown       INTEGER
+}
+
+tTlsTrustAnchorProfName OBJECT-TYPE
+    SYNTAX      TNamedItem
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorProfName specifies
+         a TLS trust anchor profile name."
+    ::= { tTlsTrustAnchorProfEntry 1 }
+
+tTlsTrustAnchorProfLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorProfLastChgd indicates the
+         sysUpTime at the time of the most recent management-initiated change
+         to this entry."
+    ::= { tTlsTrustAnchorProfEntry 2 }
+
+tTlsTrustAnchorProfRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorProfRowStatus specifies
+         the status of the conceptual row in tTlsTrustAnchorProfTable.
+
+         Rows are created and destroyed by SNMP SET operations on this
+         object.
+
+         Only values 'active(1)', 'createAndGo(4)' and 'destroy(6)'
+         are supported."
+    ::= { tTlsTrustAnchorProfEntry 3 }
+
+tTlsTrustAnchorCAProfDown OBJECT-TYPE
+    SYNTAX      INTEGER
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorCAProfDown indicates the total
+         number of trusted CA-profiles (Certificate-Authority) not operational
+         in the trust anchor profile."
+    ::= { tTlsTrustAnchorProfEntry 4 }
+
+-- --------------------------------------------------------
+-- tTlsTrustAnchorsTable
+-- --------------------------------------------------------
+tTlsTrustAnchorsTblLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorsTblLastChgd indicates the
+         sysUpTime at the time of the last modification to
+         tTlsTrustAnchorsTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last
+         re-initialization of the local network management subsystem,
+         then this object contains a zero value."
+    ::= { tmnxTlsConfigTimeStamps 5 }
+
+tTlsTrustAnchorsTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TTlsTrustAnchorsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsTrustAnchorsTable maintains configuration of trust anchor
+         CA profiles for TLS trust anchor profiles."
+    ::= { tmnxTlsConfigObjs 6 }
+
+tTlsTrustAnchorsEntry OBJECT-TYPE
+    SYNTAX      TTlsTrustAnchorsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsTrustAnchorsEntry is an entry (conceptual row) in the
+         tTlsTrustAnchorsTable. Each entry represents the
+         configuration of a CA profile for a TLS trust anchor profile.
+
+         Entries in this table can be created and deleted via
+         SNMP SET operations to tTlsTrustAnchorsRowStatus."
+    INDEX { tTlsTrustAnchorProfName, tTlsTrustAnchorsCAProfile }
+    ::= { tTlsTrustAnchorsTable 1 }
+
+TTlsTrustAnchorsEntry ::= SEQUENCE {
+    tTlsTrustAnchorsCAProfile    TNamedItem,
+    tTlsTrustAnchorsLastChgd     TimeStamp,
+    tTlsTrustAnchorsRowStatus    RowStatus
+}
+
+tTlsTrustAnchorsCAProfile OBJECT-TYPE
+    SYNTAX      TNamedItem
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorsCAProfile specifies the name
+         of a CA profile."
+    ::= { tTlsTrustAnchorsEntry 1 }
+
+tTlsTrustAnchorsLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorsLastChgd indicates the
+         sysUpTime at the time of the most recent management-initiated
+         change to this entry."
+    ::= { tTlsTrustAnchorsEntry 2 }
+
+tTlsTrustAnchorsRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsTrustAnchorsRowStatus specifies
+         the status of the conceptual row in tTlsTrustAnchorsTable.
+
+         Rows are created and destroyed by SNMP SET operations on this
+         object.
+
+         Only values 'active(1)', 'createAndGo(4)' and 'destroy(6)'
+         are supported."
+    ::= { tTlsTrustAnchorsEntry 3 }
+
+-- --------------------------------------------------------
+-- tTlsClientCiphListTable
+-- --------------------------------------------------------
+tTlsClientCiphListTblLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClientCiphListTblLastChgd indicates the
+         sysUpTime at the time of the last modification to
+         tTlsClientCiphListTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last
+         re-initialization of the local network management subsystem,
+         then this object contains a zero value."
+    ::= { tmnxTlsConfigTimeStamps 6 }
+
+tTlsClientCiphListTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TTlsClientCiphListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClientCiphListTable maintains configuration of ordered lists
+         of supported cipher suite codes to be sent in a Client Hello message
+         by a TLS client."
+    ::= { tmnxTlsConfigObjs 7 }
+
+tTlsClientCiphListEntry OBJECT-TYPE
+    SYNTAX      TTlsClientCiphListEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClientCiphListEntry is an entry (conceptual row) in the
+         tTlsClientCiphListTable. Each entry represents the configuration
+         for an ordered list of supported cipher suite codes.
+
+         Entries in this table can be created and deleted via
+         SNMP SET operations to tTlsClientCiphListRowStatus."
+    INDEX { tTlsClientCiphListName }
+    ::= { tTlsClientCiphListTable 1 }
+
+TTlsClientCiphListEntry ::= SEQUENCE {
+    tTlsClientCiphListName         TNamedItem,
+    tTlsClientCiphListLastChgd     TimeStamp,
+    tTlsClientCiphListRowStatus    RowStatus
+}
+
+tTlsClientCiphListName OBJECT-TYPE
+    SYNTAX      TNamedItem
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClientCiphListName specifies the name
+         of an ordered list of supported cipher suite codes for a TLS client."
+    ::= { tTlsClientCiphListEntry 1 }
+
+tTlsClientCiphListLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClientCiphListLastChgd indicates the
+         sysUpTime at the time of the most recent management-initiated change
+         to this entry."
+    ::= { tTlsClientCiphListEntry 2 }
+
+tTlsClientCiphListRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClientCiphListRowStatus specifies
+         the status of the conceptual row in tTlsClientCiphListTable.
+
+         Rows are created and destroyed by SNMP SET operations on this
+         object.
+
+         Only values 'active(1)', 'createAndGo(4)' and 'destroy(6)'
+         are supported."
+    ::= { tTlsClientCiphListEntry 3 }
+
+-- --------------------------------------------------------
+-- tTlsClntCiphListParamTable
+-- --------------------------------------------------------
+tTlsClntCiphListParTblLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntCiphListParTblLastChgd indicates the
+         sysUpTime at the time of the last modification to
+         tTlsClntCiphListParamTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last
+         re-initialization of the local network management subsystem,
+         then this object contains a zero value."
+    ::= { tmnxTlsConfigTimeStamps 7 }
+
+tTlsClntCiphListParamTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TTlsClntCiphListParamEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClntCiphListParamTable stores configuration and status
+         information related to cipher suite codes which belong to ordered
+         lists of cipher suite codes specified by entries in
+         tTlsClientCiphListTable."
+    ::= { tmnxTlsConfigObjs 8 }
+
+tTlsClntCiphListParamEntry OBJECT-TYPE
+    SYNTAX      TTlsClntCiphListParamEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClntCiphListParamEntry is an entry (conceptual row) in the
+         tTlsClntCiphListParamTable. Each entry contains information
+         pertaining to a cipher suite code which belongs to a list specified by
+         tTlsClientCiphListName.
+
+         Entries in this table can be created and deleted via
+         SNMP SET operations to tTlsClntCiphListParamRowStatus."
+    INDEX { tTlsClientCiphListName, tTlsClntCiphListParamIndex }
+    ::= { tTlsClntCiphListParamTable 1 }
+
+TTlsClntCiphListParamEntry ::= SEQUENCE {
+    tTlsClntCiphListParamIndex        Unsigned32,
+    tTlsClntCiphListParamLastChgd     TimeStamp,
+    tTlsClntCiphListParamRowStatus    RowStatus,
+    tTlsClntCiphListParamSuiteCode    TTlsCipherSuiteCode
+}
+
+tTlsClntCiphListParamIndex OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..255)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntCiphListParamIndex specifies
+         the TLS client's order of preference of a cipher suite code within
+         the list specified by tTlsClientCiphListName."
+    ::= { tTlsClntCiphListParamEntry 1 }
+
+tTlsClntCiphListParamLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntCiphListParamLastChgd indicates
+         the sysUpTime at the time of the most recent management-initiated
+         change to this entry."
+    ::= { tTlsClntCiphListParamEntry 2 }
+
+tTlsClntCiphListParamRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntCiphListParamRowStatus specifies
+         the status of the conceptual row in tTlsClntCiphListParamTable.
+
+         Rows are created and destroyed by SNMP SET operations on this
+         object.
+
+         Only values 'active(1)', 'createAndGo(4)' and 'destroy(6)'
+         are supported.
+
+         In order for the row creation to succeed, the value of
+         tTlsClntCiphListParamSuiteCode has to be provided in the same
+         SNMP SET PDU as the tTlsClntCiphListParamRowStatus.
+
+         Otherwise the SET request will fail with an 'inconsistentValue' error."
+    ::= { tTlsClntCiphListParamEntry 3 }
+
+tTlsClntCiphListParamSuiteCode OBJECT-TYPE
+    SYNTAX      TTlsCipherSuiteCode
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntCiphListParamSuiteCode specifies
+         the cipher suite code related to tTlsClntCiphListParamIndex within
+         the list specified by tTlsClientCiphListName.
+
+         In order for the row creation to succeed, the value of
+         tTlsClntCiphListParamSuiteCode has to be provided in the same
+         SNMP SET PDU as the tTlsClntCiphListParamRowStatus.
+
+         Otherwise the SET request will fail with an 'inconsistentValue' error."
+    ::= { tTlsClntCiphListParamEntry 4 }
+
+-- --------------------------------------------------------
+-- tTlsClntProfileTable
+-- --------------------------------------------------------
+tTlsClntProfileTblLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntProfileTblLastChgd indicates the
+         sysUpTime at the time of the last modification to
+         tTlsClntProfileTable by adding, deleting an entry or change
+         to a writable object in the table.
+
+         If no changes were made to the table since the last
+         re-initialization of the local network management subsystem,
+         then this object contains a zero value."
+    ::= { tmnxTlsConfigTimeStamps 8 }
+
+tTlsClntProfileTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TTlsClntProfileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClntProfileTable stores configuration and status
+         information related to TLS client profiles."
+    ::= { tmnxTlsConfigObjs 9 }
+
+tTlsClntProfileEntry OBJECT-TYPE
+    SYNTAX      TTlsClntProfileEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The tTlsClntProfileEntry is an entry (conceptual row) in the
+         tTlsClntProfileTable. Each entry contains information pertaining to
+         a TLS client profile.
+
+         Entries in this table can be created and deleted via
+         SNMP SET operations to tTlsClntProfileRowStatus."
+    INDEX { tTlsClntProfileName }
+    ::= { tTlsClntProfileTable 1 }
+
+TTlsClntProfileEntry ::= SEQUENCE {
+    tTlsClntProfileName             TNamedItem,
+    tTlsClntProfileLastChgd         TimeStamp,
+    tTlsClntProfileRowStatus        RowStatus,
+    tTlsClntProfileAdminState       TmnxAdminState,
+    tTlsClntProfileOperState        TmnxOperState,
+    tTlsClntProfileCiphListName     TNamedItemOrEmpty,
+    tTlsClntProfileTrstAnchrProf    TNamedItemOrEmpty
+}
+
+tTlsClntProfileName OBJECT-TYPE
+    SYNTAX      TNamedItem
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntProfileName specifies the name for a
+         TLS client profile."
+    ::= { tTlsClntProfileEntry 1 }
+
+tTlsClntProfileLastChgd OBJECT-TYPE
+    SYNTAX      TimeStamp
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntProfileLastChgd indicates the
+         sysUpTime at the time of the most recent management-initiated
+         change to this entry."
+    ::= { tTlsClntProfileEntry 2 }
+
+tTlsClntProfileRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntProfileRowStatus specifies
+         the status of the conceptual row in tTlsClntProfileTable.
+
+         Rows are created and destroyed by SNMP SET operations on this
+         object.
+
+         Only values 'active(1)', 'createAndGo(4)' and 'destroy(6)'
+         are supported."
+    ::= { tTlsClntProfileEntry 3 }
+
+tTlsClntProfileAdminState  OBJECT-TYPE
+     SYNTAX      TmnxAdminState
+     MAX-ACCESS  read-create
+     STATUS      current
+     DESCRIPTION
+         "The value of the object tTlsClntProfileAdminState specifies
+          the administrative state of the tTlsClntProfileEntry."
+     DEFVAL { outOfService }
+     ::= { tTlsClntProfileEntry 4 }
+
+tTlsClntProfileOperState  OBJECT-TYPE
+     SYNTAX      TmnxOperState
+     MAX-ACCESS  read-only
+     STATUS      current
+     DESCRIPTION
+         "The value of the object tTlsClntProfileOperState indicates
+          the operational state of tTlsClntProfileEntry."
+     ::= { tTlsClntProfileEntry 5 }
+
+tTlsClntProfileCiphListName  OBJECT-TYPE
+    SYNTAX      TNamedItemOrEmpty
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value of the object tTlsClntProfileCiphListName specifies the
+         ordered list of supported cipher suite codes associated with this
+         TLS client profile."
+    DEFVAL { ''H }
+    ::= { tTlsClntProfileEntry 6 }
+
+
+tTlsClntProfileTrstAnchrProf OBJECT-TYPE
+    SYNTAX          TNamedItemOrEmpty
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+         "The value of the object tTlsClntProfileTrstAnchrProf specifies the
+          Certificate-Authority Trust Anchor Profile associated with this
+          TLS client profile.
+
+          An 'inconsistentValue' error is returned if this object is modified
+          when tTlsClntProfileAdminState is in 'inService' state."
+    DEFVAL { ''H }
+    ::= { tTlsClntProfileEntry 8 }
+
+-- ==========================================================================
+-- NOTIFICATIONS
+--
+
+-- ==========================================================================
+--  COMPLIANCE STATEMENTS
+--
+tmnxTlsComplianceV14v1        MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for the management of the TLS protocol
+         on Nokia SROS series systems."
+    MODULE -- this module
+        MANDATORY-GROUPS {
+            tmnxTlsX509CertMgmtGroup,
+            tmnxTlsClientMgmtInitialGroup
+        }
+    ::= { tmnxTlsCompliances 1 }
+
+-- ==========================================================================
+-- OBJECT-GROUPS/NOTIFICATION-GROUPS
+--
+
+tmnxTlsV14v1Groups    OBJECT IDENTIFIER ::= { tmnxTlsGroups 1 }
+
+tmnxTlsX509CertMgmtGroup  OBJECT-GROUP
+    OBJECTS {
+        tTlsTrustAnchorProfTblLastChgd,
+        tTlsTrustAnchorProfLastChgd,
+        tTlsTrustAnchorProfRowStatus,
+        tTlsTrustAnchorCAProfDown,
+        tTlsTrustAnchorsTblLastChgd,
+        tTlsTrustAnchorsLastChgd,
+        tTlsTrustAnchorsRowStatus
+    }
+    STATUS    current
+    DESCRIPTION
+        "The group of objects supporting the management of X.509 certificates
+         on Nokia SROS series systems."
+    ::= { tmnxTlsV14v1Groups 1 }
+
+tmnxTlsClientMgmtInitialGroup  OBJECT-GROUP
+    OBJECTS {
+        tTlsClientCiphListTblLastChgd,
+        tTlsClientCiphListLastChgd,
+        tTlsClientCiphListRowStatus,
+        tTlsClntCiphListParTblLastChgd,
+        tTlsClntCiphListParamLastChgd,
+        tTlsClntCiphListParamRowStatus,
+        tTlsClntCiphListParamSuiteCode,
+        tTlsClntProfileTblLastChgd,
+        tTlsClntProfileLastChgd,
+        tTlsClntProfileRowStatus,
+        tTlsClntProfileAdminState,
+        tTlsClntProfileOperState,
+        tTlsClntProfileCiphListName,
+        tTlsClntProfileTrstAnchrProf
+    }
+    STATUS    current
+    DESCRIPTION
+        "The group of objects supporting the management of a TLS client
+         on Nokia SROS series systems."
+    ::= { tmnxTlsV14v1Groups 2 }
+
+END
