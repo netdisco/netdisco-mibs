@@ -1,0 +1,641 @@
+-- **************************************************************************
+-- *                                                                        *
+-- *                                                                        *
+-- *                    Hirschmann Automation and Control GmbH              *
+-- *                                                                        *
+-- *                         PLATFORM SNMP PRIVATE MIB                      * 
+-- *                                                                        *
+-- *                                Usergroup                               *
+-- *                                                                        *
+-- *                                                                        *
+-- %*************************************************************************
+-- *                                                                        *
+-- *    Dies ist eine SNMP MIB fuer Hirschmann Platform Geraete.            *
+-- *                                                                        *
+-- *    Sollten Sie weitere Fragen haben, wenden Sie sich bitte an ihren    *
+-- *    Hirschmann-Vertragspartner.                                         *
+-- *                                                                        *
+-- *    Aktuelle Hirschmann-Infos zu unseren Produkten erhalten Sie ueber   *
+-- *    unseren WWW-Server unter http://www.hirschmann.com                  *
+-- *                                                                        *
+-- *    This is a SNMP MIB for the Hirschmann Platform devices.             *
+-- *                                                                        *
+-- *    If you have any further questions please contact your               *
+-- *    Hirschmann contractual partner.                                     *
+-- *                                                                        *
+-- *    You can access current information about Hirschmann products        *
+-- *    via our WWW server on http://www.hirschmann.com                     *
+-- *                                                                        *
+-- **************************************************************************
+
+
+USERGROUP-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, OBJECT-IDENTITY,
+    TEXTUAL-CONVENTION, IpAddress, Integer32               
+                                        FROM SNMPv2-SMI
+    DisplayString                       FROM SNMPv2-TC
+    hmConfiguration                     FROM HMPRIV-MGMT-SNMP-MIB;   
+
+
+hmUserGroup MODULE-IDENTITY
+        LAST-UPDATED "200709131200Z" -- 13 Sep 2007 12:00:00 GMT
+        ORGANIZATION "Hirschmann Automation and Control GmbH"
+        CONTACT-INFO
+          "Customer Support
+           Postal: 
+           Hirschmann Automation and Control GmbH
+           Stuttgarter Str. 45-51
+           72654 Neckartenzlingen
+           Germany
+           Tel: +49 7127 14 1981
+           Web: http://www.hicomcenter.com/
+           E-Mail: hicomcenter@hirschmann.com"
+        DESCRIPTION
+          "The Hirschmann Private Usergroup MIB definitions for Platform devices."
+
+        -- Revision history.
+        REVISION
+          "200709131200Z" -- 13 Sep 2007 12:00:00 GMT
+        DESCRIPTION
+          "First release in SMIv2"     
+        ::= { hmConfiguration 3 }
+        
+
+MemberID ::= TEXTUAL-CONVENTION 
+    STATUS       current
+    DESCRIPTION  "mac address in canonical byte order."
+    SYNTAX       OCTET STRING (SIZE (6))
+
+
+--
+-- hmUserGroupTable
+--
+-- This table holds one instance for each user group
+--
+
+hmUserGroupTable OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmUserGroupEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "A list of user group definitions."
+    ::= { hmUserGroup 1 }
+
+hmUserGroupEntry  OBJECT-TYPE
+         SYNTAX         HmUserGroupEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "user group definition"
+         INDEX          { hmUserGroupID }
+    ::= { hmUserGroupTable 1 }
+
+HmUserGroupEntry ::= SEQUENCE {
+         hmUserGroupID           Integer32,
+         hmUserGroupDescription  DisplayString,
+         hmUserGroupRestricted   INTEGER,
+         hmUserGroupSecAction    INTEGER
+}
+
+hmUserGroupID  OBJECT-TYPE
+         SYNTAX         Integer32
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "The user group number identifying this instance."
+    ::= { hmUserGroupEntry 1 }
+
+hmUserGroupDescription  OBJECT-TYPE
+         SYNTAX         DisplayString
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "A textual description of the user group instance."
+    ::= { hmUserGroupEntry 2 }
+
+hmUserGroupRestricted  OBJECT-TYPE
+         SYNTAX         INTEGER { true(1), false(2) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "If set to true(1) any member of this group is restricted to ports
+                         - which have hmPortSecPermission set to group(2) and
+                         - the group is in hmPortSecAllowedGroupIDs.
+
+                         If set to false(2) the user may also connect to a port if permitted
+                         by other hmPortSecPermission settings, e.g. known(3) or world(4).
+
+                         The following access restrictions apply:
+
+                         UserRestr. UserGroupRestr. PortSecPermission  access allowed
+                         --------------------------------------------------------------------
+                          false        false            user          hmPortSecAllowedUserID
+                          false        false            group         hmPortSecAllowedGroupIDs
+                          false        false            known         any user group member
+                          false        false            world             yes
+
+                          true         false/true       user          hmPortSecAllowedUserID
+                          true         false/true       group             no
+                          true         false/true       known             no
+                          true         false/true       world             no
+
+                          false        true             user          hmPortSecAllowedUserID
+                          false        true             group         hmPortSecAllowedGroupIDs
+                          false        true             known             no
+                          false        true             world             no
+                        "
+    ::= { hmUserGroupEntry 3 }
+
+hmUserGroupSecAction  OBJECT-TYPE
+         SYNTAX         INTEGER { none(1), trapOnly(2), portDisable(3) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the action which is taken if a
+                         user tries to connect to the given port when he is not
+                         allowed to do so. Setting the variable to none(1)
+                         disables any action. A value of trapOnly(2) generates
+                         a trap. Setting the value to portDisable(3) will
+                         send a trap, and additionally disable the port until
+                         it is re-enabled by management."
+    ::= { hmUserGroupEntry 4 }
+
+
+--
+-- hmUserGroupMemberTable
+--
+-- This table lists the members of a given user group.
+-- Members may be added or removed using this table.
+--
+
+hmUserGroupMemberTable  OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmUserGroupMemberEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION
+         "A list of users which are members of a given user group."
+    ::= { hmUserGroup 2 }
+
+hmUserGroupMemberEntry  OBJECT-TYPE
+         SYNTAX         HmUserGroupMemberEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "An user group member entry."
+         INDEX          { hmUserGroupMemberGroupID, hmUserGroupMemberUserID }
+    ::= { hmUserGroupMemberTable 1 }
+
+HmUserGroupMemberEntry ::= SEQUENCE {
+         hmUserGroupMemberGroupID     Integer32,
+         hmUserGroupMemberUserID      MemberID
+}
+
+hmUserGroupMemberGroupID  OBJECT-TYPE
+         SYNTAX         Integer32
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "user group id of this member."
+    ::= { hmUserGroupMemberEntry 1 }
+
+hmUserGroupMemberUserID  OBJECT-TYPE
+         SYNTAX         MemberID
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "user ID of this member."
+    ::= { hmUserGroupMemberEntry 2 }
+
+
+--
+-- hmUserTable
+--
+-- This table contains all members of all user groups.
+--
+
+hmUserTable  OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmUserEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "List of all user group members."
+    ::= { hmUserGroup 3 }
+
+hmUserEntry  OBJECT-TYPE
+         SYNTAX         HmUserEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "An user entry."
+         INDEX          { hmUserID }
+    ::= { hmUserTable 1 }
+
+HmUserEntry ::= SEQUENCE {
+         hmUserID         MemberID,
+         hmUserRestricted INTEGER
+    }
+
+hmUserID  OBJECT-TYPE
+         SYNTAX         MemberID
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "User ID."
+    ::= { hmUserEntry 1 }
+
+hmUserRestricted  OBJECT-TYPE
+         SYNTAX         INTEGER { true(1), false(2) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "If set to true(1) the user may only connect to ports which
+                         have hmPortSecPermission set to user(1) and hmPortSecAllowedUserID
+                         set to hmUserID.
+                         If set to false(2) the user may also connect to a port if permitted
+                         by other hmPortSecPermission settings, e.g. group(2), known(3) or
+                         world(4).
+
+                         The following access restrictions apply:
+
+                         UserRestr. UserGroupRestr. PortSecPermission  access allowed
+                         ---------------------------------------------------------------------
+                          false        false            user          hmPortSecAllowedUserID
+                          false        false            group         hmPortSecAllowedGroupIDs
+                          false        false            known         any user group member
+                          false        false            world             yes
+
+                          true         false/true       user          hmPortSecAllowedUserID
+                          true         false/true       group             no
+                          true         false/true       known             no
+                          true         false/true       world             no
+
+                          false        true             user          hmPortSecAllowedUserID
+                          false        true             group         hmPortSecAllowedGroupIDs
+                          false        true             known             no
+                          false        true             world             no
+                        "
+    ::= { hmUserEntry 2 }
+
+
+--
+-- hmPortSecurityTable
+--
+-- This table defines which security features are to be enabled.
+-- There is one instance for each port in the switch.
+--
+
+
+
+
+
+hmPortSecurityTable  OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmPortSecurityEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "List of port security entries."
+    ::= { hmUserGroup 4 }
+
+hmPortSecurityEntry  OBJECT-TYPE
+         SYNTAX         HmPortSecurityEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "A single port security entry."
+         INDEX          { hmPortSecSlotID, hmPortSecPortID }
+    ::= { hmPortSecurityTable 1 }
+
+
+HmPortSecurityEntry ::= SEQUENCE {
+         hmPortSecSlotID          		Integer32,
+         hmPortSecPortID          		Integer32,
+         hmPortSecPermission      		INTEGER,
+         hmPortSecAllowedUserID   		MemberID,
+         hmPortSecAllowedGroupIDs 		OCTET STRING,
+         hmPortSecConnectedUserID 		MemberID,
+         hmPortSecAction          		INTEGER,
+         hmPortSecAutoReconfigure 		INTEGER,
+         hmPortSecPortStatus      		INTEGER,
+         hmPortSecAllowedUserIPID 		IpAddress,
+         hmPortSecDynamicLimit          Integer32,
+         hmPortSecDynamicCount          Integer32
+    }
+
+hmPortSecSlotID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..1)
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "Slot number the switch unit is plugged in."
+    ::= { hmPortSecurityEntry 1 }
+
+hmPortSecPortID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..32)
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "Port number within the group."
+    ::= { hmPortSecurityEntry 2 }
+
+hmPortSecPermission  OBJECT-TYPE
+         SYNTAX         INTEGER { user(1), group(2), known(3), world(4), uplink(5) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the security level of the port.
+                         If set to user(1) only the user defined by hmPortSecAllowedUserID
+                         may connect to this port. In group(2) mode only members of the
+                         user group specified by hmPortSecAllowedGroupIDs are allowed.
+                         known(3) means that all users belonging to any user group
+                         (all known users) are accepted. Setting the value to world(4)
+                         disables the security features, i.e. any user is permitted.
+                         For backbone ports the value uplink(5) should be used.
+                           If a user does not match the allowed permission he is not able
+                         to connect to the network over this port, additionally the actions
+                         configured through hmPortSecAction are taken."
+    ::= { hmPortSecurityEntry 3 }
+
+hmPortSecAllowedUserID  OBJECT-TYPE
+         SYNTAX         MemberID
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the allowed user ID if
+                         hmPortSecPermission has been set to user(1)."
+    ::= { hmPortSecurityEntry 4 }
+
+hmPortSecAllowedGroupIDs  OBJECT-TYPE
+         SYNTAX         OCTET STRING (SIZE(128))
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the allowed user groups if
+                         hmPortSecPermission has been set to group(2).
+                         Each group is represented by a single bit. If a
+                         group does not exist the value of the bit is ignored."
+::= { hmPortSecurityEntry 5 }
+
+hmPortSecConnectedUserID  OBJECT-TYPE
+         SYNTAX         MemberID
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "This variable reflects the user ID of a connected user
+                         actually seen on this port. If there is no user connected
+                         the value will be 0x00:00:00:00:00:00."
+    ::= { hmPortSecurityEntry 6 }
+
+hmPortSecAction  OBJECT-TYPE
+         SYNTAX         INTEGER { none(1), trapOnly(2), portDisable(3), autoDisable(4) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the action which is taken if a
+                         user tries to connect to the given port when he is not
+                         allowed to do so. Setting the variable to none(1)
+                         disables any action. A value of trapOnly(2) generates
+                         a trap. Setting the value to portDisable(3) will
+                         send a trap, and additionally disable the port until
+                         it is re-enabled by management. Setting the value to
+                         autoDisable(3) will send a trap, and additionally
+                         auto-disable the port for the amount of time specified per port."
+        DEFVAL           { none }
+    ::= { hmPortSecurityEntry 7 }
+
+hmPortSecAutoReconfigure  OBJECT-TYPE
+         SYNTAX         INTEGER { true(1), false(2) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable controls whether the agent should
+                         re-configure the port when another user with an
+                         incompatible user group setting has been detected.
+                         The default setting, true(1), should be used if a
+                         single user is connected to the port.
+                         The value false(2) might be useful if more than one
+                         user is connected to the port (workgroup mode)."
+::= { hmPortSecurityEntry 8 }
+
+hmPortSecPortStatus  OBJECT-TYPE
+         SYNTAX         INTEGER { enabled(1), disabled(2), enabledWithWrongAddr(3) }
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "This variable shows the current status of the port with
+                                         respect to port security. If the address seen on the port
+                                         is allowed, the status is enabled(1), if it is not allowed,
+                                         the status is disabled(2) if hmUserGroupSecurityAction is
+                                         portDisable(3), or enabledWithWrongAddr(3) if
+                                         hmUserGroupSecurityAction is none(1) or trapOnly(2)."
+::= { hmPortSecurityEntry 9 }
+
+hmPortSecAllowedUserIPID  OBJECT-TYPE
+         SYNTAX         IpAddress
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the allowed user IP ID if
+                         hmPortSecPermission has been set to user(1)."
+::= { hmPortSecurityEntry 10 }
+
+hmPortSecDynamicLimit OBJECT-TYPE
+        SYNTAX  Integer32(0..50)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This variable signifies the limit of dynamically learned allowed MAC addresses
+             for a specific port."
+        DEFVAL { 0 }
+    ::={ hmPortSecurityEntry 11 }
+    
+hmPortSecDynamicCount OBJECT-TYPE
+        SYNTAX  Integer32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The current number of dynamically learned allowed MAC addresses on this port."
+        ::={ hmPortSecurityEntry 12 }
+
+--
+-- The following MIB variables control the actions that will be taken
+-- when an illegal MAC address is discovered on a switch port.
+--
+
+hmUserGroupSecurityAction  OBJECT-TYPE
+         SYNTAX         INTEGER { none(1), trapOnly(2), portDisable(3) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the action which is taken if a
+                         user tries to connect to the given port when he is not
+                         allowed to do so. Setting the variable to none(1)
+                         disables any action. A value of trapOnly(2) generates
+                         a trap. Setting the value to portDisable(3) will
+                         send a trap, and additionally disable the port until
+                         it is re-enabled by management."
+    ::= { hmUserGroup 5 }
+
+--
+-- The following MIB variables control the mode of the hmPortSecurityTable
+--
+
+hmUserGroupPortSecurityMode OBJECT-TYPE
+             SYNTAX         INTEGER { macAddressBased(1), ipAddressBased(2) }
+             MAX-ACCESS     read-write
+             STATUS         current
+             DESCRIPTION    "This variable specifies the mode of the hmPortSecurityTable."
+    ::= { hmUserGroup 8 }
+
+
+--
+-- hmPortSecExtendedGroup
+--
+-- This group defines which security features are to be enabled.
+-- There is one instance for each port in the switch and multiple
+-- instances for each adress.
+--
+hmPortSecExtendedGroup  OBJECT IDENTIFIER ::= { hmUserGroup 10 }
+
+hmPortSecExtendedTable  OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmPortSecExtendedEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "List of extended port security entries."
+    ::= { hmPortSecExtendedGroup 1 }
+
+hmPortSecExtendedEntry  OBJECT-TYPE
+         SYNTAX         HmPortSecExtendedEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "A single extended port security entry."
+         INDEX          { hmPortSecExtSlotID, hmPortSecExtPortID }
+    ::= { hmPortSecExtendedTable 1 }
+
+HmPortSecExtendedEntry ::= SEQUENCE {
+		 hmPortSecExtSlotID        			Integer32,
+         hmPortSecExtPortID        			Integer32,
+         hmPortSecExtAction          		INTEGER,
+         hmPortSecExtPortStatus      		INTEGER
+         }
+
+hmPortSecExtSlotID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..1)
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "Slot number the switch unit is plugged in."
+    ::= { hmPortSecExtendedEntry 1 }
+
+hmPortSecExtPortID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..32)
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "Port number within the group."
+    ::= { hmPortSecExtendedEntry 2 }
+
+hmPortSecExtAction  OBJECT-TYPE
+         SYNTAX         INTEGER { none(1), trapOnly(2), portDisable(3) }
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the action which is taken if a
+                         user tries to connect to the given port when he is not
+                         allowed to do so. Setting the variable to none(1)
+                         disables any action. A value of trapOnly(2) generates
+                         a trap. Setting the value to portDisable(3) will
+                         send a trap, and additionally disable the port until
+                         it is re-enabled by management."
+         DEFVAL			 {1}
+    ::= { hmPortSecExtendedEntry 3 }
+
+hmPortSecExtPortStatus  OBJECT-TYPE
+         SYNTAX         INTEGER { enabled(1), disabled(2), enabledWithWrongAddr(3) }
+         MAX-ACCESS     read-only
+         STATUS         current
+         DESCRIPTION    "This variable shows the current status of the port with
+                        respect to port security. If the address seen on the port
+                        is allowed, the status is enabled(1), if it is not allowed,
+                        the status is disabled(2) if hmUserGroupSecurityAction is
+                        portDisable(3), or enabledWithWrongAddr(3) if
+         				hmUserGroupSecurityAction is none(1) or trapOnly(2)."
+         DEFVAL			 {1}
+::= { hmPortSecExtendedEntry 4 }
+
+
+hmPortSecMultipleAdressesTable  OBJECT-TYPE
+         SYNTAX         SEQUENCE OF HmPortSecMultipleAdressesEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "List of port security entries with multiple allowed addresses."
+    ::= { hmPortSecExtendedGroup 2 }
+
+hmPortSecMultipleAdressesEntry  OBJECT-TYPE
+         SYNTAX         HmPortSecMultipleAdressesEntry
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "A single port security entry with multiple allowed addresses."
+         INDEX          { hmPortSecMASlotID, hmPortSecMAPortID, hmPortSecMAExtendedIndex }
+    ::= { hmPortSecMultipleAdressesTable 1 }
+
+HmPortSecMultipleAdressesEntry ::= SEQUENCE {
+		 hmPortSecMASlotID        			Integer32,
+         hmPortSecMAPortID        			Integer32,
+         hmPortSecMAExtendedIndex 	 		Integer32,
+         hmPortSecMAAllowedUserIDs   		MemberID,
+         hmPortSecMAAllowedUserIPIDs 		IpAddress,
+         hmPortSecMAAllowedUserIDMask		Integer32
+         }
+
+hmPortSecMASlotID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..1)
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "Slot number the switch unit is plugged in."
+    ::= { hmPortSecMultipleAdressesEntry 1 }
+
+hmPortSecMAPortID  OBJECT-TYPE
+         SYNTAX         Integer32 (1..32)
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "Port number within the group."
+    ::= { hmPortSecMultipleAdressesEntry 2 }
+
+hmPortSecMAExtendedIndex  OBJECT-TYPE
+         SYNTAX         Integer32 (1..50)
+         MAX-ACCESS     not-accessible
+         STATUS         current
+         DESCRIPTION    "Number of adresses."
+    ::= { hmPortSecMultipleAdressesEntry 3 }
+
+hmPortSecMAAllowedUserIDs  OBJECT-TYPE
+         SYNTAX         MemberID
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the allowed user ID if
+                         hmPortSecPermission has been set to user(1)."
+    ::= { hmPortSecMultipleAdressesEntry 4 }
+
+hmPortSecMAAllowedUserIPIDs  OBJECT-TYPE
+         SYNTAX         IpAddress
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "This variable specifies the allowed user IP ID if
+                         hmPortSecPermission has been set to user(1)."
+         ::= { hmPortSecMultipleAdressesEntry 5 }
+
+hmPortSecMAAllowedUserIDMask  OBJECT-TYPE
+         SYNTAX         Integer32 (1..48)
+         MAX-ACCESS     read-write
+         STATUS         current
+         DESCRIPTION    "The number of bits from left ro right, that are used
+                        from the MAC address."
+         DEFVAL {48}
+    ::= { hmPortSecMultipleAdressesEntry 6 }
+         
+
+--
+-- Notifications
+--
+hmUserGroupEvent  OBJECT-IDENTITY
+    STATUS  current
+    DESCRIPTION "The events of hmUserGroup."
+    ::= { hmUserGroup 0 }
+
+hmNewUserTrap  NOTIFICATION-TYPE
+         OBJECTS   { hmPortSecConnectedUserID }
+         STATUS    current
+         DESCRIPTION "This trap is sent if an unknown MAC address is detected on a port."
+	::= { hmUserGroupEvent 1 }
+
+hmPortSecurityTrap  NOTIFICATION-TYPE
+         OBJECTS   { hmPortSecPermission, hmPortSecAction, hmPortSecConnectedUserID,
+                       hmPortSecAllowedUserID, hmPortSecAllowedUserIPID, hmPortSecAllowedGroupIDs }
+         STATUS    current
+         DESCRIPTION "This trap is sent if a MAC address / IP address is detected on a port
+                      which is not acceptable for the current setting of
+                      hmPortSecPermission AND ...SecAction is either set to trapOnly(2)
+                      or portDisable(3)."
+	::= { hmUserGroupEvent 2 }
+
+hmPortSecConfigErrorTrap  NOTIFICATION-TYPE
+         OBJECTS   { hmPortSecConnectedUserID }
+         STATUS    current
+         DESCRIPTION "This trap is sent when two or more users with incompatible
+                      user group settings have been detected at the port."
+	::= { hmUserGroupEvent 3 }
+
+END
