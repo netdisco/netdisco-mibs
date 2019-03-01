@@ -23,7 +23,7 @@ FORTINET-FORTIMAIL-MIB DEFINITIONS ::= BEGIN
 			FROM FORTINET-CORE-MIB;
 
 fnFortiMailMib MODULE-IDENTITY
-    LAST-UPDATED "201003230000Z"
+    LAST-UPDATED "201306280000Z"
     ORGANIZATION 
         "Fortinet Technologies, Inc."
     CONTACT-INFO 
@@ -31,6 +31,10 @@ fnFortiMailMib MODULE-IDENTITY
          email: support@fortinet.com
          http://www.fortinet.com
         "
+	DESCRIPTION
+		"Add fmlMailQueueStatistics listing mail queues and 
+			number of emails and size of emails in queues"
+	REVISION	"201306280000Z"
 	DESCRIPTION
 		"MIB module for Fortinet FortiMail devices"
 	REVISION	"201003230000Z"
@@ -44,6 +48,15 @@ fnFortiMailMib MODULE-IDENTITY
 	--
 	-- Textual conventions --
 	--
+
+	FmlIpv6Address ::= TEXTUAL-CONVENTION
+             DISPLAY-HINT "2x:"
+             STATUS       current
+             DESCRIPTION
+               "This data type is used to model IPv6 addresses.
+                This is a binary string of 16 octets in network
+                byte-order."
+             SYNTAX       OCTET STRING (SIZE (16))
 
 	FmlOpMode ::= TEXTUAL-CONVENTION
         STATUS      current
@@ -67,7 +80,9 @@ fnFortiMailMib MODULE-IDENTITY
 			guiUpgrade (5),
 			logdiskFormat (6),
 			maildiskFormat (7),
-			avDBUpdate (8) 
+			avDBUpdateSuccess (8),
+			avDBUpdateNetworkError (9),
+			avDBUpdateFailure (10)
 		}
 
 	FmlRAIDCodeVal ::= TEXTUAL-CONVENTION
@@ -244,6 +259,12 @@ fnFortiMailMib MODULE-IDENTITY
 		DESCRIPTION     "Instantaneous system load"
 		::= { fmlSystem    30 }
 
+	fmlRemoteStorageStatus OBJECT-TYPE
+		SYNTAX          INTEGER { false(0), true(1) }
+		MAX-ACCESS		accessible-for-notify
+		STATUS          obsolete
+		DESCRIPTION     "Remote Storage Status"
+		::= { fmlSystem 31 }
 	--
 	-- fnFortiMailMib.fmlSystem.fmlSysOptions
 	--
@@ -263,13 +284,6 @@ fnFortiMailMib MODULE-IDENTITY
 		DESCRIPTION     "Authentication idle timeout value"
 		::= { fmlSysOptions  2 }
 		
-	fmlSysOptsLcdProt	OBJECT-TYPE	
-		SYNTAX			FnBoolState
-		MAX-ACCESS      read-only
-		STATUS          current
-		DESCRIPTION		"Enable or disable LCD control buttons protection"
-		::=  { fmlSysOptions 4 }		
-
 	--		
 	-- fnFortiMailMib.fmlSystem.fmlIp
 	--
@@ -291,13 +305,15 @@ fnFortiMailMib MODULE-IDENTITY
 
 	FmlIpSessEntry ::=
         	SEQUENCE {
-		    fmlIpSessIndex	FnIndex,
-		    fmlIpSessProto	FnSessionProto,
-		    fmlIpSessFromAddr	IpAddress,
-		    fmlIpSessFromPort	Integer32,
-		    fmlIpSessToAddr	IpAddress,
-		    fmlIpSessToPort	Integer32,
-		    fmlIpSessExp		Gauge32
+		    fmlIpSessIndex	     FnIndex,
+		    fmlIpSessProto	     FnSessionProto,
+		    fmlIpSessFromAddr	 IpAddress,
+			fmlIpv6SessFromAddr	 FmlIpv6Address,
+		    fmlIpSessFromPort	 Integer32,
+		    fmlIpSessToAddr	     IpAddress,
+			fmlIpv6SessToAddr	 FmlIpv6Address,
+		    fmlIpSessToPort	     Integer32,
+		    fmlIpSessExp		 Gauge32 
         	}
 
 	fmlIpSessIndex	OBJECT-TYPE	
@@ -322,44 +338,109 @@ fnFortiMailMib MODULE-IDENTITY
 		DESCRIPTION "Source IP address"
 		::=  { fmlIpSessEntry  3 }
 
+	fmlIpv6SessFromAddr  OBJECT-TYPE
+		SYNTAX      FmlIpv6Address
+		MAX-ACCESS  read-only
+		STATUS      current
+		DESCRIPTION "Source IP address"
+		::= { fmlIpSessEntry 4}
+
+
 	fmlIpSessFromPort	OBJECT-TYPE	
 		SYNTAX      Integer32 ( 0 .. 65535  )
 		MAX-ACCESS  read-only
 		STATUS      current
 		DESCRIPTION "Source Port number"
-		::=  { fmlIpSessEntry  4 }
+		::=  { fmlIpSessEntry  5 }
 
 	fmlIpSessToAddr	OBJECT-TYPE	
 		SYNTAX      IpAddress
 		MAX-ACCESS  read-only
 		STATUS      current
 		DESCRIPTION "Destination IP address"
-		::=  { fmlIpSessEntry  5 }
+		::=  { fmlIpSessEntry  6 }
+
+	fmlIpv6SessToAddr  OBJECT-TYPE
+		SYNTAX      FmlIpv6Address
+		MAX-ACCESS  read-only
+		STATUS      current
+		DESCRIPTION "Source IP address"
+		::= { fmlIpSessEntry 7}
+
 
 	fmlIpSessToPort	OBJECT-TYPE	
 		SYNTAX      Integer32 ( 0 .. 65535  )
 		MAX-ACCESS  read-only
 		STATUS      current
 		DESCRIPTION "Destination Port number"
-		::=  { fmlIpSessEntry  6 }
+		::=  { fmlIpSessEntry  8 }
 
 	fmlIpSessExp	OBJECT-TYPE	
 		SYNTAX      Gauge32
 		MAX-ACCESS  read-only
 		STATUS      current
 		DESCRIPTION "Time (in seconds) before connection expires"
-		::=  { fmlIpSessEntry  7 }
+		::=  { fmlIpSessEntry  9 }
 
 	--
 	-- fnFortiMailMib.fmlSystem.fmlMailOptions
 	--
-
 	fmlMailOptionsDeferQueue OBJECT-TYPE
 		SYNTAX          Gauge32
 		MAX-ACCESS      read-only
-		STATUS          current
+		STATUS          obsolete
 		DESCRIPTION     "Instantaneous deferred emails number"
 		::= { fmlMailOptions  1 }
+
+	fmlMailQueueStatistics		OBJECT-TYPE
+		SYNTAX			SEQUENCE OF FmlMailQueueEntry
+		MAX-ACCESS		not-accessible
+		STATUS			current
+		DESCRIPTION		"Statistics of mail queues"
+		::= { fmlMailOptions 2 }
+		
+	fmlMailQueueEntry		OBJECT-TYPE
+		SYNTAX			FmlMailQueueEntry
+		MAX-ACCESS		not-accessible
+		STATUS			current
+		DESCRIPTION		"Statistics of a mail queue, e.g. number of mails in queue, size of mails"
+		INDEX			{ fmlMailQueueIndex }
+		::= { fmlMailQueueStatistics 1 }
+	
+	FmlMailQueueEntry ::= SEQUENCE {
+		fmlMailQueueIndex		FnIndex,
+		fmlMailQueueName		DisplayString,
+		fmlMailQueueMailCount	Gauge32,
+		fmlMailQueueMailSize	Gauge32
+	}
+	
+	fmlMailQueueIndex		OBJECT-TYPE
+		SYNTAX			FnIndex
+		MAX-ACCESS		read-only
+		STATUS			current
+		DESCRIPTION		"mail queue index"
+		::= { fmlMailQueueEntry 1 }
+	
+	fmlMailQueueName		OBJECT-TYPE
+		SYNTAX			DisplayString
+		MAX-ACCESS		read-only
+		STATUS			current
+		DESCRIPTION		"mail queue name"
+		::= { fmlMailQueueEntry 2 }
+	
+	fmlMailQueueMailCount	OBJECT-TYPE
+		SYNTAX			Gauge32
+		MAX-ACCESS		read-only
+		STATUS			current
+		DESCRIPTION		"number of emails in mail queue"
+		::= { fmlMailQueueEntry 3 }
+
+	fmlMailQueueMailSize	OBJECT-TYPE
+		SYNTAX			Gauge32
+		MAX-ACCESS		read-only
+		STATUS			current
+		DESCRIPTION		"size of emails in mail queue in KB"
+		::= { fmlMailQueueEntry 4 }
 
 	--			
 	-- fnFortiMailMib.fmlSystem.fmlHwSensors
@@ -376,7 +457,7 @@ fnFortiMailMib MODULE-IDENTITY
 		SYNTAX          SEQUENCE OF FmlHwSensorEntry
 		MAX-ACCESS      not-accessible
 		STATUS          current
-		DESCRIPTION     "A list of hardware sensors in the sytem user accounts"
+		DESCRIPTION     "A list of hardware sensors in the system user accounts"
 		::= { fmlHwSensors 2 }
 
 	fmlHwSensorEntry         OBJECT-TYPE
@@ -510,6 +591,12 @@ fnFortiMailMib MODULE-IDENTITY
 		DESCRIPTION   "Trap being sent when HA event occurs"
 		::=  {  fmlTraps  203  }
 
+	fmlTrapRemoteStorage NOTIFICATION-TYPE
+		OBJECTS       { fmlSysSerial, fmlRemoteStorageStatus }
+		STATUS        obsolete
+		DESCRIPTION   "Trap being sent when status of the remote storage changes"
+		::=  {  fmlTraps  205  }
+
 	fmlTrapIpChange NOTIFICATION-TYPE
 		OBJECTS       { fmlSysSerial, ifIndex }
 		STATUS        obsolete
@@ -533,7 +620,7 @@ fnFortiMailMib MODULE-IDENTITY
 		::= { fmlMIBConformance 1 }
 
 	fmlSysOptionsConformanceGroup OBJECT-GROUP
-		OBJECTS 	{ fmlSysOptIdleTimeout, fmlSysOptAuthTimeout, fmlSysOptsLcdProt }
+		OBJECTS 	{ fmlSysOptIdleTimeout, fmlSysOptAuthTimeout }
 		STATUS		current
 		DESCRIPTION
 				"object related to fortimail system option."
@@ -548,10 +635,10 @@ fnFortiMailMib MODULE-IDENTITY
 		::= { fmlMIBConformance 3 }
 	
 	fmlMailOptionsConformanceGroup OBJECT-GROUP
-		OBJECTS		{ fmlMailOptionsDeferQueue }
+		OBJECTS		{ fmlMailQueueName, fmlMailQueueMailCount, fmlMailQueueMailSize }
 		STATUS		current
 		DESCRIPTION
-				"object reated to fortimail mail options." 
+				"object related to fortimail mail options." 
 		::= { fmlMIBConformance 4 }
 
 	fmlHwSensorsConformanceGroup OBJECT-GROUP
