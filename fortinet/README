@@ -1,7 +1,5 @@
-
-
 version info, where the mib files were found, and if renamed
-also mention their original name(s)
+also mention their original name(s). removed devices have been readded
 
 FORTINET-CORE-MIB.mib
 	->FORTINET-CORE-MIB.mib: fortigate 6.0.2
@@ -18,3 +16,61 @@ FORTINET-FORTIMAIL-MIB.mib
 
 FORTINET-FORTIMANAGER-FORTIANALYZER-MIB.mib
 	->FORTINET-FORTIMANAGER-FORTIANALYZER-MIB-build0292.mib: fortianalyzer 6.0.4
+
+
+
+
+fortinet-fortigate-mib.mib has manually readded device id's. keep this in
+mind when submitting patches. we require these devices to be readded.
+this isn't all that hard, a short procedure follows:
+
+
+# we will create a staging area to pre-prepare our mibs before the actual import,
+# for this we'll create the directory /tmp/f2
+  mkdir /tmp/f2
+
+# copy new fortigate mib to /tmp/f2,  in this case FORTINET-FORTIGATE-MIB-build0231.mib
+  cp ~/FORTINET-FORTIGATE-MIB-build0231.mib /tmp/f2
+
+# now safe the removed hardware, this we'll do under our user tmp
+  mkdir ~/tmp
+  cd ~/tmp
+
+# make a list of all models in both the current mib and the new one
+  grep 'OBJECT IDENTIFIER ::= { fgModel' ~/netdisco-mibs/fortinet/fortinet-fortigate-mib.mib >> ~/tmp/fgmodels.patch
+  grep 'OBJECT IDENTIFIER ::= { fgModel' /tmp/f2/FORTINET-FORTIGATE-MIB-build0231.mib  >> ~/tmp/fgmodels.patch
+
+# sort by model oid, removing all exact duplicates
+  cat fgmodels.patch  | sort -n -k 7 | uniq > uniqfg
+
+# if a name has changed but the oid has remained the same the
+# double oids will be listed now
+  uniq -d -f 5 uniqfg
+
+# edit the file uniqfg and manually remove the doubles
+  vi uniqfg
+
+# now we'll prepare a mib which will include all models
+  cd /tmp/f2
+  cp FORTINET-FORTIGATE-MIB-build0231.mib FORTINET-FORTIGATE-MIB-patched.mib
+
+# edit FORTINET-FORTIGATE-MIB-patched.mib, remove ALL fgModel model entries
+# then insert the list we made before (~/tmp/uniqfg) in it's place
+# in vi this can be done with:
+#       :.!cat ~/tmp/uniqfg
+# now copy the mib to staging and follow the normal upgrade procedure
+  mkdir /tmp/fortinet
+  cp FORTINET-FORTIGATE-MIB-patched.mib /tmp/fortinet
+
+# if prepmibs says your file is to old:
+< FORTINET-FORTIGATE-MIB is older (201807200000 < 201901170000) (in 'fortinet-fortigate-mib.mib')
+✔ MIBs ready for import.
+
+# you can, after reviewing the new mib, overwrite 
+# fnFortiGateMib MODULE-IDENTITY
+#    LAST-UPDATED "201901170000Z"
+# just raise it by 1 hour
+#    201901170000Z -> 201901170100Z
+
+# finally, make a note at the top of this file of which mib you added
+# and with what product version it came
