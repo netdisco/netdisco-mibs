@@ -1,0 +1,232 @@
+-- ARISTA-XCVR-DWDM-MIB: Arista DWDM status and control
+-- Copyright (c) 2016 Arista Networks, Inc.  All rights reserved.
+
+ARISTA-XCVR-DWDM-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE,
+    Unsigned32, Counter64              FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP    FROM SNMPv2-CONF
+    TEXTUAL-CONVENTION, TruthValue     FROM SNMPv2-TC
+    ifIndex                            FROM IF-MIB
+    aristaMibs                         FROM ARISTA-SMI-MIB;
+
+aristaXcvrDwdmMIB MODULE-IDENTITY
+    LAST-UPDATED "201808270000Z"
+    ORGANIZATION "Arista Networks, Inc."
+    CONTACT-INFO
+        "Arista Networks, Inc.
+
+         Postal: 5453 Great America Parkway
+                 Santa Clara, CA 95054
+
+         Tel: +1 408 547-5500
+
+         E-mail: snmp@arista.com"
+    DESCRIPTION
+            "The MIB module for DWDM interface status and configuration
+            on Arista devices."
+    REVISION      "201808270000Z"
+    DESCRIPTION   "Added aristaXcvrDwdmUncorrectedCodewords"
+    REVISION      "201805160000Z"
+    DESCRIPTION   "Added aristaXcvrDwdmAdminFrequency and change the range of
+                  aristaXcvrDwdmAdminChannel"
+    REVISION      "201603110000Z"
+    DESCRIPTION "Initial version."
+    ::= { aristaMibs 19 }
+
+AristaDwdmGridSpacing ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT      "d"
+    STATUS            current
+    DESCRIPTION
+            "The spacing, in MHz, between channels.  The
+            effective frequency can be derived by adding
+            (channel - 1) * grid-spacing to the base
+            frequency of 191.2 THz. The meaning of value
+            0 depends on the specific object with this
+            syntax."
+    SYNTAX Unsigned32 (0|6250|12500|25000|50000|100000)
+
+AristaModulationFormat ::= TEXTUAL-CONVENTION
+    STATUS            current
+    DESCRIPTION
+            "The modulation format of the transceiver."
+    SYNTAX   INTEGER {
+                 notApplicable (0),
+                 none          (1),
+                 qpsk          (2),
+                 eightQam      (3),
+                 sixteenQam    (4)
+             }
+
+aristaXcvrDwdmTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF AristaXcvrDwdmEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+                "This table contains DWDM configuration and status
+                for DWDM-capable interfaces."
+    ::= { aristaXcvrDwdmMIB 1 }
+
+aristaXcvrDwdmEntry OBJECT-TYPE
+    SYNTAX      AristaXcvrDwdmEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+                "DWDM configuration and status for a single DWDM-capable
+                interface."
+    INDEX       { ifIndex }
+    ::= { aristaXcvrDwdmTable 1 }
+
+AristaXcvrDwdmEntry ::= SEQUENCE {
+    aristaXcvrDwdmOperChannel      	Unsigned32,
+    aristaXcvrDwdmOperGrid         	AristaDwdmGridSpacing,
+    aristaXcvrDwdmOperFrequency    	Unsigned32,
+    aristaXcvrDwdmAdminChannel     	Unsigned32,
+    aristaXcvrDwdmAdminGrid        	AristaDwdmGridSpacing,
+    aristaXcvrDwdmTunable          	TruthValue,
+    aristaXcvrDwdmModulationFormat 	AristaModulationFormat,
+    aristaXcvrDwdmAdminFrequency   	Unsigned32,
+    aristaXcvrDwdmUncorrectedCodewords	Counter64
+}
+
+aristaXcvrDwdmOperChannel OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The channel on which the transceiver is operating. If the channel
+        is unknown, a value of 0 is returned."
+    ::= { aristaXcvrDwdmEntry 1 }
+
+aristaXcvrDwdmOperGrid OBJECT-TYPE
+    SYNTAX      AristaDwdmGridSpacing
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The grid spacing with which the transceiver is operating,
+        in MHz. If the grid spacing is unknown, a value of 0 is
+        returned."
+    ::= { aristaXcvrDwdmEntry 2 }
+
+aristaXcvrDwdmOperFrequency OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The frequency at which the transceiver is operating,
+        in MHz. This can be derived from channel and grid-spacing
+        configuration if channel and grid are configured (see
+        AristaDwdmGridSpacing description). Value is only valid if
+        transceiver is tunable, otherwise 0."
+    ::= { aristaXcvrDwdmEntry 3 }
+
+-- TODO: aristaXcvrDwdmOperTxPower
+--    ::= { aristaXcvrDwdmEntry 4 }
+-- TODO: aristaXcvrDwdmOperRxPower
+--    ::= { aristaXcvrDwdmEntry 5 }
+
+aristaXcvrDwdmAdminChannel OBJECT-TYPE
+    SYNTAX      Unsigned32 (0|1..1000)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The channel on which the transceiver is configured. 0 is
+        returned if frequency is configured."
+    ::= { aristaXcvrDwdmEntry 6 }
+
+aristaXcvrDwdmAdminGrid OBJECT-TYPE
+    SYNTAX      AristaDwdmGridSpacing
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The grid spacing with which the transceiver is configured,
+        in MHz. The value may not be set to 0. 0 is returned if
+        frequency is configured."
+    ::= { aristaXcvrDwdmEntry 7 }
+
+aristaXcvrDwdmTunable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Whether or not the interface contains an optic capable of
+        tuning its output frequency, False if no optic is inserted."
+    ::= { aristaXcvrDwdmEntry 8 }
+
+aristaXcvrDwdmModulationFormat OBJECT-TYPE
+    SYNTAX      AristaModulationFormat
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The modulation format configured on the given interface.
+
+        If the transceiver associated with an interface does not
+        support modulation format configuration, then the value
+        will be notApplicable."        
+    ::= { aristaXcvrDwdmEntry 9 }
+
+aristaXcvrDwdmAdminFrequency OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The frequency with which the transceiver is configured,
+        in MHz. 0 if grid and/or channel are configured"
+    ::= { aristaXcvrDwdmEntry 10 }
+
+aristaXcvrDwdmUncorrectedCodewords OBJECT-TYPE
+    SYNTAX      Counter64
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The Uncorrected Codewords Count associated with the transceiver.
+
+        If reporting this value is not supported by the transceiver, the value
+        will be 0."
+    ::= { aristaXcvrDwdmEntry 11 }
+
+-- Note that future MIB objects have to start at { aristaXcvrDwdmMIB 3 }
+-- because Conformance and Compliance below uses { ... 2 }.
+
+-- Conformance and Compliance
+
+aristaXcvrDwdmMibConformance OBJECT IDENTIFIER
+    ::= { aristaXcvrDwdmMIB 2 }
+
+aristaXcvrDwdmMibCompliances OBJECT IDENTIFIER
+    ::= { aristaXcvrDwdmMibConformance 1 }
+
+aristaXcvrDwdmMibGroups OBJECT IDENTIFIER
+    ::= { aristaXcvrDwdmMibConformance 2 }
+
+aristaXcvrDwdmMibCompliance  MODULE-COMPLIANCE
+    STATUS     current
+    DESCRIPTION
+        "The compliance statement for Arista switches that implement
+        the ARISTA-XCVR-DWDM-MIB."
+    MODULE     -- this module
+    MANDATORY-GROUPS {
+        aristaXcvrDwdmGroup
+    }
+    ::= { aristaXcvrDwdmMibCompliances 1 }
+
+aristaXcvrDwdmGroup  OBJECT-GROUP
+    OBJECTS {
+        aristaXcvrDwdmOperChannel,
+        aristaXcvrDwdmOperGrid,
+        aristaXcvrDwdmOperFrequency,
+        aristaXcvrDwdmAdminChannel,
+        aristaXcvrDwdmAdminGrid,
+        aristaXcvrDwdmTunable,
+        aristaXcvrDwdmModulationFormat,
+        aristaXcvrDwdmAdminFrequency,
+        aristaXcvrDwdmUncorrectedCodewords
+    }
+    STATUS  current
+    DESCRIPTION
+        "The collection of objects that provide per-interface
+        transceiver specific information."
+    ::= { aristaXcvrDwdmMibGroups 1 }
+
+END
