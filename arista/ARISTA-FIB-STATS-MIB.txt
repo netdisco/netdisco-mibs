@@ -1,0 +1,294 @@
+ARISTA-FIB-STATS-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE,
+    Gauge32                           FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP   FROM SNMPv2-CONF
+    TEXTUAL-CONVENTION                FROM SNMPv2-TC
+    InetAddressPrefixLength           FROM INET-ADDRESS-MIB
+    InetVersion                       FROM INET-ADDRESS-MIB
+    aristaMibs                        FROM ARISTA-SMI-MIB;
+
+aristaFIBStatsMIB MODULE-IDENTITY
+    LAST-UPDATED "201705190000Z"
+    ORGANIZATION "Arista Networks, Inc."
+    CONTACT-INFO
+        "Arista Networks, Inc.
+
+         Postal: 5453 Great America Parkway
+                 Santa Clara, CA 95054
+
+         Tel: +1 408 547-5500
+
+         E-mail: snmp@arista.com"
+    DESCRIPTION
+            "Arista devices that function as a router support various
+            dynamic routing protocols like BGP, OSPF. Customers can
+            configure local or static routes as well.
+
+            The routing subsystem is responsible for creating the
+            forwarding information base (FIB) from routing information
+            received by customer configuration or dynamic routing
+            protocols. The FIB has the complete details about all the
+            routes that are active in the system and will be used for
+            data forwarding.
+
+            In the context of this MIB, we specifically refer to the
+            unicast FIB.
+
+            This MIB provides useful statistics about the FIB.
+
+            Arista devices support routing function for IPv4 and IPv6
+            address families. Arista devices also support the concept
+            of virtual routing and forwarding (VRF), with a single
+            device providing multiple routing instances. This allows
+            customers to isolate network traffic and use overlapping
+            addresses. A VRF instance is identified by a customer
+            configured string.
+            
+            Arista devices maintain independent FIB for each address
+            family and VRF instance.
+
+            This MIB provides access to FIB summary of all address
+            families within a specific VRF instance. Network
+            Management Stations can obtain FIB summary for every VRF
+            instance by specifying the VRF instance as a context, when
+            using SNMPv3; or by including the VRF instance in the
+            community string (format is <community>@<vrf instance>)
+            when using SNMPv2."           
+
+    REVISION     "201705190000Z"
+    DESCRIPTION
+           "Initial revision of the MIB module."
+    ::= { aristaMibs 23 }
+
+
+-- Textual Convention
+
+RouteType ::= TEXTUAL-CONVENTION
+    STATUS     current
+    DESCRIPTION
+        "The type of the route present in the FIB. Not all values of
+        the route type may be supported on all Arista devices. A short
+        description of some of the route types is provided below.
+
+        OSPF[v3], BGP, RIP, IS-IS are dynamic routing protocols as
+        specified by the standards bodies.
+
+        On Arista devices, customers can run their own application and
+        program routes from the applications using EOS SDK. These
+        routes are not saved - when the device reboots, the
+        routes are not longer present in the system, and have to be
+        reprogrammed. These routes are static but not persistent.
+
+        On Arista devices, customers can also create a 'nexthop list'
+        and use the list to create routes manually. Packets that match
+        specific routes will be forwarded to one of the nexthops in
+        the list. This route type is referred as a nexthop-group
+        route.
+
+        All subnets which an Arista device is (configured to be) part
+        of, are referred to as connected routes.
+
+        Hosts attached to the subnets of which an Arista device is
+        part of, are referred to as attached hosts or routes.
+
+        On Arista devices, there may be system-configured
+        non-routeable prefixes which are referred to as internal
+        routes.
+
+        Route types that correspond to 'standard routing protocols'
+        and are defined in IANA-RTPROTO-MIB, take on the same value as
+        IANAipRouteProtocol."
+        
+    SYNTAX     INTEGER {
+                   other                (1),   -- not specified
+                   connected            (2),   -- Connected or local subnet routes
+                   static               (3),   -- static routes configured by user
+                   rip                  (8),   -- RIP protocol routes
+                   isIs                 (9),   -- IS-IS protocol routes
+                   ospf                 (13),  -- OSPF protocol routes
+                   bgp                  (14),  -- BGP protocol routes
+                   ospfv3               (200), -- OSPFv3 protocol routes
+                   staticNonPersistent  (201), -- routes configured using EOS SDK
+                   staticNexthopGroup   (202), -- static next-hop group routes
+                   attached             (203), -- Attached routes
+                   vcs                  (204), -- Vxlan Control Service routes
+                   internal             (205)  -- Device internal routes
+               }
+
+aristaFIBStatsMibObjects        OBJECT IDENTIFIER
+    ::= { aristaFIBStatsMIB 1 }
+
+aristaFIBStatsMibConformance    OBJECT IDENTIFIER
+    ::= { aristaFIBStatsMIB 2 }
+
+aristaFIBStatsSummaryTable    OBJECT-TYPE
+    SYNTAX                    SEQUENCE OF AristaFIBStatsSummaryEntry
+    MAX-ACCESS                not-accessible
+    STATUS                    current
+    DESCRIPTION
+        "This table contains overall FIB statistics for each address
+        family."
+    ::= { aristaFIBStatsMibObjects 1 }
+
+aristaFIBStatsSummaryEntry   OBJECT-TYPE
+    SYNTAX                   AristaFIBStatsSummaryEntry
+    MAX-ACCESS               not-accessible
+    STATUS                   current
+    DESCRIPTION
+        "A conceptual row that contains overall FIB statistics for
+        a specific address family. A conceptual row is available only
+        for supported address families."
+    INDEX          { aristaFIBStatsAF }
+    ::= { aristaFIBStatsSummaryTable 1 }
+
+AristaFIBStatsSummaryEntry ::= SEQUENCE {
+    aristaFIBStatsAF             InetVersion,         
+    aristaFIBStatsTotalRoutes    Gauge32
+}
+
+aristaFIBStatsAF        OBJECT-TYPE
+    SYNTAX              InetVersion
+    MAX-ACCESS          not-accessible
+    STATUS              current
+    DESCRIPTION
+        "Indicates the IP version of this row."
+    ::= { aristaFIBStatsSummaryEntry 1 }
+
+aristaFIBStatsTotalRoutes  OBJECT-TYPE
+    SYNTAX                 Gauge32
+    MAX-ACCESS             read-only
+    STATUS                 current
+    DESCRIPTION
+        "Indicates the total number of routes active in the FIB for
+        the specified address family."
+    ::= { aristaFIBStatsSummaryEntry 2 }
+
+-- Statistics by Route Type
+
+aristaFIBStatsByRouteTypeTable OBJECT-TYPE
+    SYNTAX                           SEQUENCE OF AristaFIBStatsByRouteTypeEntry
+    MAX-ACCESS                       not-accessible
+    STATUS                           current
+    DESCRIPTION
+        "This table contains FIB statistics for each address
+        family and route type. Every entry in the FIB may have been
+        contributed by a specific route type. This table
+        provides statistics for various route types that contribute to
+        the FIB."
+    ::= { aristaFIBStatsMibObjects 2 }
+
+aristaFIBStatsByRouteTypeEntry   OBJECT-TYPE
+    SYNTAX                       AristaFIBStatsByRouteTypeEntry
+    MAX-ACCESS                   not-accessible
+    STATUS                       current
+    DESCRIPTION
+        "A conceptual row that contains FIB statistics for
+        a specific address family and route type. A conceptual row
+        is available only for supported address families and
+        contributing route type. If no entry exists in the FIB for a
+        specific route type, the corresponding conceptual row may not
+        be available."
+    INDEX          { aristaFIBStatsAF, aristaFIBStatsRouteType }
+    ::= { aristaFIBStatsByRouteTypeTable 1 }
+
+AristaFIBStatsByRouteTypeEntry ::= SEQUENCE {
+    aristaFIBStatsRouteType                   RouteType,
+    aristaFIBStatsTotalRoutesForRouteType     Gauge32
+}
+
+aristaFIBStatsRouteType  OBJECT-TYPE
+    SYNTAX               RouteType
+    MAX-ACCESS           not-accessible
+    STATUS               current
+    DESCRIPTION
+        "The route type that corresponds to this conceptual row."
+    ::= { aristaFIBStatsByRouteTypeEntry 1 }
+
+aristaFIBStatsTotalRoutesForRouteType  OBJECT-TYPE
+    SYNTAX                             Gauge32
+    MAX-ACCESS                         read-only
+    STATUS                             current
+    DESCRIPTION
+        "Indicates the total number of routes active in the FIB for
+        the specified address family and route type."
+    ::= { aristaFIBStatsByRouteTypeEntry 2 }
+
+
+-- Stats by prefix length
+aristaFIBStatsByPrefixLenTable OBJECT-TYPE
+    SYNTAX                     SEQUENCE OF AristaFIBStatsByPrefixLenEntry
+    MAX-ACCESS                 not-accessible
+    STATUS                     current
+    DESCRIPTION
+        "Each route entry present in the FIB has an associated prefix
+        length. This table contains FIB statistics for each address
+        family and prefix length."
+    ::= { aristaFIBStatsMibObjects 3 }
+
+aristaFIBStatsByPrefixLenEntry   OBJECT-TYPE
+    SYNTAX                       AristaFIBStatsByPrefixLenEntry
+    MAX-ACCESS                   not-accessible
+    STATUS                       current
+    DESCRIPTION
+        "A conceptual row that contains FIB statistics for
+        a specific address family and prefix length. A conceptual row
+        is available only for supported address families and
+        contributing prefix lengths."
+    INDEX          { aristaFIBStatsAF, aristaFIBStatsPrefixLen }
+    ::= { aristaFIBStatsByPrefixLenTable 1 }
+
+AristaFIBStatsByPrefixLenEntry ::= SEQUENCE {
+    aristaFIBStatsPrefixLen                   InetAddressPrefixLength,
+    aristaFIBStatsTotalRoutesForPrefixLen     Gauge32
+}
+
+aristaFIBStatsPrefixLen  OBJECT-TYPE
+    SYNTAX               InetAddressPrefixLength
+    MAX-ACCESS           not-accessible
+    STATUS               current
+    DESCRIPTION
+        "The prefix length that corresponds to this conceptual row."
+    ::= { aristaFIBStatsByPrefixLenEntry 1 }
+
+aristaFIBStatsTotalRoutesForPrefixLen  OBJECT-TYPE
+    SYNTAX                             Gauge32
+    MAX-ACCESS                         read-only
+    STATUS                             current
+    DESCRIPTION
+        "Indicates the total number of routes active in the FIB for
+        the specified address family and specific prefix length."
+    ::= { aristaFIBStatsByPrefixLenEntry 2 }
+
+-- Conformance and Compliance
+aristaFIBStatsMibCompliances OBJECT IDENTIFIER
+    ::= { aristaFIBStatsMibConformance 1 }
+
+aristaFIBStatsMibGroups OBJECT IDENTIFIER
+    ::= { aristaFIBStatsMibConformance 2 }
+
+aristaFIBStatsMibCompliance  MODULE-COMPLIANCE
+    STATUS                   current
+    DESCRIPTION
+        "The compliance statement for Arista switches that implement
+        the ARISTA-FIB-STATS-MIB."
+    MODULE   -- this module
+    MANDATORY-GROUPS {
+        aristaFIBStatsGroup
+    }
+    ::= { aristaFIBStatsMibCompliances 1 }
+
+aristaFIBStatsGroup OBJECT-GROUP
+    OBJECTS {
+        aristaFIBStatsTotalRoutes,
+        aristaFIBStatsTotalRoutesForRouteType,
+        aristaFIBStatsTotalRoutesForPrefixLen
+    }
+    STATUS current
+    DESCRIPTION
+        "The collection of objects that provide relevant FIB
+        statistics for specific VRF instance."
+    ::= { aristaFIBStatsMibGroups 1 }
+
+END
