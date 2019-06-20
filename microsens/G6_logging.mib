@@ -1,0 +1,685 @@
+G6-LOGGING-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32, Counter32, enterprises,NOTIFICATION-TYPE
+		FROM SNMPv2-SMI
+	DisplayString, MacAddress
+		FROM SNMPv2-TC
+	g6	FROM MICROSENS-G6-MIB
+	;
+
+management MODULE-IDENTITY --Category
+	LAST-UPDATED "201802121619Z"
+	ORGANIZATION "MICROSENS GmbH & Co. KG"
+	CONTACT-INFO
+		"Kueferstrasse 16
+		D-59067 Hamm
+		Germany
+		support@microsens.de
+		http://www.microsens.de"
+	DESCRIPTION
+		"Microsens private MIB for Generation 6 Ethernet Switches"
+
+	REVISION "201802121619Z"
+	DESCRIPTION
+		"File creation"
+	::= { g6 3 }
+
+logging  OBJECT IDENTIFIER ::= { management 71 }
+
+
+
+-- *************************** CONFIGURATION SECTION ********************************
+
+
+loggingSendTestEvent OBJECT-TYPE   -- send_test_event
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Creates an ALIVE_TEST event. This may be used to check out log functionality. Hint: The severeness of the ALIVE_TEST event may be changed to try out alarm thresholds."
+	::= { logging 1 }
+
+
+loggingLogFileStorage OBJECT-TYPE   -- log_file_storage
+	SYNTAX INTEGER 
+		{
+		ramDisk (0),
+		sdCard (1)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Select the storage type of the logfile. Writing to SD card protects the file against reboot but significantly increases SD card write cycles."
+	::= { logging 2 }
+
+
+-- ******************* Begin of targetTable *************************
+
+targetTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF TargetEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"An unlimited number of syslog receivers may be specified."
+	::= { logging 3 }
+
+targetEntry	OBJECT-TYPE
+	SYNTAX TargetEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { targetIndex }
+	::= { targetTable 1 }
+
+
+	TargetEntry ::= SEQUENCE {
+	targetIndex INTEGER,
+	targetAlias DisplayString,
+	targetHostAddress DisplayString,
+	targetLogType INTEGER ,
+	targetDetailLevel INTEGER ,
+	targetMessageFormat INTEGER ,
+	targetTrapType INTEGER ,
+	targetTrapCommunity DisplayString,
+	targetSnmpV3Username DisplayString,
+	targetMinimumSeverity INTEGER ,
+	targetRequiredRelevance INTEGER ,
+	targetRequiredSource INTEGER ,
+	targetLogConfigChanges INTEGER ,
+	targetLogDebugEventsOnly INTEGER 
+	}
+
+targetIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..15)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { targetEntry 1 }
+
+targetAlias OBJECT-TYPE   -- alias
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Name of this syslog entry for reference."
+	::= { targetEntry 2 }
+
+targetHostAddress OBJECT-TYPE   -- host_address
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"IP address or hostname to the syslog server or snmp manager. Leave empty for local targets such as CLI or recent logs buffer."
+	::= { targetEntry 3 }
+
+targetLogType OBJECT-TYPE   -- log_type
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		syslog (1),
+		snmpTrapV1 (2),
+		snmpTrapV2c (3),
+		snmpTrapV3 (4),
+		snmpInformV2c (5),
+		snmpInformV3 (6),
+		displayInCli (7),
+		recentLogs (8)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Specifes the type of event forwarding to match the desired manager."
+	::= { targetEntry 4 }
+
+targetDetailLevel OBJECT-TYPE   -- detail_level
+	SYNTAX INTEGER 
+		{
+		concise (0),
+		verbose (1),
+		extended (2)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Permits setting the detail level of the logged information. For SMNP v1 the setting EXTENDED changes the trap OID to indicate the private trap OID. For Syslog the setting EXTENDED prepends a rfc3164 compliant header. "
+	::= { targetEntry 5 }
+
+targetMessageFormat OBJECT-TYPE   -- message_format
+	SYNTAX INTEGER 
+		{
+		standard (0),
+		preferCustom (1),
+		customOnly (2)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Determines if custom message text is used. It may be desireable to use custom on the console but to use standard text in log files."
+	::= { targetEntry 6 }
+
+targetTrapType OBJECT-TYPE   -- trap_type
+	SYNTAX INTEGER 
+		{
+		public (0),
+		preferPublic (1),
+		private (2),
+		both (3)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Decides whether public or private traps are used. This parameter only applies then a SNMP log_type is selected."
+	::= { targetEntry 7 }
+
+targetTrapCommunity OBJECT-TYPE   -- trap_community
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"For SNMP v1/v2c parameter may be used to help receiving manager filtering out unwanted traps."
+	::= { targetEntry 8 }
+
+targetSnmpV3Username OBJECT-TYPE   -- snmp_v3_username
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When SNMP v3 is used this name is associated with a user under Mangement.access.user.name of the same name. The SNMP security level and passwords are taken from this user.For non SNMP logs this parameter has no effect."
+	::= { targetEntry 9 }
+
+targetMinimumSeverity OBJECT-TYPE   -- minimum_severity
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		debug (1),
+		info (2),
+		notice (3),
+		warning (4),
+		error (5),
+		critical (6),
+		alert (7),
+		emergency (8)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Only events with the defined severeness or worse are forwarded."
+	::= { targetEntry 10 }
+
+targetRequiredRelevance OBJECT-TYPE   -- required_relevance
+	SYNTAX INTEGER 
+		{
+		any (0),
+		negOnly (1)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Forward any event or only negative ones."
+	::= { targetEntry 11 }
+
+targetRequiredSource OBJECT-TYPE   -- required_source
+	SYNTAX INTEGER 
+		{
+		any (0),
+		portOnly (1),
+		unitOnly (2)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Forward any event or only port or unit related events."
+	::= { targetEntry 12 }
+
+targetLogConfigChanges OBJECT-TYPE   -- log_config_changes
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled configuration changes are logged regardless of relevance or source. When disabled no config changes are logged."
+	::= { targetEntry 13 }
+
+targetLogDebugEventsOnly OBJECT-TYPE   -- log_debug_events_only
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled debugging events with a minimum severity are logged. Other events are suppressed! When disabled no debugging events are logged."
+	::= { targetEntry 14 }
+
+
+-- ********************* End of targetTable ***********************
+
+
+-- ******************* Begin of historyConfigTable *************************
+
+historyConfigTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF HistoryConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Up to 15 distinct values may be polled and and saved to create a value history."
+	::= { logging 4 }
+
+historyConfigEntry	OBJECT-TYPE
+	SYNTAX HistoryConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { historyConfigIndex }
+	::= { historyConfigTable 1 }
+
+
+	HistoryConfigEntry ::= SEQUENCE {
+	historyConfigIndex INTEGER,
+	historyConfigName DisplayString,
+	historyConfigRecordMode INTEGER ,
+	historyConfigHistoryFileMode INTEGER ,
+	historyConfigDotstring DisplayString,
+	historyConfigRestart DisplayString
+	}
+
+historyConfigIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..14)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { historyConfigEntry 1 }
+
+historyConfigName OBJECT-TYPE   -- name
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Name of this chart"
+	::= { historyConfigEntry 2 }
+
+historyConfigRecordMode OBJECT-TYPE   -- record_mode
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		enabled (1)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Defines in which way the history data are recorded."
+	::= { historyConfigEntry 3 }
+
+historyConfigHistoryFileMode OBJECT-TYPE   -- history_file_mode
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		hourly (1),
+		daily (2)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When set, the recorded data points will be saved to flash memory. The files can be accessed in the ftp history folder or using commands under Management.files.history."
+	::= { historyConfigEntry 4 }
+
+historyConfigDotstring OBJECT-TYPE   -- dotstring
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"CLI compliant dotstring (command line) that will be executed in order to obtain the data to record."
+	::= { historyConfigEntry 5 }
+
+historyConfigRestart OBJECT-TYPE   -- restart
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Clear all historic data (in RAM)  and start from now on again. Only this seleted dotstring is affected. History files are NOT affected."
+	::= { historyConfigEntry 6 }
+
+
+-- ********************* End of historyConfigTable ***********************
+
+
+
+-- ****************************** STATUS SECTION ********************************
+
+
+-- ******************* Begin of statisticsTable *************************
+
+statisticsTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF StatisticsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"These statistics indicate about the operation of the logging process."
+	::= { logging 100 }
+
+statisticsEntry	OBJECT-TYPE
+	SYNTAX StatisticsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { statisticsIndex }
+	::= { statisticsTable 1 }
+
+
+	StatisticsEntry ::= SEQUENCE {
+	statisticsIndex INTEGER,
+	statisticsNumberOfTargets Unsigned32,
+	statisticsLogfileCounter Unsigned32,
+	statisticsSyslogCounter Unsigned32,
+	statisticsSyslogErrorCounter Unsigned32,
+	statisticsLastSyslogResponse DisplayString,
+	statisticsTrapCounter Unsigned32,
+	statisticsTrapErrorCounter Unsigned32,
+	statisticsActiveLogfileIndex Unsigned32,
+	statisticsLogfile1Size Unsigned32,
+	statisticsLogfile2Size Unsigned32
+	}
+
+statisticsIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { statisticsEntry 1 }
+
+statisticsNumberOfTargets OBJECT-TYPE   -- number_of_targets
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates who many recipients exist for an event. This includes local log file when selected."
+	::= { statisticsEntry 2 }
+
+statisticsLogfileCounter OBJECT-TYPE   -- logfile_counter
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"All logs written in the internal logfile system are counted here."
+	::= { statisticsEntry 3 }
+
+statisticsSyslogCounter OBJECT-TYPE   -- syslog_counter
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"All logs to any target are counted here."
+	::= { statisticsEntry 4 }
+
+statisticsSyslogErrorCounter OBJECT-TYPE   -- syslog_error_counter
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"All logs to any target that failed are counted here."
+	::= { statisticsEntry 5 }
+
+statisticsLastSyslogResponse OBJECT-TYPE   -- last_syslog_response
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This contains a copy of the last syslog response for trouble shooting."
+	::= { statisticsEntry 6 }
+
+statisticsTrapCounter OBJECT-TYPE   -- trap_counter
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"All traps to any target are counted here."
+	::= { statisticsEntry 7 }
+
+statisticsTrapErrorCounter OBJECT-TYPE   -- trap_error_counter
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"All traps to any target that failed are counted here."
+	::= { statisticsEntry 8 }
+
+statisticsActiveLogfileIndex OBJECT-TYPE   -- active_logfile_index
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates which of the alternating logfiles is currently selected and contains the recent logs."
+	::= { statisticsEntry 9 }
+
+statisticsLogfile1Size OBJECT-TYPE   -- logfile_1_size
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the size of the internal local log file 1 in bytes."
+	::= { statisticsEntry 10 }
+
+statisticsLogfile2Size OBJECT-TYPE   -- logfile_2_size
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the size of the internal local log file 2 in bytes."
+	::= { statisticsEntry 11 }
+
+
+-- ********************* End of statisticsTable ***********************
+
+
+-- ******************* Begin of recentLogsTable *************************
+
+recentLogsTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF RecentLogsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table displays the last 15 log events ordered from latest to oldest."
+	::= { logging 101 }
+
+recentLogsEntry	OBJECT-TYPE
+	SYNTAX RecentLogsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { recentLogsIndex }
+	::= { recentLogsTable 1 }
+
+
+	RecentLogsEntry ::= SEQUENCE {
+	recentLogsIndex INTEGER,
+	recentLogsTimeStamp Counter32,
+	recentLogsSeverity INTEGER ,
+	recentLogsSource DisplayString,
+	recentLogsMessage DisplayString
+	}
+
+recentLogsIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..19)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { recentLogsEntry 1 }
+
+recentLogsTimeStamp OBJECT-TYPE   -- time_stamp
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Updated whenever the entry is updated."
+	::= { recentLogsEntry 2 }
+
+recentLogsSeverity OBJECT-TYPE   -- severity
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		debug (1),
+		info (2),
+		notice (3),
+		warning (4),
+		error (5),
+		critical (6),
+		alert (7),
+		emergency (8)
+		}
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the severeness of the event."
+	::= { recentLogsEntry 3 }
+
+recentLogsSource OBJECT-TYPE   -- source
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates unit or port id of originating event source."
+	::= { recentLogsEntry 4 }
+
+recentLogsMessage OBJECT-TYPE   -- message
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This contains a copy of the last syslog message"
+	::= { recentLogsEntry 5 }
+
+
+-- ********************* End of recentLogsTable ***********************
+
+
+-- ******************* Begin of historyRecordsTable *************************
+
+historyRecordsTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF HistoryRecordsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Displays historic values accumulated over time. These data may be used to plot graphs or to detect trends."
+	::= { logging 102 }
+
+historyRecordsEntry	OBJECT-TYPE
+	SYNTAX HistoryRecordsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { historyRecordsIndex }
+	::= { historyRecordsTable 1 }
+
+
+	HistoryRecordsEntry ::= SEQUENCE {
+	historyRecordsIndex INTEGER,
+	historyRecordsName DisplayString,
+	historyRecordsState INTEGER ,
+	historyRecordsLastValue DisplayString,
+	historyRecordsAverageLastMinute DisplayString,
+	historyRecordsAverageLastHour DisplayString,
+	historyRecordsLastMinute DisplayString,
+	historyRecordsLastHour DisplayString,
+	historyRecordsLastDay DisplayString,
+	historyRecordsLastUpdate Counter32
+	}
+
+historyRecordsIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..14)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { historyRecordsEntry 1 }
+
+historyRecordsName OBJECT-TYPE   -- name
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Reflects the name of the related history_config entry."
+	::= { historyRecordsEntry 2 }
+
+historyRecordsState OBJECT-TYPE   -- state
+	SYNTAX INTEGER 
+		{
+		disabled (0),
+		invalid (1),
+		normal (2),
+		updating (3)
+		}
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates if this record displays a currently running script or a history entry of a previously running script which has ended by now."
+	::= { historyRecordsEntry 3 }
+
+historyRecordsLastValue OBJECT-TYPE   -- last_value
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This value is updated every second with the latest polled value."
+	::= { historyRecordsEntry 4 }
+
+historyRecordsAverageLastMinute OBJECT-TYPE   -- average_last_minute
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This value is updated every second but averages over the last minute."
+	::= { historyRecordsEntry 5 }
+
+historyRecordsAverageLastHour OBJECT-TYPE   -- average_last_hour
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This value is updated every minute but averages over the last hour."
+	::= { historyRecordsEntry 6 }
+
+historyRecordsLastMinute OBJECT-TYPE   -- last_minute
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Comma separated list with one value per every second starting at second 00. 60 values are recorded. Successive commas with no content in between indicate time positions for which no data are available."
+	::= { historyRecordsEntry 7 }
+
+historyRecordsLastHour OBJECT-TYPE   -- last_hour
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Comma separated list with one value per minute, starting at minute 00. 60 values are recorded. Successive commas with no content in between indicate time positions for which no data are yet available. Every hour the daily file gets one line appended. Every day a new file is created."
+	::= { historyRecordsEntry 8 }
+
+historyRecordsLastDay OBJECT-TYPE   -- last_day
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Comma separated list with one value per every 15 minutes, starting at hour 00. 96 values are recorded. Successive commas with no content in between indicate time positions for which no data are yet available. Every day at nidnight the file gets one line appended with the current day. Every month a new file is started."
+	::= { historyRecordsEntry 9 }
+
+historyRecordsLastUpdate OBJECT-TYPE   -- last_update
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the time when this record was last updated."
+	::= { historyRecordsEntry 10 }
+
+
+-- ********************* End of historyRecordsTable ***********************
+
+
+
+END
+

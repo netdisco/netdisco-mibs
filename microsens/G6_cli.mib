@@ -1,0 +1,574 @@
+G6-CLI-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32, Counter32, enterprises,NOTIFICATION-TYPE
+		FROM SNMPv2-SMI
+	DisplayString, MacAddress
+		FROM SNMPv2-TC
+	g6	FROM MICROSENS-G6-MIB
+	;
+
+management MODULE-IDENTITY --Category
+	LAST-UPDATED "201802121619Z"
+	ORGANIZATION "MICROSENS GmbH & Co. KG"
+	CONTACT-INFO
+		"Kueferstrasse 16
+		D-59067 Hamm
+		Germany
+		support@microsens.de
+		http://www.microsens.de"
+	DESCRIPTION
+		"Microsens private MIB for Generation 6 Ethernet Switches"
+
+	REVISION "201802121619Z"
+	DESCRIPTION
+		"File creation"
+	::= { g6 3 }
+
+cli  OBJECT IDENTIFIER ::= { management 62 }
+
+
+
+-- *************************** CONFIGURATION SECTION ********************************
+
+
+cliEnableTelnet OBJECT-TYPE   -- enable_telnet
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enable TELNET for CLI access. Note: Disable TELNET and enable only SSH when only secure access is desired."
+	::= { cli 1 }
+
+
+cliEnableSsh OBJECT-TYPE   -- enable_ssh
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enable SSH for CLI access. Note: When disabled also the SFTP file transfer server is disabled. "
+	::= { cli 2 }
+
+
+cliPromptSource OBJECT-TYPE   -- prompt_source
+	SYNTAX INTEGER 
+		{
+		hostname (0),
+		deviceLocation (1),
+		userName (2),
+		userDefined (3)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Decides which prompt is shown."
+	::= { cli 3 }
+
+
+cliWelcomeMessage OBJECT-TYPE   -- welcome_message
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"This welcome message is displayed prior to the login prompt."
+	::= { cli 4 }
+
+
+cliUserPrompt OBJECT-TYPE   -- user_prompt
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"User definable prompt string."
+	::= { cli 5 }
+
+
+cliColors OBJECT-TYPE   -- colors
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Color enhances readability but may not work with every terminal. Disable function when funny character appear."
+	::= { cli 6 }
+
+
+cliScriptMode OBJECT-TYPE   -- script_mode
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When set the output will include the the full command which permits to pipe the output into a script file."
+	::= { cli 7 }
+
+
+cliAutoTextExpansion OBJECT-TYPE   -- auto_text_expansion
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled typing characters will automatically be expanded on the command line for quicker access. This may conflict with batch file processing."
+	::= { cli 8 }
+
+
+cliDontAskQuestions OBJECT-TYPE   -- dont_ask_questions
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled security questions are avoided for experienced operators."
+	::= { cli 9 }
+
+
+cliInactivityTimeout OBJECT-TYPE   -- inactivity_timeout
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"An unattended CLI terminal logs off automatically after specified seconds. Use 0 to disable timeout."
+	::= { cli 10 }
+
+
+cliMicroscriptTracing OBJECT-TYPE   -- microscript_tracing
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled the program flow of each running microscript or app is traced. The resulting trace files are accessible under ftp folder script_logs. This feature may be used to debug scripts and should otherwise be disabled."
+	::= { cli 11 }
+
+
+cliNamedStatusSelection OBJECT-TYPE   -- named_status_selection
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled dynamic status tables can comfortably be referenced by name. Otherwise a numerical index is used."
+	::= { cli 12 }
+
+
+cliLiveHelp OBJECT-TYPE   -- live_help
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled a help text is automatically displayed while browsing through the CLI commands."
+	::= { cli 13 }
+
+
+-- ******************* Begin of favoritesTable *************************
+
+favoritesTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF FavoritesEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table may be for a customized the favorites display. The commands are displayed in the entered order using the Favorites command."
+	::= { cli 14 }
+
+favoritesEntry	OBJECT-TYPE
+	SYNTAX FavoritesEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { favoritesIndex }
+	::= { favoritesTable 1 }
+
+
+	FavoritesEntry ::= SEQUENCE {
+	favoritesIndex INTEGER,
+	favoritesCommandLine DisplayString
+	}
+
+favoritesIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..15)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { favoritesEntry 1 }
+
+favoritesCommandLine OBJECT-TYPE   -- command_line
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enter full command as it would be typed on the CLI console. This may also include calling scripts using runscriptfile = file syntax."
+	::= { favoritesEntry 2 }
+
+
+-- ********************* End of favoritesTable ***********************
+
+
+
+-- ****************************** STATUS SECTION ********************************
+
+
+cliLastInstance OBJECT-TYPE   -- last_instance
+	SYNTAX Integer32 (0..255)
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Number of times a CLI was started. Note: this value wraps at 255."
+	::= { cli 100 }
+
+
+-- ******************* Begin of scriptStatusTable *************************
+
+scriptStatusTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF ScriptStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Statistics about script file execution. Note that multiple CLI instances or command line invokations add up in the same statistics."
+	::= { cli 101 }
+
+scriptStatusEntry	OBJECT-TYPE
+	SYNTAX ScriptStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { scriptStatusIndex }
+	::= { scriptStatusTable 1 }
+
+
+	ScriptStatusEntry ::= SEQUENCE {
+	scriptStatusIndex INTEGER,
+	scriptStatusLastScriptName DisplayString,
+	scriptStatusExecutedFiles Unsigned32,
+	scriptStatusExecutedCommands Unsigned32,
+	scriptStatusCommandErrors Unsigned32
+	}
+
+scriptStatusIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { scriptStatusEntry 1 }
+
+scriptStatusLastScriptName OBJECT-TYPE   -- last_script_name
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Name of last CLI script executed."
+	::= { scriptStatusEntry 2 }
+
+scriptStatusExecutedFiles OBJECT-TYPE   -- executed_files
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts each time a CLI script is executed."
+	::= { scriptStatusEntry 3 }
+
+scriptStatusExecutedCommands OBJECT-TYPE   -- executed_commands
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts each command executed within the current/last script file. The value is reset each time a script starts executing."
+	::= { scriptStatusEntry 4 }
+
+scriptStatusCommandErrors OBJECT-TYPE   -- command_errors
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts each executed command within the current/last script file that returned an error code. The value is reset each time a script starts executing."
+	::= { scriptStatusEntry 5 }
+
+
+-- ********************* End of scriptStatusTable ***********************
+
+
+-- ******************* Begin of compareStatusTable *************************
+
+compareStatusTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF CompareStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Displays status results of the % operator to compare parameter or status to a set value."
+	::= { cli 102 }
+
+compareStatusEntry	OBJECT-TYPE
+	SYNTAX CompareStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { compareStatusIndex }
+	::= { compareStatusTable 1 }
+
+
+	CompareStatusEntry ::= SEQUENCE {
+	compareStatusIndex INTEGER,
+	compareStatusLastDotstring DisplayString,
+	compareStatusMatched INTEGER ,
+	compareStatusItemsCompared Unsigned32,
+	compareStatusItemsDifferent Unsigned32
+	}
+
+compareStatusIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { compareStatusEntry 1 }
+
+compareStatusLastDotstring OBJECT-TYPE   -- last_dotstring
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Copy of last dot_string tested."
+	::= { compareStatusEntry 2 }
+
+compareStatusMatched OBJECT-TYPE   -- matched
+	SYNTAX INTEGER { false(0), true(1) }
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays True when the last comparision matched."
+	::= { compareStatusEntry 3 }
+
+compareStatusItemsCompared OBJECT-TYPE   -- items_compared
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts the number of items tested. May be more than 1 when wildcards are used."
+	::= { compareStatusEntry 4 }
+
+compareStatusItemsDifferent OBJECT-TYPE   -- items_different
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts the number of items the were different. May be more than 0 when wildcards are used."
+	::= { compareStatusEntry 5 }
+
+
+-- ********************* End of compareStatusTable ***********************
+
+
+-- ******************* Begin of scriptMonitorTable *************************
+
+scriptMonitorTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF ScriptMonitorEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Displays status results of the % operator to compare parameter or status to a set value."
+	::= { cli 103 }
+
+scriptMonitorEntry	OBJECT-TYPE
+	SYNTAX ScriptMonitorEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { scriptMonitorIndex }
+	::= { scriptMonitorTable 1 }
+
+
+	ScriptMonitorEntry ::= SEQUENCE {
+	scriptMonitorIndex INTEGER,
+	scriptMonitorState INTEGER ,
+	scriptMonitorScriptName DisplayString,
+	scriptMonitorLaunchedBy DisplayString,
+	scriptMonitorCliInstance Unsigned32,
+	scriptMonitorLaunchTimeStamp Counter32,
+	scriptMonitorRunTime Counter32,
+	scriptMonitorCurrentFile DisplayString,
+	scriptMonitorCurrentSubroutine DisplayString,
+	scriptMonitorLinesExecuted Unsigned32,
+	scriptMonitorCurrentLineNumber Unsigned32,
+	scriptMonitorScriptErrors Unsigned32
+	}
+
+scriptMonitorIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..15)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { scriptMonitorEntry 1 }
+
+scriptMonitorState OBJECT-TYPE   -- state
+	SYNTAX INTEGER 
+		{
+		unused (0),
+		history (1),
+		running (2)
+		}
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates if this record displays a currently running script or a history entry of a previously running script which has ended by now."
+	::= { scriptMonitorEntry 2 }
+
+scriptMonitorScriptName OBJECT-TYPE   -- script_name
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Name of the script"
+	::= { scriptMonitorEntry 3 }
+
+scriptMonitorLaunchedBy OBJECT-TYPE   -- launched_by
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Name of event or or other means of starting"
+	::= { scriptMonitorEntry 4 }
+
+scriptMonitorCliInstance OBJECT-TYPE   -- cli_instance
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Index identifying the executing cli instance"
+	::= { scriptMonitorEntry 5 }
+
+scriptMonitorLaunchTimeStamp OBJECT-TYPE   -- launch_time_stamp
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the time when this record was created and the time this script was started."
+	::= { scriptMonitorEntry 6 }
+
+scriptMonitorRunTime OBJECT-TYPE   -- run_time
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates how long the script has been executing. For history entries indicates the last run time taken."
+	::= { scriptMonitorEntry 7 }
+
+scriptMonitorCurrentFile OBJECT-TYPE   -- current_file
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the currently executed script file."
+	::= { scriptMonitorEntry 8 }
+
+scriptMonitorCurrentSubroutine OBJECT-TYPE   -- current_subroutine
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the currently executed subroutine."
+	::= { scriptMonitorEntry 9 }
+
+scriptMonitorLinesExecuted OBJECT-TYPE   -- lines_executed
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Counts how many script lines were executed."
+	::= { scriptMonitorEntry 10 }
+
+scriptMonitorCurrentLineNumber OBJECT-TYPE   -- current_line_number
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"This gives a snapshot of the currently executed line of code."
+	::= { scriptMonitorEntry 11 }
+
+scriptMonitorScriptErrors OBJECT-TYPE   -- script_errors
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"In real time counts errors during script execution."
+	::= { scriptMonitorEntry 12 }
+
+
+-- ********************* End of scriptMonitorTable ***********************
+
+
+-- ******************* Begin of instancesTable *************************
+
+instancesTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF InstancesEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table indicates how many CLI are currently running and for which operator and reason."
+	::= { cli 104 }
+
+instancesEntry	OBJECT-TYPE
+	SYNTAX InstancesEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { instancesIndex }
+	::= { instancesTable 1 }
+
+
+	InstancesEntry ::= SEQUENCE {
+	instancesIndex INTEGER,
+	instancesUserName DisplayString,
+	instancesCommandLine DisplayString,
+	instancesProcessId Unsigned32,
+	instancesLaunchTimeStamp Counter32
+	}
+
+instancesIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..255)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { instancesEntry 1 }
+
+instancesUserName OBJECT-TYPE   -- user_name
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"User that is logged in."
+	::= { instancesEntry 2 }
+
+instancesCommandLine OBJECT-TYPE   -- command_line
+	SYNTAX DisplayString
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays optional command line parameter or script names that are executed by this cli instance."
+	::= { instancesEntry 3 }
+
+instancesProcessId OBJECT-TYPE   -- process_id
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the process id for debugging purposes. 0 is no process."
+	::= { instancesEntry 4 }
+
+instancesLaunchTimeStamp OBJECT-TYPE   -- launch_time_stamp
+	SYNTAX Counter32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Indicates the time when this cli was started."
+	::= { instancesEntry 5 }
+
+
+-- ********************* End of instancesTable ***********************
+
+
+
+END
+
