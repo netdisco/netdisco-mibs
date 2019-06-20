@@ -1,0 +1,585 @@
+G6-IGMP-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32, Counter32, enterprises,NOTIFICATION-TYPE
+		FROM SNMPv2-SMI
+	DisplayString, MacAddress
+		FROM SNMPv2-TC
+	g6	FROM MICROSENS-G6-MIB
+	;
+
+protocol MODULE-IDENTITY --Category
+	LAST-UPDATED "201802121619Z"
+	ORGANIZATION "MICROSENS GmbH & Co. KG"
+	CONTACT-INFO
+		"Kueferstrasse 16
+		D-59067 Hamm
+		Germany
+		support@microsens.de
+		http://www.microsens.de"
+	DESCRIPTION
+		"Microsens private MIB for Generation 6 Ethernet Switches"
+
+	REVISION "201802121619Z"
+	DESCRIPTION
+		"File creation"
+	::= { g6 2 }
+
+igmp  OBJECT IDENTIFIER ::= { protocol 40 }
+
+
+
+-- *************************** CONFIGURATION SECTION ********************************
+
+
+igmpEnableIgmpSnooping OBJECT-TYPE   -- enable_igmp_snooping
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"General enable of the IGMP snooping function. When disabled all IGMP snooping in all VLANs is disabled as well."
+	::= { igmp 1 }
+
+
+igmpEnableMldSnooping OBJECT-TYPE   -- enable_mld_snooping
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"General enable of the MLD snooping function. When disabled all MLD snooping in all VLANs is disabled as well."
+	::= { igmp 2 }
+
+
+igmpShowMulticastForVlan OBJECT-TYPE   -- show_multicast_for_vlan
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Filter MAC table to show only multicast MACs associated with a given VLAN range. Supply VLAN ID as parameter. Syntax example: igmp.show_multicast_for_vlan = 1-4,1000-2000."
+	::= { igmp 3 }
+
+
+igmpShowMulticastForPort OBJECT-TYPE   -- show_multicast_for_port
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Filter MAC table to show only multicast MACs associated with a given port range. Supply port as parameter. The shorthand port format like 1 for 1/1 may be used. Syntax examples: igmp.show_multicast_for_port = 1/2,1/5  or igmp.show_multicast_for_port = 1-3,5."
+	::= { igmp 4 }
+
+
+-- ******************* Begin of configTable *************************
+
+configTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF ConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table defines IGMP snooping parameter per VLAN. The table entries are referenced by VLAN ID and must match corresponding VLAN filter entires defined under vlan.filter_config.vlan_id. Any number of table entires can be created to configure unique settings for different VLANs. The default entry for VLAN ID=0 cannot be deleted and it used when no VLAN are used in the system."
+	::= { igmp 5 }
+
+configEntry	OBJECT-TYPE
+	SYNTAX ConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { configIndex }
+	::= { configTable 1 }
+
+
+	ConfigEntry ::= SEQUENCE {
+	configIndex INTEGER,
+	configVlanId DisplayString,
+	configEnableIgmpSnooping INTEGER ,
+	configEnableMldSnooping INTEGER ,
+	configSnoopingPorts INTEGER,
+	configStaticRouterPorts INTEGER,
+	configMulticastRouterDetection INTEGER ,
+	configEnableReportAggregation INTEGER ,
+	configEnableFloodingUnregisterPkt INTEGER ,
+	configMcastGroupLimit Integer32 ,
+	configGroupMembershipInterval Integer32 ,
+	configMaxResponseTime Integer32 ,
+	configEnableFastLeave INTEGER ,
+	configLastMemberQueryTime Integer32 ,
+	configNeighborDeadInterval Integer32 ,
+	configRouterAgingTime Integer32 
+	}
+
+configIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..255)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { configEntry 1 }
+
+configVlanId OBJECT-TYPE   -- vlan_id
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Defines IGMP snooping table entry associated with this VLAN ID. This is the key value for the table.VLAN ID 0 is used to define the IGMP settings when VLANs are not used. Type '=:' to edit, use index '[*] = new_vlan:' to add an entry. Edit string to nothing to delete entry."
+	::= { configEntry 2 }
+
+configEnableIgmpSnooping OBJECT-TYPE   -- enable_igmp_snooping
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enable IGMP (IPv4) snooping for this particular VLAN."
+	::= { configEntry 3 }
+
+configEnableMldSnooping OBJECT-TYPE   -- enable_mld_snooping
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enable MLD (IPv6) snooping for this particular VLAN."
+	::= { configEntry 4 }
+
+configSnoopingPorts OBJECT-TYPE   -- snooping_ports
+	SYNTAX INTEGER
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"This parameter permits port selective IGMP/MLD snooping enabling. When empty all ports are enabled! Syntax: slot/port, slot/port or use hex value for quick setup. Example: = 0xf (ports 1-4)"
+	::= { configEntry 5 }
+
+configStaticRouterPorts OBJECT-TYPE   -- static_router_ports
+	SYNTAX INTEGER
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When set corresponding ports will be marked as static router ports. Upon default no ports will be marked. Syntax: slot/port, slot/port or use hex value for quick setup. Example: = 0x30 (ports 5-6)"
+	::= { configEntry 6 }
+
+configMulticastRouterDetection OBJECT-TYPE   -- multicast_router_detection
+	SYNTAX INTEGER 
+		{
+		routerDiscovery (0),
+		queryMessage (1)
+		}
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Defines the mode for detecting the router port."
+	::= { configEntry 7 }
+
+configEnableReportAggregation OBJECT-TYPE   -- enable_report_aggregation
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled limits the number of reports received from same subnet to be transmitted only once to the router."
+	::= { configEntry 8 }
+
+configEnableFloodingUnregisterPkt OBJECT-TYPE   -- enable_flooding_unregister_pkt
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"When enabled unregistered multicast streams are flooded on all ports (which are member of the source VLAN of this stream). When disabled unregistered multicast streams are forwarded on static router ports only."
+	::= { configEntry 9 }
+
+configMcastGroupLimit OBJECT-TYPE   -- mcast_group_limit
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Indicates the number of multicast groups in the table."
+	::= { configEntry 10 }
+
+configGroupMembershipInterval OBJECT-TYPE   -- group_membership_interval
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"IGMP group_membership_interval time in seconds."
+	::= { configEntry 11 }
+
+configMaxResponseTime OBJECT-TYPE   -- max_response_time
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"IGMP response time in seconds."
+	::= { configEntry 12 }
+
+configEnableFastLeave OBJECT-TYPE   -- enable_fast_leave
+	SYNTAX INTEGER {  disabled(0), enabled(1) }
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enables the software to remove the multicast group when it receives an IGMP leave report without first sending an IGMP query message to check if other users still require this group. This parameter is used for IGMPv2 hosts when only one host is present on each VLAN port."
+	::= { configEntry 13 }
+
+configLastMemberQueryTime OBJECT-TYPE   -- last_member_query_time
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Sets the interval in seconds that the software waits after sending an IGMP query to verify that no hosts that want to receive a particular multicast group to remain on a network segment. If no hosts respond before the last_member_query_time expires, the multicast group is removed from the associated VLAN port."
+	::= { configEntry 14 }
+
+configNeighborDeadInterval OBJECT-TYPE   -- neighbor_dead_interval
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"IGMP neighbor dead interval in seconds in case of router_discovery mode."
+	::= { configEntry 15 }
+
+configRouterAgingTime OBJECT-TYPE   -- router_aging_time
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"IGMP router aging time in seconds."
+	::= { configEntry 16 }
+
+
+-- ********************* End of configTable ***********************
+
+
+-- ******************* Begin of staticMulticastGroupsTable *************************
+
+staticMulticastGroupsTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF StaticMulticastGroupsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table may be used to enter the multicast addresses of other protocols beside IGMP, that need to be forwarded when IGMP snooping is enabled. This can be used instead of flood_unregistered_packets parameter and reduces the traffic in the network."
+	::= { igmp 6 }
+
+staticMulticastGroupsEntry	OBJECT-TYPE
+	SYNTAX StaticMulticastGroupsEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { staticMulticastGroupsIndex }
+	::= { staticMulticastGroupsTable 1 }
+
+
+	StaticMulticastGroupsEntry ::= SEQUENCE {
+	staticMulticastGroupsIndex INTEGER,
+	staticMulticastGroupsName DisplayString,
+	staticMulticastGroupsDescription DisplayString,
+	staticMulticastGroupsMulticastMac MacAddress,
+	staticMulticastGroupsForwardingPortMask INTEGER,
+	staticMulticastGroupsVlanId Integer32 
+	}
+
+staticMulticastGroupsIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0..255)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { staticMulticastGroupsEntry 1 }
+
+staticMulticastGroupsName OBJECT-TYPE   -- name
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Unique name to reference this entry and to remember whose MAC address is entered."
+	::= { staticMulticastGroupsEntry 2 }
+
+staticMulticastGroupsDescription OBJECT-TYPE   -- description
+	SYNTAX DisplayString
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enter any information required to remember what this rule is intended to do."
+	::= { staticMulticastGroupsEntry 3 }
+
+staticMulticastGroupsMulticastMac OBJECT-TYPE   -- multicast_mac
+	SYNTAX MacAddress
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"MAC address entry."
+	::= { staticMulticastGroupsEntry 4 }
+
+staticMulticastGroupsForwardingPortMask OBJECT-TYPE   -- forwarding_port_mask
+	SYNTAX INTEGER
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"Enter the ports to which this multicast should be forwarded. A value of 0 disables this entry. Syntax: slot/port, slot/port or use hex value for quick setup. Example: = 0xf (ports 1-4)"
+	::= { staticMulticastGroupsEntry 5 }
+
+staticMulticastGroupsVlanId OBJECT-TYPE   -- vlan_id
+	SYNTAX Integer32 (0..65535)
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+	"VLAN on which the packets is entering."
+	::= { staticMulticastGroupsEntry 6 }
+
+
+-- ********************* End of staticMulticastGroupsTable ***********************
+
+
+
+-- ****************************** STATUS SECTION ********************************
+
+
+-- ******************* Begin of statusTable *************************
+
+statusTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF StatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table contains operational counters of the IGMP snooping module."
+	::= { igmp 100 }
+
+statusEntry	OBJECT-TYPE
+	SYNTAX StatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { statusIndex }
+	::= { statusTable 1 }
+
+
+	StatusEntry ::= SEQUENCE {
+	statusIndex INTEGER,
+	statusIgmpRouterPorts INTEGER,
+	statusRxGeneralQueries Unsigned32,
+	statusRxGroupQueries Unsigned32,
+	statusRxReports Unsigned32,
+	statusRxLeaves Unsigned32,
+	statusRxAdvertisements Unsigned32,
+	statusRxTerminations Unsigned32,
+	statusRxUnsupported Unsigned32,
+	statusRxErrors Unsigned32,
+	statusTxSolicitations Unsigned32
+	}
+
+statusIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { statusEntry 1 }
+
+statusIgmpRouterPorts OBJECT-TYPE   -- igmp_router_ports
+	SYNTAX INTEGER
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the igmp router ports list"
+	::= { statusEntry 2 }
+
+statusRxGeneralQueries OBJECT-TYPE   -- rx_general_queries
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received general queries."
+	::= { statusEntry 3 }
+
+statusRxGroupQueries OBJECT-TYPE   -- rx_group_queries
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received group queries."
+	::= { statusEntry 4 }
+
+statusRxReports OBJECT-TYPE   -- rx_reports
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received report messages."
+	::= { statusEntry 5 }
+
+statusRxLeaves OBJECT-TYPE   -- rx_leaves
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received leave messages."
+	::= { statusEntry 6 }
+
+statusRxAdvertisements OBJECT-TYPE   -- rx_advertisements
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received advertisements."
+	::= { statusEntry 7 }
+
+statusRxTerminations OBJECT-TYPE   -- rx_terminations
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received terminations."
+	::= { statusEntry 8 }
+
+statusRxUnsupported OBJECT-TYPE   -- rx_unsupported
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received unsupported messages."
+	::= { statusEntry 9 }
+
+statusRxErrors OBJECT-TYPE   -- rx_errors
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received error packets."
+	::= { statusEntry 10 }
+
+statusTxSolicitations OBJECT-TYPE   -- tx_solicitations
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of transmitted solicitation messges."
+	::= { statusEntry 11 }
+
+
+-- ********************* End of statusTable ***********************
+
+
+-- ******************* Begin of mldStatusTable *************************
+
+mldStatusTable	OBJECT-TYPE
+	SYNTAX SEQUENCE OF MldStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table contains operational counters of the MLD snooping module."
+	::= { igmp 101 }
+
+mldStatusEntry	OBJECT-TYPE
+	SYNTAX MldStatusEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		""
+	INDEX { mldStatusIndex }
+	::= { mldStatusTable 1 }
+
+
+	MldStatusEntry ::= SEQUENCE {
+	mldStatusIndex INTEGER,
+	mldStatusMldRouterPorts INTEGER,
+	mldStatusRxGeneralQueries Unsigned32,
+	mldStatusRxGroupQueries Unsigned32,
+	mldStatusRxReports Unsigned32,
+	mldStatusRxLeaves Unsigned32,
+	mldStatusRxAdvertisements Unsigned32,
+	mldStatusRxTerminations Unsigned32,
+	mldStatusRxUnsupported Unsigned32,
+	mldStatusRxErrors Unsigned32,
+	mldStatusTxSolicitations Unsigned32
+	}
+
+mldStatusIndex	OBJECT-TYPE
+	SYNTAX INTEGER (0)
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Automatically generated"
+	::= { mldStatusEntry 1 }
+
+mldStatusMldRouterPorts OBJECT-TYPE   -- mld_router_ports
+	SYNTAX INTEGER
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the igmp router ports list"
+	::= { mldStatusEntry 2 }
+
+mldStatusRxGeneralQueries OBJECT-TYPE   -- rx_general_queries
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received general queries."
+	::= { mldStatusEntry 3 }
+
+mldStatusRxGroupQueries OBJECT-TYPE   -- rx_group_queries
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received group queries."
+	::= { mldStatusEntry 4 }
+
+mldStatusRxReports OBJECT-TYPE   -- rx_reports
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received report messages."
+	::= { mldStatusEntry 5 }
+
+mldStatusRxLeaves OBJECT-TYPE   -- rx_leaves
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received leave messages."
+	::= { mldStatusEntry 6 }
+
+mldStatusRxAdvertisements OBJECT-TYPE   -- rx_advertisements
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received advertisements."
+	::= { mldStatusEntry 7 }
+
+mldStatusRxTerminations OBJECT-TYPE   -- rx_terminations
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received terminations."
+	::= { mldStatusEntry 8 }
+
+mldStatusRxUnsupported OBJECT-TYPE   -- rx_unsupported
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received unsupported messages."
+	::= { mldStatusEntry 9 }
+
+mldStatusRxErrors OBJECT-TYPE   -- rx_errors
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of received error packets."
+	::= { mldStatusEntry 10 }
+
+mldStatusTxSolicitations OBJECT-TYPE   -- tx_solicitations
+	SYNTAX Unsigned32
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+	"Displays the number of transmitted solicitation messges."
+	::= { mldStatusEntry 11 }
+
+
+-- ********************* End of mldStatusTable ***********************
+
+
+
+END
+
