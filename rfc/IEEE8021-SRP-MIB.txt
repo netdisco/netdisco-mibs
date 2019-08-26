@@ -1,9 +1,8 @@
-
 IEEE8021-SRP-MIB DEFINITIONS ::= BEGIN
 
 -- =============================================================
--- MIB for support of 802.1Qat Stream Reservation Protocol
--- (SRP) in 802.1Q Bridges.
+-- MIB for support of IEEE 802.1Qat Stream Reservation Protocol
+-- (SRP) in IEEE 802.1Q Bridges.
 -- =============================================================
 
 IMPORTS
@@ -30,36 +29,52 @@ IMPORTS
     ieee8021BridgeBasePort,
     ieee8021BridgeBasePortEntry
         FROM IEEE8021-BRIDGE-MIB
-    BridgeId
-        FROM BRIDGE-MIB
+
     ;
 
 ieee8021SrpMib MODULE-IDENTITY
-    LAST-UPDATED "201412150000Z" -- December 15, 2014
+    LAST-UPDATED "201810040000Z" -- October 4, 2018
     ORGANIZATION "IEEE 802.1 Working Group"
     CONTACT-INFO
-        "WG-URL: http://grouper.ieee.org/groups/802/1/index.html
-         WG-EMail: stds-802-1@ieee.org
+        "WG-URL: http://ieee802.org/1/
+         WG-EMail: STDS-802-1-L@IEEE.ORG
 
           Contact: IEEE 802.1 Working Group Chair
            Postal: C/O IEEE 802.1 Working Group
                    IEEE Standards Association
                    445 Hoes Lane
-                   P.O. Box 1331
                    Piscataway
-                   NJ 08855-1331
+                   NJ 08854
                    USA
-           E-mail: STDS-802-1-L@LISTSERV.IEEE.ORG"
+           E-mail: STDS-802-1-L@IEEE.ORG"
     DESCRIPTION
         "The Bridge MIB module for managing devices that support
         the IEEE Std 802.1Q Stream Reservation Protocol.
 
         Unless otherwise indicated, the references in this MIB
-        module are to IEEE Std 802.1Q-2014.
+        module are to IEEE Std 802.1Q.
 
-        Copyright (C) IEEE (2014).
-        This version of this MIB module is part of IEEE802.1Q;
+        Copyright (C) IEEE (2018).
+        This version of this MIB module is part of IEEE Std 802.1Q;
         see the draft itself for full legal notices."
+
+    REVISION "201810040000Z" -- October 4, 2018
+    DESCRIPTION
+            "Published as part of IEEE 802.1Qcc-2018.
+			Added managed objects for Stream Reservation
+			Protocol (SRP) Enhancements and Performance
+			Improvements"
+
+    REVISION "201806280000Z" -- June 28, 2018
+    DESCRIPTION
+            "Published as part of IEEE Std 802.1Q 2017.
+            Cross references updated. "
+
+    REVISION "201512020000Z" -- December 2, 2015
+    DESCRIPTION
+            "Published as part of IEEE Std 802.1Q-2014 Cor-1.
+            ieee8021SrpReservationFailureBridgeId changed to
+            ieee8021SrpReservationFailureSystemId."
 
     REVISION "201412150000Z" -- December 15, 2014
     DESCRIPTION
@@ -70,11 +85,11 @@ ieee8021SrpMib MODULE-IDENTITY
     DESCRIPTION
          "Minor edits to contact information etc. as part of
           2011 revision of Std 802.1Q."
-          
+
     REVISION     "201004190000Z" -- April 19, 2010
     DESCRIPTION
          "Initial revision, included in IEEE 802.1Qat"
-    ::= { ieee802dot1mibs 19 } 
+    ::= { ieee802dot1mibs 19 }
 
 -- =============================================================
 -- Textual Conventions
@@ -254,6 +269,10 @@ Ieee8021SrpBridgeBaseEntry ::=
          ieee8021SrpBridgeBaseMsrpMaxFanInPorts
             Unsigned32,
          ieee8021SrpBridgeBaseMsrpLatencyMaxFrameSize
+            Unsigned32,
+         ieee8021SrpBridgeBaseMsrpTalkerVlanPruning
+            TruthValue,
+         ieee8021SrpBridgeBaseMsrpMaxSRClasses
             Unsigned32
     }
 
@@ -341,6 +360,34 @@ ieee8021SrpBridgeBaseMsrpLatencyMaxFrameSize OBJECT-TYPE
     DEFVAL      { 2000 }
     ::= { ieee8021SrpBridgeBaseEntry 4 }
 
+ieee8021SrpBridgeBaseMsrpTalkerVlanPruning OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This parameter allows to limit the Talker declaration
+        to ports, that have the Stream's VLAN identifier
+        registered as a member in the VLAN Registration
+        Entries. The value true(1) indicates that Talker
+        declarations are only sent out on ports, that have the
+        Stream's VLAN identifier registered as a member in the
+        VLAN Registration Entries. When false(2), Talker
+        declarations are propagated according to the VLAN
+        spanning tree."
+    REFERENCE   "12.22.1, 35.2.1.4l"
+    DEFVAL      { false }
+    ::= { ieee8021SrpBridgeBaseEntry 5 }
+
+ieee8021SrpBridgeBaseMsrpMaxSRClasses OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This attribute provides the maximum number of SR classes
+        supported by the Bridge."
+    REFERENCE   "12.22.1, 35.2.1.4m"
+    ::= { ieee8021SrpBridgeBaseEntry 6 }
+
 
 ieee8021SrpBridgePortTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF Ieee8021SrpBridgePortEntry
@@ -369,7 +416,9 @@ Ieee8021SrpBridgePortEntry ::=
         ieee8021SrpBridgePortMsrpLastPduOrigin
             MacAddress,
         ieee8021SrpBridgePortSrPvid
-            IEEE8021VlanIndex
+            IEEE8021VlanIndex,
+        ieee8021SrpBridgePortMsrpTalkerPrunningPerPort
+        	TruthValue
     }
 
 ieee8021SrpBridgePortMsrpEnabledStatus OBJECT-TYPE
@@ -439,6 +488,22 @@ ieee8021SrpBridgePortSrPvid OBJECT-TYPE
     DEFVAL      { 2 }
     ::= { ieee8021SrpBridgePortEntry 4}
 
+ieee8021SrpBridgePortMsrpTalkerPrunningPerPort OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "This parameter controls the forwarding behavior for
+        Talker declarations on the port when the TalkerPruning
+        parameter is disabled for the bridge. The value true(1)
+        indicates, that Talker declarations are only forwarded
+        on that port, if the destination_address of the Stream
+        is found in the MAC Address Registration Entries for the
+        port. When false(2), Talker declarations are forwarded
+        on that port regardless of the destination address."
+    REFERENCE   "12.22.2, 35.2.1.4k"
+    DEFVAL      { false }
+    ::= { ieee8021SrpBridgePortEntry 5 }
 
 -- =============================================================
 -- The ieee8021SrpLatency subtree
@@ -454,7 +519,7 @@ ieee8021SrpLatencyTable OBJECT-TYPE
     MAX-ACCESS  not-accessible
     STATUS      current
     DESCRIPTION
-        "A table containing a set of latency measurement 
+        "A table containing a set of latency measurement
         parameters for each traffic class."
     REFERENCE   "35.2.2.8.6"
     ::= { ieee8021SrpLatency 1 }
@@ -601,7 +666,7 @@ ieee8021SrpStreamTspecMaxFrameSize OBJECT-TYPE
         of the Traffic Specification for the Stream."
     REFERENCE   "35.2.2.8.4a"
     ::= { ieee8021SrpStreamEntry 4}
-        
+
 ieee8021SrpStreamTspecMaxIntervalFrames OBJECT-TYPE
     SYNTAX      Unsigned32 (0..65535)
     MAX-ACCESS  read-only
@@ -636,6 +701,127 @@ ieee8021SrpStreamRank OBJECT-TYPE
         resources available for the emergency traffic."
     REFERENCE   "35.2.2.8.5b"
     ::= { ieee8021SrpStreamEntry 7}
+
+
+    -- =============================================================
+    -- the ieee8021SrpStreamPreloadTable
+    -- =============================================================
+    ieee8021SrpStreamPreloadTable OBJECT-TYPE
+        SYNTAX      SEQUENCE OF Ieee8021SrpStreamPreloadEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "A table containing a set of parameters for each StreamID
+            that is preloaded on the Bridge as it initializes."
+        REFERENCE   "12.22.6"
+        ::= { ieee8021SrpStreams 2 }
+
+    ieee8021SrpStreamPreloadEntry OBJECT-TYPE
+        SYNTAX      Ieee8021SrpStreamPreloadEntry
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "A list of objects containing characteristics
+            for each registered Stream. Rows in the table are
+            automatically created for Streams registered on any
+            port of a Bridge."
+        INDEX  { ieee8021SrpStreamPreloadId }
+        ::= { ieee8021SrpStreamPreloadTable 1 }
+
+    Ieee8021SrpStreamPreloadEntry ::=
+        SEQUENCE {
+            ieee8021SrpStreamPreloadId
+                IEEE8021SrpStreamIdValue,
+            ieee8021SrpStreamPreloadDestinationAddress
+                MacAddress,
+            ieee8021SrpStreamPreloadVlanId
+                IEEE8021VlanIndex,
+            ieee8021SrpStreamPreloadTspecMaxFrameSize
+                Unsigned32,
+            ieee8021SrpStreamPreloadTspecMaxIntervalFrames
+                Unsigned32,
+            ieee8021SrpStreamPreloadDataFramePriority
+                IEEE8021PriorityCodePoint,
+            ieee8021SrpStreamPreloadRank
+                IEEE8021SrpStreamRankValue
+            }
+
+    ieee8021SrpStreamPreloadId OBJECT-TYPE
+        SYNTAX      IEEE8021SrpStreamIdValue
+        MAX-ACCESS  not-accessible
+        STATUS      current
+        DESCRIPTION
+            "The 64-bit StreamID is used to match Talker
+            registrations with their corresponding Listener
+            registrations(35.2.4)."
+        REFERENCE   "12.22.6, 35.2.2.8.2"
+        ::= { ieee8021SrpStreamPreloadEntry 1 }
+
+    ieee8021SrpStreamPreloadDestinationAddress OBJECT-TYPE
+        SYNTAX      MacAddress
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The MAC destination address for the Stream described
+            by this reservation."
+        REFERENCE   "12.22.6, 35.2.2.8.3a"
+        ::= { ieee8021SrpStreamPreloadEntry 2}
+
+    ieee8021SrpStreamPreloadVlanId OBJECT-TYPE
+        SYNTAX      IEEE8021VlanIndex
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The VLAN ID associated with the MSRP registration
+            for this Stream."
+        REFERENCE   "12.22.6, 35.2.2.8.3b"
+        ::= { ieee8021SrpStreamPreloadEntry 3}
+
+    ieee8021SrpStreamPreloadTspecMaxFrameSize OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..65535)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The maximum size frame that will be sent by
+            a Talker for this Stream. This value is part
+            of the Traffic Specification for the Stream."
+        REFERENCE   "12.22.6, 35.2.2.8.4a"
+        ::= { ieee8021SrpStreamPreloadEntry 4}
+
+    ieee8021SrpStreamPreloadTspecMaxIntervalFrames OBJECT-TYPE
+        SYNTAX      Unsigned32 (0..65535)
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The maximum number of frames that the Talker may
+            transmit in one classMeasurementInterval (34.3).
+            This value is part of the Traffic Specification
+            for the Stream."
+        REFERENCE   "12.22.6, 35.2.2.8.4b"
+        ::= { ieee8021SrpStreamPreloadEntry 5}
+
+    ieee8021SrpStreamPreloadDataFramePriority OBJECT-TYPE
+        SYNTAX      IEEE8021PriorityCodePoint
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The Priority Code Point (PCP) value that the
+            referenced Stream will be tagged with. This value
+            is used to distinguish Class A and Class B traffic."
+        REFERENCE   "12.22.6, 35.2.2.8.5a"
+        ::= { ieee8021SrpStreamPreloadEntry 6}
+
+    ieee8021SrpStreamPreloadRank OBJECT-TYPE
+        SYNTAX      IEEE8021SrpStreamRankValue
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "SRP supports emergency and non-emergency.
+            Emergency traffic will interrupt non-emergency
+            traffic if there is insufficient bandwidth or
+            resources available for the emergency traffic."
+        REFERENCE   "12.22.6, 35.2.2.8.5b"
+        ::= { ieee8021SrpStreamPreloadEntry 7}
 
 
 -- =============================================================
@@ -682,8 +868,8 @@ Ieee8021SrpReservationsEntry ::=
             IEEE8021SrpReservationDeclarationTypeValue,
         ieee8021SrpReservationAccumulatedLatency
             Unsigned32,
-        ieee8021SrpReservationFailureBridgeId
-            BridgeId,
+        ieee8021SrpReservationFailureSystemId
+            OCTET STRING,
         ieee8021SrpReservationFailureCode
             IEEE8021SrpReservationFailureCodeValue,
         ieee8021SrpReservationDroppedStreamFrames
@@ -743,15 +929,15 @@ ieee8021SrpReservationAccumulatedLatency OBJECT-TYPE
     REFERENCE   "35.2.2.8.6"
     ::= { ieee8021SrpReservationsEntry 4 }
 
-ieee8021SrpReservationFailureBridgeId OBJECT-TYPE
-    SYNTAX      BridgeId
+ieee8021SrpReservationFailureSystemId OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(8))
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-        "The first Bridge that changes a Talker Advertise to a
-        Talker Failed registration will report its Bridge
-        Identification in this field. That single Bridge
-        Identification is then propagated from Bridge to Bridge."
+        "The first system that changes a Talker Advertise to a
+        Talker Failed registration will report its System
+        Identification in this field. That single System
+        Identification is then propagated from system to system."
     REFERENCE   "35.2.2.8.7a"
     ::= { ieee8021SrpReservationsEntry 5 }
 
@@ -798,6 +984,86 @@ ieee8021SrpReservationStreamAge OBJECT-TYPE
 
 
 -- =============================================================
+-- the ieee8021SrpReservationsPreloadTable
+-- =============================================================
+ieee8021SrpReservationsPreloadTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Ieee8021SrpReservationsPreloadEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A table containing Stream attribute
+        registrations per port."
+    REFERENCE   "12.22.7"
+    ::= { ieee8021SrpReservations 2 }
+
+ieee8021SrpReservationsPreloadEntry OBJECT-TYPE
+    SYNTAX      Ieee8021SrpReservationsPreloadEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A list of objects containing Stream attribute
+        registrations per port. Rows in the table are
+        automatically created for Streams registered on any
+        port of a Bridge."
+    INDEX  { ieee8021SrpReservationsPreloadStreamId,
+             ieee8021SrpReservationPreloadDirection,
+             ieee8021BridgeBaseComponentId,
+             ieee8021BridgeBasePort }
+    ::= { ieee8021SrpReservationsPreloadTable 1 }
+
+Ieee8021SrpReservationsPreloadEntry ::=
+    SEQUENCE {
+        ieee8021SrpReservationsPreloadStreamId
+            IEEE8021SrpStreamIdValue,
+        ieee8021SrpReservationPreloadDirection
+            IEEE8021SrpReservationDirectionValue,
+        ieee8021SrpReservationPreloadAccumulatedLatency
+            Unsigned32
+        }
+
+ieee8021SrpReservationsPreloadStreamId OBJECT-TYPE
+    SYNTAX      IEEE8021SrpStreamIdValue
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The 64-bit StreamID is used to match Talker
+        registrations with their corresponding Listener
+        registrations(35.2.4)."
+    REFERENCE   "12.22.7, 35.2.2.8.2"
+    ::= { ieee8021SrpReservationsPreloadEntry 1 }
+
+ieee8021SrpReservationPreloadDirection OBJECT-TYPE
+    SYNTAX      IEEE8021SrpReservationDirectionValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The source of this Stream registration, either
+        Talker or Listener"
+    REFERENCE   "12.22.7, 35.2.1.1"
+    ::= { ieee8021SrpReservationsPreloadEntry 2 }
+
+ieee8021SrpReservationPreloadAccumulatedLatency OBJECT-TYPE
+    SYNTAX      Unsigned32
+    UNITS       "nano-seconds"
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "The Accumulated Latency associated with the current
+        registration.
+
+        For Talker registrations this represents the accumulated
+        latency from the Talker to the ingress port of this
+        Bridge.
+
+        For Listener registrations this represents the accumulated
+        latency to the ingress port of the neighbor Bridge or
+        end stations. This include the latency of the media
+        attached to this egress port."
+    REFERENCE   "12.22.7, 35.2.2.8.6"
+    ::= { ieee8021SrpReservationsPreloadEntry 3 }
+
+
+-- =============================================================
 -- IEEE8021 SRP MIB - Conformance Information
 -- =============================================================
 
@@ -820,10 +1086,13 @@ ieee8021SrpConfigurationGroup OBJECT-GROUP
         ieee8021SrpBridgeBaseMsrpTalkerPruning,
         ieee8021SrpBridgeBaseMsrpMaxFanInPorts,
         ieee8021SrpBridgeBaseMsrpLatencyMaxFrameSize,
+        ieee8021SrpBridgeBaseMsrpTalkerVlanPruning,
+        ieee8021SrpBridgeBaseMsrpMaxSRClasses,
         ieee8021SrpBridgePortMsrpEnabledStatus,
         ieee8021SrpBridgePortMsrpFailedRegistrations,
         ieee8021SrpBridgePortMsrpLastPduOrigin,
-        ieee8021SrpBridgePortSrPvid
+        ieee8021SrpBridgePortSrPvid,
+        ieee8021SrpBridgePortMsrpTalkerPrunningPerPort
     }
     STATUS      current
     DESCRIPTION
@@ -855,7 +1124,7 @@ ieee8021SrpStreamsGroup OBJECT-GROUP
         ieee8021SrpStreamTspecMaxFrameSize,
         ieee8021SrpStreamTspecMaxIntervalFrames,
         ieee8021SrpStreamDataFramePriority,
-        ieee8021SrpStreamRank 
+        ieee8021SrpStreamRank
     }
     STATUS      current
     DESCRIPTION
@@ -872,7 +1141,7 @@ ieee8021SrpReservationsGroup OBJECT-GROUP
         -- ieee8021SrpReservationDirection,
         ieee8021SrpReservationDeclarationType,
         ieee8021SrpReservationAccumulatedLatency,
-        ieee8021SrpReservationFailureBridgeId,
+        ieee8021SrpReservationFailureSystemId,
         ieee8021SrpReservationFailureCode,
         ieee8021SrpReservationDroppedStreamFrames,
         ieee8021SrpReservationStreamAge
@@ -882,6 +1151,72 @@ ieee8021SrpReservationsGroup OBJECT-GROUP
         "Objects that define Stream Reservations for SRP."
     ::= { ieee8021SrpGroups 4 }
 
+-- =============================================================
+-- the ieee8021SrpConfigurationPruning group
+-- =============================================================
+
+ieee8021SrpConfigurationPruningGroup OBJECT-GROUP
+    OBJECTS {
+        ieee8021SrpBridgeBaseMsrpTalkerVlanPruning,
+        ieee8021SrpBridgePortMsrpTalkerPrunningPerPort
+    }
+    STATUS      current
+    DESCRIPTION
+        "Objects that allow configuration of pruning behavior
+        for SRP."
+    ::= { ieee8021SrpGroups 5 }
+
+-- =============================================================
+-- the ieee8021SrpMonitoringSRclasses group
+-- =============================================================
+
+ieee8021SrpMonitoringSRclassesGroup OBJECT-GROUP
+    OBJECTS {
+        ieee8021SrpBridgeBaseMsrpMaxSRClasses
+    }
+    STATUS      current
+    DESCRIPTION
+        "Objects that provides information on the maximum number
+        of SR classes supported on the Bridge."
+    ::= { ieee8021SrpGroups 6 }
+
+-- =============================================================
+-- the ieee8021SrpStreamsPreload group
+-- =============================================================
+
+ieee8021SrpStreamsPreloadGroup OBJECT-GROUP
+    OBJECTS {
+        ieee8021SrpStreamPreloadId,
+        ieee8021SrpStreamPreloadDestinationAddress,
+        ieee8021SrpStreamPreloadVlanId,
+        ieee8021SrpStreamPreloadTspecMaxFrameSize,
+        ieee8021SrpStreamPreloadTspecMaxIntervalFrames,
+        ieee8021SrpStreamPreloadDataFramePriority,
+        ieee8021SrpStreamPreloadRank
+    }
+    STATUS      current
+    DESCRIPTION
+        "Objects that allow to preload parameters for each
+        StreamId on Bridge Ports as the Bridge initializes."
+    ::= { ieee8021SrpGroups 7 }
+
+-- =============================================================
+-- the ieee8021SrpReservationsPreload group
+-- =============================================================
+
+ieee8021SrpReservationsPreloadGroup OBJECT-GROUP
+    OBJECTS {
+        ieee8021SrpReservationsPreloadStreamId,
+        ieee8021SrpReservationPreloadDirection,
+        ieee8021SrpReservationPreloadAccumulatedLatency
+    }
+    STATUS      current
+    DESCRIPTION
+        "Objects that allow to initialize Streams within each
+        Bridge as it powers up, to preload the Stream
+        registrations that will later be provided by operation
+        of SRP."
+    ::= { ieee8021SrpGroups 8 }
 
 -- =============================================================
 -- compliance statements
@@ -890,8 +1225,8 @@ ieee8021SrpReservationsGroup OBJECT-GROUP
 ieee8021SrpCompliance MODULE-COMPLIANCE
     STATUS      current
     DESCRIPTION
-        "The compliance statement for devices supporting 
-        Stream Reservation Protocol. 
+        "The compliance statement for devices supporting
+        Stream Reservation Protocol.
 
         Support of the objects defined in the IEEE8021-SRP MIB
         also requires support of the IEEE8021-BRIDGE-MIB; the
@@ -906,11 +1241,29 @@ ieee8021SrpCompliance MODULE-COMPLIANCE
             ieee8021SrpReservationsGroup
         }
 
+    GROUP   ieee8021SrpConfigurationPruningGroup
+    DESCRIPTION
+        "Implementation of this group is optional. Implementation
+        will allow configuration of pruning behavior for SRP."
+
+    GROUP   ieee8021SrpMonitoringSRclassesGroup
+    DESCRIPTION
+        "Implementation of this group is optional. Implementation
+        will allow configuration of pruning behavior for SRP."
+
+    GROUP   ieee8021SrpStreamsPreloadGroup
+    DESCRIPTION
+        "Implementation of this group is optional. Implementation
+        will allow to preload parameters for each StreamId on
+        Bridge Ports as the Bridge initializes."
+
+    GROUP   ieee8021SrpReservationsPreloadGroup
+    DESCRIPTION
+        "Implementation of this group is optional. Implementation
+        will allow to initialize Streams within each Bridge as it
+        powers up, to preload the Stream registrations that will
+        later be provided by operation of SRP."
+
     ::= { ieee8021SrpCompliances 1 }
 
 END
-
-
-
-
-

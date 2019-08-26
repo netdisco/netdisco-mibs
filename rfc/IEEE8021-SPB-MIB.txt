@@ -1,8 +1,8 @@
+IEEE8021-SPB-MIB DEFINITIONS ::= BEGIN
+
 -- ===================================================================
 --  IEEE 802.1 Shortest Path Bridging (SPB) MIB                     --
 -- ===================================================================
-
-IEEE8021-SPB-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
 	MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32
@@ -10,10 +10,15 @@ IMPORTS
 	RowStatus, MacAddress, TruthValue, TEXTUAL-CONVENTION
 		FROM SNMPv2-TC
 	ieee802dot1mibs, IEEE8021PbbIngressEgress, 
-	IEEE8021BridgePortNumber
+	IEEE8021BridgePortNumber, IEEE8021PbbServiceIdentifier,
+        IEEE8021PbbTeEsp
 		FROM IEEE8021-TC-MIB
+	ieee8021BridgeBasePort
+		FROM IEEE8021-BRIDGE-MIB
 	VlanId, VlanIdOrNone, VlanIdOrAny
 		FROM Q-BRIDGE-MIB
+	dot1agCfmMepEntry, dot1agCfmMdIndex, dot1agCfmMaIndex
+		FROM IEEE8021-CFM-MIB
 	InterfaceIndexOrZero
 		FROM IF-MIB
 	SnmpAdminString
@@ -22,25 +27,41 @@ IMPORTS
 		FROM SNMPv2-CONF;
 
 ieee8021SpbMib MODULE-IDENTITY
-	LAST-UPDATED "201202030000Z"  -- February 3, 2012
+	LAST-UPDATED "201806280000Z" -- June 28, 2018
 	ORGANIZATION "IEEE 802.1 Working Group"
 	CONTACT-INFO
-        "  WG-URL: http://grouper.ieee.org/groups/802/1/index.html
-         WG-EMail: stds-802-1@ieee.org
+        "  WG-URL: http://www.ieee802.org/1/
+         WG-EMail: stds-802-1-L@ieee.org
 
-          Contact: Don Fedyk
+          Contact: IEEE 802.1 Working Group Chair
            Postal: C/O IEEE 802.1 Working Group
                    IEEE Standards Association
                    445 Hoes Lane
-                   P.O. Box 1331
                    Piscataway
-                   NJ 08855-1331
+                   NJ 08854
                    USA
-           E-mail: STDS-802-1-L@LISTSERV.IEEE.ORG"
+           E-mail: stds-802-1-L@ieee.org"
 	DESCRIPTION  "802.1 SPB MIB"
+
+    REVISION "201806280000Z" -- June 28, 2018
+    DESCRIPTION
+            "Published as part of IEEE Std 802.1Q-2018.
+            Cross references updated and corrected.
+            Contact details corrected. Syntax error in
+            ieee8021SpbEctDynamicEntryIngressCheckDiscards
+            corrected."
+            
+	REVISION  "201506230000Z"  -- June 23, 2015
+	DESCRIPTION  "802.1Qca additions"
+
+	REVISION  "201305130000Z"  -- May 13, 2013
+	DESCRIPTION  "802.1Qbp additions and corrections"
+
 	REVISION  "201202030000Z"  -- February 3, 2012
 	DESCRIPTION  "802.1 Shortest Path Bridging MIB Initial Version"
-	::= { ieee802dot1mibs 26 }
+
+        ::= { ieee802dot1mibs 26 }
+
 -- ===================================================================
 --  TYPE DEFINITIONS                                                --
 -- ===================================================================
@@ -51,7 +72,7 @@ IEEE8021SpbAreaAddress ::= TEXTUAL-CONVENTION
 	DESCRIPTION
 		"This identifier is the 3 Byte IS-IS Area Address.
 		Domain Specific part(DSP)."
-	REFERENCE "12.25.1.1.2 a), 12.25.1.2.2 a), 12.25.1.3.2 a), 12.25.1.2.2 a)"
+	REFERENCE "12.25.1.1.2 a), 12.25.1.2.2 a), 12.25.1.3.2 a), 12.25.1.4.2 a)"
 	SYNTAX OCTET STRING (SIZE(3))
 
 IEEE8021SpbEctAlgorithm ::= TEXTUAL-CONVENTION
@@ -147,7 +168,7 @@ IEEE8021SpbMTID ::= TEXTUAL-CONVENTION
 	STATUS current
 	DESCRIPTION
 		"The IS-IS Multi Topology Identifier."
-	REFERENCE "3.23, 3.24"
+	REFERENCE "3.157, 3.158"
 	SYNTAX Unsigned32
 
 IEEE8021SpbServiceIdentifierOrAny ::= TEXTUAL-CONVENTION
@@ -158,7 +179,7 @@ IEEE8021SpbServiceIdentifierOrAny ::= TEXTUAL-CONVENTION
 		 port in SPBM to distinguish a service instance.
 		 The special value of 0xFFFFFF is used for wildcard. 
 		 This range also includes the default I-SID. "
-	REFERENCE "3.23, 3.24"
+	REFERENCE "3.157, 3.158"
 	SYNTAX Unsigned32 (255..16777215)
 
 -- ===================================================================
@@ -170,6 +191,11 @@ IEEE8021SpbServiceIdentifierOrAny ::= TEXTUAL-CONVENTION
 -- ===================================================================
 ieee8021SpbObjects OBJECT IDENTIFIER 
 	::= { ieee8021SpbMib 1 }
+
+-- ===================================================================
+-- ieee8021PcrObjects:
+-- ===================================================================
+ieee8021PcrObjects OBJECT IDENTIFIER ::= { ieee8021SpbMib 3 }
 
 -- ===================================================================
 -- ieee8021SpbSys:
@@ -184,7 +210,7 @@ ieee8021SpbSysAreaAddress OBJECT-TYPE
 	DESCRIPTION
 		"The three byte IS-IS Area Address to join. Normally
 		 SPB will use area 00:00:00 however if SPB is being
-		 used in conjunction with IPV4/V6 it may operate
+		 used in conjunction with IPV4/V6 it can operate
 		 using the IS-IS area address already in use.                       
 		 This object is persistent."
 	REFERENCE "12.25.1.3.2, 12.25.1.3.3"
@@ -197,10 +223,10 @@ ieee8021SpbSysId OBJECT-TYPE
 	DESCRIPTION
 		"SYS ID used for all SPB instances on this bridge.
 		 A six byte network wide unique identifier. This is
-		 defaulted to the Bridge Address initially but may 
+		 defaulted to the Bridge Address initially but can 
 		 be overridden.
 		 This object is persistent."
-	REFERENCE "12.25.1.3.3, 3.21"
+	REFERENCE "12.25.1.3.3, 3.238"
 	::= { ieee8021SpbSys 2 }
 
 ieee8021SpbSysControlAddr OBJECT-TYPE
@@ -208,9 +234,9 @@ ieee8021SpbSysControlAddr OBJECT-TYPE
 	MAX-ACCESS read-write
 	STATUS current
 	DESCRIPTION
-		"Group MAC that the ISIS control plane will use. SPB may
+		"Group MAC that the ISIS control plane will use. SPB can
 		 use a number of different addresses for SPB Hello and
-		 LSP exchange. Section 27.2, 8.13.1.5 and Table 8-13 covers
+		 LSP exchange. Section 27.2, 8.13.5.1 and Table 8-16 cover
 		 the different choices. The choices are as follows:
 		 01:80:C2:00:00:14 = All Level 1 Intermediate Systems 
 		 01:80:C2:00:00:15 = All Level 2 Intermediate Systems
@@ -256,7 +282,7 @@ ieee8021SpbmSysSPSourceId OBJECT-TYPE
 		 Note that only the 20 bits not including the top 4 bits are
 		 the SPSourceID.
 		 This object is persistent."
-	REFERENCE "12.25.1.3.3, 3.17, 27.15"
+	REFERENCE "12.25.1.3.3, 3.244, 27.15"
 	::= { ieee8021SpbSys 6 }
 
 ieee8021SpbvSysMode OBJECT-TYPE
@@ -266,10 +292,10 @@ ieee8021SpbvSysMode OBJECT-TYPE
 	DESCRIPTION
 		"Indication of supporting SPBV mode
 		 auto(=1)/manual(=2)
-		 auto => enable SPBV mode and auto allocate SPVIDs.
-		 manual => enable SPBV mode and manually assign SPVIDs.
+		 auto => auto allocate SPVIDs.
+		 manual => manually assign SPVIDs.
 		 This object is persistent."
-	REFERENCE "12.25.1.3.3, 3.20"
+	REFERENCE "12.25.1.3.3, 3.249"
 	DEFVAL {auto}
 	::= { ieee8021SpbSys 7 }
 
@@ -283,7 +309,7 @@ ieee8021SpbmSysMode OBJECT-TYPE
 		 auto => enable SPBM mode and auto allocate SPsourceID.
 		 manual => enable SPBM mode and manually assign SPsourceID.
 		 This object is persistent."
-	REFERENCE "12.25.1.3.3, 3.19"
+	REFERENCE "12.25.1.3.3, 3.239"
 	DEFVAL {auto}
 	::= { ieee8021SpbSys 8 }
 
@@ -384,7 +410,7 @@ ieee8021SpbTopIx OBJECT-TYPE
 		"Unique identifier of this SPB topology
 		 This is index is allocated for this ISIS/MT instance.
 		 It is used as an index to most other SPB tables below and to
-		 select the exact ISIS instance and which MT instance together."
+		 select the exact ISIS instance and the MT instance together."
 	REFERENCE "12.25.2.3.3"
 	::= { ieee8021SpbMtidStaticTableEntry 4 }
 
@@ -460,7 +486,7 @@ ieee8021SpbTopIxDynamicEntryAuxMCID OBJECT-TYPE
 	STATUS current
 	DESCRIPTION
 		"The aux MST Identifier for migration.
-		 Either MCID or AuxMCID must match for adjacency to form."
+		 Either MCID or AuxMCID has to match for adjacency to form."
 	REFERENCE "12.25.3.1.3, 28.9"
 	::= { ieee8021SpbTopIxDynamicTableEntry 4 }
 
@@ -520,7 +546,7 @@ ieee8021SpbEctStaticEntryBaseVid OBJECT-TYPE
 		 Traffic B-VID (SPBM) or Management VID (SPBV).
 		 A Base VID value of 4095 is a wildcard for any Base VID
 		 assigned to SPB operation."
-	REFERENCE "12.25.4.2.3, 3.3"
+	REFERENCE "12.25.4.2.3, 3.20"
 	::= { ieee8021SpbEctStaticTableEntry 2 }
 
 ieee8021SpbEctStaticEntryEctAlgorithm OBJECT-TYPE
@@ -528,13 +554,22 @@ ieee8021SpbEctStaticEntryEctAlgorithm OBJECT-TYPE
 	MAX-ACCESS read-create
 	STATUS current
 	DESCRIPTION
-		"This identifies the tie-breaking algorithms used in 
-		 Shortest Path Tree computation.  Values range from 
-		 00-80-c2-01 to 00-80-c2-16 for 802.1 for each
-		 the 16 ECT behaviors. The default is 00-80-c2-01 
-		 the LowPATHID.
+		"This identifies the method and the algorithm used
+		 to determine the active topology. The standard ECT
+		 Algorithm values are specified by Table 28-1, 
+		 Table 44-1, and Table 45-1.
+		 Table 28-1 values identify the tie-breaking algorithms 
+		 used in Shortest Path Tree computation; 
+		 values range from 00-80-c2-01 to 00-80-c2-10. 
+		 Table 44-1 values (00-80-c2-11 and 00-80-c2-12) 
+		 identify ECMP operations.
+		 Table 45-1 values identify explicit path control;
+		 values are 00-80-c2-17, 00-80-c2-18, 00-80-c2-19, 
+		 and the range from 00-80-c2-21 to 00-80-c2-40.
+		 The default is 00-80-c2-01, which is the LowPATHID
+		 from Table 28-1.
 		 This object is persistent."
-	REFERENCE "12.25.4.1, 12.25.4.2.3, 3.6"
+	REFERENCE "12.25.4.1, 12.25.4.2.3, 3.157"
 	DEFVAL {"00-80-c2-01"}
 	::= { ieee8021SpbEctStaticTableEntry 3 }
 
@@ -548,7 +583,7 @@ ieee8021SpbvEctStaticEntrySpvid OBJECT-TYPE
 		 but the output always returns the SPVID in use.
 		 Otherwise in SPBM this is empty, should be set = 0.
 		 This object is persistent."
-	REFERENCE "12.25.4.2.3, 3.16"
+	REFERENCE "12.25.4.2.3, 3.246"
 	::= { ieee8021SpbEctStaticTableEntry 4 }
 
 ieee8021SpbEctStaticEntryRowStatus OBJECT-TYPE
@@ -617,7 +652,7 @@ ieee8021SpbEctDynamicEntryBaseVid OBJECT-TYPE
 	DESCRIPTION
 		"The Base VID being queried. Base VID 
 		 define the mode in the VID to MSTID table. "
-	REFERENCE "12.25.5.1.2, 12.25.5.1.3, 3.3"
+	REFERENCE "12.25.5.1.2, 12.25.5.1.3, 3.20"
 	::= { ieee8021SpbEctDynamicTableEntry 2 }
 
 ieee8021SpbEctDynamicEntryMode OBJECT-TYPE
@@ -636,9 +671,9 @@ ieee8021SpbEctDynamicEntryLocalUse OBJECT-TYPE
 	STATUS current
 	DESCRIPTION
 		"This value indicates the ECT is in use locally 
-		 (True/False) for this Base Vid. ECTs may be defined before 
+		 (True/False) for this Base Vid. ECTs can be defined before 
 		 services are assigned. "
-	REFERENCE "12.25.5.1.3, 28.12.4"
+	REFERENCE "112.25.5.1.3, 28.12.4"
 	::= { ieee8021SpbEctDynamicTableEntry 4 }
 
 ieee8021SpbEctDynamicEntryRemoteUse OBJECT-TYPE
@@ -647,7 +682,7 @@ ieee8021SpbEctDynamicEntryRemoteUse OBJECT-TYPE
 	STATUS current
 	DESCRIPTION
 		"This value indicates the remote ECT is in use  
-		 (True/False) for this Base Vid. ECTs may be defined before 
+		 (True/False) for this Base Vid. ECTs can be defined before 
 		 services are assigned."
 	REFERENCE "12.25.5.1.3, 28.12.4"
 	::= { ieee8021SpbEctDynamicTableEntry 5 }
@@ -657,12 +692,14 @@ ieee8021SpbEctDynamicEntryIngressCheckDiscards OBJECT-TYPE
 	MAX-ACCESS read-only
 	STATUS current
 	DESCRIPTION
-		"The number of SA check failures on this ECT VID
-		 This is referred to as the ingress check and this
+		"The number of ingress check failures on this ECT VID.
+		 This is referred to as the ingress check, and this
 		 counter increments whenever a packet is discarded
 		 for this VID because it has not come from an
-		 interface which is on the shortest path to its SA.                                                                             "
-	REFERENCE "12.25.5.1.3"
+		 interface which is on the shortest path to its SA
+		 or because it is not upstream for the individual DA if
+		 relaxed ingress checking is applied."
+	REFERENCE "12.25.5.1.3, 8.4, 45.3.1"
 	::= { ieee8021SpbEctDynamicTableEntry 6 }
 
 -- ===================================================================
@@ -835,7 +872,7 @@ ieee8021SpbAdjDynamicEntryPeerSysId OBJECT-TYPE
 	DESCRIPTION
 		"The SPB System Identifier of this peer. This is used to 
 		 identify a neighbor uniquely."
-	REFERENCE "12.25.7.1.3, 3.21"
+	REFERENCE "12.25.7.1.3, 3.238"
 	::= { ieee8021SpbAdjDynamicTableEntry 3 }
 
 ieee8021SpbAdjDynamicEntryPort OBJECT-TYPE
@@ -874,7 +911,7 @@ ieee8021SpbAdjDynamicEntryPeerAgreeDigest OBJECT-TYPE
 	STATUS current
 	DESCRIPTION
 		"The peer topology agreement digest value
-		 (all of the elements defined in clause 28.4).
+		 (all of the elements defined in 28.4).
 		 If it does not match this bridge's digest it indicates loss of 
 		 synchronization."
 	REFERENCE "12.25.7.1.3, 28.4"
@@ -1004,7 +1041,7 @@ ieee8021SpbTopNodeEntrySysId OBJECT-TYPE
 		"The IS-IS System ID of a bridge in the SPB 
 		 LSP database and hence the network.
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.8.1.2, 12.25.8.1.3, 3.21"
+	REFERENCE "12.25.8.1.2, 12.25.8.1.3, 3.238"
 	::= { ieee8021SpbTopNodeTableEntry 2 }
 
 ieee8021SpbTopNodeEntryBridgePriority OBJECT-TYPE
@@ -1031,7 +1068,7 @@ ieee8021SpbmTopNodeEntrySPsourceID OBJECT-TYPE
 		 It is the high order 3 bytes for Group Address DA from this
 		 bridge. Note that only the 20 bits not including the 
 		 top 4 bits are the SPSourceID."
-	REFERENCE "12.25.8.1.3, 3.17"
+	REFERENCE "12.25.8.1.3, 3.247"
 	::= { ieee8021SpbTopNodeTableEntry 4 }
 
 ieee8021SpbTopNodeEntrySysName OBJECT-TYPE
@@ -1102,7 +1139,7 @@ ieee8021SpbTopEctEntrySysId OBJECT-TYPE
 	DESCRIPTION
 		"The system ID which is using a particular ECT.
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.9.1.2, 12.25.9.1.3, 3.21"
+	REFERENCE "12.25.9.1.2, 12.25.9.1.3, 3.238"
 	::= { ieee8021SpbTopEctTableEntry 2 }
 
 ieee8021SpbTopEctEntryBaseVid OBJECT-TYPE
@@ -1110,13 +1147,13 @@ ieee8021SpbTopEctEntryBaseVid OBJECT-TYPE
 	MAX-ACCESS not-accessible
 	STATUS current
 	DESCRIPTION
-		"Base VID related to this algorithm
+		"Base VID related to this algorithm.
 		 In the case of SPBM this is the B-VID that carries
 		 traffic for this ECT-ALGORITHM. In the case of SPBV
 		 this is the Base-VID used for management.
 		 A Base VID value of 4095 is a wildcard for any Base VID
 		 assigned to SPB operation."
-	REFERENCE "12.25.9.1.2, 12.25.9.1.3, 3.3"
+	REFERENCE "12.25.9.1.2, 12.25.9.1.3, 3.20"
 	::= { ieee8021SpbTopEctTableEntry 3 }
 
 ieee8021SpbTopEctEntryEctAlgorithm OBJECT-TYPE
@@ -1132,7 +1169,7 @@ ieee8021SpbTopEctEntryEctAlgorithm OBJECT-TYPE
 		 and the lower 8 bits are an index. This creates a 
 		 world-wide unique identity for the computation that
 		 will be using the VID thus ensuring consistency."
-	REFERENCE "12.25.9.1.3, 3.6"
+	REFERENCE "12.25.9.1.3, 3.157"
 	::= { ieee8021SpbTopEctTableEntry 4 }
 
 ieee8021SpbTopEctEntryMode OBJECT-TYPE
@@ -1153,7 +1190,7 @@ ieee8021SpbvTopEctSysMode OBJECT-TYPE
 		 auto(=1)/manual(=2)
 		 auto => SPBV mode and auto allocate SPVIDs.
 		 manual => SPBV mode and manually assign SPVIDs."
-	REFERENCE "12.25.9.1.3, 3.18"
+	REFERENCE "12.25.9.1.3, 3.248"
 	::= { ieee8021SpbTopEctTableEntry 6 }
 
 ieee8021SpbvTopEctEntrySpvid OBJECT-TYPE
@@ -1164,7 +1201,7 @@ ieee8021SpbvTopEctEntrySpvid OBJECT-TYPE
 		"SPVID in V mode
 		 The VID this bridge will use to originate traffic 
 		 using this ECT-ALGORITHM when running in SPBV mode."
-	REFERENCE "12.25.9.1.3, 3.14"
+	REFERENCE "12.25.9.1.3, 3.244"
 	::= { ieee8021SpbTopEctTableEntry 7 }
 
 ieee8021SpbTopEctEntryLocalUse OBJECT-TYPE
@@ -1176,7 +1213,7 @@ ieee8021SpbTopEctEntryLocalUse OBJECT-TYPE
 		 bridge :- TRUE or FALSE. This is used to help with 
 		 disruption-free migration between ECT-ALGORITHMs.
 		 Changes are only allowed if this flag is FALSE."
-	REFERENCE "12.25.9.1.3, 28.12.5(1"
+	REFERENCE "12.25.9.1.3, 28.12.5"
 	::= { ieee8021SpbTopEctTableEntry 8 }
 
 -- ===================================================================
@@ -1236,7 +1273,7 @@ ieee8021SpbTopEdgeEntrySysIdNear OBJECT-TYPE
 		"The System ID of near bridge (the bridge 
 		 reporting the adjacency).
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.10.1.2, 12.25.10.1.3, 3.21"
+	REFERENCE "12.25.10.1.2, 12.25.10.1.3, 3.238"
 	::= { ieee8021SpbTopEdgeTableEntry 2 }
 
 ieee8021SpbTopEdgeEntrySysIdFar OBJECT-TYPE
@@ -1247,7 +1284,7 @@ ieee8021SpbTopEdgeEntrySysIdFar OBJECT-TYPE
 		"The System ID of far bridge (the neighbor 
 		 of the bridge reporting).
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.10.1.2, 12.25.10.1.3, 3.21"
+	REFERENCE "12.25.10.1.2, 12.25.10.1.3, 3.238"
 	::= { ieee8021SpbTopEdgeTableEntry 3 }
 
 ieee8021SpbTopEdgeEntryMetricNear2Far OBJECT-TYPE
@@ -1275,7 +1312,7 @@ ieee8021SpbTopEdgeEntryMetricFar2Near OBJECT-TYPE
 	::= { ieee8021SpbTopEdgeTableEntry 5 }
 
 -- ===================================================================
--- ieee8021SpbvTopSrvTable:
+-- ieee8021SpbmTopSrvTable:
 -- ===================================================================
 ieee8021SpbmTopSrvTable OBJECT-TYPE
 	SYNTAX SEQUENCE OF Ieee8021SpbmTopSrvTableEntry
@@ -1335,7 +1372,7 @@ ieee8021SpbmTopSrvEntrySysId OBJECT-TYPE
 	DESCRIPTION
 		"The System identifier this service originates/terminates on.
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.11.1.2, 12.25.11.1.3, 3.21"
+	REFERENCE "12.25.11.1.2, 12.25.11.1.3, 3.238"
 	::= { ieee8021SpbmTopSrvTableEntry 2 }
 
 ieee8021SpbmTopSrvEntryIsid OBJECT-TYPE
@@ -1367,10 +1404,10 @@ ieee8021SpbmTopSrvEntryMac OBJECT-TYPE
 	DESCRIPTION
 		"The MAC address associated with a service.
 		 An additional nodal MAC address by which an I-SID 
-		 can be reached may be advertised, in which case
+		 can be reached can be advertised, in which case
 		 traffic to this MAC follows a forwarding path identical
 		 to that taken to reach the corresponding SYSID (nodal) MAC.
-		 If no additional MAC is advertised this will be the SYSID MAC.
+		 If no additional MAC is advertised, this will be the SYSID MAC.
 		 A value of 0 is a wildcard for the MAC address."
 	REFERENCE "12.25.11.1.3, 28.12.10"
 	::= { ieee8021SpbmTopSrvTableEntry 5 }
@@ -1389,7 +1426,9 @@ ieee8021SpbmTopSrvEntryIsidFlags OBJECT-TYPE
 	REFERENCE "12.25.11.1.2, 12.25.11.1.3, 28.12.10"
 	::= { ieee8021SpbmTopSrvTableEntry 6 }
 
-
+-- ===================================================================
+-- ieee8021SpbvTopSrvTable:
+-- ===================================================================
 ieee8021SpbvTopSrvTable OBJECT-TYPE
 	SYNTAX SEQUENCE OF Ieee8021SpbvTopSrvTableEntry
 	MAX-ACCESS not-accessible
@@ -1443,7 +1482,7 @@ ieee8021SpbvTopSrvEntrySysId OBJECT-TYPE
 	DESCRIPTION
 		"The System identifier advertising this group address.
 		 A value of 0 is a wildcard for all System identifiers."
-	REFERENCE "12.25.12.1.2, 12.25.12.1.3, 3.21"
+	REFERENCE "12.25.12.1.2, 12.25.12.1.3, 3.238"
 	::= { ieee8021SpbvTopSrvTableEntry 2 }
 
 ieee8021SpbvTopSrvEntryMMac OBJECT-TYPE
@@ -1464,7 +1503,7 @@ ieee8021SpbvTopSrvEntryBaseVid OBJECT-TYPE
 	DESCRIPTION
 		"The Base VID associated with this service. The Base VID determines
 		 the ECT Algorithm that is associated with this service."
-	REFERENCE "12.25.12.1.3, 3.3"
+	REFERENCE "12.25.12.1.3, 3.20"
 	::= { ieee8021SpbvTopSrvTableEntry 4 }
 
 ieee8021SpbvTopSrvEntryMMacFlags OBJECT-TYPE
@@ -1478,6 +1517,453 @@ ieee8021SpbvTopSrvEntryMMacFlags OBJECT-TYPE
 	REFERENCE "12.25.12.1.3, 28.12.9"
 	::= { ieee8021SpbvTopSrvTableEntry 5 }
 
+-- ===================================================================
+-- ieee8021SpbmBsiStaticTable:
+-- ===================================================================
+ieee8021SpbmBsiStaticTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF Ieee8021SpbmBsiStaticEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "Table of BSIs configured on this system and assigned to
+         an SPBM VID.
+         The table is indexed by
+         - ieee8021SpbTopIx from ieee8021SpbMtidStaticTable
+             indicating the ISIS-SPB topology instance into
+             which the BSI will be advertised, 
+         - ieee8021BridgeBasePort from ieee8021PbbCbpTable
+             identifying the CPB on which the BSI is configured,
+         - an I-SID value identifying the BSI, and
+         - a VID value identifying a B-VID for which forwarding
+             state is to be installed for the BSI"
+    REFERENCE "12.25.8"
+    ::= { ieee8021SpbObjects 13 }
+
+ieee8021SpbmBsiStaticEntry OBJECT-TYPE
+    SYNTAX Ieee8021SpbmBsiStaticEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "This table contains information about backbone services
+         configured on this system to be advertised by ISIS-SPB."
+    REFERENCE "12.25.8"
+    INDEX { 
+            ieee8021SpbTopIx,
+            ieee8021BridgeBasePort,
+            ieee8021SpbmBsiStaticEntryIsid,
+            ieee8021SpbmBsiStaticEntryBaseVid
+          } 
+    ::= { ieee8021SpbmBsiStaticTable 1 }
+
+Ieee8021SpbmBsiStaticEntry ::=
+    SEQUENCE {
+        ieee8021SpbmBsiStaticEntryIsid
+                              IEEE8021PbbServiceIdentifier,
+        ieee8021SpbmBsiStaticEntryBaseVid       VlanId,
+        ieee8021SpbmBsiStaticEntryTBit          TruthValue,
+        ieee8021SpbmBsiStaticEntryRBit          TruthValue,
+        ieee8021SpbmBsiStaticEntryTsBit         TruthValue,
+        ieee8021SpbmBsiStaticEntryTieBreakMask  Integer32,
+        ieee8021SpbmBsiStaticEntryRowStatus     RowStatus
+    }
+
+ieee8021SpbmBsiStaticEntryIsid OBJECT-TYPE
+    SYNTAX      IEEE8021PbbServiceIdentifier
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An I-SID registered on the CBP identified
+         by ieee8021BridgeBasePort."
+    ::= { ieee8021SpbmBsiStaticEntry 1 }
+
+ieee8021SpbmBsiStaticEntryBaseVid OBJECT-TYPE
+    SYNTAX      VlanId
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An B-VID registered on the CBP identified
+         by ieee8021BridgeBasePort."
+    ::= { ieee8021SpbmBsiStaticEntry 2 }
+
+ieee8021SpbmBsiStaticEntryTBit OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "If true(1), indicates the BSI transmits multicast
+         frames from this CBP.
+         This object is persistent."
+    ::= { ieee8021SpbmBsiStaticEntry 3 }
+
+ieee8021SpbmBsiStaticEntryRBit OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "If true(1), indicates the BSI wishes to receive
+         multicast frames at this CBP.
+         This object is persistent."
+    ::= { ieee8021SpbmBsiStaticEntry 4 }
+
+ieee8021SpbmBsiStaticEntryTsBit OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "If true(1), indicates the BSI transmits multicast
+         frames on a shared tree from this CBP.
+         This object is persistent."
+    ::= { ieee8021SpbmBsiStaticEntry 5 }
+
+ieee8021SpbmBsiStaticEntryTieBreakMask OBJECT-TYPE
+    SYNTAX      Integer32 (0..15)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "The value used to create the Tie-Break Mask
+         for calculating multicast trees.
+         This object is persistent."
+    ::= { ieee8021SpbmBsiStaticEntry 6 }
+
+ieee8021SpbmBsiStaticEntryRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+        "This column holds the status for this row.
+         When the status is active, no columns of this table can be
+         modified.
+         This object is persistent."
+    ::= { ieee8021SpbmBsiStaticEntry 7 }
+
+-- ===================================================================
+-- SPBM MEP configurable objects
+-- ===================================================================
+dot1agCfmMepSpbmTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF Dot1agCfmMepSpbmEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The additional objects configurable in SPBM MEPs"
+    REFERENCE "27.18"
+    ::= { ieee8021SpbObjects 14 }
+
+dot1agCfmMepSpbmEntry OBJECT-TYPE
+    SYNTAX      Dot1agCfmMepSpbmEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "The SPBM MEP table additions."
+
+    AUGMENTS { dot1agCfmMepEntry }
+    ::= { dot1agCfmMepSpbmTable 1 }
+
+Dot1agCfmMepSpbmEntry ::=
+    SEQUENCE {
+        dot1agCfmMepTransmitLbmSpbmDA   MacAddress,
+        dot1agCfmMepTransmitLtmSpbmDA   MacAddress
+    }
+
+dot1agCfmMepTransmitLbmSpbmDA OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+       "The MAC Address to be used as the LBM destination address
+        in an SPBM MA: A unicast or multicast address."
+    REFERENCE
+       "12.14.7.3.2:g"
+    ::= { dot1agCfmMepSpbmEntry 1 }
+
+dot1agCfmMepTransmitLtmSpbmDA OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+       "The MAC Address to be used as the LTM destination address
+        in an SPBM MA: A unicast or multicast address."
+    REFERENCE
+       "12.14.7.4.2:f"
+    ::= { dot1agCfmMepSpbmEntry 2 }
+
+-- ===================================================================
+-- SPBM path MA and ECMP path MA TE-SIDs
+-- ===================================================================
+dot1agCfmMepSpbmEspTable OBJECT-TYPE
+    SYNTAX     SEQUENCE OF Dot1agCfmMepSpbmEspEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The SPBM ESP table contains path-tesid information for each
+         SPBM path MA known to a system.
+
+         This table uses three indices. The first two indices are the
+         indices of the Maintenance Domain and MA tables, the reason
+         being that a path-tesid is always related to an MA and
+         Maintenance Domain."
+    REFERENCE
+        "12.14.5.3.2:c, 27.18.1"
+    ::= { ieee8021SpbObjects 15 }
+
+dot1agCfmMepSpbmEspEntry OBJECT-TYPE
+    SYNTAX     Dot1agCfmMepSpbmEspEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "The SPBM path MA ESP entry.  Each entry refers to an
+         ESP by identifier and contains information about
+         one of the ESPs that comprise an SPBM path MA.
+         The "
+    INDEX { dot1agCfmMdIndex,
+            dot1agCfmMaIndex,
+            dot1agCfmMepSpbmEspIndex
+          }
+    ::= { dot1agCfmMepSpbmEspTable 1 }
+
+Dot1agCfmMepSpbmEspEntry ::=
+    SEQUENCE {
+        dot1agCfmMepSpbmEspIndex       Unsigned32,
+        dot1agCfmMepSpbmEspEsp         IEEE8021PbbTeEsp,
+        dot1agCfmMepSpbmEspRowStatus   RowStatus
+    }
+
+dot1agCfmMepSpbmEspIndex OBJECT-TYPE
+    SYNTAX     Unsigned32 (1..4294967295)
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+        "This is an identifier, of local signifigance to a particular
+         SPBM path MA which is used to index the ESPs associated
+         with that MA."
+    ::= { dot1agCfmMepSpbmEspEntry 1 }
+
+dot1agCfmMepSpbmEspEsp OBJECT-TYPE
+    SYNTAX     IEEE8021PbbTeEsp
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+        "This column holds the ESP identifier for one of the Ethernet
+         Switched Paths that define the SPBM path MA.
+         This object is persistent."
+    REFERENCE
+        "12.14.5.3.2:c, 27.18.1"
+    ::= { dot1agCfmMepSpbmEspEntry 2 }
+
+dot1agCfmMepSpbmEspRowStatus OBJECT-TYPE
+    SYNTAX     RowStatus
+    MAX-ACCESS read-create
+    STATUS     current
+    DESCRIPTION
+        "This column holds the status for this row.
+         When the status is active, no columns of this table can be
+         modified.
+         This object is persistent."
+    ::= { dot1agCfmMepSpbmEspEntry 3 }
+
+-- ===================================================================
+--  PCR objects:
+-- ===================================================================
+	
+-- ===================================================================
+--  ieee8021PcrEctStaticTable:
+-- ===================================================================
+ieee8021PcrEctStaticTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF Ieee8021PcrEctStaticTableEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"The Path Control and Reservation (PCR)
+		 static configuration table."
+	REFERENCE "12.28.1"
+	::= { ieee8021PcrObjects 1 }
+
+ieee8021PcrEctStaticTableEntry OBJECT-TYPE
+	SYNTAX Ieee8021PcrEctStaticTableEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"The PCR static configuration Table defines the
+		 MRT VIDs for the Base VID if MRT is used."
+	REFERENCE "12.28.1"
+	INDEX { 
+	        ieee8021PcrEctStaticEntryTopIx,
+	        ieee8021PcrEctStaticEntryBaseVid
+	      } 
+	::= { ieee8021PcrEctStaticTable 1 }
+
+Ieee8021PcrEctStaticTableEntry ::=
+	SEQUENCE {
+	    ieee8021PcrEctStaticEntryTopIx IEEE8021SpbMTID,
+	    ieee8021PcrEctStaticEntryBaseVid VlanIdOrAny,
+		ieee8021PcrEctStaticEntryMrtBlueVid VlanIdOrNone,
+		ieee8021PcrEctStaticEntryMrtRedVid VlanIdOrNone,
+		ieee8021PcrEctStaticEntryRowStatus RowStatus
+	}
+
+ieee8021PcrEctStaticEntryTopIx OBJECT-TYPE
+	SYNTAX IEEE8021SpbMTID
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"The IS-IS Topology Index identifier to which this 
+		 instance belongs."
+	REFERENCE "12.28.1.1.2"
+	::= { ieee8021PcrEctStaticTableEntry 1 }
+
+ieee8021PcrEctStaticEntryBaseVid OBJECT-TYPE
+	SYNTAX VlanIdOrAny
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Base VID to use for the MRT ECT-Algorithm or for the
+		 MRTG ECT Algorithm.
+		 In the case of a non-learning VLAN, this is the VID
+		 that carries traffic. In the case of a learning VLAN,
+		 this is the Base-VID used for management.
+		 A Base VID value of 4095 is a wildcard for any Base VID
+		 assigned to MRT operation."
+	REFERENCE "12.28.1.1.2"
+	::= { ieee8021PcrEctStaticTableEntry 2 }
+
+ieee8021PcrEctStaticEntryMrtBlueVid OBJECT-TYPE
+	SYNTAX VlanIdOrNone
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+		"MRT-Blue VID.
+		 The VID this bridge will use to originate traffic 
+		 on MRT-Blue for the VLAN if the VLAN is associated
+		 with MRT operation.
+		 This object is persistent."
+	REFERENCE "12.28.1.1.2, 45.3.3, 45.3.4"
+	::= { ieee8021PcrEctStaticTableEntry 3 }
+	
+ieee8021PcrEctStaticEntryMrtRedVid OBJECT-TYPE
+	SYNTAX VlanIdOrNone
+	MAX-ACCESS read-write
+	STATUS current
+	DESCRIPTION
+		"MRT-Red VID.
+		 The VID this bridge will use to originate traffic 
+		 on MRT-Red for the VLAN if the VLAN is associated
+		 with MRT operation.
+		 This object is persistent."
+	REFERENCE "12.28.1.1.2, 45.3.3, 45.3.4"
+	::= { ieee8021PcrEctStaticTableEntry 4 }
+	
+ieee8021PcrEctStaticEntryRowStatus OBJECT-TYPE
+	SYNTAX RowStatus
+	MAX-ACCESS read-create
+	STATUS current
+	DESCRIPTION
+		"The object indicates the status of an entry and is used
+		 to create/delete entries. 
+		 This object is persistent."
+	REFERENCE "12.28.1.2.3"
+	::= { ieee8021PcrEctStaticTableEntry 5 }
+
+-- ===================================================================
+--  ieee8021PcrTopEctTable:
+-- ===================================================================
+ieee8021PcrTopEctTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF Ieee8021PcrTopEctTableEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Table of MRT use in the network."
+	REFERENCE "12.28.2"
+	::= { ieee8021PcrObjects 2 }
+
+ieee8021PcrTopEctTableEntry OBJECT-TYPE
+	SYNTAX Ieee8021PcrTopEctTableEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"This table lists bridges configured to use MRT."
+	REFERENCE "12.25.9"
+	INDEX { 
+	        ieee8021PcrTopEctEntryTopIx,
+	        ieee8021PcrTopEctEntrySysId,
+	        ieee8021PcrTopEctEntryBaseVid
+	      } 
+	::= { ieee8021PcrTopEctTable 1 }
+
+Ieee8021PcrTopEctTableEntry ::=
+	SEQUENCE {
+	    ieee8021PcrTopEctEntryTopIx IEEE8021SpbMTID,
+	    ieee8021PcrTopEctEntrySysId MacAddress,
+	    ieee8021PcrTopEctEntryBaseVid VlanIdOrAny,
+	    ieee8021PcrTopEctEntryMode IEEE8021SpbEctMode,
+	    ieee8021PcrTopEctEntryMrtBlueVid VlanIdOrNone,
+	    ieee8021PcrTopEctEntryMrtRedVid VlanIdOrNone
+	}
+
+ieee8021PcrTopEctEntryTopIx OBJECT-TYPE
+	SYNTAX IEEE8021SpbMTID
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"The IS-IS Topology Index identifier to which this 
+		 instance belongs."
+	REFERENCE "12.28.2.1.2, 12.28.2.1.3"
+	::= { ieee8021PcrTopEctTableEntry 1 }
+
+ieee8021PcrTopEctEntrySysId OBJECT-TYPE
+	SYNTAX MacAddress
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"The System ID that is using MRT.
+		 A value of 0 is a wildcard for all System identifiers."
+	REFERENCE "12.28.2.1.2, 12.28.2.1.3"
+	::= { ieee8021PcrTopEctTableEntry 2 }
+
+ieee8021PcrTopEctEntryBaseVid OBJECT-TYPE
+	SYNTAX VlanIdOrAny
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"Base VID related to this algorithm.
+		 In the case of a non-learning VLAN, this is the VID
+		 that carries traffic. In the case of a learning VLAN,
+		 this is the Base-VID used for management.
+		 A Base VID value of 4095 is a wildcard for any Base VID
+		 assigned to MRT operation."
+	REFERENCE "12.28.2.1.2, 12.28.2.1.3"
+	::= { ieee8021PcrTopEctTableEntry 3 }
+
+ieee8021PcrTopEctEntryMode OBJECT-TYPE
+	SYNTAX IEEE8021SpbEctMode
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"Operating mode : non-learning (=2) or learning (=3)"
+	REFERENCE "12.28.2.1.3"
+	::= { ieee8021PcrTopEctTableEntry 4 }
+
+ieee8021PcrTopEctEntryMrtBlueVid OBJECT-TYPE
+	SYNTAX VlanIdOrNone
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"MRT-Blue VID.
+		 The VID this bridge will use to originate traffic 
+		 on MRT-Blue for the VLAN if the VLAN is associated
+		 with MRT operation."
+	REFERENCE "12.28.2.1.3, 45.3.3, 45.3.4"
+	::= { ieee8021PcrTopEctTableEntry 5 }
+	
+ieee8021PcrTopEctEntryMrtRedVid OBJECT-TYPE
+	SYNTAX VlanIdOrNone
+	MAX-ACCESS read-only
+	STATUS current
+	DESCRIPTION
+		"MRT-Red VID.
+		 The VID this bridge will use to originate traffic 
+		 on MRT-Red for the VLAN if the VLAN is associated
+		 with MRT operation."
+	REFERENCE "12.28.2.1.3, 45.3.3, 45.3.4"
+	::= { ieee8021PcrTopEctTableEntry 6 }
 
 -- =============================================================
 -- Conformance Information
@@ -1486,6 +1972,10 @@ ieee8021SpbvTopSrvEntryMMacFlags OBJECT-TYPE
 ieee8021SpbConformance OBJECT IDENTIFIER ::= { ieee8021SpbMib 2}
 ieee8021SpbGroups      OBJECT IDENTIFIER ::= { ieee8021SpbConformance 1}
 ieee8021SpbCompliances OBJECT IDENTIFIER ::= { ieee8021SpbConformance 2}
+
+ieee8021PcrConformance OBJECT IDENTIFIER ::= { ieee8021SpbMib 4 }
+ieee8021PcrGroups      OBJECT IDENTIFIER ::= { ieee8021PcrConformance 1}
+ieee8021PcrCompliances OBJECT IDENTIFIER ::= { ieee8021PcrConformance 2}
 
 -- =============================================================
 -- SPBM Units of conformance
@@ -1631,6 +2121,8 @@ ieee8021SpbmTopSrvTableGroupSPBM OBJECT-GROUP
 	DESCRIPTION
 	"The collection of objects used to represent ieee8021SpbmTopSrvTable"
 	::= { ieee8021SpbGroups 11 }
+
+-- See below for additional SPBM Units of conformance (after SPBV section)
 
 -- =============================================================
 -- SPBV Units of conformance
@@ -1780,6 +2272,205 @@ ieee8021SpbvTopSrvTableGroupSPBV OBJECT-GROUP
 	::= { ieee8021SpbGroups 22 }
 
 -- =============================================================
+-- Additional SPBM Units of conformance
+-- =============================================================
+
+ieee8021SpbmBsiStaticTableGroupSPBM OBJECT-GROUP
+	OBJECTS {
+                ieee8021SpbmBsiStaticEntryTBit,
+                ieee8021SpbmBsiStaticEntryRBit,
+                ieee8021SpbmBsiStaticEntryTsBit,
+                ieee8021SpbmBsiStaticEntryTieBreakMask,
+                ieee8021SpbmBsiStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbmBsiStaticTable"
+	::= { ieee8021SpbGroups 23 }
+
+dot1agCfmMepSpbmTableGroupSPBM OBJECT-GROUP
+	OBJECTS {
+                dot1agCfmMepTransmitLbmSpbmDA,
+                dot1agCfmMepTransmitLtmSpbmDA
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent dot1agCfmMepSpbmTable"
+	::= { ieee8021SpbGroups 24 }
+
+dot1agCfmMepSpbmEspTableGroupSPBM OBJECT-GROUP
+	OBJECTS {
+                dot1agCfmMepSpbmEspEsp,
+                dot1agCfmMepSpbmEspRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent dot1agCfmMepSpbmEspTable"
+	::= { ieee8021SpbGroups 25 }
+
+-- =============================================================
+-- PCR Units of conformance
+-- =============================================================
+
+ieee8021PcrSysGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbSysAreaAddress,
+		ieee8021SpbSysId,
+		ieee8021SpbSysControlAddr,
+		ieee8021SpbSysName,
+		ieee8021SpbSysBridgePriority,
+		ieee8021SpbmSysSPSourceId,
+		ieee8021SpbmSysMode,
+		ieee8021SpbvSysMode,
+		ieee8021SpbSysDigestConvention
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbSys for PCR."
+	::= { ieee8021PcrGroups 1 }
+
+ieee8021PcrMtidStaticTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbMTidStaticEntryMtidOverload,
+		ieee8021SpbMtidStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbMtidStaticTable for PCR."
+	::= { ieee8021PcrGroups 2 }
+
+ieee8021PcrTopIxDynamicTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbTopIxDynamicEntryAgreeDigest,
+		ieee8021SpbTopIxDynamicEntryMCID,
+		ieee8021SpbTopIxDynamicEntryAuxMCID
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbTopIxDynamicTable for PCR."
+	::= { ieee8021PcrGroups 3 }
+
+ieee8021PcrEctStaticTableGroupMAC OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbEctStaticEntryEctAlgorithm,
+		ieee8021SpbEctStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbEctStaticTable for PCR,
+	for non-learning VLAN, i.e., MAC-based."
+	::= { ieee8021PcrGroups 4 }
+
+ieee8021PcrEctStaticTableGroupVID OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbEctStaticEntryEctAlgorithm,
+		ieee8021SpbvEctStaticEntrySpvid,
+		ieee8021SpbEctStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbEctStaticTable for PCR,
+	for learning VLAN, i.e., VID-based."
+	::= { ieee8021PcrGroups 5 }
+
+ieee8021PcrEctStaticTableGroupMrt OBJECT-GROUP
+	OBJECTS {
+		ieee8021PcrEctStaticEntryMrtBlueVid,
+		ieee8021PcrEctStaticEntryMrtRedVid,
+		ieee8021PcrEctStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021PcrEctStaticTable,
+	for MRT operation."
+	::= { ieee8021PcrGroups 6 }
+
+ieee8021PcrEctDynamicTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbEctDynamicEntryMode,
+		ieee8021SpbEctDynamicEntryLocalUse,
+		ieee8021SpbEctDynamicEntryRemoteUse,
+		ieee8021SpbEctDynamicEntryIngressCheckDiscards
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbEctDynamicTable for PCR."
+	::= { ieee8021PcrGroups 7 }
+
+ieee8021PcrAdjStaticTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbAdjStaticEntryMetric,
+		ieee8021SpbAdjStaticEntryIfAdminState,
+		ieee8021SpbAdjStaticEntryRowStatus
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbAdjStaticTable for PCR."
+	::= { ieee8021PcrGroups 8 }
+
+ieee8021PcrAdjDynamicTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbAdjDynamicEntryPort,
+		ieee8021SpbAdjDynamicEntryIfOperState,
+		ieee8021SpbAdjDynamicEntryPeerSysName,
+		ieee8021SpbAdjDynamicEntryPeerAgreeDigest,
+		ieee8021SpbAdjDynamicEntryPeerMCID,
+		ieee8021SpbAdjDynamicEntryPeerAuxMCID,
+		ieee8021SpbAdjDynamicEntryLocalCircuitID,
+		ieee8021SpbAdjDynamicEntryPeerLocalCircuitID,
+		ieee8021SpbAdjDynamicEntryPortIdentifier,
+		ieee8021SpbAdjDynamicEntryPeerPortIdentifier,
+		ieee8021SpbAdjDynamicEntryIsisCircIndex
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbAdjDynamicTable for PCR."
+	::= { ieee8021PcrGroups 9 }
+
+ieee8021PcrTopNodeTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbTopNodeEntryBridgePriority,
+		ieee8021SpbmTopNodeEntrySPsourceID,
+		ieee8021SpbTopNodeEntrySysName
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbTopNodeTable for PCR."
+	::= { ieee8021PcrGroups 10 }
+
+ieee8021PcrTopEctTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021PcrTopEctEntryMode,
+		ieee8021PcrTopEctEntryMrtBlueVid,
+		ieee8021PcrTopEctEntryMrtRedVid
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021PcrTopEctTable."
+	::= { ieee8021PcrGroups 11 }
+
+ieee8021PcrTopEdgeTableGroup OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbTopEdgeEntryMetricNear2Far,
+		ieee8021SpbTopEdgeEntryMetricFar2Near
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbTopEdgeTable for PCR."
+	::= { ieee8021PcrGroups 12 }
+
+ieee8021PcrTopSrvTableGroupVid OBJECT-GROUP
+	OBJECTS {
+		ieee8021SpbvTopSrvEntryBaseVid,
+		ieee8021SpbvTopSrvEntryMMacFlags
+	}
+	STATUS current
+	DESCRIPTION
+	"The collection of objects used to represent ieee8021SpbvTopSrvTable for PCR,
+	i.e., when the service is provided by a VID."
+	::= { ieee8021PcrGroups 13 }
+
+-- =============================================================
 -- Compliance statements SPBM
 -- =============================================================
 
@@ -1799,8 +2490,21 @@ ieee8021SpbComplianceSPBM MODULE-COMPLIANCE
 			ieee8021SpbTopNodeTableGroupSPBM ,
 			ieee8021SpbTopEctTableGroupSPBM ,
 			ieee8021SpbTopEdgeTableGroupSPBM ,
-			ieee8021SpbmTopSrvTableGroupSPBM 
+			ieee8021SpbmTopSrvTableGroupSPBM ,
+			ieee8021SpbmBsiStaticTableGroupSPBM
 		}
+
+                GROUP   dot1agCfmMepSpbmTableGroupSPBM
+                DESCRIPTION
+                    "This group is mandatory ONLY for devices supporting
+                     SPBM VID MAs."
+
+
+                GROUP   dot1agCfmMepSpbmEspTableGroupSPBM
+                DESCRIPTION
+                    "This group is mandatory ONLY for devices supporting
+                     SPBM path MAs or ECMP path MAs."
+
 	::= { ieee8021SpbCompliances 1 }
 
 -- =============================================================
@@ -1827,5 +2531,30 @@ ieee8021SpbComplianceSPBV MODULE-COMPLIANCE
 		}
 	::= { ieee8021SpbCompliances 2 }
 
-END
+-- =============================================================
+-- Compliance statements PCR
+-- =============================================================
 
+ieee8021PcrCompliance MODULE-COMPLIANCE
+	STATUS current
+	DESCRIPTION
+		"Compliance to IEEE 802.1 PCR"
+	MODULE
+		MANDATORY-GROUPS {
+			ieee8021PcrSysGroup ,
+			ieee8021PcrMtidStaticTableGroup ,
+			ieee8021PcrTopIxDynamicTableGroup ,
+			ieee8021PcrEctStaticTableGroupMAC ,
+			ieee8021PcrEctStaticTableGroupVID ,
+			ieee8021PcrEctStaticTableGroupMrt,
+			ieee8021PcrEctDynamicTableGroup ,
+			ieee8021PcrAdjStaticTableGroup ,
+			ieee8021PcrAdjDynamicTableGroup ,
+			ieee8021PcrTopNodeTableGroup ,
+			ieee8021PcrTopEctTableGroup ,
+			ieee8021PcrTopEdgeTableGroup ,
+			ieee8021PcrTopSrvTableGroupVid 
+		}
+	::= { ieee8021PcrCompliances 1 }
+
+END
