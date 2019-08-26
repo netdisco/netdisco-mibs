@@ -1,0 +1,2168 @@
+BGP-MPLS-LAYER3-VPN-MULTICAST-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+   MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
+   Counter32, Counter64, Gauge32, Unsigned32, TimeTicks,
+   mib-2
+      FROM SNMPv2-SMI                         -- RFC 2578
+
+   MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
+      FROM SNMPv2-CONF                        -- RFC 2580
+
+   RowPointer, TimeStamp, DateAndTime
+      FROM SNMPv2-TC                          -- RFC 2579
+
+   InterfaceIndex, InterfaceIndexOrZero
+      FROM IF-MIB                             -- RFC 2863
+
+   InetAddress, InetAddressType, InetAddressPrefixLength
+      FROM INET-ADDRESS-MIB                   -- RFC 4001
+
+   mplsL3VpnVrfName, MplsL3VpnRouteDistinguisher
+      FROM MPLS-L3VPN-STD-MIB                 -- RFC 4382
+
+   IANAipRouteProtocol, IANAipMRouteProtocol
+   FROM IANA-RTPROTO-MIB
+     -- http://www.iana.org/assignments/ianaiprouteprotocol-mib
+
+   L2L3VpnMcastProviderTunnelType
+      FROM L2L3-VPN-MULTICAST-TC-MIB;         -- RFC 8502
+
+mvpnMIB MODULE-IDENTITY
+   LAST-UPDATED "201812140000Z"  -- 14 December 2018
+   ORGANIZATION "IETF BESS Working Group"
+   CONTACT-INFO
+                "Hiroshi Tsunoda
+                 Tohoku Institute of Technology
+                 35-1, Yagiyama Kasumi-cho
+                 Taihaku-ku, Sendai, 982-8577
+                 Japan
+                 Email: tsuno@m.ieice.org"
+   DESCRIPTION
+        "This MIB module contains managed object definitions to
+         configure and/or monitor Multicast communication over IP
+         Virtual Private Networks (VPNs) supported by the
+         Multiprotocol Label Switching/Border Gateway Protocol
+         (MPLS/BGP) on a Provider Edge (PE) router.
+
+         Copyright (c) 2018 IETF Trust and the persons identified
+         as authors of the code.  All rights reserved.
+
+         Redistribution and use in source and binary forms, with or
+         without modification, is permitted pursuant to, and subject
+         to the license terms contained in, the Simplified BSD License
+         set forth in Section 4.c of the IETF Trust's Legal Provisions
+         Relating to IETF Documents
+         (http://trustee.ietf.org/license-info).
+        "
+
+  -- Revision History
+
+  REVISION "201812140000Z"  -- 14 December 2018
+  DESCRIPTION
+      "Initial version, published as RFC 8503."
+  ::= { mib-2 243 }
+
+-- Top-level components of this MIB module.
+mvpnNotifications OBJECT IDENTIFIER ::= { mvpnMIB 0 }
+
+-- Scalars, Tables
+mvpnObjects       OBJECT IDENTIFIER ::= { mvpnMIB 1 }
+
+-- Conformance Information
+mvpnConformance   OBJECT IDENTIFIER ::= { mvpnMIB 2 }
+
+-- MVPN Objects
+mvpnScalars       OBJECT IDENTIFIER ::= { mvpnObjects 1 }
+
+-- Scalar Objects
+
+mvpnMvrfs OBJECT-TYPE
+   SYNTAX        Gauge32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The total number of Multicast Virtual Routing and
+        Forwarding (MVRF) tables that are present on
+        this Provider Edge (PE) router.  This includes MVRFs
+        for IPv4, IPv6, and Multipoint LDP (mLDP) C-multicast.
+       "
+   ::= { mvpnScalars 1 }
+
+mvpnV4Mvrfs OBJECT-TYPE
+   SYNTAX        Gauge32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The number of MVRFs for IPv4 C-multicast on this PE.
+       "
+   ::= { mvpnScalars 2 }
+
+mvpnV6Mvrfs OBJECT-TYPE
+   SYNTAX        Gauge32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The number of MVRFs for IPv6 C-multicast on this PE.
+       "
+   ::= { mvpnScalars 3 }
+
+mvpnMldpMvrfs OBJECT-TYPE
+   SYNTAX         Gauge32
+   MAX-ACCESS     read-only
+   STATUS         current
+   DESCRIPTION
+       "The number of MVRFs on this PE that use BGP for
+        exchanging mLDP C-multicast routing information.
+       "
+   ::= { mvpnScalars 4 }
+
+mvpnPimV4Mvrfs OBJECT-TYPE
+   SYNTAX         Gauge32
+   MAX-ACCESS     read-only
+   STATUS         current
+   DESCRIPTION
+       "The number of MVRFs on this PE that use Provider
+        Independent Multicast (PIM) for exchanging IPv4
+        C-multicast routing information.
+       "
+   ::= { mvpnScalars 5 }
+
+mvpnPimV6Mvrfs OBJECT-TYPE
+   SYNTAX         Gauge32
+   MAX-ACCESS     read-only
+   STATUS         current
+   DESCRIPTION
+       "The number of MVRFs on this PE that use PIM for
+        exchanging IPv6 C-multicast routing information.
+       "
+   ::= { mvpnScalars 6 }
+
+mvpnBgpV4Mvrfs OBJECT-TYPE
+   SYNTAX         Gauge32
+   MAX-ACCESS     read-only
+   STATUS         current
+   DESCRIPTION
+       "The number of MVRFs on this PE that use BGP for
+        exchanging IPv4 C-multicast routing information.
+       "
+   ::= { mvpnScalars 7 }
+
+mvpnBgpV6Mvrfs OBJECT-TYPE
+   SYNTAX         Gauge32
+   MAX-ACCESS     read-only
+   STATUS         current
+   DESCRIPTION
+       "The number of MVRFs on this PE that use BGP for
+        exchanging IPv6 C-multicast routing information.
+       "
+   ::= { mvpnScalars 8 }
+
+mvpnSPTunnelLimit OBJECT-TYPE
+   SYNTAX        Unsigned32 (1..4294967295)
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The maximum number of selective provider tunnels that
+        are allowed for a particular MVPN on this PE.
+       "
+   REFERENCE
+       "RFC 6513, Section 13"
+   ::= { mvpnScalars 9 }
+
+mvpnBgpCmcastRouteWithdrawalTimer OBJECT-TYPE
+   SYNTAX        Unsigned32
+   UNITS         "milliseconds"
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "A configurable timer to control the delay
+        of C-multicast route withdrawal advertisements.
+       "
+   REFERENCE
+       "RFC 6514, Section 16.1.1"
+   ::= { mvpnScalars 10 }
+
+mvpnBgpSrcSharedTreeJoinTimer OBJECT-TYPE
+   SYNTAX        Unsigned32
+   UNITS         "milliseconds"
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "A configurable timer to control the delay
+        of Source/Shared Tree Join C-multicast route
+        advertisements.
+       "
+   REFERENCE
+       "RFC 6514, Section 16.1.2"
+   ::= { mvpnScalars 11 }
+
+-- Generic MVRF Information Table
+
+mvpnGenericTable  OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnGenericEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table containing generic information about
+        MVPNs on this PE.
+       "
+   ::= { mvpnObjects 2 }
+
+mvpnGenericEntry OBJECT-TYPE
+   SYNTAX        MvpnGenericEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual row that represents an MVPN on this PE.
+        The MVPN represented by this entry will have one or more
+        corresponding P-Multicast Service Interfaces (PMSIs)
+        and a corresponding VRF in MPLS-L3VPN-STD-MIB (RFC 4382).
+       "
+   INDEX {
+           mplsL3VpnVrfName
+         }
+   ::= { mvpnGenericTable 1 }
+
+MvpnGenericEntry ::= SEQUENCE {
+   mvpnGenMvrfLastAction       INTEGER,
+   mvpnGenMvrfLastActionTime   DateAndTime,
+   mvpnGenMvrfCreationTime     DateAndTime,
+   mvpnGenCmcastRouteProtocol  INTEGER,
+   mvpnGenIpmsiInfo            RowPointer,
+   mvpnGenInterAsPmsiInfo      RowPointer,
+   mvpnGenUmhSelection         INTEGER,
+   mvpnGenCustomerSiteType     INTEGER
+}
+
+mvpnGenMvrfLastAction OBJECT-TYPE
+   SYNTAX      INTEGER {
+                         createdMvrf             (1),
+                         deletedMvrf             (2),
+                         modifiedMvrfIpmsiConfig (3),
+                         modifiedMvrfSpmsiConfig (4)
+                       }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+       "This object describes the last action pertaining
+        to the MVPN represented by this entry.
+
+        The enumerated action types and the corresponding
+        descriptions are as follows:
+
+          createdMvrf:
+            MVRF was created for this MVPN on the PE.
+
+          deletedMvrf:
+            MVRF for this MVPN was deleted from the PE.
+            A conceptual row in this table will never have
+            mvpnGenMvrfLastAction equal to deletedMvrf,
+            because in that case, the row itself will not exist
+            in the table.
+
+            This value for mvpnGenMvrfLastAction is defined
+            solely for use in the mvpnMvrfActionChange
+            notification.
+
+          modifiedMvrfIpmsiConfig:
+            An I-PMSI for this MVPN was configured, deleted,
+            or changed.
+
+          modifiedMvrfSpmsiConfig:
+            An S-PMSI for this MVPN was configured, deleted,
+            or changed.
+       "
+   ::= { mvpnGenericEntry 2 }
+
+mvpnGenMvrfLastActionTime OBJECT-TYPE
+   SYNTAX        DateAndTime
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The timestamp when the last action, given in
+        the corresponding mvpnGenMvrfLastAction object,
+        was carried out.
+       "
+   ::= { mvpnGenericEntry 3 }
+
+mvpnGenMvrfCreationTime OBJECT-TYPE
+   SYNTAX        DateAndTime
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The timestamp when the MVRF was created for
+        the MVPN represented by this entry.
+       "
+   ::= { mvpnGenericEntry 4 }
+
+mvpnGenCmcastRouteProtocol OBJECT-TYPE
+   SYNTAX        INTEGER {
+                           pim (1),
+                           bgp (2)
+                         }
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The protocol used to signal C-multicast routing
+        information across the provider core for the MVPN
+        represented by this entry.
+
+        The enumerated protocols and the corresponding
+        descriptions are as follows:
+
+          pim : PIM (PIM-MVPN)
+          bgp : BGP (BGP-MVPN)
+       "
+   REFERENCE
+       "RFC 6513, Section 5"
+   ::= { mvpnGenericEntry 5 }
+
+mvpnGenIpmsiInfo OBJECT-TYPE
+   SYNTAX        RowPointer
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "A pointer to a conceptual row representing
+        the corresponding I-PMSI in mvpnPmsiTable.
+        If there is no I-PMSI for the MVPN
+        represented by this entry, the
+        value of this object will be zeroDotZero.
+       "
+   ::= { mvpnGenericEntry 6 }
+
+mvpnGenInterAsPmsiInfo OBJECT-TYPE
+   SYNTAX        RowPointer
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "A pointer to a conceptual row representing
+        the corresponding segmented Inter-AS I-PMSI in mvpnPmsiTable.
+        If there is no segmented Inter-AS I-PMSI for the MVPN,
+        the value of this object will be zeroDotZero.
+       "
+   ::= { mvpnGenericEntry 7 }
+
+mvpnGenUmhSelection OBJECT-TYPE
+   SYNTAX        INTEGER {
+                           highestPeAddress  (1),
+                           cRootGroupHashing (2),
+                           ucastUmhRoute     (3)
+                         }
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The Upstream Multicast Hop (UMH) selection method for the
+        MVPN represented by this entry.
+
+        The enumerated methods and the corresponding
+        descriptions are as follows:
+
+          highestPeAddress  : PE with the highest address
+                              (see RFC 6513, Section 5.1.3)
+          cRootGroupHashing : hashing based on (c-root, c-group)
+          ucastUmhRoute     : per-unicast route towards c-root
+       "
+   REFERENCE
+       "RFC 6513, Section 5.1"
+   ::= { mvpnGenericEntry 8 }
+
+mvpnGenCustomerSiteType OBJECT-TYPE
+   SYNTAX        INTEGER {
+                           senderReceiver (1),
+                           receiverOnly   (2),
+                           senderOnly     (3)
+                         }
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The type of the customer site, connected to
+        the MVPN represented by this entry.
+
+        The enumerated types and the corresponding
+        descriptions are as follows:
+
+          senderReceiver : Site is both sender and receiver
+          receiverOnly   : Site is receiver only
+          senderOnly     : Site is sender only
+       "
+   REFERENCE
+       "RFC 6513, Section 2.3"
+   ::= { mvpnGenericEntry 9 }
+
+-- Generic BGP-MVPN Table
+
+mvpnBgpTable OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnBgpEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table that supplements mvpnGenericTable
+        with BGP-MVPN-specific information for BGP-MVPNs on this PE.
+       "
+   ::= { mvpnObjects 3 }
+
+mvpnBgpEntry OBJECT-TYPE
+   SYNTAX           MvpnBgpEntry
+   MAX-ACCESS       not-accessible
+   STATUS           current
+   DESCRIPTION
+       "A conceptual row corresponding to a BGP-MVPN on this PE.
+       "
+   INDEX {
+           mplsL3VpnVrfName
+         }
+::= { mvpnBgpTable 1 }
+
+MvpnBgpEntry ::= SEQUENCE {
+   mvpnBgpMode                            INTEGER,
+   mvpnBgpVrfRouteImportExtendedCommunity MplsL3VpnRouteDistinguisher,
+   mvpnBgpSrcASExtendedCommunity          Unsigned32,
+   mvpnBgpMsgRateLimit                    Unsigned32,
+   mvpnBgpMaxSpmsiAdRoutes                Unsigned32,
+   mvpnBgpMaxSpmsiAdRouteFreq             Unsigned32,
+   mvpnBgpMaxSrcActiveAdRoutes            Unsigned32,
+   mvpnBgpMaxSrcActiveAdRouteFreq         Unsigned32
+}
+
+mvpnBgpMode OBJECT-TYPE
+   SYNTAX        INTEGER {
+                           other   (0),
+                           rptSpt  (1),
+                           sptOnly (2)
+                         }
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The inter-site C-tree mode used by the BGP-MVPN
+        represented by this entry.
+
+          other   : none of the following
+          rptSpt  : inter-site shared tree mode
+                    (Rendezvous Point Tree (RPT) and
+                    source-specific shortest-path tree (SPT))
+          sptOnly : inter-site source-only tree mode
+       "
+   REFERENCE
+       "RFC 6513, Section 9.3.1"
+   ::= { mvpnBgpEntry 1 }
+
+mvpnBgpVrfRouteImportExtendedCommunity OBJECT-TYPE
+   SYNTAX             MplsL3VpnRouteDistinguisher
+   MAX-ACCESS         read-only
+   STATUS             current
+   DESCRIPTION
+       "The VRF Route Import Extended Community added by this PE
+        to unicast VPN routes that it advertises for the BGP-MVPN
+        corresponding to this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 7
+       "
+   ::= { mvpnBgpEntry 2 }
+
+mvpnBgpSrcASExtendedCommunity OBJECT-TYPE
+   SYNTAX            Unsigned32
+   MAX-ACCESS        read-only
+   STATUS            current
+   DESCRIPTION
+       "The Source AS Extended Community added by this PE
+        to the unicast VPN routes that it advertises for
+        the BGP-MVPN represented by this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 6
+       "
+   ::= { mvpnBgpEntry 3 }
+
+mvpnBgpMsgRateLimit OBJECT-TYPE
+   SYNTAX        Unsigned32 (0..4294967295)
+   UNITS         "messages per second"
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The configurable upper bound for the rate of the BGP
+        C-multicast routing information message exchange between
+        this PE and other PEs in the BGP-MVPN corresponding to
+        this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 17"
+   ::= { mvpnBgpEntry 4 }
+
+mvpnBgpMaxSpmsiAdRoutes OBJECT-TYPE
+   SYNTAX        Unsigned32 (0..4294967295)
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The configurable upper bound for the number of S-PMSI
+        auto-discovery (A-D) routes for the BGP-MVPN
+        corresponding to this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 17"
+   ::= { mvpnBgpEntry 5 }
+
+mvpnBgpMaxSpmsiAdRouteFreq OBJECT-TYPE
+   SYNTAX        Unsigned32 (0..4294967295)
+   UNITS         "routes per second"
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The configurable upper bound for the frequency of
+        S-PMSI A-D route generation for the BGP-MVPN
+        corresponding to this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 17"
+   ::= { mvpnBgpEntry 6 }
+
+mvpnBgpMaxSrcActiveAdRoutes OBJECT-TYPE
+   SYNTAX        Unsigned32 (0..4294967295)
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The configurable upper bound for the number of
+        Source Active A-D routes for the BGP-MVPN corresponding
+        to this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 17"
+   ::= { mvpnBgpEntry 7 }
+
+mvpnBgpMaxSrcActiveAdRouteFreq OBJECT-TYPE
+   SYNTAX        Unsigned32 (0..4294967295)
+   UNITS         "routes per second"
+   MAX-ACCESS    read-write
+   STATUS        current
+   DESCRIPTION
+       "The configurable upper bound for the frequency of Source
+        Active A-D route generation for the BGP-MVPN corresponding
+        to this entry.
+       "
+   REFERENCE
+       "RFC 6514, Section 17"
+   ::= { mvpnBgpEntry 8 }
+
+-- Table of PMSI Information
+
+mvpnPmsiTable  OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnPmsiEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table containing information related
+        to PMSIs on this PE.
+       "
+   ::= { mvpnObjects 4 }
+
+mvpnPmsiEntry OBJECT-TYPE
+   SYNTAX        MvpnPmsiEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual row corresponding to a
+        PMSI on this PE.
+       "
+   INDEX       {
+                 mvpnPmsiTunnelIfIndex
+               }
+   ::= { mvpnPmsiTable 1 }
+
+MvpnPmsiEntry ::= SEQUENCE {
+   mvpnPmsiTunnelIfIndex          InterfaceIndex,
+   mvpnPmsiRD                     MplsL3VpnRouteDistinguisher,
+   mvpnPmsiTunnelType             L2L3VpnMcastProviderTunnelType,
+   mvpnPmsiTunnelAttribute        RowPointer,
+   mvpnPmsiTunnelPimGroupAddrType InetAddressType,
+   mvpnPmsiTunnelPimGroupAddr     InetAddress,
+   mvpnPmsiEncapsulationType      INTEGER
+}
+
+mvpnPmsiTunnelIfIndex OBJECT-TYPE
+   SYNTAX        InterfaceIndex
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A unique value for this conceptual row.  Its value
+        will be the same as that of the ifIndex object instance
+        for the corresponding PMSI in ifTable.
+       "
+   REFERENCE
+       "RFC 2863, Section 3.1.5
+       "
+   ::= { mvpnPmsiEntry 1 }
+
+mvpnPmsiRD OBJECT-TYPE
+   SYNTAX        MplsL3VpnRouteDistinguisher
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The Route Distinguisher for this I-PMSI.
+       "
+   ::= { mvpnPmsiEntry 3 }
+
+mvpnPmsiTunnelType OBJECT-TYPE
+   SYNTAX        L2L3VpnMcastProviderTunnelType
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The type of tunnel used to
+        instantiate the PMSI corresponding to this entry.
+       "
+   REFERENCE
+       "RFC 6513, Section 2.6
+       "
+   ::= { mvpnPmsiEntry 4 }
+
+mvpnPmsiTunnelAttribute OBJECT-TYPE
+   SYNTAX        RowPointer
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "A pointer to a conceptual row representing
+        the P-tunnel used by the PMSI in
+        l2L3VpnMcastPmsiTunnelAttributeTable.
+       "
+   ::= { mvpnPmsiEntry 5 }
+
+mvpnPmsiTunnelPimGroupAddrType OBJECT-TYPE
+   SYNTAX        InetAddressType
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The InetAddressType of the mvpnPmsiTunnelPimGroupAddr object
+        that follows.  When the PMSI corresponding to this entry
+        does not use the PIM provider tunnel, i.e., the value of
+        mvpnPmsiTunnelType is not one of pimSsm(3), pimAsm(4), or
+        pimBidir(5), this object should be unknown(0).
+       "
+   ::= { mvpnPmsiEntry 6 }
+
+mvpnPmsiTunnelPimGroupAddr OBJECT-TYPE
+   SYNTAX        InetAddress
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The tunnel address that is used by the PMSI
+        corresponding to this entry.  When the PMSI
+        corresponding to this entry does not use
+        the PIM provider tunnel, i.e., the value of
+        mvpnPmsiTunnelType is not one of pimSsm(3),
+        pimAsm(4), or pimBidir(5), this
+        object should be a zero-length octet string.
+       "
+   ::= { mvpnPmsiEntry 7 }
+
+mvpnPmsiEncapsulationType OBJECT-TYPE
+   SYNTAX        INTEGER {
+                           greIp (1),
+                           ipIp  (2),
+                           mpls  (3)
+                         }
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The encapsulation type used for sending
+        packets through the PMSI corresponding to this entry.
+
+        The enumerated encapsulation types and the corresponding
+        descriptions are as follows:
+
+          greIp : Generic Routing Encapsulation (GRE)
+                  (RFC 2784)
+          ipIp  : IP-in-IP encapsulation (RFC 2003)
+          mpls  : MPLS encapsulation (RFC 3032)
+       "
+   REFERENCE
+       "RFC 2003
+        RFC 2784
+        RFC 3032
+        RFC 6513, Section 12.1
+       "
+   ::= { mvpnPmsiEntry 8 }
+
+-- Table of S-PMSI-Specific Information
+
+mvpnSpmsiTable  OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnSpmsiEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table containing information related
+        to S-PMSIs on this PE.
+        This table stores only S-PMSI-specific attribute
+        information.  Generic PMSI attribute information of
+        S-PMSIs is stored in mvpnPmsiTable.
+       "
+   ::= { mvpnObjects 5 }
+
+mvpnSpmsiEntry OBJECT-TYPE
+   SYNTAX        MvpnSpmsiEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual row corresponding to an S-PMSI on this PE.
+        Implementers need to be aware that if the total number of
+        octets in mplsL3VpnVrfName, mvpnSpmsiCmcastGroupAddr, and
+        mvpnSpmsiCmcastSourceAddr exceeds 113, the OIDs of column
+        instances in this row will have more than 128 sub-identifiers
+        and cannot be accessed using SNMPv1, SNMPv2c, or SNMPv3.
+       "
+   INDEX       {
+                 mplsL3VpnVrfName,
+                 mvpnSpmsiCmcastGroupAddrType,
+                 mvpnSpmsiCmcastGroupAddr,
+                 mvpnSpmsiCmcastGroupPrefixLen,
+                 mvpnSpmsiCmcastSourceAddrType,
+                 mvpnSpmsiCmcastSourceAddr,
+                 mvpnSpmsiCmcastSourcePrefixLen
+               }
+   ::= { mvpnSpmsiTable 1 }
+
+MvpnSpmsiEntry ::= SEQUENCE {
+   mvpnSpmsiCmcastGroupAddrType   InetAddressType,
+   mvpnSpmsiCmcastGroupAddr       InetAddress,
+   mvpnSpmsiCmcastGroupPrefixLen  InetAddressPrefixLength,
+   mvpnSpmsiCmcastSourceAddrType  InetAddressType,
+   mvpnSpmsiCmcastSourceAddr      InetAddress,
+   mvpnSpmsiCmcastSourcePrefixLen InetAddressPrefixLength,
+   mvpnSpmsiPmsiPointer           RowPointer
+}
+
+mvpnSpmsiCmcastGroupAddrType OBJECT-TYPE
+   SYNTAX        InetAddressType
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The InetAddressType of the mvpnSpmsiCmcastGroupAddr object
+        that follows.
+       "
+   ::= { mvpnSpmsiEntry 1 }
+
+mvpnSpmsiCmcastGroupAddr OBJECT-TYPE
+   SYNTAX        InetAddress
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The group address of the C-flow assigned to the
+        S-PMSI corresponding to this entry.
+       "
+   REFERENCE
+       "RFC 6513, Section 3.1"
+   ::= { mvpnSpmsiEntry 2 }
+
+mvpnSpmsiCmcastGroupPrefixLen OBJECT-TYPE
+   SYNTAX        InetAddressPrefixLength
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The prefix length of the corresponding
+        mvpnSpmsiCmcastGroupAddr object.
+       "
+   ::= { mvpnSpmsiEntry 3 }
+
+mvpnSpmsiCmcastSourceAddrType OBJECT-TYPE
+   SYNTAX        InetAddressType
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The InetAddressType of the mvpnSpmsiCmcastSourceAddr object
+        that follows.
+       "
+   ::= { mvpnSpmsiEntry 4 }
+
+mvpnSpmsiCmcastSourceAddr OBJECT-TYPE
+   SYNTAX        InetAddress
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The source address of the C-flow assigned to the
+        S-PMSI corresponding to this entry.
+       "
+   ::= { mvpnSpmsiEntry 5 }
+
+mvpnSpmsiCmcastSourcePrefixLen OBJECT-TYPE
+   SYNTAX        InetAddressPrefixLength
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The prefix length of the corresponding
+        mvpnSpmsiCmcastSourceAddr object.
+       "
+   ::= { mvpnSpmsiEntry 6 }
+
+mvpnSpmsiPmsiPointer OBJECT-TYPE
+   SYNTAX        RowPointer
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "A pointer to a conceptual row representing
+        generic information of this S-PMSI in mvpnPmsiTable.
+       "
+   ::= { mvpnSpmsiEntry 7 }
+
+-- Table of Statistics Pertaining to
+-- Advertisements Sent/Received
+
+mvpnAdvtStatsTable OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnAdvtStatsEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table containing statistics pertaining to
+        I-PMSI and S-PMSI advertisements sent/received by this PE.
+       "
+   ::= { mvpnObjects 6 }
+
+mvpnAdvtStatsEntry OBJECT-TYPE
+   SYNTAX        MvpnAdvtStatsEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual row corresponding to statistics
+        pertaining to advertisements sent/received
+        for a particular MVPN on this PE.
+
+        Implementers need to be aware that if the total number of
+        octets in mplsL3VpnVrfName and mvpnAdvtPeerAddr exceeds 115,
+        then OIDs of column instances in this row will have more than
+        128 sub-identifiers and cannot be accessed using SNMPv1,
+        SNMPv2c, or SNMPv3.
+       "
+   INDEX  {
+            mplsL3VpnVrfName,
+            mvpnAdvtType,
+            mvpnAdvtPeerAddrType,
+            mvpnAdvtPeerAddr
+          }
+   ::= { mvpnAdvtStatsTable 1 }
+
+MvpnAdvtStatsEntry ::= SEQUENCE {
+   mvpnAdvtType                        INTEGER,
+   mvpnAdvtPeerAddrType                InetAddressType,
+   mvpnAdvtPeerAddr                    InetAddress,
+   mvpnAdvtSent                        Counter32,
+   mvpnAdvtReceived                    Counter32,
+   mvpnAdvtReceivedError               Counter32,
+   mvpnAdvtReceivedMalformedTunnelType Counter32,
+   mvpnAdvtReceivedMalformedTunnelId   Counter32,
+   mvpnAdvtLastSentTime                DateAndTime,
+   mvpnAdvtLastReceivedTime            DateAndTime,
+   mvpnAdvtCounterDiscontinuityTime    TimeStamp
+  }
+
+mvpnAdvtType OBJECT-TYPE
+   SYNTAX        INTEGER {
+                            intraAsIpmsi (0),
+                            interAsIpmsi (1),
+                            sPmsi        (2)
+                         }
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The PMSI type.
+
+        The enumerated PMSI types and corresponding
+        descriptions are as follows:
+
+          intraAsIpmsi : Intra-AS Inclusive PMSI
+          interAsIpmsi : Inter-AS Inclusive PMSI
+          sPmsi        : Selective PMSI
+       "
+   REFERENCE
+       "RFC 6513, Sec. 3.2.1"
+   ::= { mvpnAdvtStatsEntry 1 }
+
+mvpnAdvtPeerAddrType OBJECT-TYPE
+   SYNTAX        InetAddressType
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The InternetAddressType of the mvpnAdvtPeerAddr object
+        that follows.
+       "
+   ::= { mvpnAdvtStatsEntry 2 }
+
+mvpnAdvtPeerAddr OBJECT-TYPE
+   SYNTAX        InetAddress
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "The address of a peer PE that exchanges advertisement with
+        this PE.
+       "
+   ::= { mvpnAdvtStatsEntry 3 }
+
+mvpnAdvtSent OBJECT-TYPE
+   SYNTAX        Counter32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The number of advertisements successfully
+        sent to the peer PE specified by the corresponding
+        mvpnAdvtPeerAddr.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnAdvtCounterDiscontinuityTime object.
+       "
+   ::= { mvpnAdvtStatsEntry 4 }
+
+mvpnAdvtReceived OBJECT-TYPE
+   SYNTAX        Counter32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The number of advertisements received from the peer PE
+        specified by the corresponding mvpnAdvtPeerAddr object.
+        This includes advertisements that were discarded.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnAdvtCounterDiscontinuityTime object.
+       "
+   ::= { mvpnAdvtStatsEntry 5 }
+
+mvpnAdvtReceivedError OBJECT-TYPE
+   SYNTAX        Counter32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The total number of advertisements received from a peer PE,
+        specified by the corresponding mvpnAdvtPeerAddr object,
+        that were rejected due to an error(s) in the advertisement.
+        The value of this object includes
+        the error cases counted in the corresponding
+        mvpnAdvtReceivedMalformedTunnelType and
+        mvpnAdvtReceivedMalformedTunnelId objects.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnAdvtCounterDiscontinuityTime object.
+       "
+   ::= { mvpnAdvtStatsEntry 6 }
+
+mvpnAdvtReceivedMalformedTunnelType OBJECT-TYPE
+   SYNTAX        Counter32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The total number of advertisements received from the peer PE,
+        specified by the corresponding mvpnAdvtPeerAddr object,
+        that were rejected due to a malformed Tunnel Type
+        in the PMSI Tunnel attribute.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnAdvtCounterDiscontinuityTime object.
+       "
+   REFERENCE
+       "RFC 6514, Section 5"
+   ::= { mvpnAdvtStatsEntry 7 }
+
+mvpnAdvtReceivedMalformedTunnelId   OBJECT-TYPE
+   SYNTAX        Counter32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The total number of advertisements received from the peer PE,
+        specified by the corresponding mvpnAdvtPeerAddr object,
+        that were rejected due to a malformed Tunnel Identifier
+        in the PMSI Tunnel attribute.  Discontinuities in the value
+
+        of this counter can occur at re-initialization of the
+        management system and at other times as indicated by the
+        corresponding mvpnAdvtCounterDiscontinuityTime object.
+       "
+   REFERENCE
+       "RFC 6514, Section 5"
+   ::= { mvpnAdvtStatsEntry 8 }
+
+mvpnAdvtLastSentTime   OBJECT-TYPE
+   SYNTAX        DateAndTime
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The timestamp when the last advertisement
+        was successfully sent by this PE.  If no
+        advertisement has been sent since the
+        last re-initialization of this PE, this
+        object will have a zero-length string.
+       "
+   ::= { mvpnAdvtStatsEntry 9 }
+
+mvpnAdvtLastReceivedTime   OBJECT-TYPE
+   SYNTAX        DateAndTime
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The timestamp when the last advertisement
+        was successfully received from the peer PE specified
+        by the corresponding mvpnAdvtPeerAddr object and
+        processed by this PE.
+        If no advertisement has been received since the
+        last re-initialization of this PE, this object
+        will have a zero-length string.
+       "
+   ::= { mvpnAdvtStatsEntry 10 }
+
+mvpnAdvtCounterDiscontinuityTime OBJECT-TYPE
+   SYNTAX        TimeStamp
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The value of sysUpTime on the most recent occasion
+        at which any one or more of this application's
+        counters, viz., counters with the OID prefix
+        'mvpnAdvtSent', 'mvpnAdvtReceived',
+        'mvpnAdvtReceivedError',
+        'mvpnAdvtReceivedMalformedTunnelType', or
+        'mvpnAdvtReceivedMalformedTunnelId', suffered a
+
+        discontinuity.
+        If no such discontinuities have occurred since the
+        last re-initialization of the local management
+        subsystem, this object will have a zero value.
+       "
+   ::= { mvpnAdvtStatsEntry 11 }
+
+-- Table of Multicast Routes in an MVPN
+
+mvpnMrouteTable OBJECT-TYPE
+   SYNTAX        SEQUENCE OF MvpnMrouteEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual table containing multicast routing information
+        corresponding to the MVRFs present on the PE.
+       "
+   ::= { mvpnObjects 7 }
+
+mvpnMrouteEntry OBJECT-TYPE
+   SYNTAX        MvpnMrouteEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+       "A conceptual row corresponding to a route for IP datagrams
+        from a particular source and addressed to a particular
+        IP multicast group address.
+
+        Implementers need to be aware that if the total number of
+        octets in mplsL3VpnVrfName, mvpnMrouteCmcastGroupAddr, and
+        mvpnMrouteCmcastSourceAddrs exceeds 113, the OIDs of column
+        instances in this row will have more than 128 sub-identifiers
+        and cannot be accessed using SNMPv1, SNMPv2c, or SNMPv3.
+       "
+   INDEX  {
+            mplsL3VpnVrfName,
+            mvpnMrouteCmcastGroupAddrType,
+            mvpnMrouteCmcastGroupAddr,
+            mvpnMrouteCmcastGroupPrefixLength,
+            mvpnMrouteCmcastSourceAddrType,
+            mvpnMrouteCmcastSourceAddrs,
+            mvpnMrouteCmcastSourcePrefixLength
+          }
+   ::= { mvpnMrouteTable 1 }
+
+MvpnMrouteEntry ::= SEQUENCE {
+   mvpnMrouteCmcastGroupAddrType       InetAddressType,
+   mvpnMrouteCmcastGroupAddr           InetAddress,
+   mvpnMrouteCmcastGroupPrefixLength   InetAddressPrefixLength,
+   mvpnMrouteCmcastSourceAddrType      InetAddressType,
+   mvpnMrouteCmcastSourceAddrs         InetAddress,
+   mvpnMrouteCmcastSourcePrefixLength  InetAddressPrefixLength,
+   mvpnMrouteUpstreamNeighborAddrType  InetAddressType,
+   mvpnMrouteUpstreamNeighborAddr      InetAddress,
+   mvpnMrouteInIfIndex                 InterfaceIndexOrZero,
+   mvpnMrouteExpiryTime                TimeTicks,
+   mvpnMrouteProtocol                  IANAipMRouteProtocol,
+   mvpnMrouteRtProtocol                IANAipRouteProtocol,
+   mvpnMrouteRtAddrType                InetAddressType,
+   mvpnMrouteRtAddr                    InetAddress,
+   mvpnMrouteRtPrefixLength            InetAddressPrefixLength,
+   mvpnMrouteRtType                    INTEGER,
+   mvpnMrouteOctets                    Counter64,
+   mvpnMroutePkts                      Counter64,
+   mvpnMrouteTtlDroppedOctets          Counter64,
+   mvpnMrouteTtlDroppedPackets         Counter64,
+   mvpnMrouteDroppedInOctets           Counter64,
+   mvpnMrouteDroppedInPackets          Counter64,
+   mvpnMroutePmsiPointer               RowPointer,
+   mvpnMrouteNumberOfLocalReplication  Unsigned32,
+   mvpnMrouteNumberOfRemoteReplication Unsigned32,
+   mvpnMrouteCounterDiscontinuityTime  TimeStamp
+}
+
+mvpnMrouteCmcastGroupAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteCmcastGroupAddr object
+        that follows.
+       "
+   ::= { mvpnMrouteEntry 1 }
+
+mvpnMrouteCmcastGroupAddr OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The IP multicast group address that, along with
+        the corresponding mvpnMrouteCmcastGroupPrefixLength object,
+        identifies destinations for which this entry contains
+        multicast routing information.
+
+        This address object is only significant up to
+        mvpnMrouteCmcastGroupPrefixLength bits.  The remaining
+        address bits MUST be set to zero.
+
+        For addresses of type 'ipv4z' or 'ipv6z', the appended zone
+        index is significant even though it lies beyond the prefix
+        length.  The use of these address types indicates that this
+        forwarding state applies only within the given zone.  Zone
+        index zero is not valid in this table.
+       "
+   ::= { mvpnMrouteEntry 2 }
+
+mvpnMrouteCmcastGroupPrefixLength OBJECT-TYPE
+   SYNTAX     InetAddressPrefixLength
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The length in bits of the mask that, along with
+        the corresponding mvpnMrouteCmcastGroupAddr object,
+        identifies destinations for which this entry contains
+        multicast routing information.
+
+        If the corresponding InetAddressType is 'ipv4' or 'ipv4z',
+        this object must be in the range 4..32.
+        If the corresponding InetAddressType is 'ipv6' or 'ipv6z',
+        this object must be in the range 8..128.
+       "
+   ::= { mvpnMrouteEntry 3 }
+
+mvpnMrouteCmcastSourceAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteCmcastSourceAddrs object
+        that follows.
+
+        A value of unknown(0) indicates a non-source-specific entry,
+        corresponding to all sources in the group.  Otherwise, the
+        value MUST be the same as the value of
+        mvpnMrouteCmcastGroupAddrType.
+       "
+   ::= { mvpnMrouteEntry 4 }
+
+mvpnMrouteCmcastSourceAddrs OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The network address that, along with the
+        corresponding mvpnMrouteCmcastSourcePrefixLength object,
+        identifies the sources for which this entry contains
+        multicast routing information.
+
+        This address object is only significant up to
+        mvpnMrouteCmcastSourcePrefixLength bits.
+        The remaining address bits MUST be set to zero.
+
+        For addresses of type 'ipv4z' or 'ipv6z', the appended zone
+        index is significant even though it lies beyond the prefix
+        length.  The use of these address types indicates that this
+        source address applies only within the given zone.  Zone
+        index zero is not valid in this table.
+       "
+   ::= { mvpnMrouteEntry 5 }
+
+mvpnMrouteCmcastSourcePrefixLength OBJECT-TYPE
+   SYNTAX     InetAddressPrefixLength
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The length in bits of the mask that, along with
+        the corresponding mvpnMrouteCmcastSourceAddr object,
+        identifies the sources for which this entry contains
+        multicast routing information.
+
+        If the corresponding InetAddressType is 'ipv4' or 'ipv4z',
+        this object must be in the range 4..32.
+        If the corresponding InetAddressType is 'ipv6' or 'ipv6z',
+        this object must be in the range 8..128.
+        If the corresponding InetAddressType is 'unknown',
+        this object must be zero.
+       "
+   ::= { mvpnMrouteEntry 6 }
+
+mvpnMrouteUpstreamNeighborAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteUpstreamNeighborAddr
+        object that follows.
+
+        A value of unknown(0) indicates that the upstream
+        neighbor is unknown, for example, in
+        Bidirectional PIM (BIDIR-PIM).
+       "
+   REFERENCE
+       "RFC 5015"
+   ::= { mvpnMrouteEntry 7 }
+
+mvpnMrouteUpstreamNeighborAddr OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The address of the upstream neighbor (for example,
+        the Reverse Path Forwarding (RPF) neighbor) from
+        which IP datagrams from these sources represented
+        by this entry to this multicast address are received.
+       "
+   ::= { mvpnMrouteEntry 8 }
+
+mvpnMrouteInIfIndex OBJECT-TYPE
+   SYNTAX     InterfaceIndexOrZero
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The value of ifIndex for the interface on which IP
+        datagrams sent by these sources represented by this entry to
+        this multicast address are received.
+
+        A value of zero indicates that datagrams are not
+        subject to an incoming interface check but may be accepted
+        on multiple interfaces (for example, in BIDIR-PIM).
+       "
+   REFERENCE
+       "RFC 5015"
+   ::= { mvpnMrouteEntry 9 }
+
+mvpnMrouteExpiryTime OBJECT-TYPE
+   SYNTAX     TimeTicks
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The minimum amount of time remaining before this entry will
+        be aged out.  The value zero indicates that the entry is not
+        subject to aging.  If the corresponding mvpnMrouteNextHopState
+        object is pruned(1), this object represents the remaining
+        time for the prune to expire after which the state will
+        return to forwarding(2).
+        If the corresponding mvpnMrouteNextHopState object is
+        forwarding(2), this object indicates the time after which
+        this entry will be removed from the table.
+       "
+   ::= { mvpnMrouteEntry 10 }
+
+mvpnMrouteProtocol OBJECT-TYPE
+   SYNTAX     IANAipMRouteProtocol
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The multicast routing protocol via which this multicast
+        forwarding entry was learned.
+       "
+   ::= { mvpnMrouteEntry 11 }
+
+mvpnMrouteRtProtocol OBJECT-TYPE
+   SYNTAX     IANAipRouteProtocol
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The routing protocol via which the route used to find the
+        upstream or parent interface for this multicast forwarding
+        entry was learned.
+       "
+   ::= { mvpnMrouteEntry 12 }
+
+mvpnMrouteRtAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteRtAddr object
+        that follows.
+       "
+   ::= { mvpnMrouteEntry 13 }
+
+mvpnMrouteRtAddr OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The address portion of the route used to find the upstream
+        or parent interface for this multicast forwarding entry.
+
+        This address object is only significant up to
+        mvpnMrouteRtPrefixLength bits.  The remaining address bits
+        MUST be set to zero.
+
+        For addresses of type 'ipv4z' or 'ipv6z', the appended zone
+        index is significant even though it lies beyond the prefix
+
+        length.  The use of these address types indicates that this
+        forwarding state applies only within the given zone.  Zone
+        index zero is not valid in this table.
+       "
+   ::= { mvpnMrouteEntry 14 }
+
+mvpnMrouteRtPrefixLength OBJECT-TYPE
+   SYNTAX     InetAddressPrefixLength
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The length in bits of the mask associated with the route
+        used to find the upstream or parent interface for this
+        multicast forwarding entry.
+
+        If the corresponding InetAddressType is 'ipv4' or 'ipv4z',
+        this object must be in the range 4..32.
+        If the corresponding InetAddressType is 'ipv6' or 'ipv6z',
+        this object must be in the range 8..128.
+       "
+   ::= { mvpnMrouteEntry 15 }
+
+mvpnMrouteRtType OBJECT-TYPE
+   SYNTAX     INTEGER {
+                        unicast   (1),
+                        multicast (2)
+                      }
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The reason for placing the route in the (logical)
+        multicast Routing Information Base (RIB).
+
+        The enumerated reasons and the corresponding
+        descriptions are as follows:
+
+          unicast:
+            The route would normally be placed only in
+            the unicast RIB, but it was placed in the multicast
+            RIB by local configuration, such as when running
+            PIM over RIP.
+
+          multicast:
+            The route was explicitly added to the multicast RIB by
+            the routing protocol, such as the Distance Vector
+            Multicast Routing Protocol (DVMRP) or Multiprotocol BGP.
+       "
+   ::= { mvpnMrouteEntry 16 }
+
+mvpnMrouteOctets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of octets contained in IP datagrams that were
+        received from sources represented by this entry and
+        addressed to this multicast group address and that were
+        forwarded by this router.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteEntry 17 }
+
+mvpnMroutePkts OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of packets routed using this multicast route
+        entry.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteEntry 18 }
+
+mvpnMrouteTtlDroppedOctets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of octets contained in IP datagrams that this
+        router has received from sources represented by
+        this entry and addressed to this multicast group address,
+        which were dropped due to Time To Live (TTL) issues.
+        TTL issues occur when the TTL (IPv4) or Hop Limit (IPv6)
+        of the incoming packet was decremented to zero or to a
+        value less than ipMcastInterfaceTtl of the corresponding
+        interface.
+
+        The ipMcastInterfaceTtl object is defined in IPMCAST-MIB
+        (RFC 5132) and represents the datagram TTL
+
+        threshold for the interface.  Any IP multicast datagrams
+        with a TTL (IPv4) or Hop Limit (IPv6) less than this
+        threshold will not be forwarded out of the interface.
+        The default value of zero means all multicast packets are
+        forwarded out of the interface.  A value of 256 means that
+        no multicast packets are forwarded out of the interface.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   REFERENCE
+       "RFC 5132, Section 6
+       "
+   ::= { mvpnMrouteEntry 19 }
+
+mvpnMrouteTtlDroppedPackets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of packets that this router has received from
+        the sources represented by this entry and addressed to this
+        multicast group address, which were dropped due to
+        Time To Live (TTL) issues.  TTL issues occur when the
+        TTL (IPv4) or Hop Limit (IPv6) of the incoming packet was
+        decremented to zero or to a value less than
+        ipMcastInterfaceTtl of the corresponding interface.
+
+        The ipMcastInterfaceTtl object is defined in IPMCAST-MIB
+        (RFC 5132) and represents the datagram TTL
+        threshold for the interface.  Any IP multicast datagrams
+        with a TTL (IPv4) or Hop Limit (IPv6) less than this
+        threshold will not be forwarded out of the interface.
+        The default value of zero means all multicast packets are
+        forwarded out of the interface.  A value of 256 means that
+        no multicast packets are forwarded out of the interface.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   REFERENCE
+       "RFC 5132, Section 6
+       "
+   ::= { mvpnMrouteEntry 20 }
+
+mvpnMrouteDroppedInOctets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of octets contained in IP datagrams that this
+        router has received from sources represented by
+        this entry and addressed to this multicast group address,
+        which were dropped due to an error(s).
+        The value of this object includes the octets counted
+        in the corresponding mvpnMrouteTtlDroppedOctets object.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteEntry 21 }
+
+mvpnMrouteDroppedInPackets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of packets that this router has received from
+        sources represented by this entry and addressed to this
+        multicast group address, which were dropped due to an
+        error(s).  The value of this object includes the number
+        of octets counted in the corresponding
+        mvpnMrouteTtlDroppedPackets object.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteEntry 22 }
+
+mvpnMroutePmsiPointer OBJECT-TYPE
+   SYNTAX        RowPointer
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "A pointer to a conceptual row representing
+        the corresponding I-PMSI in mvpnPmsiTable or S-PMSI
+        in mvpnSpmsiTable that this C-multicast route is using.
+       "
+   ::= { mvpnMrouteEntry 23 }
+
+mvpnMrouteNumberOfLocalReplication OBJECT-TYPE
+   SYNTAX        Unsigned32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "Number of replications for local receivers.
+        For example, if an ingress PE needs to send traffic out of
+        N PE-CE interfaces, then mvpnMrouteNumberOfLocalReplication
+        is N.
+       "
+   ::= { mvpnMrouteEntry 24 }
+
+mvpnMrouteNumberOfRemoteReplication OBJECT-TYPE
+   SYNTAX        Unsigned32
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "Number of local replications for remote PEs.  For example,
+        if the number of remote PEs that need to receive traffic is N,
+        then mvpnMrouteNumberOfRemoteReplication is N in case of
+        Ingress Replication, but it may be less than N in case of
+        RSVP-TE or mLDP Point-to-Multipoint (P2MP) tunnels, depending
+        on the actual number of replications the PE needs to do.
+       "
+   ::= { mvpnMrouteEntry 25 }
+
+mvpnMrouteCounterDiscontinuityTime OBJECT-TYPE
+   SYNTAX        TimeStamp
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The value of sysUpTime on the most recent occasion
+        at which any one or more of this application's
+        counters, viz., counters with the OID prefix
+        'mvpnMrouteOctets', 'mvpnMroutePkts',
+        'mvpnMrouteTtlDroppedOctets',
+        'mvpnMrouteTtlDroppedPackets',
+        'mvpnMrouteDroppedInOctets', or 'mvpnMrouteDroppedInPackets',
+        suffered a discontinuity.
+        If no such discontinuities have occurred since the
+        last re-initialization of the local management
+        subsystem, this object will have a zero value.
+       "
+   ::= { mvpnMrouteEntry 26 }
+
+-- Table of Next Hops for Multicast Routes in an MVPN
+
+mvpnMrouteNextHopTable OBJECT-TYPE
+   SYNTAX     SEQUENCE OF MvpnMrouteNextHopEntry
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "A conceptual table containing information on the
+        next hops for routing IP multicast datagrams.
+        Each entry is one of a list of next hops for
+        a set of sources sending to a multicast group
+        address.
+       "
+   ::= { mvpnObjects 8 }
+
+mvpnMrouteNextHopEntry OBJECT-TYPE
+   SYNTAX     MvpnMrouteNextHopEntry
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "A conceptual row corresponding to a next hop to which
+        IP multicast datagrams from a set of sources to
+        an IP multicast group address are routed.
+
+        Implementers need to be aware that if the total number of
+        octets in mplsL3VpnVrfName, mvpnMrouteNextHopGroupAddr,
+        mvpnMrouteNextHopSourceAddrs, and mvpnMrouteNextHopAddr
+        exceeds 111, the OIDs of column instances in this row
+        will have more than 128 sub-identifiers and cannot be
+        accessed using SNMPv1, SNMPv2c, or SNMPv3.
+       "
+   INDEX      {
+                mplsL3VpnVrfName,
+                mvpnMrouteNextHopGroupAddrType,
+                mvpnMrouteNextHopGroupAddr,
+                mvpnMrouteNextHopGroupPrefixLength,
+                mvpnMrouteNextHopSourceAddrType,
+                mvpnMrouteNextHopSourceAddrs,
+                mvpnMrouteNextHopSourcePrefixLength,
+                mvpnMrouteNextHopIfIndex,
+                mvpnMrouteNextHopAddrType,
+                mvpnMrouteNextHopAddr
+              }
+   ::= { mvpnMrouteNextHopTable 1 }
+
+MvpnMrouteNextHopEntry ::= SEQUENCE {
+   mvpnMrouteNextHopGroupAddrType            InetAddressType,
+   mvpnMrouteNextHopGroupAddr                InetAddress,
+   mvpnMrouteNextHopGroupPrefixLength        InetAddressPrefixLength,
+   mvpnMrouteNextHopSourceAddrType           InetAddressType,
+   mvpnMrouteNextHopSourceAddrs              InetAddress,
+   mvpnMrouteNextHopSourcePrefixLength       InetAddressPrefixLength,
+   mvpnMrouteNextHopIfIndex                  InterfaceIndex,
+   mvpnMrouteNextHopAddrType                 InetAddressType,
+   mvpnMrouteNextHopAddr                     InetAddress,
+   mvpnMrouteNextHopState                    INTEGER,
+   mvpnMrouteNextHopExpiryTime               TimeTicks,
+   mvpnMrouteNextHopClosestMemberHops        Unsigned32,
+   mvpnMrouteNextHopProtocol                 IANAipMRouteProtocol,
+   mvpnMrouteNextHopOctets                   Counter64,
+   mvpnMrouteNextHopPkts                     Counter64,
+   mvpnMrouteNextHopCounterDiscontinuityTime TimeStamp
+}
+
+mvpnMrouteNextHopGroupAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteNextHopGroupAddr object
+        that follows.
+       "
+   ::= { mvpnMrouteNextHopEntry 1 }
+
+mvpnMrouteNextHopGroupAddr OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The IP multicast group address that, along with
+        the corresponding mvpnMrouteNextHopGroupPrefixLength object,
+        identifies destinations for which this entry contains
+        multicast forwarding information.
+
+        This address object is only significant up to
+        mvpnMrouteNextHopGroupPrefixLength bits.  The remaining
+        address bits MUST be set to zero.
+
+        For addresses of type 'ipv4z' or 'ipv6z', the appended zone
+        index is significant even though it lies beyond the prefix
+        length.  The use of these address types indicates that this
+        forwarding state applies only within the given zone.  Zone
+        index zero is not valid in this table.
+       "
+   ::= { mvpnMrouteNextHopEntry 2 }
+
+mvpnMrouteNextHopGroupPrefixLength OBJECT-TYPE
+   SYNTAX     InetAddressPrefixLength
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The length in bits of the mask that, along with
+        the corresponding mvpnMrouteGroupAddr object,
+        identifies destinations for which this entry contains
+        multicast routing information.
+
+        If the corresponding InetAddressType is 'ipv4' or 'ipv4z',
+        this object must be in the range 4..32.
+        If the corresponding InetAddressType is 'ipv6' or 'ipv6z',
+        this object must be in the range 8..128.
+       "
+   ::= { mvpnMrouteNextHopEntry 3 }
+
+mvpnMrouteNextHopSourceAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteNextHopSourceAddrs
+        object that follows.
+
+        A value of unknown(0) indicates a non-source-specific entry,
+        corresponding to all sources in the group.  Otherwise, the
+        value MUST be the same as the value of
+        mvpnMrouteNextHopGroupAddrType.
+       "
+   ::= { mvpnMrouteNextHopEntry 4 }
+
+mvpnMrouteNextHopSourceAddrs OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The network address that, along with the
+        corresponding mvpnMrouteNextHopSourcePrefixLength object,
+        identifies the sources for which this entry specifies
+        a next hop.
+
+        This address object is only significant up to
+        mvpnMrouteNextHopSourcePrefixLength bits.  The remaining
+        address bits MUST be set to zero.
+
+        For addresses of type 'ipv4z' or 'ipv6z', the appended zone
+        index is significant even though it lies beyond the prefix
+
+        length.  The use of these address types indicates that this
+        source address applies only within the given zone.  Zone
+        index zero is not valid in this table.
+       "
+   ::= { mvpnMrouteNextHopEntry 5 }
+
+mvpnMrouteNextHopSourcePrefixLength OBJECT-TYPE
+   SYNTAX     InetAddressPrefixLength
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The length in bits of the mask that, along with
+        the corresponding mvpnMrouteNextHopSourceAddrs object,
+        identifies the sources for which this entry specifies
+        a next hop.
+
+        If the corresponding InetAddressType is 'ipv4' or 'ipv4z',
+        this object must be in the range 4..32.
+        If the corresponding InetAddressType is 'ipv6' or 'ipv6z',
+        this object must be in the range 8..128.
+        If the corresponding InetAddressType is 'unknown',
+        this object must be zero.
+       "
+   ::= { mvpnMrouteNextHopEntry 6 }
+
+mvpnMrouteNextHopIfIndex OBJECT-TYPE
+   SYNTAX     InterfaceIndex
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The ifIndex value of the outgoing interface
+        for this next hop.
+       "
+   ::= { mvpnMrouteNextHopEntry 7 }
+
+mvpnMrouteNextHopAddrType OBJECT-TYPE
+   SYNTAX     InetAddressType
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The InetAddressType of the mvpnMrouteNextHopAddr object
+        that follows.
+       "
+   ::= { mvpnMrouteNextHopEntry 8 }
+
+mvpnMrouteNextHopAddr OBJECT-TYPE
+   SYNTAX     InetAddress
+   MAX-ACCESS not-accessible
+   STATUS     current
+   DESCRIPTION
+       "The address of the next hop specific to this entry.  For
+        most interfaces, this is identical to
+        mvpnMrouteNextHopGroupAddr.  Non-Broadcast Multi-Access
+        (NBMA) interfaces, however, may have multiple next-hop
+        addresses out of a single outgoing interface.
+       "
+   ::= { mvpnMrouteNextHopEntry 9 }
+
+mvpnMrouteNextHopState OBJECT-TYPE
+   SYNTAX     INTEGER {
+                        pruned(1),
+                        forwarding(2)
+                      }
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "An indication of whether the outgoing interface and next
+        hop represented by this entry is currently being used to
+        forward IP datagrams.
+
+        The enumerated states and the corresponding
+        descriptions are as follows:
+
+          pruned     : this entry is not currently being used.
+          forwarding : this entry is currently being used.
+       "
+   ::= { mvpnMrouteNextHopEntry 10 }
+
+mvpnMrouteNextHopExpiryTime OBJECT-TYPE
+   SYNTAX     TimeTicks
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The minimum amount of time remaining before this entry will
+        be aged out.  If mvpnMrouteNextHopState is pruned(1),
+        this object represents the remaining time for the prune
+        to expire after which the state will return to forwarding(2).
+        If mvpnMrouteNextHopState is forwarding(2),
+        this object indicates the time after which this
+        entry will be removed from the table.
+
+        The value of zero indicates that the entry is not subject to
+        aging.
+       "
+   ::= { mvpnMrouteNextHopEntry 11 }
+
+mvpnMrouteNextHopClosestMemberHops OBJECT-TYPE
+   SYNTAX     Unsigned32 (0..256)
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The minimum number of hops between this router and any
+        member of this IP multicast group reached via this next hop
+        on the corresponding outgoing interface.  Any IP multicast
+        datagram for the group that has a TTL (IPv4) or a Hop Count
+        (IPv6) less than mvpnMrouteNextHopClosestMemberHops will
+        not be forwarded through this interface.
+
+        A value of zero means all multicast datagrams are forwarded
+        out of the interface.  A value of 256 means that no multicast
+        datagrams are forwarded out of the interface.
+
+        This is an optimization applied by multicast routing
+        protocols that explicitly track hop counts to downstream
+        listeners.  Multicast protocols that are not aware of hop
+        counts to downstream listeners set this object to zero.
+       "
+   ::= { mvpnMrouteNextHopEntry 12 }
+
+mvpnMrouteNextHopProtocol OBJECT-TYPE
+   SYNTAX     IANAipMRouteProtocol
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The routing protocol via which this next hop was learned.
+       "
+   ::= { mvpnMrouteNextHopEntry 13 }
+
+mvpnMrouteNextHopOctets OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of octets of multicast packets that have been
+        forwarded using this route.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteNextHopCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteNextHopEntry 14 }
+
+mvpnMrouteNextHopPkts OBJECT-TYPE
+   SYNTAX     Counter64
+   MAX-ACCESS read-only
+   STATUS     current
+   DESCRIPTION
+       "The number of packets that have been forwarded using this
+        route.
+
+        Discontinuities in the value of this counter can
+        occur at re-initialization of the management system
+        and at other times as indicated by the corresponding
+        mvpnMrouteNextHopCounterDiscontinuityTime object.
+       "
+   ::= { mvpnMrouteNextHopEntry 15 }
+
+mvpnMrouteNextHopCounterDiscontinuityTime OBJECT-TYPE
+   SYNTAX        TimeStamp
+   MAX-ACCESS    read-only
+   STATUS        current
+   DESCRIPTION
+       "The value of sysUpTime on the most recent occasion
+        at which any one or more of this application's
+        counters, viz., counters with the OID prefix
+        'mvpnMrouteNextHopOctets' or 'mvpnMrouteNextHopPackets',
+        suffered a discontinuity.
+        If no such discontinuities have occurred since the
+        last re-initialization of the local management
+        subsystem, this object will have a zero value.
+       "
+   ::= { mvpnMrouteNextHopEntry 16 }
+
+-- MVPN Notifications
+
+mvpnMvrfActionTaken NOTIFICATION-TYPE
+   OBJECTS     {
+                 mvpnGenMvrfCreationTime,
+                 mvpnGenMvrfLastAction,
+                 mvpnGenMvrfLastActionTime,
+                 mvpnGenMvrfCreationTime,
+                 mvpnGenCmcastRouteProtocol,
+                 mvpnGenUmhSelection,
+                 mvpnGenCustomerSiteType
+               }
+   STATUS      current
+   DESCRIPTION
+       "mvpnMvrfActionTaken notifies about a change
+        in an MVRF on the PE.  The change itself will be given by
+        mvpnGenMvrfLastAction.
+       "
+   ::= { mvpnNotifications 1 }
+
+-- MVPN MIB Conformance Information
+
+mvpnGroups      OBJECT IDENTIFIER ::= { mvpnConformance 1 }
+mvpnCompliances OBJECT IDENTIFIER ::= { mvpnConformance 2 }
+
+-- Compliance Statements
+
+    mvpnModuleFullCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+            "Compliance statement for agents that provide full support
+             for BGP-MPLS-LAYER3-VPN-MULTICAST-MIB.
+            "
+       MODULE  -- this module
+       MANDATORY-GROUPS {
+           mvpnScalarGroup,
+           mvpnGenericGroup,
+           mvpnPmsiGroup,
+           mvpnAdvtStatsGroup,
+           mvpnMrouteGroup,
+           mvpnMrouteNextHopGroup,
+           mvpnNotificationGroup
+       }
+
+       GROUP mvpnBgpScalarGroup
+           DESCRIPTION
+               "This group is mandatory for systems that support
+                BGP-MVPN.
+               "
+
+       GROUP mvpnBgpGroup
+           DESCRIPTION
+               "This group is mandatory for systems that support
+                BGP-MVPN.
+               "
+       ::= { mvpnCompliances 1 }
+
+    mvpnModuleReadOnlyCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION "Compliance requirement for implementations that
+                    only provide read-only support for
+                    BGP-MPLS-LAYER3-VPN-MULTICAST-MIB.  Such devices
+                    can then be monitored but cannot be configured
+                    using this MIB module.
+                   "
+       MODULE  -- this module
+       MANDATORY-GROUPS {
+           mvpnScalarGroup,
+           mvpnGenericGroup,
+           mvpnPmsiGroup,
+           mvpnAdvtStatsGroup,
+           mvpnMrouteGroup,
+           mvpnMrouteNextHopGroup,
+           mvpnNotificationGroup
+       }
+
+       GROUP mvpnBgpScalarGroup
+           DESCRIPTION
+               "This group is mandatory for systems that support
+                BGP-MVPN.
+               "
+       GROUP mvpnBgpGroup
+           DESCRIPTION
+               "This group is mandatory for systems that support
+                BGP-MVPN.
+               "
+
+       OBJECT       mvpnSPTunnelLimit
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpCmcastRouteWithdrawalTimer
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpSrcSharedTreeJoinTimer
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpMsgRateLimit
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpMaxSpmsiAdRoutes
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpMaxSpmsiAdRouteFreq
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpMaxSrcActiveAdRoutes
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+
+       OBJECT       mvpnBgpMaxSrcActiveAdRouteFreq
+       MIN-ACCESS   read-only
+       DESCRIPTION "Write access is not required."
+       ::= { mvpnCompliances 2 }
+
+    mvpnModuleAdvtStatsCompliance MODULE-COMPLIANCE
+       STATUS  current
+       DESCRIPTION
+            "Compliance statement for agents that support
+             the monitoring of the statistics pertaining
+             to advertisements sent/received by a PE.
+            "
+       MODULE  -- this module
+
+       MANDATORY-GROUPS {
+           mvpnAdvtStatsGroup
+       }
+       ::= { mvpnCompliances 3 }
+
+-- Units of Conformance
+
+    mvpnScalarGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnMvrfs,
+                  mvpnV4Mvrfs,
+                  mvpnV6Mvrfs,
+                  mvpnPimV4Mvrfs,
+                  mvpnPimV6Mvrfs,
+                  mvpnSPTunnelLimit
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor/manage
+             global statistics and parameters.
+            "
+        ::= { mvpnGroups 1 }
+
+    mvpnBgpScalarGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnMldpMvrfs,
+                  mvpnBgpV4Mvrfs,
+                  mvpnBgpV6Mvrfs,
+                  mvpnBgpCmcastRouteWithdrawalTimer,
+                  mvpnBgpSrcSharedTreeJoinTimer
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor/manage
+             BGP-MVPN-specific global parameters.
+            "
+        ::= { mvpnGroups 2 }
+
+    mvpnGenericGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnGenMvrfLastAction,
+                  mvpnGenMvrfLastActionTime,
+                  mvpnGenMvrfCreationTime,
+                  mvpnGenCmcastRouteProtocol,
+                  mvpnGenIpmsiInfo,
+                  mvpnGenInterAsPmsiInfo,
+                  mvpnGenUmhSelection,
+                  mvpnGenCustomerSiteType
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor MVPNs on a PE.
+            "
+        ::= { mvpnGroups 3 }
+
+    mvpnBgpGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnBgpMode,
+                  mvpnBgpVrfRouteImportExtendedCommunity,
+                  mvpnBgpSrcASExtendedCommunity,
+                  mvpnBgpMsgRateLimit,
+                  mvpnBgpMaxSpmsiAdRoutes,
+                  mvpnBgpMaxSpmsiAdRouteFreq,
+                  mvpnBgpMaxSrcActiveAdRoutes,
+                  mvpnBgpMaxSrcActiveAdRouteFreq
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor/manage
+             MVPN-wise BGP-specific parameters.
+            "
+        ::= { mvpnGroups 4 }
+
+    mvpnPmsiGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnPmsiRD,
+                  mvpnPmsiTunnelType,
+                  mvpnPmsiTunnelAttribute,
+                  mvpnPmsiTunnelPimGroupAddrType,
+                  mvpnPmsiTunnelPimGroupAddr,
+                  mvpnPmsiEncapsulationType,
+                  mvpnSpmsiPmsiPointer
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor
+             I-PMSI and S-PMSI tunnels on a PE.
+            "
+        ::= { mvpnGroups 5 }
+
+    mvpnAdvtStatsGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnAdvtSent,
+                  mvpnAdvtReceived,
+                  mvpnAdvtReceivedError,
+                  mvpnAdvtReceivedMalformedTunnelType,
+                  mvpnAdvtReceivedMalformedTunnelId,
+                  mvpnAdvtLastSentTime,
+                  mvpnAdvtLastReceivedTime,
+                  mvpnAdvtCounterDiscontinuityTime
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor
+             the statistics pertaining to I-PMSI and S-PMSI
+             advertisements sent/received by a PE.
+            "
+        ::= { mvpnGroups 6 }
+
+    mvpnMrouteGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnMrouteUpstreamNeighborAddrType,
+                  mvpnMrouteUpstreamNeighborAddr,
+                  mvpnMrouteInIfIndex,
+                  mvpnMrouteExpiryTime,
+                  mvpnMrouteProtocol,
+                  mvpnMrouteRtProtocol,
+                  mvpnMrouteRtAddrType,
+                  mvpnMrouteRtAddr,
+                  mvpnMrouteRtPrefixLength,
+                  mvpnMrouteRtType,
+                  mvpnMrouteOctets,
+                  mvpnMroutePkts,
+                  mvpnMrouteTtlDroppedOctets,
+                  mvpnMrouteTtlDroppedPackets,
+                  mvpnMrouteDroppedInOctets,
+                  mvpnMrouteDroppedInPackets,
+                  mvpnMroutePmsiPointer,
+                  mvpnMrouteNumberOfLocalReplication,
+                  mvpnMrouteNumberOfRemoteReplication,
+                  mvpnMrouteCounterDiscontinuityTime
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor multicast routing
+             information corresponding to the MVRFs on a PE.
+            "
+        ::= { mvpnGroups 7 }
+
+    mvpnMrouteNextHopGroup    OBJECT-GROUP
+        OBJECTS {
+                  mvpnMrouteNextHopState,
+                  mvpnMrouteNextHopExpiryTime,
+                  mvpnMrouteNextHopClosestMemberHops,
+                  mvpnMrouteNextHopProtocol,
+                  mvpnMrouteNextHopOctets,
+                  mvpnMrouteNextHopPkts,
+                  mvpnMrouteNextHopCounterDiscontinuityTime
+                }
+        STATUS      current
+        DESCRIPTION
+            "These objects are used to monitor the information on
+             next hops for routing datagrams to MVPNs on a PE.
+            "
+        ::= { mvpnGroups 8 }
+
+    mvpnNotificationGroup NOTIFICATION-GROUP
+        NOTIFICATIONS {
+                     mvpnMvrfActionTaken
+                      }
+        STATUS  current
+        DESCRIPTION
+           "Objects required for MVPN notifications."
+        ::= { mvpnGroups 9 }
+
+END
