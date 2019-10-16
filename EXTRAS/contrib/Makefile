@@ -1,8 +1,6 @@
 #
 # Netdisco MIBs Makefile
 #
-# $Source$
-# $Id$
 #
 
 MIBS    = $(shell grep ^Version mibs/README | sed -n -e 's/^Version //;P')
