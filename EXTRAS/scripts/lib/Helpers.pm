@@ -62,7 +62,7 @@ sub build_index {
   qx(snmptranslate -IR sysName 2>&1 >/dev/null);
   # now run snmptranslate to get the new index file
   my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
-  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>\&1 >/dev/null);
+  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>&1 >/dev/null);
   # restore persistent dir
   $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
 
