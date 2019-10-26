@@ -56,7 +56,7 @@ sub build_index {
   my ($bundle, $keep) = @_;
   my (%mib_for, %file_for);
 
-  # change net-snmp perisistent dir and establish index baseline
+  # change net-snmp persistent dir and establish index baseline
   my $tmpdir = File::Temp->newdir();
   $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
   qx(snmptranslate -IR sysName 2>&1 >/dev/null);
