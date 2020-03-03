@@ -3,7 +3,7 @@
 -- Light Weight Access Point Management Frame Protection MIB
 -- January 2006, Victor Griswold, Devesh Pujari, Prasanna Viswakumar
 --   
--- Copyright (c) 2006, 2007 by Cisco Systems, Inc.
+-- Copyright (c) 2006-2007, 2017 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *******************************************************************
 
@@ -24,11 +24,13 @@ IMPORTS
     TimeInterval,
     MacAddress
         FROM SNMPv2-TC
-    cLWlanConfigEntry
+    cLApName
+        FROM CISCO-LWAPP-AP-MIB
+    cLWlanIndex
         FROM CISCO-LWAPP-WLAN-MIB
-    cLApIfSmtDot11Bssid,
-    cLApEntry,
-    cLApIfSmtParamEntry
+    cLApSysMacAddress,
+    cLApDot11IfSlotId,
+    cLApIfSmtDot11Bssid
         FROM CISCO-LWAPP-AP-MIB
     cldcClientMacAddress
         FROM CISCO-LWAPP-DOT11-CLIENT-MIB
@@ -45,7 +47,7 @@ IMPORTS
 -- ********************************************************************
 
 ciscoLwappMfpMIB MODULE-IDENTITY
-    LAST-UPDATED    "200701201545Z"
+    LAST-UPDATED    "201703171545Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -206,7 +208,17 @@ ciscoLwappMfpMIB MODULE-IDENTITY
         Std 802.11, 1999 Edition.
 
         [2] Draft-obara-Capwap-lwapp-00.txt, IETF Light 
-        Weight Access Point Protocol"
+        Weight Access Point Protocol"    
+    REVISION        "201703171545Z"
+    DESCRIPTION
+        "The objects cLMfpProtectionEnable, 
+	CLMfpApIfSmtCapEntry,
+        have been deprecated."
+    REVISION        "200706201545Z"
+    DESCRIPTION
+        "Added cLApName to ciscoLwappMfpProtectConfigMismatch,
+        ciscoLwappMfpValidationConfigMismatch and
+        ciscoLwappMfpAnomalyDetected1 notifications."
     REVISION        "200701201545Z"
     DESCRIPTION
         "The objects cLClientLastSourceMacAddress,
@@ -221,8 +233,8 @@ ciscoLwappMfpMIB MODULE-IDENTITY
 ciscoLwappMfpMIBNotifs  OBJECT IDENTIFIER
     ::= { ciscoLwappMfpMIB 0 }
 
-ciscoLwappMfpMIBNotifObjects  OBJECT IDENTIFIER
-    ::= { ciscoLwappMfpMIB 1 }
+ciscoLwappMfpMIBNotifObjects  OBJECT IDENTIFIER 
+	::= { ciscoLwappMfpMIB 1 }
 
 ciscoLwappMfpMIBObjects  OBJECT IDENTIFIER
     ::= { ciscoLwappMfpMIB 2 }
@@ -249,20 +261,21 @@ cLMfpProtectType OBJECT-TYPE
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "The authentication mechanism to be used to secure
-        the WLANs managed through this controller.
+        "This object specifies the authentication mechanism 
+	to be used to secure the WLANs managed through this
+	controller.
 
-        cLMfpProtectNone - No authentication or protection
-        mechanism is configured on the controller.
+        A value of 'cLMfpProtectNone' specifies no authentication
+	or protection mechanism is configured on the controller.
 
-        cLMfpProtectApAuth - AP-authentication is configured
-        as the authentication and protection mechanism
-        on the controller.
+        A value of 'cLMfpProtectApAuth' specifies AP-authentication
+	is configured as the authentication and protection mechanism 
+	on the controller.
 
-        cLMfpProtectMfp -  MFP is configured as the
-        as the authentication and protection mechanism
-        on the controller. 
-
+        A value of 'cLMfpProtectMfp' specifies MFP is configured 
+	as the as the authentication and protection mechanism
+	on the controller. 
+	
         The settings configured through cLMfpProtectionEnable
         and cLMfpApMfpValidationEnable for a WLAN and AP
         respectively take effect only if this object is set
@@ -275,7 +288,7 @@ cLMfpWlanConfigTable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table provides the configuration needed by the
+        "This table represents the configuration needed by the
         controller to enable management frame protection on a
         particular WLAN.
 
@@ -306,9 +319,14 @@ cLMfpWlanConfigEntry OBJECT-TYPE
         "A conceptual row in cLMfpWlanConfigTable and
         represents the MFP configuration on a particular
         WLAN."
-    AUGMENTS           { cLWlanConfigEntry  } 
- 
-    ::= { cLMfpWlanConfigTable 1 }
+-- The following was converted from AUGMENTS to INDEX to separate
+-- implementation and does not have any external impact
+-- to users of MIB. The version available at mib-police page
+-- will be shipped to the customers. This version is for
+-- INTERNAL USE ONLY.
+--      AUGMENTS {cLWlanConfigEntry }
+        INDEX { cLWlanIndex }
+        ::= { cLMfpWlanConfigTable 1 }
 
 CLMfpWlanConfigEntry ::= SEQUENCE {
         cLMfpVersionRequired  CLMfpVersion,
@@ -321,17 +339,18 @@ cLMfpVersionRequired OBJECT-TYPE
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "The version of the Management Frame Protection
-        Protocol required for the MFP framework when the
-        MFP protection is enabled through the 
-        cLMfpProtectionEnable object."
+        "This object specifies the version of the management
+	frame protection protocol required for the MFP framework
+	when the MFP protection is enabled through the 
+    	cLMfpProtectionEnable object."
+
     DEFVAL          { mfpv1 } 
     ::= { cLMfpWlanConfigEntry 2 }
 
 cLMfpProtectionEnable OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-write
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "This object specifies whether the MFP protection
         on this WLAN be enabled or not.
@@ -363,14 +382,15 @@ cLMfpClientProtection OBJECT-TYPE
     DESCRIPTION
         "This object specifies the level of client MFP
         protection for this WLAN.
-            disabled - client protection is disabled.
-            enabled  - client protection is optional.
-            required - client protection is mandatory."
+        A value of 'disabled' specifies client protection 
+	is disabled.
+        A value of 'enabled' specifies client protection 
+	is optional.
+        A value of 'required' specifies client protection 
+	is mandatory."
     DEFVAL          { enabled } 
     ::= { cLMfpWlanConfigEntry 4 }
  
-
-
 cLMfpClientTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CLMfpClientEntry 
     MAX-ACCESS      not-accessible
@@ -408,8 +428,6 @@ cLMfpClientMfpEnabled OBJECT-TYPE
         of 'false' indicates MFP protection is disabled." 
     ::= { cLMfpClientEntry 1 }
  
-
-
 -- ********************************************************************
 -- *  controller status
 -- ********************************************************************
@@ -418,10 +436,12 @@ cLMfpCtrlTimeBaseStatus OBJECT-TYPE
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
-        "The status of synchronization of the MFP-aware
-        LWAPP controller's timebase with that of a
-        central time server." 
+        "This object indicates the status of synchronization
+	of the MFP-aware LWAPP controller's timebase with that
+	of a central time server." 
+
     ::= { ciscoLwappMfpStatus 1 }
+    
 -- ********************************************************************
 -- *  Per-AP MFP status
 -- ********************************************************************
@@ -431,7 +451,7 @@ cLMfpApParamTable OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "This table provides the configuration of MFP related
+        "This table represents the configuration of MFP related
         parameters corresponding to a particular AP.
 
         A row is added to the table by the agent when a
@@ -445,11 +465,17 @@ cLMfpApParamEntry OBJECT-TYPE
     MAX-ACCESS      not-accessible
     STATUS          current
     DESCRIPTION
-        "A conceptual row in this table and represents
-        the MFP parameters of a particular AP."
-    AUGMENTS           { cLApEntry  } 
- 
-    ::= { cLMfpApParamTable 1 }
+        "This object represents a conceptual row in this table
+	and represents the MFP parameters of a particular AP."
+
+-- The following was converted from AUGMENTS to INDEX to separate
+-- implementation and does not have any external impact
+-- to users of MIB. The version available at mib-police page
+-- will be shipped to the customers. This version is for
+-- INTERNAL USE ONLY.
+--      AUGMENTS { cLApEntry }
+        INDEX   { cLApSysMacAddress }
+        ::= { cLMfpApParamTable 1 }
 
 CLMfpApParamEntry ::= SEQUENCE {
         cLMfpApMfpValidationEnable TruthValue,
@@ -474,7 +500,7 @@ cLMfpApMfpValidationEnable OBJECT-TYPE
         A value of 'false' indicates that the AP won't
         validate the received management frames.
 
-        Note that MFP validation is enabled or disabled
+        MFP validation is enabled or disabled
         on an AP through the values of 'true' and 'false'
         only if MFP is configured as the protection
         mechanism by setting the object cLMfpProtectType to
@@ -482,7 +508,9 @@ cLMfpApMfpValidationEnable OBJECT-TYPE
         value of this object, but the change made will
         take effect only if MFP is configured as the
         protection mechanism on the controller through
-        the cLMfpProtectType object."
+        the cLMfpProtectType object.
+        
+        SET is no more supported for this object. "
     DEFVAL          { true } 
     ::= { cLMfpApParamEntry 1 }
 
@@ -513,9 +541,9 @@ cLMfpApMfpValidationActual OBJECT-TYPE
 cLMfpApIfSmtCapTable OBJECT-TYPE
     SYNTAX          SEQUENCE OF CLMfpApIfSmtCapEntry 
     MAX-ACCESS      not-accessible
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "This table provides the MFP capabilities on a dot11
+        "This table represents the MFP capabilities on a dot11
         radio interface of an AP that has joined this
         controller.
 
@@ -540,14 +568,20 @@ cLMfpApIfSmtCapTable OBJECT-TYPE
 cLMfpApIfSmtCapEntry OBJECT-TYPE
     SYNTAX          CLMfpApIfSmtCapEntry
     MAX-ACCESS      not-accessible
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "A conceptual row in this table and represents
-        the MFP capabilities on the dot11 interface of
-        a particular LWAPP AP."
-    AUGMENTS           { cLApIfSmtParamEntry  } 
- 
-    ::= { cLMfpApIfSmtCapTable 1 }
+        "This object represents a conceptual row in this table
+	and represents the MFP capabilities on the dot11 interface
+	of a particular LWAPP AP."
+	
+-- The following was converted from AUGMENTS to INDEX to separate
+-- implementation and does not have any external impact
+-- to users of MIB. The version available at mib-police page
+-- will be shipped to the customers. This version is for
+-- INTERNAL USE ONLY.
+--      AUGMENTS { cLApIfSmtParamEntry }
+        INDEX   { cLApSysMacAddress, cLApDot11IfSlotId }
+    	::= { cLMfpApIfSmtCapTable 1 }
 
 CLMfpApIfSmtCapEntry ::= SEQUENCE {
         cLMfpApIfMfpVersionSupported     CLMfpVersion,
@@ -558,9 +592,9 @@ CLMfpApIfSmtCapEntry ::= SEQUENCE {
 cLMfpApIfMfpVersionSupported OBJECT-TYPE
     SYNTAX          CLMfpVersion
     MAX-ACCESS      read-only
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "The version of the Management Frame Protection
+        "This object represents the version of the MFP
         protocol currently supported by this radio
         interface." 
     ::= { cLMfpApIfSmtCapEntry 1 }
@@ -572,20 +606,21 @@ cLMfpApIfMfpProtectionCapability OBJECT-TYPE
                         protectCapAllFrames(3)
                     }
     MAX-ACCESS      read-only
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "The management frame protection capability
-        currently exhibited by the dot11 interface.
+        "This object represents the management frame 
+	protection capability urrently exhibited by the
+	dot11 interface.
 
-        protectCapNone - protection is not supported on this
-        dot11 interface. 
+        A value of 'protectCapNone' represents protection
+	is not supported on this dot11 interface. 
 
-        protectCapNoBeacon - protection is supported for all
-        types of 802.11 management frames except for beacon
-        and probe rsponse frames.
+        A value of 'protectCapNoBeacon' represents protection
+	is supported for all types of 802.11 management frames
+	except for beacon and probe rsponse frames.
 
-        protectCapAllFrames - protection is supported for all
-        types of 802.11 management frames." 
+        A value of 'protectCapAllFrames' represents protection
+	is supported for all types of 802.11 management frames." 
     ::= { cLMfpApIfSmtCapEntry 2 }
 
 cLMfpApIfMfpValidationCapability OBJECT-TYPE
@@ -594,33 +629,31 @@ cLMfpApIfMfpValidationCapability OBJECT-TYPE
                         validateCapAllFrames(2)
                     }
     MAX-ACCESS      read-only
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
-        "The management frame validation capability
-        currently exhibited by this dot11 interface.
+        "This object represents the management frame validation
+	capability currently exhibited by this dot11 interface.
 
-        validateCapNone - The MFP validation is not done by
-        this dot11 interface.
+        A value of 'validateCapNone' represents the MFP validation
+	is not done by this dot11 interface.
 
-        validateCapAllFrames - The MFP validation is
-        supported on ths dot11 interface for all types of
-        802.11 management frames." 
+        A value of 'validateCapAllFrames' represents the MFP 
+	validation is supported on ths dot11 interface for all
+	types of 802.11 management frames." 
     ::= { cLMfpApIfSmtCapEntry 3 }
- 
-
 
 cLMfpCtrlNotifEnable OBJECT-TYPE
     SYNTAX          TruthValue
     MAX-ACCESS      read-write
     STATUS          current
     DESCRIPTION
-        "The object to control the generation of
+        "The object specifies to control the generation of
         notifications defined in this MIB.
 
-        A value of 'true' indicates that the agent generates
+        A value of 'true' specifies that the agent generates
         the notifications defined in this MIB.
 
-        A value of 'false' indicates that the agent doesn't
+        A value of 'false' specifies that the agent doesn't
         generate the notifications."
     DEFVAL          { true } 
     ::= { ciscoLwappMfpStatus 4 }
@@ -633,7 +666,7 @@ cLApMacAddress OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "This object specifies the radio MAC address
+        "This object represents the radio MAC address
         of a LWAPP AP." 
     ::= { ciscoLwappMfpMIBNotifObjects 1 }
 
@@ -642,7 +675,7 @@ cLApDot11IfSlotIdx OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "This object specifies the slotId of the dot11
+        "This object represents the slotId of the dot11
         interface." 
     ::= { ciscoLwappMfpMIBNotifObjects 2 }
 
@@ -651,7 +684,7 @@ cLWlanIdx OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "This object indicates the identifier for a
+        "This object represents the identifier for a
         WLAN." 
     ::= { ciscoLwappMfpMIBNotifObjects 3 }
 
@@ -660,9 +693,9 @@ cLMfpApIfMfpProtectionActual OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "The actual protection configuration for a
-        specific WLAN as applicable to a dot11
-        interface of a specific AP." 
+        "This object represents the actual protection
+	configuration for a specific WLAN as applicable
+	to a dot11 interface of a specific AP." 
     ::= { ciscoLwappMfpMIBNotifObjects 4 }
 
 cLMfpEventType OBJECT-TYPE
@@ -670,7 +703,7 @@ cLMfpEventType OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "The type of the MFP anomaly event." 
+        "This object represents the type of the MFP anomaly event." 
     ::= { ciscoLwappMfpMIBNotifObjects 5 }
 
 cLMfpEventTotal OBJECT-TYPE
@@ -678,10 +711,10 @@ cLMfpEventTotal OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "The number of MFP anomaly events detected in the
-        prior period indicated by cLMfpEventPeriod.
-        cLMfpEventType indicates the type of the anomaly 
-        event." 
+        "This object represents the number of MFP anomaly events 
+	detected in the prior period indicated by cLMfpEventPeriod.
+    	cLMfpEventType indicates the type of the anomaly 
+    	event." 
     ::= { ciscoLwappMfpMIBNotifObjects 6 }
 
 cLMfpEventPeriod OBJECT-TYPE
@@ -689,9 +722,10 @@ cLMfpEventPeriod OBJECT-TYPE
     MAX-ACCESS      accessible-for-notify
     STATUS          current
     DESCRIPTION
-        "The time period, in hundredths of a second,
-        in which the reported number of events are
-        detected.  This is the time interval at which
+        "This object represents the time period, in hundredths
+	of a second,  in which the reported number of events are
+	
+	detected.  This is the time interval at which
         the controller periodically checks for the
         anomaly events to be reported to the NMS
         through the ciscoLwappMfpAnomalyDetected notification." 
@@ -720,6 +754,7 @@ cLClientLastSourceMacAddress OBJECT-TYPE
         identify the rogue client that has staged the most recent
         attack on the wireless network." 
     ::= { ciscoLwappMfpMIBNotifObjects 10 }
+    
 -- ********************************************************************
 -- *    NOTIFICATION TYPE objects
 -- ********************************************************************
@@ -731,7 +766,8 @@ ciscoLwappMfpProtectConfigMismatch NOTIFICATION-TYPE
                         cLApDot11IfSlotIdx,
                         cLWlanIdx,
                         cLMfpProtectionEnable,
-                        cLMfpApIfMfpProtectionActual
+                        cLMfpApIfMfpProtectionActual,
+                        cLApName
                     }
     STATUS          current
     DESCRIPTION
@@ -759,7 +795,8 @@ ciscoLwappMfpValidationConfigMismatch NOTIFICATION-TYPE
     OBJECTS         {
                         cLApMacAddress,
                         cLMfpApMfpValidationEnable,
-                        cLMfpApMfpValidationActual
+                        cLMfpApMfpValidationActual,
+                        cLApName
                     }
     STATUS          current
     DESCRIPTION
@@ -782,7 +819,9 @@ ciscoLwappMfpValidationConfigMismatch NOTIFICATION-TYPE
 
 
 ciscoLwappMfpTimebaseStatus NOTIFICATION-TYPE
-    OBJECTS         { cLMfpCtrlTimeBaseStatus }
+    OBJECTS {
+    		cLMfpCtrlTimeBaseStatus 
+    }
     STATUS          current
     DESCRIPTION
         "This notification is sent by the agent to indicate
@@ -793,8 +832,6 @@ ciscoLwappMfpTimebaseStatus NOTIFICATION-TYPE
         status changes."
    ::= { ciscoLwappMfpMIBNotifs 3 }
 -- STATUS deprecated by ciscoLwappMfpAnomalyDetected1
-
-
 ciscoLwappMfpAnomalyDetected NOTIFICATION-TYPE
     OBJECTS         {
                         cLApMacAddress,
@@ -839,7 +876,8 @@ ciscoLwappMfpAnomalyDetected1 NOTIFICATION-TYPE
                         cLMfpEventTotal,
                         cLMfpEventPeriod,
                         cLMfpEventFrames,
-                        cLClientLastSourceMacAddress
+                        cLClientLastSourceMacAddress,
+                        cLApName
                     }
     STATUS          current
     DESCRIPTION
@@ -886,13 +924,12 @@ ciscoLwappMfpMIBCompliance MODULE-COMPLIANCE
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappMfpMIB module."
-    MODULE          -- this module
-    MANDATORY-GROUPS {
-                        ciscoLwappMfpConfigGroup,
-                        ciscoLwappMfpStatusGroup,
-                        ciscoLwappMfpNotifObjsGroup,
-                        ciscoLwappMfpNotifsGroup
-                    }
+    MODULE MANDATORY-GROUPS {
+            ciscoLwappMfpConfigGroup,
+            ciscoLwappMfpStatusGroup,
+            ciscoLwappMfpNotifObjsGroup,
+            ciscoLwappMfpNotifsGroup
+         }
     ::= { ciscoLwappMfpMIBCompliances 1 }
 
 ciscoLwappMfpMIBComplianceRev1 MODULE-COMPLIANCE
@@ -900,16 +937,15 @@ ciscoLwappMfpMIBComplianceRev1 MODULE-COMPLIANCE
     DESCRIPTION
         "The compliance statement for the SNMP entities that
         implement the ciscoLwappMfpMIB module."
-    MODULE          -- this module
-    MANDATORY-GROUPS {
-                        ciscoLwappMfpConfigGroup,
-                        ciscoLwappMfpStatusGroup,
-                        ciscoLwappMfpNotifObjsGroup,
-                        ciscoLwappMfpNotifsNewGroup,
-                        ciscoLwappMfpConfigSup1Group,
-                        ciscoLwappMfpStatusSup1Group,
-                        ciscoLwappMfpNotifObjsSup1Group
-                    }
+    MODULE MANDATORY-GROUPS {
+            ciscoLwappMfpConfigGroup,
+            ciscoLwappMfpStatusGroup,
+            ciscoLwappMfpNotifObjsGroup,
+            ciscoLwappMfpNotifsNewGroup,
+            ciscoLwappMfpConfigSup1Group,
+            ciscoLwappMfpStatusSup1Group,
+            ciscoLwappMfpNotifObjsSup1Group
+         }
     ::= { ciscoLwappMfpMIBCompliances 2 }
 
 -- ********************************************************************
@@ -979,7 +1015,9 @@ ciscoLwappMfpNotifsGroup NOTIFICATION-GROUP
     ::= { ciscoLwappMfpMIBGroups 4 }
 
 ciscoLwappMfpConfigSup1Group OBJECT-GROUP
-    OBJECTS         { cLMfpClientProtection }
+    OBJECTS { 
+    		cLMfpClientProtection 
+    }
     STATUS          current
     DESCRIPTION
         "This collection of objects represent the configuration
@@ -987,7 +1025,9 @@ ciscoLwappMfpConfigSup1Group OBJECT-GROUP
     ::= { ciscoLwappMfpMIBGroups 5 }
 
 ciscoLwappMfpStatusSup1Group OBJECT-GROUP
-    OBJECTS         { cLMfpClientMfpEnabled }
+    OBJECTS {
+    		cLMfpClientMfpEnabled 
+    }
     STATUS          current
     DESCRIPTION
         "This collection of objects represent the status
@@ -995,7 +1035,9 @@ ciscoLwappMfpStatusSup1Group OBJECT-GROUP
     ::= { ciscoLwappMfpMIBGroups 6 }
 
 ciscoLwappMfpNotifObjsSup1Group OBJECT-GROUP
-    OBJECTS         { cLClientLastSourceMacAddress }
+    OBJECTS {
+    		cLClientLastSourceMacAddress
+    }
     STATUS          current
     DESCRIPTION
         "This collection of objects represent the client
@@ -1018,6 +1060,14 @@ ciscoLwappMfpNotifsNewGroup NOTIFICATION-GROUP
     ::= { ciscoLwappMfpMIBGroups 8 }
 
 END
+
+
+
+
+
+
+
+
 
 
 
