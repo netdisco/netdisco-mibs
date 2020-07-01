@@ -18,13 +18,28 @@ IMPORTS
 -- (I follow the CamelCase to be sure I don't mistype. Who knows the rules...
 
 wrSwitchMIB MODULE-IDENTITY
-    LAST-UPDATED "201807181400Z"
+    LAST-UPDATED "202005220000Z"
     ORGANIZATION "CERN"
     CONTACT-INFO "postal:   BE-CO-HT, CERN, Geneva
                   email:    ht-drivers@cern.ch
                  "
     DESCRIPTION  "White Rabbit Switch internal details
                  "
+
+    REVISION     "202005220000Z"
+    DESCRIPTION
+        "Updates for v6.0 WRS firmware release
+        Added objects:
+         - wrsLeapSecSource
+         - wrsLeapSecStatusDetails
+         - wrsLeapSecSourceStatusDetails
+         - wrsLeapSecSourceURL
+         - wrsSystemClockStatus
+         - wrsSystemClockStatusDetails
+         - wrsPortStatusT24p
+         - wrsPortStatusT24pValid
+        "
+
     REVISION     "201807181400Z"
     DESCRIPTION
         "Add wrsStartCntLldpd
@@ -323,62 +338,22 @@ wrsSystemClockStatus OBJECT-TYPE
                         na(0),
                         ok(1),
                         error(2),
-                        errorMinor(3),                      
-                        thresholdExceeded(4)
+                        warning(3),                      
+                        warningNA(4)
     }
     MAX-ACCESS     read-only
     STATUS         current
     DESCRIPTION
-            "The system clock is compared to NTP time  
-            ok - system clock is under the threshold value
-            thresholdExceeded - system clock has exceeded the threshold value
-            error - Unexpected status
-            warningNA - there is N/A in one of object used to calculate this value"
+            "Grouped status of system clock
+            ok - system clock is withing threshold (set in WRS configuration)
+                 to NTP time and correct leap seconds file was loaded
+            error - system clock problem, either it diverged or incorrect leap
+                 seconds file is used
+            warning - leapseconds file is not valid anymore and should be
+                 updated
+            warningNA - some information could not be retrieved to calculate the
+                 value of this object"
     ::= { wrsTimingStatusGroup 5 }
-
-wrsLeapSecStatus OBJECT-TYPE
-    SYNTAX         INTEGER {
-                        na(0),
-						ok(1),                        
-						error(2),
-                        errorMinor(3),
-						warning(4) 
-						}
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Leap second status
-			ok -  Everything ok
-			leapSecFileExpired - The current leap second file is out-dated
-		    internalErrorDetected - Internal error detected (system,...)
-			taiReadError - Cannot read the TAI time
-			leaSecInserted - A leap second will be inserted at 00:00 
-			leapSecDeleted - A leap second will be deleted at 00:00
-            errorMinor - cannot read the status file, problem is probably somewhere
-                     else"
-    ::= { wrsTimingStatusGroup 6 }
-
-wrsLeapSecSourceStatus OBJECT-TYPE
-    SYNTAX         INTEGER {
-                        na(0),
-                        ok(1),
-                        error(2),
-                        errorMinor(3)
-                    }
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Download status of the leap seconds file
-             ok - Everything is OK
-             updated  - Local leap seconds file has been updated
-             dhcpError - DHCP error detected
-             invalidUrl - The URL is not reachable or invalid
-             invalidFile - The download file is invalid
-             downloadError - Error detected during the download
-             errorMinor - cannot read the status file, problem is probably somewhere
-                     else"
-    ::= { wrsTimingStatusGroup 7 }
-
 
 -- wrsNetworkingStatusGroup (.6.2.3)
 wrsNetworkingStatusGroup   OBJECT IDENTIFIER ::= { wrsDetailedStatusesGroup 3 }
@@ -593,8 +568,10 @@ wrsSystemClockStatusDetails OBJECT-TYPE
                         na(0),
                         ok(1),
                         thresholdExceeded(2),
-                        statusFileMissing(3),
-                        unknownStatus(4)
+                        ntpError(3),
+                        error(4),
+                        ioError(5),
+                        unknownStatus(6)
                             }
     MAX-ACCESS     read-only
     STATUS         current
@@ -602,7 +579,9 @@ wrsSystemClockStatusDetails OBJECT-TYPE
             "The system clock is compared to NTP time  
             ok - system clock is under the threshold value
             thresholdExceeded - system clock has exceeded the threshold value
-            error - Unexpected status
+            IOError - IO error detected (error) 
+            unknownStatus - Unexpected status (error)
+            error - Error detected
             warningNA - there is N/A in one of object used to calculate this value"
     ::= { wrsCurrentTimeGroup 3 }
 
@@ -613,6 +592,41 @@ wrsSystemClockDrift OBJECT-TYPE
     DESCRIPTION
             "Drift of system clock expressed in seconds"  
     ::= { wrsCurrentTimeGroup 4 }
+
+wrsSystemClockDriftThreshold OBJECT-TYPE
+    SYNTAX         Integer32
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+            "Threshold level in seconds for system clock drift"  
+    ::= { wrsCurrentTimeGroup 5 }
+
+wrsSystemClockCheckInterval OBJECT-TYPE
+    SYNTAX         Integer32
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+            "Check interval of system clock drift. 
+            The unit is given by wrsSystemClockCheckIntervalUnit object."  
+            
+    ::= { wrsCurrentTimeGroup 6 }
+
+wrsSystemClockCheckIntervalUnit OBJECT-TYPE
+    SYNTAX         INTEGER {
+                        na(0),
+                        error(1),
+                        minutes(2),
+                        hours(3),
+                        days(4) }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+            "System clock check interval unit (see wrsSystemClockCheckInterval)
+            seconds - System clock check interval expressed in seconds
+            minutes - System clock check interval expressed in minutes
+            days - System clock check interval expressed in number of days
+            "
+    ::= { wrsCurrentTimeGroup 7 }
 
 wrsLeapSecSource OBJECT-TYPE
     SYNTAX         INTEGER {
@@ -633,7 +647,7 @@ wrsLeapSecSource OBJECT-TYPE
                         the error is propagated
             errorMinor - cannot read the status file, problem is probably somewhere
                      else"
-    ::= { wrsCurrentTimeGroup 5 }
+    ::= { wrsCurrentTimeGroup 8 }
 
 wrsLeapSecStatusDetails OBJECT-TYPE
     SYNTAX         INTEGER {
@@ -641,12 +655,12 @@ wrsLeapSecStatusDetails OBJECT-TYPE
                         ok(1),
                         statusFileMissing(2),
                         unknownStatus(3),
-						leapSecFileExpired(4),
-					    internalErrorDetected(5),
-						taiReadError(6),
-						leaSecInserted(7),
-						leapSecDeleted(8) 
-						}
+                        leapSecFileExpired(4),
+                        internalErrorDetected(5),
+                        taiReadError(6),
+                        leaSecInserted(7),
+                        leapSecDeleted(8) 
+    }
     MAX-ACCESS     read-only
     STATUS         current
     DESCRIPTION
@@ -659,7 +673,7 @@ wrsLeapSecStatusDetails OBJECT-TYPE
 			leapSecDeleted - A leap second will be deleted at 00:00
             errorMinor - cannot read the status file, problem is probably somewhere
                      else"
-    ::= { wrsCurrentTimeGroup 6 }
+    ::= { wrsCurrentTimeGroup 9 }
 
 wrsLeapSecSourceStatusDetails OBJECT-TYPE
     SYNTAX         INTEGER {
@@ -685,7 +699,7 @@ wrsLeapSecSourceStatusDetails OBJECT-TYPE
              downloadError - Error detected during the download
              errorMinor - cannot read the status file, problem is probably somewhere
                      else"
-    ::= { wrsCurrentTimeGroup 7 }
+    ::= { wrsCurrentTimeGroup 10 }
 
 wrsLeapSecSourceURL OBJECT-TYPE
     SYNTAX         DisplayString (SIZE (0..128))
@@ -693,7 +707,7 @@ wrsLeapSecSourceURL OBJECT-TYPE
     STATUS         current
     DESCRIPTION
         "Url to the leap second file"
-    ::= { wrsCurrentTimeGroup 8 }
+    ::= { wrsCurrentTimeGroup 11 }
 
 --wrsBootStatusGroup (.7.1.2)
 wrsBootStatusGroup      OBJECT IDENTIFIER ::= { wrsOperationStatus 2 }
@@ -1383,7 +1397,8 @@ wrsSpllMode        OBJECT-TYPE
                 na(0),
                 grandmaster(1),
                 master(2),
-                slave(3)
+                slave(3),
+                disabled(4)
     }
     MAX-ACCESS     read-only
     STATUS         current
@@ -1965,7 +1980,7 @@ wrsPtpMode OBJECT-TYPE
                 slave(3)
     }
     MAX-ACCESS  read-only
-    STATUS      current
+    STATUS      obsolete
     DESCRIPTION
             "The mode of this clock"
     ::= { wrsPtpDataEntry 5 }
@@ -1985,7 +2000,8 @@ wrsPtpServoStateN OBJECT-TYPE
                 syncSec(2),
                 syncPhase(3),
                 trackPhase(4),
-                waitOffsetStable(5)
+                waitOffsetStable(5),
+                standardPTP(99)
     }
     MAX-ACCESS  read-only
     STATUS      current
@@ -2010,7 +2026,7 @@ wrsPtpSyncSource OBJECT-TYPE
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-            "The port name that is currently the synchronization source"
+            "The interface name that is currently the synchronization source"
     ::= { wrsPtpDataEntry 9 }
 
 wrsPtpClockOffsetPs OBJECT-TYPE
@@ -2018,7 +2034,7 @@ wrsPtpClockOffsetPs OBJECT-TYPE
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-            "Current clock offset from master, in picoseconds"
+            "Absolute value of current clock offset from master, in picoseconds"
     ::= { wrsPtpDataEntry 10 }
 
 wrsPtpClockOffsetPsHR OBJECT-TYPE
@@ -2178,7 +2194,9 @@ WrsPortStatusEntry ::=
         wrsPortStatusSfpVcc      INTEGER,
         wrsPortStatusSfpTxBias   INTEGER,
         wrsPortStatusSfpTxPower  INTEGER,
-        wrsPortStatusSfpRxPower  INTEGER
+        wrsPortStatusSfpRxPower  INTEGER,
+        wrsPortStatusT24p        INTEGER,
+        wrsPortStatusT24pValid   INTEGER
     }
 
 wrsPortStatusIndex OBJECT-TYPE
@@ -2239,7 +2257,7 @@ wrsPortStatusLocked OBJECT-TYPE
 wrsPortStatusPeer OBJECT-TYPE
     SYNTAX         OCTET STRING (SIZE(8))
     MAX-ACCESS     read-only
-    STATUS         current
+    STATUS         obsolete
     DESCRIPTION
             "the ClockID of the peer, if available. Or 0"
     ::= { wrsPortStatusEntry 6 }
@@ -2384,6 +2402,25 @@ wrsPortStatusSfpRxPower OBJECT-TYPE
             "Measured RX output power in uW reported by SFP.
             According to SFF-8472, accuracy of this value must be better than 3dB%"
     ::= { wrsPortStatusEntry 21 }
+
+wrsPortStatusT24p OBJECT-TYPE
+    SYNTAX             Integer32
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+            "T2/T4 phase transition point used for Rx timestamps correction"
+    ::= { wrsPortStatusEntry 22 }
+
+wrsPortStatusT24pValid OBJECT-TYPE
+    SYNTAX             INTEGER {
+                           invalid(0),
+                           readFromConfig(1)
+    }
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+            "Validity of wrsPortStatusT24p"
+    ::= { wrsPortStatusEntry 23 }
 
 -- wrsPstatsHCTable (.7.7)
 wrsPstatsHCTable OBJECT-TYPE
@@ -2828,22 +2865,19 @@ WrsPtpInstanceEntry ::=
         wrsPtpInstanceProfile           INTEGER,
         wrsPtpInstanceExtension         INTEGER,
         wrsPtpInstanceAsymEnabled       INTEGER,
-        wrsPtpInstanceAsymConstAsym     Counter64,
         wrsPtpInstanceAsymConstAsymPS   Counter64,
         wrsPtpInstanceAsymScDelayCoef   Counter64,
         wrsPtpInstanceAsymScDelayCoefHR DisplayString,
-        wrsPtpInstanceTSCorrEgressLat   Counter64,
         wrsPtpInstanceTSCorrEgressLatPS Counter64,
-        wrsPtpInstanceTSCorrIngLat      Counter64,
         wrsPtpInstanceTSCorrIngLatPS    Counter64,
-        wrsPtpInstanceTSCorrSemistLat   Counter64,
         wrsPtpInstanceTSCorrSemistLatPS Counter64,
         wrsPtpInstanceProtoDetectState  INTEGER,
         wrsPtpInstanceExtState          INTEGER,
         wrsPtpInstancePeerMac           PhysAddress,
         wrsPtpInstancePeerVid           INTEGER,
         wrsPtpInstanceVlanNum           INTEGER,
-        wrsPtpInstanceVlanListStr       DisplayString
+        wrsPtpInstanceVlanListStr       DisplayString,
+        wrsPtpInstanceStatusError       INTEGER
     }
 
 wrsPtpInstancePortIndex OBJECT-TYPE
@@ -2998,21 +3032,13 @@ wrsPtpInstanceAsymEnabled  OBJECT-TYPE
             "Asymmetry Corrections enabled/disabled on the PTP Instance"
     ::= { wrsPtpInstanceEntry 13 }
 
-wrsPtpInstanceAsymConstAsym  OBJECT-TYPE
-    SYNTAX         Counter64
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Constant Asymmetry in scaled nanoseconds"
-    ::= { wrsPtpInstanceEntry 14 }
-
 wrsPtpInstanceAsymConstAsymPS  OBJECT-TYPE
     SYNTAX         Counter64
     MAX-ACCESS     read-only
     STATUS         current
     DESCRIPTION
             "Constant Asymmetry in picoseconds"
-    ::= { wrsPtpInstanceEntry 15 }
+    ::= { wrsPtpInstanceEntry 14 }
 
 wrsPtpInstanceAsymScDelayCoef OBJECT-TYPE
     SYNTAX         Counter64
@@ -3020,7 +3046,7 @@ wrsPtpInstanceAsymScDelayCoef OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "Scaled Relative Delay Coefficient"
-    ::= { wrsPtpInstanceEntry 16 }
+    ::= { wrsPtpInstanceEntry 15 }
 
 wrsPtpInstanceAsymScDelayCoefHR OBJECT-TYPE
     SYNTAX                     DisplayString (SIZE (0..64))
@@ -3028,15 +3054,7 @@ wrsPtpInstanceAsymScDelayCoefHR OBJECT-TYPE
     STATUS                     current
     DESCRIPTION
         "Relative Delay Coefficient in a floating form"
-    ::= { wrsPtpInstanceEntry 17 }
-
-wrsPtpInstanceTSCorrEgressLat OBJECT-TYPE
-    SYNTAX         Counter64
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Egress Latency (Tx Fixed Delay) in scaled nanoseconds"
-    ::= { wrsPtpInstanceEntry 18 }
+    ::= { wrsPtpInstanceEntry 16 }
 
 wrsPtpInstanceTSCorrEgressLatPS OBJECT-TYPE
     SYNTAX         Counter64
@@ -3044,15 +3062,7 @@ wrsPtpInstanceTSCorrEgressLatPS OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "Egress Latency (Tx Fixed Delay) in picoseconds"
-    ::= { wrsPtpInstanceEntry 19 }
-
-wrsPtpInstanceTSCorrIngLat OBJECT-TYPE
-    SYNTAX         Counter64
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Ingress Latency (Rx Fixed Delay) in scaled nanoseconds"
-    ::= { wrsPtpInstanceEntry 20 }
+    ::= { wrsPtpInstanceEntry 17 }
 
 wrsPtpInstanceTSCorrIngLatPS OBJECT-TYPE
     SYNTAX         Counter64
@@ -3060,15 +3070,7 @@ wrsPtpInstanceTSCorrIngLatPS OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "Ingress Latency (Rx Fixed Delay) in picoseconds"
-    ::= { wrsPtpInstanceEntry 21 }
-
-wrsPtpInstanceTSCorrSemistLat OBJECT-TYPE
-    SYNTAX         Counter64
-    MAX-ACCESS     read-only
-    STATUS         current
-    DESCRIPTION
-            "Semi-static latency (bitslide) in scaled nanoseconds"
-    ::= { wrsPtpInstanceEntry 22 }
+    ::= { wrsPtpInstanceEntry 18 }
 
 wrsPtpInstanceTSCorrSemistLatPS OBJECT-TYPE
     SYNTAX         Counter64
@@ -3076,7 +3078,7 @@ wrsPtpInstanceTSCorrSemistLatPS OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "Semi-static latency (bitslide) in picoseconds"
-    ::= { wrsPtpInstanceEntry 23 }
+    ::= { wrsPtpInstanceEntry 19 }
 
 wrsPtpInstanceProtoDetectState  OBJECT-TYPE
     SYNTAX         INTEGER {             -- ppsi/include/ppsi/pp-instance.h
@@ -3091,7 +3093,7 @@ wrsPtpInstanceProtoDetectState  OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "Protocol detection state"
-    ::= { wrsPtpInstanceEntry 24 }
+    ::= { wrsPtpInstanceEntry 20 }
 
     wrsPtpInstanceExtState  OBJECT-TYPE
     SYNTAX         INTEGER {         -- ppsi/include/ppsi/pp-instance.h
@@ -3104,7 +3106,7 @@ wrsPtpInstanceProtoDetectState  OBJECT-TYPE
     STATUS         current
     DESCRIPTION
             "State of PTP extension (more than one are allowed per 1 physical port)"
-    ::= { wrsPtpInstanceEntry 25 }
+    ::= { wrsPtpInstanceEntry 21 }
 
 
 wrsPtpInstancePeerMac  OBJECT-TYPE
@@ -3113,7 +3115,7 @@ wrsPtpInstancePeerMac  OBJECT-TYPE
     STATUS             current
     DESCRIPTION
             "MAC used by an instance"
-    ::= { wrsPtpInstanceEntry 26 }
+    ::= { wrsPtpInstanceEntry 22 }
 
 wrsPtpInstancePeerVid  OBJECT-TYPE
     SYNTAX             Integer32
@@ -3121,7 +3123,7 @@ wrsPtpInstancePeerVid  OBJECT-TYPE
     STATUS             current
     DESCRIPTION
             "VID used by an instance"
-    ::= { wrsPtpInstanceEntry 27 }
+    ::= { wrsPtpInstanceEntry 23 }
 
 wrsPtpInstanceVlanNum  OBJECT-TYPE
     SYNTAX             Integer32
@@ -3129,7 +3131,7 @@ wrsPtpInstanceVlanNum  OBJECT-TYPE
     STATUS             current
     DESCRIPTION
             "Number of VLANs used by an instance"
-    ::= { wrsPtpInstanceEntry 28 }
+    ::= { wrsPtpInstanceEntry 24 }
 
 wrsPtpInstanceVlanListStr  OBJECT-TYPE
     SYNTAX             DisplayString (SIZE (0..160)) --32*5-
@@ -3137,8 +3139,25 @@ wrsPtpInstanceVlanListStr  OBJECT-TYPE
     STATUS             current
     DESCRIPTION
             "Comma separated list of VLANs used by an instance"
-    ::= { wrsPtpInstanceEntry 29 }
+    ::= { wrsPtpInstanceEntry 25 }
 
+ wrsPtpInstanceStatusError  OBJECT-TYPE
+    SYNTAX         INTEGER { 
+                        na(0),
+                        ok(1), 
+                        error(2),
+                        warningNA(3) -- at least one field is equal to 0 (NA)
+    }
+    MAX-ACCESS     read-only
+    STATUS         current
+    DESCRIPTION
+            "PTP instance status error
+             ok - all SFPs are ok
+             error - there is an error in SFP
+             warningNA - at least one field is equal to 0 (NA),
+                         shouldn't happen in normal operation 
+             "
+    ::= { wrsPtpInstanceEntry 26 }
 
 --wrsNetworking
 --Configuration
