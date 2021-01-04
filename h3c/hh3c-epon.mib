@@ -1,9 +1,8 @@
 -- ===========================================================
--- Copyright (c) 2004-2009 Hangzhou H3C Tech. Co., Ltd. All rights reserved.
---
+-- Copyright (c) 2004-2018 New H3C Tech. Co., Ltd. All rights reserved.
 -- Description:
 -- Reference:
--- Version: V2.4
+-- Version: V2.6
 -- History:
 -- V1.0 created by liyue.
 --     Define MODULE-IDENTITY for hh3cEpon
@@ -89,6 +88,24 @@
 -- V2.4 2010-12-02 updated by zhaodan.
 --        Add hh3cOnuRS485PropertiesTable, hh3cOnuRS485SessionSummaryTable,
 --            hh3cOnuRS485SessionTable and hh3cOnuRS485SessionErrInfoTable.
+-- V2.5 2015-05-12 updated by lvhuipeng.
+--        Add hh3cOnuDbaReport2Table.
+--        Modify hh3cEponMonitorCycle, hh3cOltDbaDiscoveryLength, hh3cOltDbaDiscovryFrequency
+--        Modify hh3cOnuCosToLocalPrecedenceValue
+--        Modify hh3cEponOnuStpPortTable
+-- V2.6 2018-02-02 updated by zhuhaifeng.
+--        Add hh3cOnuStatisticsTable, hh3cOltTransceiverTxPowerTable, hh3cEponOnuPowerOnTrap.
+--        Add hh3cOnuSlaMaxBandWidthMinVal10G, hh3cOnuSlaMaxBandWidthMaxVal10G.
+--        Add hh3cOnuSlaMinBandWidthMinVal10G, hh3cOnuSlaMinBandWidthMaxVal10G.
+--        Add hh3cEponOnuBindOneToOne.
+--        Modify hh3cOltSysManTable, hh3cOnuSlaManTable, hh3cOnuCapabilityTable.
+--        Modify hh3cOnuSysManTable, hh3cOnuDownStreamMaxBandWidth.
+--      2016-11-29 updated by zhuhaifeng.
+--        Add hh3cOnuSilentLoidTable, hh3cOnuLoidInfoTable.
+--        Modify hh3cOnuFirmwareUpdateTable, hh3cOnuFirmwareUpdateByTypeTable.
+--        Modify hh3cOnuBindMacAddrTable, hh3cEponSysMan, hh3cOltSysManTable.
+--        Modify hh3cEponErrorInfo, hh3cEponTrap.
+
 -- =================================================================
 HH3C-EPON-MIB DEFINITIONS ::= BEGIN
 
@@ -108,12 +125,12 @@ IMPORTS
     FROM INET-ADDRESS-MIB;
 
 hh3cEponMibObjects MODULE-IDENTITY
-    LAST-UPDATED "200705221008Z"
+    LAST-UPDATED "201703061145Z"  -- March 06, 2017
     ORGANIZATION
-        "Hangzhou H3C Technologies Co., Ltd."
+        "New H3C Technologies Co., Ltd."
     CONTACT-INFO
-        "Platform Team H3C Technologies Co., Ltd.
-         Hai-Dian District Beijing P.R. China
+        "Platform Team New H3C Technologies Co., Ltd.
+         Hai-Dian District Beijing P.R.  China
          http://www.h3c.com
          Zip: 100085"
     DESCRIPTION
@@ -124,6 +141,18 @@ hh3cEponMibObjects MODULE-IDENTITY
         the First Mile (EFM) Passive Optical Network(PON) as
         defined in IEEE Draft P802.3ah/D3.0 clause 60, 64, 65..
         "
+    REVISION    "201703061145Z"  -- March 06, 2017
+    DESCRIPTION "Add the objects of hh3cOnuStatisticsTable, and hh3cOltTransceiverTxPowerTable,
+                 update the objects of hh3cOnuCapabilityTable, and hh3cOnuSysManTable."
+    REVISION    "201702101145Z"  -- February 10, 2017
+    DESCRIPTION "Add the objects of hh3cOnuSilentLoidTable, and hh3cOnuLoidInfoTable,
+                 update the objects of hh3cOnuFirmwareUpdateTable,
+                 hh3cOnuFirmwareUpdateByTypeTable, hh3cOnuBindMacAddrTable, hh3cEponSysMan,
+                 hh3cOltSysManTable, hh3cEponErrorInfo, and hh3cEponTrap."
+    REVISION    "201508041145Z"  -- August 4, 2015
+    DESCRIPTION "Add the objects of hh3cOnuDbaReport2Table, update the
+                 objects of hh3cEponMonitorCycle, hh3cOltDbaDiscoveryLength,
+                 hh3cOltDbaDiscovryFrequency, and hh3cEponOnuStpPortTable."
     ::= { hh3cEpon 1 }
 
 hh3cEponSysMan OBJECT IDENTIFIER ::= { hh3cEponMibObjects 1 }
@@ -154,7 +183,7 @@ hh3cEponAutoAuthorize OBJECT-TYPE
 
 
 hh3cEponMonitorCycle OBJECT-TYPE
-    SYNTAX      Integer32
+    SYNTAX      Integer32(1..3600)
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -165,6 +194,7 @@ hh3cEponMonitorCycle OBJECT-TYPE
         Logical Link Identity(LLID) mismatch alarm and so on.
         The unit is second.
         "
+    DEFVAL { 80 }
     ::= { hh3cEponSysMan 2 }
 
 hh3cEponMsgTimeOut OBJECT-TYPE
@@ -346,7 +376,8 @@ Hh3cEponSysManEntry ::= SEQUENCE
         hh3cEponOamDiscoveryTimeout         Integer32,
         hh3cEponEncryptionNoReplyTimeOut    Integer32,
         hh3cEponEncryptionUpdateTime        Integer32,
-        hh3cEponAutoBindStatus              INTEGER
+        hh3cEponAutoBindStatus              INTEGER,
+        hh3cEponAutoBindType                BITS
     }
 
 hh3cEponSlotIndex OBJECT-TYPE
@@ -450,6 +481,21 @@ hh3cEponAutoBindStatus OBJECT-TYPE
     DEFVAL { disable }
     ::= { hh3cEponSysManEntry 7 }
 
+hh3cEponAutoBindType OBJECT-TYPE
+    SYNTAX      BITS
+        {
+            mac(0),
+            loid(1),
+            loidPassword(2)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Set auto binding type, which can be combined.
+        If auto binding is disabled, 0 is returned.
+        "
+    ::= { hh3cEponSysManEntry 8 }
 
 --
 -- hh3cEponAutoUpdateTable
@@ -493,7 +539,7 @@ hh3cEponAutoUpdateFileName OBJECT-TYPE
     DESCRIPTION
         "
         The name of ONU application file,  the file name must be valid
-        and include the path. It is a zero length string by default.
+        and include the path.  It is a zero length string by default.
         "
     ::= { hh3cEponAutoUpdateEntry 1 }
 
@@ -676,7 +722,7 @@ hh3cEponOuiValue OBJECT-TYPE
     DESCRIPTION
         "
         OUI list supported by the extended OAM discovery process.
-        The OUI is composed of six octets. The first six octets denote the first OUI ,
+        The OUI is composed of six octets.  The first six octets denote the first OUI ,
         the second six octets denote the second OUI, and the like.
         "
     ::= { hh3cEponOuiEntry 2 }
@@ -698,7 +744,7 @@ hh3cEponOuiRowStatus OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "
-        The status of this table entry. Only active,
+        The status of this table entry.  Only active,
         createAndGo and the destory are supported.
         "
     ::= { hh3cEponOuiEntry 4 }
@@ -771,6 +817,33 @@ hh3cEponMulticastStatus OBJECT-TYPE
         "
     ::= { hh3cEponMulticastControlEntry 3 }
 
+hh3cEponAuthMode OBJECT-TYPE
+    SYNTAX      BITS
+        {
+            mac(0),
+            loid(1),
+            loidPassword(2)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Set global auth mode, which can be combined(loid and loid-password cannot be configured at the same time).
+        If no auth mode was set, 0 is returned.
+        "
+    ::= { hh3cEponSysMan 21 }
+
+hh3cEponOnuBindOneToOne OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Enable or disable one-to-one ONU binding feature.
+        true(1)  - feature enable.
+        false(2) - feature disable.
+        "
+    ::= { hh3cEponSysMan 22 }
 hh3cEponFileName OBJECT IDENTIFIER ::= { hh3cEponMibObjects 2 }
 
 hh3cEponDbaUpdateFileName OBJECT-TYPE
@@ -840,7 +913,9 @@ Hh3cOltSysManEntry ::= SEQUENCE
         hh3cOltEnableDiscardPacket    TruthValue,
         hh3cOltSelfTest               INTEGER,
         hh3cOltSelfTestResult         INTEGER,
-        hh3cOltMaxRtt                 Unsigned32
+        hh3cOltMaxRtt                 Unsigned32,
+        hh3cOltAuthMode               BITS,
+        hh3cOltOnuBindOneToOne        TruthValue
     }
 
 hh3cOltLaserOnTime OBJECT-TYPE
@@ -937,6 +1012,33 @@ hh3cOltMaxRtt OBJECT-TYPE
         "
     ::= { hh3cOltSysManEntry 7 }
 
+hh3cOltAuthMode OBJECT-TYPE
+    SYNTAX      BITS
+        {
+            mac(0),
+            loid(1),
+            loidPassword(2)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Set the auth mode of this OLT, which can be combined(loid and loid-password cannot be configured at the same time).
+        If no auth mode was set, 0 is returned.
+        "
+    ::= { hh3cOltSysManEntry 8 }
+
+hh3cOltOnuBindOneToOne OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Enable or disable one-to-one ONU binding feature.
+        true(1)  - feature enable.
+        false(2) - feature disable.
+        "
+    ::= { hh3cOltSysManEntry 9 }
 --
 -- hh3cOltInfoTable
 --
@@ -1177,7 +1279,6 @@ hh3cOltDbaDiscoveryLength OBJECT-TYPE
         "
         Discovery length in TQ units.
         "
-    DEFVAL { 41500 }
     ::= { hh3cOltDbaManEntry 2 }
 
 hh3cOltDbaDiscovryFrequency OBJECT-TYPE
@@ -1189,7 +1290,6 @@ hh3cOltDbaDiscovryFrequency OBJECT-TYPE
         How often should the OLT send discovery frames to
         the ONUs, measured in grant cycles.
         "
-    DEFVAL { 50 }
     ::= { hh3cOltDbaManEntry 3 }
 
 hh3cOltDbaCycleLength OBJECT-TYPE
@@ -1783,7 +1883,7 @@ hh3cOltUsingOnuNum OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "
-        The ONU interface number. This value is used to specify the ONU interface
+        The ONU interface number.  This value is used to specify the ONU interface
         which the user wants to configure for an OLT interface.
         "
     ::= { hh3cOltUsingOnuEntry 1 }
@@ -1809,6 +1909,142 @@ hh3cOltUsingOnuRowStatus OBJECT-TYPE
         status and CreatAndGo, destroy operation.
         "
     ::= { hh3cOltUsingOnuEntry 3 }
+
+--
+-- hh3cOnuSilentLoidTable
+--
+
+hh3cOnuSilentLoidTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Hh3cOnuSilentLoidEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        This table is used for getting silent ONU's LOID information of an OLT.
+        "
+    ::= { hh3cEponOltMan 23 }
+
+hh3cOnuSilentLoidEntry OBJECT-TYPE
+    SYNTAX      Hh3cOnuSilentLoidEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The entry of the table hh3cOnuSilentLoidTable.
+        "
+    INDEX
+        {
+            ifIndex,
+            hh3cOnuSilentLoid
+        }
+    ::= { hh3cOnuSilentLoidTable 1 }
+
+Hh3cOnuSilentLoidEntry ::= SEQUENCE
+    {
+        hh3cOnuSilentLoid       OCTET STRING,
+        hh3cOnuSilentLoidTime   Integer32
+    }
+
+hh3cOnuSilentLoid OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(1..24))
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The LOID of a silent ONU in an OLT.
+        "
+    ::= { hh3cOnuSilentLoidEntry 1 }
+
+hh3cOnuSilentLoidTime OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The aging time of a silent ONU.
+        "
+    ::= { hh3cOnuSilentLoidEntry 2 }
+
+--
+-- hh3cOltTransceiverTxPowerTable
+--
+
+hh3cOltTransceiverTxPowerTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Hh3cOltTransceiverTxPowerEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        This table is used for setting ONU's Tx power on an OLT.
+        "
+    ::= { hh3cEponOltMan 24 }
+
+hh3cOltTransceiverTxPowerEntry OBJECT-TYPE
+    SYNTAX      Hh3cOltTransceiverTxPowerEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The entry of the table hh3cOltTransceiverTxPowerTable.
+        "
+    INDEX
+        {
+            ifIndex
+        }
+    ::= { hh3cOltTransceiverTxPowerTable 1 }
+
+Hh3cOltTransceiverTxPowerEntry ::= SEQUENCE
+    {
+        hh3cOltTransTxPwrTransId             INTEGER,
+        hh3cOltTransTxPwrOffTime             Unsigned32,
+        hh3cOltTransTxPwrIsAllOnu            TruthValue,
+        hh3cOltTransTxPwrOnuIfList           OCTET STRING
+    }
+
+hh3cOltTransTxPwrTransId OBJECT-TYPE
+    SYNTAX      INTEGER
+        {
+            main(0),
+            standby(1),
+            all(2)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        The transceiver ID of an ONU in an OLT.
+        "
+    ::= { hh3cOltTransceiverTxPowerEntry 1 }
+
+hh3cOltTransTxPwrOffTime OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        The turnoff time of the transceiver Tx power.
+        "
+    ::= { hh3cOltTransceiverTxPowerEntry 2 }
+
+hh3cOltTransTxPwrIsAllOnu OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Setting all ONUs' transceiver Tx power or not.
+        "
+    ::= { hh3cOltTransceiverTxPowerEntry 3 }
+
+hh3cOltTransTxPwrOnuIfList OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(0..20))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        ONUs' ifIndex for which the transceiver Tx power is to be set.
+        "
+    ::= { hh3cOltTransceiverTxPowerEntry 4 }
 
 hh3cEponOnuMan OBJECT IDENTIFIER ::= { hh3cEponMibObjects 5 }
 
@@ -1862,7 +2098,8 @@ Hh3cOnuSysManEntry ::= SEQUENCE
         hh3cOnuFecStatus                  INTEGER,
         hh3cOnuMcastCtrlHostAgingTime     Integer32,
         hh3cOnuMulticastFastLeaveEnable   TruthValue,
-        hh3cOnuPortIsolateEnable          TruthValue
+        hh3cOnuPortIsolateEnable          TruthValue,
+        hh3cOnuMacAddressTimer            Unsigned32
     }
 
 hh3cOnuEncryptMan OBJECT-TYPE
@@ -2016,7 +2253,7 @@ hh3cOnuEncryptKey OBJECT-TYPE
         "
         The encryption key, used to encrypt all downstream
         traffic destined to and/or upstream traffic originating
-        from a specific ONU. It is a zero length, or MD5 hashed string,
+        from a specific ONU.  It is a zero length, or MD5 hashed string,
         by default, the string is empty.
         "
     ::= { hh3cOnuSysManEntry 10 }
@@ -2086,6 +2323,18 @@ hh3cOnuPortIsolateEnable OBJECT-TYPE
         false(2) - Disable port isolate setting on all ethernet UNIs of the ONU.
         "
     ::= { hh3cOnuSysManEntry 15 }
+
+hh3cOnuMacAddressTimer OBJECT-TYPE
+    SYNTAX     Unsigned32
+    MAX-ACCESS read-write
+    STATUS     current
+    DESCRIPTION
+        "
+        no-aging(0)  - Disable aging.
+        others       - Aging time(seconds).
+        "
+    DEFVAL { 300 }
+    ::= { hh3cOnuSysManEntry 16 }
 
 --
 -- hh3cOnuLinkTestTable
@@ -2348,7 +2597,7 @@ hh3cOnuDownStreamBandWidthPolicy OBJECT-TYPE
     ::= { hh3cOnuBandWidthEntry 1 }
 
 hh3cOnuDownStreamMaxBandWidth OBJECT-TYPE
-    SYNTAX      Integer32(0..1000000)
+    SYNTAX      Integer32
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -2498,7 +2747,8 @@ Hh3cOnuSlaManEntry ::= SEQUENCE
         hh3cOnuSlaDelay               INTEGER,
         hh3cOnuSlaFixedBandWidth      Integer32,
         hh3cOnuSlaPriorityClass       Integer32,
-        hh3cOnuSlaFixedPacketSize     Integer32
+        hh3cOnuSlaFixedPacketSize     Integer32,
+        hh3cOnuSlaWrrBandWidth        Integer32
     }
 
 hh3cOnuSlaMaxBandWidth OBJECT-TYPE
@@ -2552,7 +2802,7 @@ hh3cOnuSlaDelay OBJECT-TYPE
         "
         low  - low delay.
         high - high delay.
-        The delay constraint of a specific ONU. Set to high may improve the
+        The delay constraint of a specific ONU.  Set to high may improve the
         bandwidth usage at the cost of delay.
         "
     DEFVAL { low }
@@ -2593,6 +2843,17 @@ hh3cOnuSlaFixedPacketSize OBJECT-TYPE
         "
     ::= { hh3cOnuSlaManEntry 7 }
 
+hh3cOnuSlaWrrBandWidth OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        The WRR weight will be used to compute the remaining bandwidth
+        allocation after each CIR has been guaranteed.
+        "
+    DEFVAL { 1 }
+    ::= { hh3cOnuSlaManEntry 8 }
 --
 -- hh3cOnuInfoTable
 --
@@ -2921,10 +3182,10 @@ hh3cOnuMacAddrFlag OBJECT-TYPE
     DESCRIPTION
         "
         The flag of ONU status.
-        1 - bound:The ONU is bound but not registered.
-        2 - registered:The ONU is registered but not bound.
-        3 - run:The ONU is registered and bound on one OLT.
-        4 - regIncorrect:The ONU is bound on one OLT and registered on
+        1 - bound: The ONU is bound but not registered.
+        2 - registered: The ONU is registered but not bound.
+        3 - run: The ONU is registered and bound on one OLT.
+        4 - regIncorrect: The ONU is bound on one OLT and registered on
         another OLT.
         "
     ::= { hh3cOnuMacAddrInfoEntry 2 }
@@ -2971,7 +3232,9 @@ hh3cOnuBindMacAddrEntry OBJECT-TYPE
 Hh3cOnuBindMacAddrEntry ::= SEQUENCE
     {
         hh3cOnuBindMacAddress    MacAddress,
-        hh3cOnuBindType          Integer32
+        hh3cOnuBindType          Integer32,
+        hh3cOnuBindLoid          OCTET STRING,
+        hh3cOnuBindPassword      OCTET STRING
     }
 
 hh3cOnuBindMacAddress OBJECT-TYPE
@@ -2999,6 +3262,29 @@ hh3cOnuBindType OBJECT-TYPE
         to the index of hh3cEponOnuTypeDescr.
         "
     ::= { hh3cOnuBindMacAddrEntry 2 }
+
+hh3cOnuBindLoid OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(0..24))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Bind the LOID of ONU.
+        While the LOID is not bound, the ONU can not go into
+        effect and configurations can not be set.
+        "
+    ::= { hh3cOnuBindMacAddrEntry 3 }
+
+hh3cOnuBindPassword OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(0..12))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        The password of LOID by using LOID-PASSWORD binding type to bind ONU.
+        A zero-length string will be returned when reading.
+        "
+    ::= { hh3cOnuBindMacAddrEntry 4 }
 
 --
 -- hh3cOnuFirmwareUpdateTable
@@ -3034,7 +3320,8 @@ Hh3cOnuFirmwareUpdateEntry ::= SEQUENCE
     {
         hh3cOnuUpdate            INTEGER,
         hh3cOnuUpdateResult      INTEGER,
-        hh3cOnuUpdateFileName    OCTET STRING
+        hh3cOnuUpdateFileName    OCTET STRING,
+        hh3cOnuUpdateProtType    INTEGER
     }
 
 hh3cOnuUpdate OBJECT-TYPE
@@ -3090,6 +3377,22 @@ hh3cOnuUpdateFileName OBJECT-TYPE
         Note that the filename must contain the file path.
         "
     ::= { hh3cOnuFirmwareUpdateEntry 3 }
+
+hh3cOnuUpdateProtType OBJECT-TYPE
+    SYNTAX      INTEGER
+        {
+            private(0),
+            ctc(1)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        private(0): Using private protocol to update the ONU firmware.
+        ctc(1): Using ctc standard protocol to update the ONU firmware.
+        "
+    DEFVAL { private }
+    ::= { hh3cOnuFirmwareUpdateEntry 4 }
 
 hh3cOnuLinkTestFrameNumMinVal OBJECT-TYPE
     SYNTAX      Integer32
@@ -3556,9 +3859,9 @@ hh3cOnuQueueSize OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "
-        The size of priority queue, measured in percent. The total length of
+        The size of priority queue, measured in percent.  The total length of
         all priority queues is a constant, by default, it is assigned to all
-        of the priority queues evenly. The length of each priority queue may
+        of the priority queues evenly.  The length of each priority queue may
         be changed by changing the value of hh3cOnuPriorityQueueSize.
         The total size of the inbound or outbound priority queues should be
         not more than 100.
@@ -3981,7 +4284,15 @@ Hh3cOnuCapabilityEntry ::= SEQUENCE
         hh3cOnuMaxDownstreamQueuePerPort    Integer32,
         hh3cOnuBatteryBackup                TruthValue,
         hh3cOnuIgspFastLeaveSupported       TruthValue,
-        hh3cOnuMCtrlFastLeaveSupported      TruthValue
+        hh3cOnuMCtrlFastLeaveSupported      TruthValue,
+        hh3cOnuType                         Integer32,
+        hh3cOnuMultiLLID                    Integer32,
+        hh3cOnuProtectionType               Integer32,
+        hh3cOnuPonIFNum                     Integer32,
+        hh3cOnuSlotNum                      Integer32,
+        hh3cOnuIPv6Supported                Integer32,
+        hh3cOnuPowerSupplyControl           Integer32,
+        hh3cOnuServiceSLA                   Integer32
     }
 
 hh3cOnuServiceSupported OBJECT-TYPE
@@ -4120,6 +4431,109 @@ hh3cOnuMCtrlFastLeaveSupported OBJECT-TYPE
         "
     ::= { hh3cOnuCapabilityEntry 12 }
 
+hh3cOnuType OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        ONU type:
+        SFU(0)
+        HGU(1)
+        SBU(2)
+        MDU(3) which is cassette equipment and uses Ethernet access as broadband
+        MDU(4) which is small card equipment and uses Ethernet access as broadband
+        MDU(5) which is small card equipment and uses DSL access as broadband
+        MDU(6) which is middle card equipment and uses DSL access as broadband
+        MDU(7) which is card equipment and can use both Ethernet and DSL access as broadband
+        MTU(8)
+        "
+    ::= { hh3cOnuCapabilityEntry 13 }
+
+hh3cOnuMultiLLID OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (0) - Invalid value.
+        (1) - ONU supports one LLID.
+        other - ONU supports multiple LLIDs.
+        "
+    ::= { hh3cOnuCapabilityEntry 14 }
+
+hh3cOnuProtectionType OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (0) - Not supported.
+        (1) - ONU supports type C optical link protection.
+        (2) - ONU supports type D optical link protection.
+        "
+    ::= { hh3cOnuCapabilityEntry 15 }
+
+hh3cOnuPonIFNum OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (1) - ONU support one PON interface.
+        (2) - ONU support two PON interfaces.
+        "
+    ::= { hh3cOnuCapabilityEntry 16 }
+
+hh3cOnuSlotNum OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The slot number of a card ONU.
+        If the ONU is not card equipment, 0 is returned.
+        "
+    ::= { hh3cOnuCapabilityEntry 17 }
+
+hh3cOnuIPv6Supported OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (0) - ONU supports IPv6.
+        (1) - ONU does not support IPv6.
+        "
+    ::= { hh3cOnuCapabilityEntry 18 }
+
+hh3cOnuPowerSupplyControl OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (0) - ONU does not support ONU power supply control.
+        (1) - ONU supports Tx power supply control only.
+        The Tx and Rx power supply can only be controlled together
+        whereby Rx power supply is also shutdown when Tx power supply is shutdown.
+        (2) - ONU supports both Tx and Rx power supply control.
+        In this case, Tx and Rx power supply can be controlled separately whereby
+        Rx power supply is still on while Tx power supply is shutdown.
+        "
+    ::= { hh3cOnuCapabilityEntry 19 }
+
+hh3cOnuServiceSLA OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        (1) - ONU does not support SLA services.
+        (2~8) - ONU supports 2~8 SLA services.
+        "
+    ::= { hh3cOnuCapabilityEntry 20 }
+
 --
 -- hh3cOnuDbaReportTable
 --
@@ -4243,7 +4657,7 @@ hh3cOnuCosToLocalPrecedenceCosIndex OBJECT-TYPE
     ::={ hh3cOnuCosToLocalPrecedenceEntry 1 }
 
 hh3cOnuCosToLocalPrecedenceValue OBJECT-TYPE
-    SYNTAX      Integer32(0..7)
+    SYNTAX      Integer32(0..3)
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -4292,7 +4706,7 @@ hh3cEponStpPortIndex OBJECT-TYPE
 
 hh3cEponStpPortDescr OBJECT-TYPE
     SYNTAX      OCTET STRING
-    MAX-ACCESS  accessible-for-notify
+    MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
         "The description of the STP ports."
@@ -4306,7 +4720,7 @@ hh3cEponStpPortState OBJECT-TYPE
             learning(3),
             forwarding(4)
         }
-    MAX-ACCESS  accessible-for-notify
+    MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
         "The current state of the port (i.e. disabled, discarding,
@@ -4931,6 +5345,269 @@ hh3cOnuRS485SessionErrInfo OBJECT-TYPE
     ::= { hh3cOnuRS485SessionErrInfoEntry 1 }
 
 --
+-- hh3cOnuDbaReport2Table
+--
+
+hh3cOnuDbaReport2Table OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Hh3cOnuDbaReport2Entry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        This table defines the information of DBA(dynamic bandwidth allocation)
+        report threshold contained in the MPCP report frames.
+        "
+    ::= { hh3cEponOnuMan 35 }
+
+hh3cOnuDbaReport2Entry OBJECT-TYPE
+    SYNTAX      Hh3cOnuDbaReport2Entry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The entry of the table hh3cOnuDbaReport2Table.
+        "
+    INDEX
+        {
+            ifIndex,
+            hh3cOnuDbaReport2QueueSetId,
+            hh3cOnuDbaReport2QueueId
+        }
+    ::= { hh3cOnuDbaReport2Table 1 }
+
+Hh3cOnuDbaReport2Entry ::= SEQUENCE
+    {
+        hh3cOnuDbaReport2QueueSetId   Integer32,
+        hh3cOnuDbaReport2QueueId      Integer32,
+        hh3cOnuDbaReport2Threshold    Integer32,
+        hh3cOnuDbaReport2Status       TruthValue
+    }
+
+hh3cOnuDbaReport2QueueSetId OBJECT-TYPE
+    SYNTAX      Integer32 (1..3)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The DBA report queue set ID.
+        "
+    ::= { hh3cOnuDbaReport2Entry 1 }
+
+hh3cOnuDbaReport2QueueId OBJECT-TYPE
+    SYNTAX      Integer32 (1..8)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The DBA report queue ID.
+        "
+    ::= { hh3cOnuDbaReport2Entry 2 }
+
+hh3cOnuDbaReport2Threshold OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        The thresholds of the DBA report queue.
+        The following are the queue ID and
+        the related default threshold settings.
+        1 - 0
+        2 - 0
+        3 - 0
+        4 - 65535
+        5 - 65535
+        6 - 0
+        7 - 0
+        8 - 0
+        "
+    ::= { hh3cOnuDbaReport2Entry 3 }
+
+hh3cOnuDbaReport2Status OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        true  -threshold configuration is active for the queue.
+        false -threshold configuration is not active for the queue.
+        "
+    ::= { hh3cOnuDbaReport2Entry 4 }
+
+--
+-- hh3cOnuLoidInfoTable
+--
+
+hh3cOnuLoidInfoTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Hh3cOnuLoidInfoEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        This table is used for getting LOID information of an ONU.
+        "
+    ::= { hh3cEponOnuMan 36 }
+
+hh3cOnuLoidInfoEntry OBJECT-TYPE
+    SYNTAX      Hh3cOnuLoidInfoEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The entry of the hh3cOnuLoidInfoTable.
+        "
+    INDEX
+        {
+            ifIndex,
+            hh3cOnuLoidIndex
+        }
+    ::= { hh3cOnuLoidInfoTable 1 }
+
+Hh3cOnuLoidInfoEntry ::= SEQUENCE
+    {
+        hh3cOnuLoidIndex      Integer32,
+        hh3cOnuLoidFlag       INTEGER,
+        hh3cOnuLoid           OCTET STRING
+    }
+
+hh3cOnuLoidIndex OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The index of an ONU in one OLT.
+        "
+    ::= { hh3cOnuLoidInfoEntry 1 }
+
+hh3cOnuLoidFlag OBJECT-TYPE
+    SYNTAX      INTEGER
+        {
+            bound(1),
+            registered(2),
+            run(3),
+            regIncorrect(4)
+        }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The flag of ONU status.
+        1 - bound: The ONU is bound but not registered.
+        2 - registered: The ONU is registered but not bound.
+        3 - run: The ONU is registered and bound on one OLT.
+        4 - regIncorrect: The ONU is bound on one OLT and registered on
+        another OLT.
+        "
+    ::= { hh3cOnuLoidInfoEntry 2 }
+
+hh3cOnuLoid OBJECT-TYPE
+    SYNTAX      OCTET STRING(SIZE(1..24))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The LOID of an ONU.
+        "
+    ::= { hh3cOnuLoidInfoEntry 3 }
+
+--
+-- hh3cOnuStatisticsTable
+--
+
+hh3cOnuStatisticsTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF Hh3cOnuStatisticsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        This table is used for enabling or disabling statistics and setting period of a PON.
+        "
+    ::= { hh3cEponOnuMan 37 }
+
+hh3cOnuStatisticsEntry OBJECT-TYPE
+    SYNTAX      Hh3cOnuStatisticsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "
+        The entry of the hh3cOnuStatisticsTable.
+        "
+    INDEX
+        {
+            ifIndex
+        }
+    ::= { hh3cOnuStatisticsTable 1 }
+
+Hh3cOnuStatisticsEntry ::= SEQUENCE
+    {
+        hh3cOnuStatisticsPeriodVal  Unsigned32,
+        hh3cOnuStatisticsEnable     TruthValue
+    }
+
+hh3cOnuStatisticsPeriodVal OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        PON statistics period value.
+        "
+    ::= { hh3cOnuStatisticsEntry 1 }
+
+hh3cOnuStatisticsEnable OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Enable or disable statistics of a PON.
+        true(1)  - alarm enable.
+        false(2) - alarm disable.
+        "
+    ::= { hh3cOnuStatisticsEntry 2 }
+
+hh3cOnuSlaMaxBandWidthMinVal10G OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The lower limit of maximum-bandwidth which is confined to
+        hh3cOnuSlaMaxBandWidth for 10G EPON."
+    ::= { hh3cEponOnuMan 38 }
+
+hh3cOnuSlaMaxBandWidthMaxVal10G OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The upper limit of maximum-bandwidth which is confined to
+        hh3cOnuSlaMaxBandWidth for 10G EPON."
+    ::= { hh3cEponOnuMan 39 }
+
+hh3cOnuSlaMinBandWidthMinVal10G OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The lower limit of minimum-bandwidth which is confined to
+        hh3cOnuSlaMinBandWidth for 10G EPON."
+    ::= { hh3cEponOnuMan 40 }
+
+hh3cOnuSlaMinBandWidthMaxVal10G OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "
+        The upper limit of minimum-bandwidth which is confined to
+        hh3cOnuSlaMinBandWidth for 10G EPON."
+    ::= { hh3cEponOnuMan 41 }
+
+--
 -- hh3cEponBatchOperationBySlotTable
 --
 
@@ -4963,7 +5640,8 @@ Hh3cEponBatchOperationBySlotEntry ::= SEQUENCE
         hh3cEponBatchOperationBySlotIndex     Integer32,
         hh3cEponBatchOperationBySlotType      INTEGER,
         hh3cEponBatchOperationBySlot          INTEGER,
-        hh3cEponBatchOperationBySlotResult    Integer32
+        hh3cEponBatchOperationBySlotResult    Integer32,
+        hh3cEponBatchOpBySlotBindType         BITS
     }
 
 hh3cEponBatchOperationBySlotIndex OBJECT-TYPE
@@ -5027,6 +5705,21 @@ hh3cEponBatchOperationBySlotResult OBJECT-TYPE
         7 - failed because of not set slottype.
         "
     ::= { hh3cEponBatchOperationBySlotEntry 4 }
+
+hh3cEponBatchOpBySlotBindType OBJECT-TYPE
+    SYNTAX      BITS
+        {
+            mac(0),
+            loid(1),
+            loidPassword(2)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        Set batch binding type, which can only be assigned one type.
+        "
+    ::= { hh3cEponBatchOperationBySlotEntry 5 }
 
 --
 -- hh3cEponBatchOperationByOLTTable
@@ -5102,7 +5795,7 @@ hh3cEponBatchOperationByOLTResult OBJECT-TYPE
     DESCRIPTION
         "
         The result of batch operation:
-        0xFFFF -- other, gernal error.
+        0xFFFF -- other, general error.
         1 -- working, operation is not completed.
         2 -- successful, operation completed successfully.
         4 -- failed because the ONU firmware file does not exist.
@@ -5144,7 +5837,8 @@ Hh3cOnuFirmwareUpdateByTypeEntry ::= SEQUENCE
         hh3cOnuUpdateByOnuTypeIndex     Integer32,
         hh3cOnuUpdateByTypeOnuType      OCTET STRING,
         hh3cOnuUpdateByTypeFileName     OCTET STRING,
-        hh3cOnuUpdateByTypeRowStatus    RowStatus
+        hh3cOnuUpdateByTypeRowStatus    RowStatus,
+        hh3cOnuUpdateByTypeProtType     INTEGER
     }
 
 hh3cOnuUpdateByOnuTypeIndex OBJECT-TYPE
@@ -5187,6 +5881,22 @@ hh3cOnuUpdateByTypeRowStatus OBJECT-TYPE
         Only createAndGo and destroy actions are supported.
         "
     ::= { hh3cOnuFirmwareUpdateByTypeEntry 4 }
+
+hh3cOnuUpdateByTypeProtType OBJECT-TYPE
+    SYNTAX      INTEGER
+        {
+            private(0),
+            ctc(1)
+        }
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "
+        private(0): Using private protocol to update the ONU firmware.
+        ctc(1): Using ctc standard protocol to update the ONU firmware.
+        "
+    DEFVAL { private }
+    ::= { hh3cOnuFirmwareUpdateByTypeEntry 5 }
 
 hh3cEponErrorInfo OBJECT IDENTIFIER ::= { hh3cEponMibObjects 7 }
 
@@ -5327,6 +6037,69 @@ hh3cEponOnuLaserState OBJECT-TYPE
         The state of ONU laser.
         "
     ::= { hh3cEponErrorInfo 13 }
+
+hh3cEponOnuRegSilentBindType OBJECT-TYPE
+    SYNTAX      BITS
+        {
+            mac(0),
+            loid(1),
+            loidPassword(2)
+        }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "
+        The binding type of a silent ONU.
+        "
+    ::= { hh3cEponErrorInfo 14 }
+
+hh3cEponOnuRegSilentLoid OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "
+        The LOID of a silent ONU.
+        "
+    ::= { hh3cEponErrorInfo 15 }
+
+hh3cEponOnuRegSilentLoidPwd OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "
+        The LOID's password of a silent ONU.
+        A zero-length string will be returned when reading.
+        "
+    ::= { hh3cEponErrorInfo 16 }
+
+hh3cEponOnuRegErrorLoid OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "
+        The LOID of an ONU with registration error.
+        "
+    ::= { hh3cEponErrorInfo 17 }
+
+hh3cEponOnuRegErrorLoidCode OBJECT-TYPE
+    SYNTAX      INTEGER
+    {
+        loidNotExist(1),
+        wrongPassword(2),
+        conflictLoid(3),
+        notSupport(4),
+        mismatch(5)
+    }
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "
+        The reason of ONU registration failure.
+        "
+    ::= { hh3cEponErrorInfo 18 }
 
 --
 -- hh3cEpon NOTIFICATION
@@ -5532,7 +6305,7 @@ hh3cEponPortAlarmFerRecoverTrap NOTIFICATION-TYPE
         "
         A hh3cEponPortAlarmFerRecoverTrap notification is sent when
         a frame error rate threshold crossing event is detected and then
-        recoverd.
+        recovered.
         "
     ::= { hh3cEponTrapPrefix 13 }
 
@@ -5547,7 +6320,7 @@ hh3cEponErrorLLIDFrameRecoverTrap NOTIFICATION-TYPE
         "
         A hh3cEponErrorLLIDFrameRecoverTrap notification is sent when a
         LLID mismatched frames rate threshold crossing event is detected
-        and then recoverd.
+        and then recovered.
         "
     ::= { hh3cEponTrapPrefix 14 }
 
@@ -5561,7 +6334,7 @@ hh3cEponLoopBackEnableRecoverTrap NOTIFICATION-TYPE
     DESCRIPTION
         "
         A hh3cEponLoopBackEnableRecoverTrap notification is sent when
-        the loop back is detected and then recoverd.
+        the loop back is detected and then recovered.
         "
     ::= { hh3cEponTrapPrefix 15 }
 
@@ -5679,7 +6452,7 @@ hh3cDot3OamThresholdRecoverEvent NOTIFICATION-TYPE
     DESCRIPTION
         "
         A hh3cDot3OamThresholdRecoverEvent notification is sent when
-        hh3cDot3OamThresholdEvent is detected and then recoverd.
+        hh3cDot3OamThresholdEvent is detected and then recovered.
         "
     ::= { hh3cEponTrapPrefix 23 }
 
@@ -5695,7 +6468,7 @@ hh3cDot3OamNonThresholdRecoverEvent NOTIFICATION-TYPE
     DESCRIPTION
         "
         A hh3cDot3OamNonThresholdRecoverEvent notification is sent when
-        hh3cDot3OamNonThresholdEvent is detected and then recoverd.
+        hh3cDot3OamNonThresholdEvent is detected and then recovered.
         "
     ::= { hh3cEponTrapPrefix 24 }
 
@@ -5723,7 +6496,7 @@ hh3cEponOnuRegExcessRecoverTrap NOTIFICATION-TYPE
     DESCRIPTION
         "
         A hh3cEponOnuRegExcessRecoverTrap notification is sent when
-        hh3cEponOnuRegExcessTrap is detected and then recoverd.
+        hh3cEponOnuRegExcessTrap is detected and then recovered.
         "
     ::= { hh3cEponTrapPrefix 26 }
 
@@ -5778,7 +6551,7 @@ hh3cEponOltDFERecoverTrap NOTIFICATION-TYPE
     DESCRIPTION
         "
         A hh3cEponOltDFERecoverTrap notification is sent when
-        device fatal error is detected and then recoverd.
+        device fatal error is detected and then recovered.
         "
     ::= { hh3cEponTrapPrefix 30 }
 
@@ -5896,6 +6669,122 @@ hh3cOnuSmlkSwitchoverTrap NOTIFICATION-TYPE
         an ONU SMLK switchover is detected.
         "
     ::= { hh3cEponTrapPrefix 37 }
+
+hh3cEponOnuRegLoidErrTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cEponOnuRegErrorLoid,
+            hh3cEponOnuRegErrorLoidCode
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        A hh3cEponOnuRegLoidErrTrap notification is sent when an
+        ONU failed to register identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 38 }
+
+hh3cEponOnuRegLoidErrRecTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cEponOnuRegErrorLoid,
+            hh3cEponOnuRegErrorLoidCode
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        A hh3cEponOnuRegLoidErrRecTrap notification is sent when an
+        ONU failed to register and then registered successful again identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 39 }
+
+hh3cEponOnuSilenceLoidTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cEponOnuRegSilentBindType,
+            hh3cEponOnuRegSilentMac,
+            hh3cEponOnuRegSilentLoid,
+            hh3cEponOnuRegSilentLoidPwd
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        The hh3cEponOnuSilenceLoidTrap notification is sent when an
+        unbound ONU try to register to an OLT identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 40 }
+
+hh3cEponOnuSilenceLoidRecTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cEponOnuRegSilentBindType,
+            hh3cEponOnuRegSilentMac,
+            hh3cEponOnuRegSilentLoid,
+            hh3cEponOnuRegSilentLoidPwd
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        The hh3cEponOnuSilenceLoidRecTrap notification is sent when
+        a silent ONU is bound in the OLT or the aging ONU MAC
+        address times out identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 41 }
+
+hh3cEponOnuUpdateLoidRetTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cOnuBindLoid,
+            hh3cOnuUpdateResult,
+            hh3cOnuRegType,
+            hh3cOnuUpdateFileName
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        A hh3cEponOnuUpdateLoidRetTrap notification is sent when
+        an ONU reported its firmware update result identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 42 }
+
+hh3cEponOnuAutoBindLoidTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr,
+            hh3cOnuBindLoid,
+            hh3cEponOperationResult
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        A hh3cEponOnuAutoBindLoidTrap notification is sent
+        when a silent ONU is bound automatically identified by LOID.
+        "
+    ::= { hh3cEponTrapPrefix 43 }
+
+hh3cEponOnuPowerOnTrap NOTIFICATION-TYPE
+    OBJECTS
+        {
+            ifIndex,
+            ifDescr
+        }
+    STATUS      current
+    DESCRIPTION
+        "
+        A hh3cEponOnuPowerOffTrap notification is sent when ONU is powered on.
+        "
+    ::= { hh3cEponTrapPrefix 44 }
 
 hh3cEponStat OBJECT IDENTIFIER ::= { hh3cEponMibObjects 9 }
 

@@ -1,10 +1,10 @@
 -- =============================================================================
--- Copyright (C) 2009 by H3C Technologies Co., Ltd. All rights reserved.
+-- Copyright (c) 2004-2015 New H3C Tech. Co., Ltd. All rights reserved.
 --
 -- Description:
 --   The file defines a MIB to provide MESH configuration information.
 -- Reference:
--- Version: V1.2
+-- Version: V1.5
 -- History:
 --   V1.0 2008-07-08 Initial version, created by ChangHuifeng
 --   V1.1 2008-11-07 modified by liyugang
@@ -12,6 +12,19 @@
 --        to hh3cDot11sMeshStatusGroup
 --   V1.2 2009-08-01 modified by Wang Shaojie
 --        Add hh3cDot11sMeshLinkIFName to hh3cDot11sMeshLinkStatisTable.
+--   V1.3 2013-09-14 modified by Zhang Siyu
+--        Add hh3cDot11sMeshLinkType to hh3cDot11sMeshLinkStatusTable
+--   V1.4 2015-02-02 modified by Xiao min
+--        Add hh3cDot11sMeshLinkSNR to hh3cDot11sMeshLinkStatusTable
+--        Add hh3cDot11sMeshLinkNoise to hh3cDot11sMeshLinkStatusTable
+--        Add hh3cDot11sMeshLinkPeerSNR to hh3cDot11sMeshLinkStatusTable
+--        Add hh3cDot11sMeshLinkPeerNoise to hh3cDot11sMeshLinkStatusTable
+--   V1.5 2015-05-6 modified by guoxuzhen
+--        Add hh3cDot11sMeshAKMMode, hh3cDot11sSimplerKey to Hh3cDot11sMeshPflTable
+--        Add hh3cDot11sBindInterface to hh3cDot11sRadioCfgTable
+--        2015-08-14 modified by Xiao min
+--        Add hh3cDot11sMeshLinkPeerIPAddress to hh3cDot11sMeshLinkStatusTable
+--        Add hh3cDot11sMeshLinkPeerSystemName to hh3cDot11sMeshLinkStatusTable
 -- =============================================================================
 HH3C-DOT11S-MESH-MIB DEFINITIONS ::= BEGIN
 
@@ -24,17 +37,18 @@ IMPORTS
         OBJECT-TYPE,
         Integer32,
         Unsigned32,
-        Counter32
+        Counter32,
+        IpAddress
     FROM SNMPv2-SMI
-        hh3cDot11, Hh3cDot11RadioElementIndex, hh3cDot11APElementIndex
+        hh3cDot11, Hh3cDot11RadioElementIndex, hh3cDot11APElementIndex, Hh3cDot11AKMType
     FROM HH3C-DOT11-REF-MIB;
 
 hh3cDot11sMesh MODULE-IDENTITY
-    LAST-UPDATED "200908011000Z"        -- Nov 07, 2008 at 10:00 GMT
+    LAST-UPDATED "201508141000Z"        -- Aug 14, 2015 at 10:00 GMT
     ORGANIZATION
-        "Hangzhou H3C Technologies Co., Ltd."
+        "New H3C Technologies Co., Ltd."
     CONTACT-INFO
-        "Platform Team Hangzhou H3C Technologies Co., Ltd.
+        "Platform Team New H3C Technologies Co., Ltd.
          Hai-Dian District Beijing P.R. China
          Http://www.h3c.com
          Zip:100085"
@@ -88,7 +102,18 @@ hh3cDot11sMesh MODULE-IDENTITY
         A mesh point that is collocated with one or more portals.
 
         Mesh Link
-        A link between two MPs."
+        A link between two MPs.
+
+        Simultaneous Authentication of Equals (SAE)
+        A password-authenticated key exchange based on
+        a zero-knowledge proof."
+    REVISION "201508141000Z"        -- Aug 01, 2009 at 10:00 GMT
+    DESCRIPTION
+        "Add hh3cDot11sMeshLinkPeerIPAddress to hh3cDot11sMeshLinkStatusTable,
+         Add hh3cDot11sMeshLinkPeerSystemName to hh3cDot11sMeshLinkStatusTable"
+    REVISION "201505061500Z"        -- May 6, 2015 at 15:00 GMT
+    DESCRIPTION
+        "Add new nodes."
     REVISION "200908011000Z"        -- Aug 01, 2009 at 10:00 GMT
     DESCRIPTION
         "Add new nodes."
@@ -152,8 +177,8 @@ hh3cDot11sMeshPflTable OBJECT-TYPE
         it can provide mesh services to other MPs which have the same
         mesh ID.
         When the mesh profile is enabled, all of the object in this table
-        can not be modified except hh3cDot11sMeshPflEnable.
-        The mesh profile can not be deleted when it is bound with the radio."
+        cannot be modified except hh3cDot11sMeshPflEnable.
+        The mesh profile cannot be deleted when it is bound with the radio."
     ::= { hh3cDot11sConfigGroup 2 }
 
 hh3cDot11sMeshPflEntry OBJECT-TYPE
@@ -177,7 +202,9 @@ Hh3cDot11sMeshPflEntry ::= SEQUENCE
         hh3cDot11sMeshPflBackhaulRate  Integer32,
         hh3cDot11sMeshMkdServEnable    TruthValue,
         hh3cDot11sMeshPflEnable        TruthValue,
-        hh3cDot11sMeshPflRowStatus     RowStatus
+        hh3cDot11sMeshPflRowStatus     RowStatus,
+        hh3cDot11sMeshAKMMode          Hh3cDot11AKMType,
+        hh3cDot11sMeshSimpleKey        OCTET STRING
     }
 
 hh3cDot11sMeshPflIndex OBJECT-TYPE
@@ -196,7 +223,7 @@ hh3cDot11sMeshPflMeshID OBJECT-TYPE
         "This object represents the mesh ID of the mesh profile.
         The string length of this object is zero when the mesh ID is not
         configured.  If the mesh ID is not configured, hh3cDot11sMeshPflEnable
-        can not be set to 'true'."
+        cannot be set to 'true'."
     ::= { hh3cDot11sMeshPflEntry 2 }
 
 hh3cDot11sMeshPflBindIntNum OBJECT-TYPE
@@ -205,10 +232,8 @@ hh3cDot11sMeshPflBindIntNum OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "This object represents the specified mesh interface number
-        binding to the mesh profile.
-        If the value is set to -1, the binding will be removed.
-        If the mesh interface is not specified, the value of
-        hh3cDot11sMeshPflEnable can not be set to 'true'."
+        bound to the mesh profile.
+        If the value is set to -1, the binding will be removed."
     DEFVAL      { -1 }
     ::= { hh3cDot11sMeshPflEntry 3 }
 
@@ -261,6 +286,26 @@ hh3cDot11sMeshPflRowStatus OBJECT-TYPE
         "The status of this table entry."
     ::= { hh3cDot11sMeshPflEntry 8 }
 
+hh3cDot11sMeshAKMMode OBJECT-TYPE
+    SYNTAX      Hh3cDot11AKMType
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Represents the authentication and key management mode defined by 802.11s.
+        The following values are supported:
+        'none': No key management mode configured.
+        'psk': pre-shared key authentication."
+    DEFVAL      { none }
+    ::= { hh3cDot11sMeshPflEntry 9 }
+
+hh3cDot11sMeshSimpleKey OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Represents the simple key for SAE."
+    ::= { hh3cDot11sMeshPflEntry 10 }
+
 -- *****************************************************************************
 -- * End of hh3cDot11sMeshPflTable Definition
 -- *****************************************************************************
@@ -273,10 +318,9 @@ hh3cDot11sMpPlcyTable OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "This table is used to configure MP policy.
-        There is 'default_mp_plcy' on system by default and its index is 1.
-        The 'default_mp_plcy' can not be deleted or modified.
-        The MP policy can not be deleted when it is applied to a radio.
-        It can not be modified when it is applied to an enabled radio."
+        There is a default policy on system and its index is 1.
+        The default policy cannot be deleted or modified.
+        The MP policy cannot be deleted when it is applied to a radio."
     ::= { hh3cDot11sConfigGroup 3 }
 
 hh3cDot11sMpPlcyEntry OBJECT-TYPE
@@ -317,13 +361,13 @@ hh3cDot11sMpPlcyIndex OBJECT-TYPE
     ::= { hh3cDot11sMpPlcyEntry 1 }
 
 hh3cDot11sMpPlcyName OBJECT-TYPE
-    SYNTAX      OCTET STRING (SIZE (1..15))
+    SYNTAX      OCTET STRING (SIZE (1..31))
     MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION
         "This object represents the MP policy name.
-        MP policy can not be created with name 'a', 'al', 'all' or
-        'default_mp_plcy'.
+        MP policy cannot be created with the name of the
+        default policy.
         Modification is not supported."
     ::= { hh3cDot11sMpPlcyEntry 2 }
 
@@ -451,7 +495,7 @@ hh3cDot11sMlspCfgTable OBJECT-TYPE
         "This table is used to configure MLSP proxy MAC address.
         Only if the specified MP policy is modifiable and the MLSP
         is enabled, the row of this table can be created and deleted.
-        The row of this table can not be modified."
+        The row of this table cannot be modified."
     ::= { hh3cDot11sConfigGroup 4 }
 
 hh3cDot11sMlspCfgEntry OBJECT-TYPE
@@ -529,7 +573,8 @@ Hh3cDot11sRadioCfgEntry ::= SEQUENCE
     {
         hh3cDot11sCfgRadioIndex        Hh3cDot11RadioElementIndex,
         hh3cDot11sMeshPflMap           Integer32,
-        hh3cDot11sMpPlcyMap            Integer32
+        hh3cDot11sMpPlcyMap            Integer32,
+        hh3cDot11sBindInterface        Integer32
     }
 
 hh3cDot11sCfgRadioIndex OBJECT-TYPE
@@ -547,7 +592,7 @@ hh3cDot11sMeshPflMap OBJECT-TYPE
     DESCRIPTION
         "This object represents the number of the mesh profile mapped to
         the specified radio.  The value is zero when the radio is not
-        binding mesh profile."
+        bound to a mesh profile."
     DEFVAL      { 0 }
     ::= { hh3cDot11sRadioCfgEntry 2 }
 
@@ -557,12 +602,23 @@ hh3cDot11sMpPlcyMap OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "This object represents the index of the MP policy mapped to the
-        specified radio.  The MP policy is 'default_mp_plcy' when the radio
-        is not binding user-defined MP policy.
-        The index of 'default_mp_plcy' is 1.
-        This object can not be modified when the radio is enabled."
+        specified radio.  The MP policy is the default policy when the radio
+        is not bound to the user-defined MP policy.
+        The index of the default policy is 1.
+        This object cannot be modified when the radio is enabled."
     DEFVAL      { 1 }
     ::= { hh3cDot11sRadioCfgEntry 3 }
+
+hh3cDot11sBindInterface OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "This object represents the number of the WLAN-Mesh interface
+        mapped to the specified radio.  The value is -1 when the
+        radio is not bound to a WLAN-Mesh interface."
+    DEFVAL      { -1 }
+    ::= { hh3cDot11sRadioCfgEntry 4 }
 
 -- *****************************************************************************
 -- * End of hh3cDot11sRadioCfgTable Definition
@@ -619,7 +675,7 @@ hh3cDot11sWDSPeerMacTable OBJECT-TYPE
     STATUS      current
     DESCRIPTION
         "This table is used to configure wireless distribution system (WDS).
-        The row of this table can not be modified."
+        The row of this table cannot be modified."
     ::= { hh3cDot11sWDSConfigGroup 1 }
 
 hh3cDot11sWDSPeerMacEntry OBJECT-TYPE
@@ -698,7 +754,14 @@ Hh3cDot11sMeshLinkStatusEntry ::= SEQUENCE
         hh3cDot11sMeshLinkName           OCTET STRING,
         hh3cDot11sMeshLinkBSSID          MacAddress,
         hh3cDot11sMeshLinkPeerMac        MacAddress,
-        hh3cDot11sMeshLinkExistDuration  Integer32
+        hh3cDot11sMeshLinkExistDuration  Integer32,
+        hh3cDot11sMeshLinkType           INTEGER,
+        hh3cDot11sMeshLinkSNR            Integer32,
+        hh3cDot11sMeshLinkNoise          Integer32,
+        hh3cDot11sMeshLinkPeerSNR        Integer32,
+        hh3cDot11sMeshLinkPeerNoise      Integer32,
+        hh3cDot11sMeshLinkPeerIPAddress  IpAddress,
+        hh3cDot11sMeshLinkPeerSystemName OCTET STRING
     }
 
 hh3cDot11sMeshLinkIfIndex OBJECT-TYPE
@@ -741,6 +804,68 @@ hh3cDot11sMeshLinkExistDuration OBJECT-TYPE
     DESCRIPTION
         "This object represents the time for which the link has been up."
     ::= { hh3cDot11sMeshLinkStatusEntry 5 }
+
+hh3cDot11sMeshLinkType OBJECT-TYPE
+    SYNTAX      INTEGER
+        {
+            active(1),
+            dormant(2)
+        }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object represents the type for the link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 6 }
+
+hh3cDot11sMeshLinkSNR OBJECT-TYPE
+    SYNTAX      Integer32
+    UNITS       "percent"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the SNR for the link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 7 }
+
+hh3cDot11sMeshLinkNoise OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the noise for the link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 8 }
+
+hh3cDot11sMeshLinkPeerSNR OBJECT-TYPE
+    SYNTAX      Integer32
+    UNITS       "percent"
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the SNR transferred from the neighbor of this mesh link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 9 }
+
+hh3cDot11sMeshLinkPeerNoise OBJECT-TYPE
+    SYNTAX      Integer32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the noise transferred from the neighbor of this mesh link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 10 }
+
+hh3cDot11sMeshLinkPeerIPAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the IP address of the neighbor of this mesh link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 11 }
+
+hh3cDot11sMeshLinkPeerSystemName OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Represents the system name of the neighbor of this mesh link."
+    ::= { hh3cDot11sMeshLinkStatusEntry 12 }
 
 -- *****************************************************************************
 -- * End of hh3cDot11sMeshLinkStatusTable Definition
