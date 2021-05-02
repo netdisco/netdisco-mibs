@@ -1,7 +1,7 @@
 -- ****************************************************************************
 --  COLUBRIS-DEVICE-WIRELESS-MIB definitions
 --
---  Copyright (c) 2006, Hewlett-Packard Development Company, L.P. 
+--  (c) Copyright 2006-2015 Hewlett-Packard Development Company, L.P.
 --  The information contained herein is subject to change without notice.
 --  All Rights Reserved.
 --
@@ -31,7 +31,7 @@ IMPORTS
 
 
 colubrisDeviceWirelessMIB MODULE-IDENTITY
-    LAST-UPDATED    "200906010000Z"
+    LAST-UPDATED    "201310170000Z"
     ORGANIZATION    "Colubris Networks, Inc."
     CONTACT-INFO    "Colubris Networks
                      Postal: 200 West Street Ste 300
@@ -62,6 +62,7 @@ coDeviceWirelessClientRatesGroup     OBJECT IDENTIFIER ::= { colubrisDeviceWirel
 coDeviceWirelessClientHTRatesGroup   OBJECT IDENTIFIER ::= { colubrisDeviceWirelessMIBObjects 10 }
 coDeviceWirelessDetectedAPGroup      OBJECT IDENTIFIER ::= { colubrisDeviceWirelessMIBObjects 13 }
 coDeviceWirelessDetectedStationGroup OBJECT IDENTIFIER ::= { colubrisDeviceWirelessMIBObjects 14 }
+coDeviceWirelessClientVHTRatesGroup  OBJECT IDENTIFIER ::= { colubrisDeviceWirelessMIBObjects 15 }
 
 -- The Device Wireless Configuration Group
 
@@ -141,7 +142,8 @@ CoDeviceWirelessInterfaceStatusEntry ::= SEQUENCE
     coDevWirIfStaAutoPowerInterval       Integer32,
     coDevWirIfStaResetStats              INTEGER,
     coDevWirIfStaGreenfieldOptionEnabled TruthValue,
-    coDevWirIfStaNbDetectedStation       Unsigned32
+    coDevWirIfStaNbDetectedStation       Unsigned32,
+    coDevWirIfStaProtectionStatus        BITS
 }
 
 coDevWirIfStaRadioIndex OBJECT-TYPE
@@ -197,7 +199,8 @@ coDevWirIfStaRadioMode OBJECT-TYPE
                     ieee802dot11bAndg(4),
                     ieee802dot11aTurbo(5),
                     ieee802dot11na(6),
-                    ieee802dot11ng(7)
+                    ieee802dot11ng(7),
+                    ieee802dot11ac(8)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -285,6 +288,27 @@ coDevWirIfStaNbDetectedStation OBJECT-TYPE
     STATUS      current
     DESCRIPTION "Number of stations detected on this radio."
     ::= { coDeviceWirelessInterfaceStatusEntry 16 }
+
+coDevWirIfStaProtectionStatus OBJECT-TYPE
+    SYNTAX      BITS
+                {
+                    protStatusDisabled(0),
+                            -- protection is disabled
+                    protStatusNonERPClients(1),
+                            -- B clients are connected to the radio
+                    protStatusNonERPAccessPoints(2),
+                            -- Another AP is advertizing B clients
+                    protStatusNonHTClients(3),
+                            -- Non HT clients are connected to the radio
+                    protStatusNonHTAccessPoints(4),
+                            -- Another AP is advertizing non HT clients
+                    protStatusNotAvailable(5)
+                            -- protection status is not available
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Indicates the reasons why the wireless protection is enabled."
+    ::= { coDeviceWirelessInterfaceStatusEntry 17 }
 
 -- The Device Wireless Interface Statistics Group
 coDeviceWirelessInterfaceStatsTable OBJECT-TYPE
@@ -480,7 +504,8 @@ CoDeviceVscStatusEntry ::= SEQUENCE
     coDevWirVscStaMaximumNumberOfUsers  Unsigned32,
     coDevWirVscStaCurrentNumberOfUsers  Unsigned32,
     coDevWirVscStaAverageSNR            Integer32,
-    coDevWirVscStaResetStats            INTEGER
+    coDevWirVscStaResetStats            INTEGER,
+    coDevWirVscStaCurrentNumberOfPMFUsers Unsigned32
 }
 
 coDevWirVscStaVscIndex OBJECT-TYPE
@@ -551,6 +576,14 @@ coDevWirVscStaResetStats OBJECT-TYPE
     DESCRIPTION "Reset the VSC statistics. Reading this object will always 
                  return 'idle'."
     ::= { coDeviceWirelessVscStatusEntry 8 }
+    
+    coDevWirVscStaCurrentNumberOfPMFUsers OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Indicates the number of wireless client stations connected via 
+                 this VSC using protected management frames."
+    ::= { coDeviceWirelessVscStatusEntry 9 }
 
 -- The Device Virtual Service Communities Stats Group
 coDeviceWirelessVscStatsTable OBJECT-TYPE
@@ -723,7 +756,15 @@ CoDeviceWirelessClientStatusEntry ::= SEQUENCE
     coDevWirCliStaReceiveMCS          Unsigned32,
     coDevWirCliStaChannelWidth        INTEGER,
     coDevWirCliStaShortGI             TruthValue,
-    coDevWirCliDisassociate           INTEGER
+    coDevWirCliDisassociate           INTEGER,
+    coDevWirCliStaNbStreams           Integer32,
+    coDevWirCliStaQOSLevel            INTEGER,
+    coDevWirCliStaLegacyRates         BITS,
+    coDevWirCliStaHTRates             BITS,
+    coDevWirCliStaVHT                 TruthValue,
+    coDevWirCliStaVHTNbStreams        Integer32,
+    coDevWirCliStaVHTRates            BITS,
+    coDevWirCliStaMFPC                TruthValue
 }
 
 coDevWirCliStaIndex OBJECT-TYPE
@@ -732,7 +773,8 @@ coDevWirCliStaIndex OBJECT-TYPE
     STATUS      current
     DESCRIPTION "Specifies the index of a wireless client using the
                  specified radio on the device. The association ID is
-                 used for the index."
+                 used for the index. On new products, the index
+                 contain also a VSC index."
     ::= { coDeviceWirelessClientStatusEntry 1 }
 
 coDevWirCliStaMACAddress OBJECT-TYPE
@@ -810,28 +852,32 @@ coDevWirCliStaTrafficAuthorized OBJECT-TYPE
     SYNTAX      TruthValue
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current receive rate of the associated station."
+    DESCRIPTION "Indicates whether the associated station traffic 
+                 is authorized."
     ::= { coDeviceWirelessClientStatusEntry 11 }
 
 coDevWirCliSta8021xAuthenticated OBJECT-TYPE
     SYNTAX      TruthValue
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current receive rate of the associated station."
+    DESCRIPTION "Indicates whether the associated station is 
+                 8021x authenticated."
     ::= { coDeviceWirelessClientStatusEntry 12 }
 
 coDevWirCliStaMACAuthenticated OBJECT-TYPE
     SYNTAX      TruthValue
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current receive rate of the associated station."
+    DESCRIPTION "Indicates whether the associated station is 
+                 MAC authenticated."
     ::= { coDeviceWirelessClientStatusEntry 13 }
 
 coDevWirCliStaMACFiltered OBJECT-TYPE
     SYNTAX      TruthValue
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current receive rate of the associated station."
+    DESCRIPTION "Indicates whether the associated station is
+                 disallowed by the MAC filtering feature."
     ::= { coDeviceWirelessClientStatusEntry 14 }
 
 coDevWirCliStaPhyType OBJECT-TYPE
@@ -841,7 +887,8 @@ coDevWirCliStaPhyType OBJECT-TYPE
                     ieee802dot11b(2),
                     ieee802dot11g(3),
                     ieee802dot11bAndg(4),
-                    ieee802dot11n(5)
+                    ieee802dot11n(5),
+                    ieee802dot11ac(6)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -924,21 +971,22 @@ coDevWirCliStaTransmitMCS OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current transmit MCS of an HT associated station."
+    DESCRIPTION "Current transmit MCS of an HT/VHT associated station."
     ::= { coDeviceWirelessClientStatusEntry 23 }
 
 coDevWirCliStaReceiveMCS OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Current receive MCS of an HT associated station."
+    DESCRIPTION "Current receive MCS of an HT/VHT associated station."
     ::= { coDeviceWirelessClientStatusEntry 24 }
 
 coDevWirCliStaChannelWidth OBJECT-TYPE
     SYNTAX      INTEGER
                 {
                     cw20MHz(1),
-                    cw40MHz(2)
+                    cw40MHz(2),
+                    cw80MHz(3)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -966,6 +1014,122 @@ coDevWirCliDisassociate OBJECT-TYPE
                  disassociate: disassociate the client."
     ::= { coDeviceWirelessClientStatusEntry 27 }
 
+coDevWirCliStaNbStreams OBJECT-TYPE
+    SYNTAX      Integer32 (0..4)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of spatial streams used with the HT client."
+    ::= { coDeviceWirelessClientStatusEntry 28 }
+
+coDevWirCliStaQOSLevel OBJECT-TYPE
+    SYNTAX      INTEGER
+                {
+                    low(1),
+                    medium(2),
+                    high(3),
+                    veryHigh(4),
+                    none(5)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "QOS level assigned by a RADIUS server."
+    ::= { coDeviceWirelessClientStatusEntry 29 }
+
+coDevWirCliStaLegacyRates OBJECT-TYPE
+    SYNTAX      BITS
+                {
+                    rate1Mbps(0),
+                    rate2Mbps(1),
+                    rate5dot5Mbps(2),
+                    rate11Mbps(3),
+                    rate6Mbps(4),
+                    rate9Mbps(5),
+                    rate12Mbps(6),
+                    rate18Mbps(7),
+                    rate24Mbps(8),
+                    rate36Mbps(9),
+                    rate48Mbps(10),
+                    rate54Mbps(11)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Legacy rates negotiated during the association."
+    ::= { coDeviceWirelessClientStatusEntry 30 }
+
+coDevWirCliStaHTRates OBJECT-TYPE
+    SYNTAX      BITS
+                {
+                    htRateMCS0(0),
+                    htRateMCS1(1),
+                    htRateMCS2(2),
+                    htRateMCS3(3),
+                    htRateMCS4(4),
+                    htRateMCS5(5),
+                    htRateMCS6(6),
+                    htRateMCS7(7),
+                    htRateMCS8(8),
+                    htRateMCS9(9),
+                    htRateMCS10(10),
+                    htRateMCS11(11),
+                    htRateMCS12(12),
+                    htRateMCS13(13),
+                    htRateMCS14(14),
+                    htRateMCS15(15),
+                    htRateMCS16(16),
+                    htRateMCS17(17),
+                    htRateMCS18(18),
+                    htRateMCS19(19),
+                    htRateMCS20(20),
+                    htRateMCS21(21),
+                    htRateMCS22(22),
+                    htRateMCS23(23)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "HT rates negotiated during the association."
+    ::= { coDeviceWirelessClientStatusEntry 31 }
+    
+coDevWirCliStaVHT OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Indicates that the associated station is VHT."
+    ::= { coDeviceWirelessClientStatusEntry 32 }
+ 
+coDevWirCliStaVHTNbStreams OBJECT-TYPE
+    SYNTAX      Integer32 (0..8)
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of spatial streams used with the VHT client."
+    ::= { coDeviceWirelessClientStatusEntry 33 }
+
+coDevWirCliStaVHTRates OBJECT-TYPE
+    SYNTAX      BITS
+                {
+                    vhtRateMCS0(0),
+                    vhtRateMCS1(1),
+                    vhtRateMCS2(2),
+                    vhtRateMCS3(3),
+                    vhtRateMCS4(4),
+                    vhtRateMCS5(5),
+                    vhtRateMCS6(6),
+                    vhtRateMCS7(7),
+                    vhtRateMCS8(8),
+                    vhtRateMCS9(9)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "VHT rates negotiated during the association."
+    ::= { coDeviceWirelessClientStatusEntry 34 }
+    
+    coDevWirCliStaMFPC OBJECT-TYPE
+    SYNTAX      TruthValue
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Indicates whether the associated station  
+                 is capable of using protected management frames."
+    ::= { coDeviceWirelessClientStatusEntry 35 }
+    
 coDevWirNbAssociatedStation OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
@@ -1345,7 +1509,23 @@ CoDeviceWirelessClientStatsHTRatesEntry ::= SEQUENCE
     coDevWirCliStsPktsRxMCS12      Counter32,
     coDevWirCliStsPktsRxMCS13      Counter32,
     coDevWirCliStsPktsRxMCS14      Counter32,
-    coDevWirCliStsPktsRxMCS15      Counter32
+    coDevWirCliStsPktsRxMCS15      Counter32,
+    coDevWirCliStsPktsTxMCS16      Counter32,
+    coDevWirCliStsPktsTxMCS17      Counter32,
+    coDevWirCliStsPktsTxMCS18      Counter32,
+    coDevWirCliStsPktsTxMCS19      Counter32,
+    coDevWirCliStsPktsTxMCS20      Counter32,
+    coDevWirCliStsPktsTxMCS21      Counter32,
+    coDevWirCliStsPktsTxMCS22      Counter32,
+    coDevWirCliStsPktsTxMCS23      Counter32,
+    coDevWirCliStsPktsRxMCS16      Counter32,
+    coDevWirCliStsPktsRxMCS17      Counter32,
+    coDevWirCliStsPktsRxMCS18      Counter32,
+    coDevWirCliStsPktsRxMCS19      Counter32,
+    coDevWirCliStsPktsRxMCS20      Counter32,
+    coDevWirCliStsPktsRxMCS21      Counter32,
+    coDevWirCliStsPktsRxMCS22      Counter32,
+    coDevWirCliStsPktsRxMCS23      Counter32
 }
 
 coDevWirCliStsPktsTxMCS0 OBJECT-TYPE
@@ -1604,6 +1784,134 @@ coDevWirCliStsPktsRxMCS15 OBJECT-TYPE
                  station associated."
     ::= { coDeviceWirelessClientStatsHTRatesEntry 32 }
 
+coDevWirCliStsPktsTxMCS16 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS16 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 33 }
+
+coDevWirCliStsPktsTxMCS17 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS17 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 34 }
+
+coDevWirCliStsPktsTxMCS18 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS18 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 35 }
+
+coDevWirCliStsPktsTxMCS19 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS19 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 36 }
+
+coDevWirCliStsPktsTxMCS20 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS20 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 37 }
+
+coDevWirCliStsPktsTxMCS21 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS21 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 38 }
+
+coDevWirCliStsPktsTxMCS22 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS22 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 39 }
+
+coDevWirCliStsPktsTxMCS23 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS23 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 40 }
+
+coDevWirCliStsPktsRxMCS16 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS16 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 41 }
+
+coDevWirCliStsPktsRxMCS17 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS17 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 42 }
+
+coDevWirCliStsPktsRxMCS18 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS18 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 43 }
+
+coDevWirCliStsPktsRxMCS19 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS19 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 44 }
+
+coDevWirCliStsPktsRxMCS20 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS20 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 45 }
+
+coDevWirCliStsPktsRxMCS21 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS21 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 46 }
+
+coDevWirCliStsPktsRxMCS22 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS22 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 47 }
+
+coDevWirCliStsPktsRxMCS23 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS23 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsHTRatesEntry 48 }
+
 -- The Device Wireless Detected AP Group
 coDeviceWirelessDetectedAPTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF CoDeviceWirelessDetectedAPEntry
@@ -1708,7 +2016,8 @@ coDevWirApPHYType OBJECT-TYPE
                     ieee802dot11b(2),
                     ieee802dot11g(3),
                     ieee802dot11na(4),
-                    ieee802dot11ng(5)
+                    ieee802dot11ng(5),
+                    ieee802dot11ac(6)
                 }
     MAX-ACCESS  read-only
     STATUS      current
@@ -1879,6 +2188,576 @@ coDevWirDetStaTimeLastSeen OBJECT-TYPE
                  been received from this client."
     ::= { coDeviceWirelessDetectedStationEntry 11 }
 
+-- The Device Wireless Client Statistics VHT Rates Group
+coDeviceWirelessClientStatsVHTRatesTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF CoDeviceWirelessClientStatsVHTRatesEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "Device Wireless VHT client statistical rate
+                 attributes."
+    ::= { coDeviceWirelessClientVHTRatesGroup 1 }
+
+coDeviceWirelessClientStatsVHTRatesEntry OBJECT-TYPE
+    SYNTAX      CoDeviceWirelessClientStatsVHTRatesEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION "An entry in the coDeviceWirelessClientStatsVHTRatesTable.
+
+                 coDevDisIndex - Uniquely identifies a device on the
+                                 controller.
+
+                 coDevWirIfStaRadioIndex - Uniquely identifies a radio
+                                           on the device.
+
+                 coDevWirCliStaIndex - Uniquely identifies a VHT
+                                       wireless client using the
+                                       specified radio on the device."
+    AUGMENTS    { coDeviceWirelessClientStatusEntry }
+    ::= { coDeviceWirelessClientStatsVHTRatesTable 1 }
+
+CoDeviceWirelessClientStatsVHTRatesEntry ::= SEQUENCE
+{
+    coDevWirCliStsPktsTxNSS1VHTMCS0       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS1       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS2       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS3       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS4       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS5       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS6       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS7       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS8       Counter32,
+    coDevWirCliStsPktsTxNSS1VHTMCS9       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS0       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS1       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS2       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS3       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS4       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS5       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS6       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS7       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS8       Counter32,
+    coDevWirCliStsPktsTxNSS2VHTMCS9       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS0       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS1       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS2       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS3       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS4       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS5       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS6       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS7       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS8       Counter32,
+    coDevWirCliStsPktsTxNSS3VHTMCS9       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS0       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS1       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS2       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS3       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS4       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS5       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS6       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS7       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS8       Counter32,
+    coDevWirCliStsPktsRxNSS1VHTMCS9       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS0       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS1       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS2       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS3       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS4       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS5       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS6       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS7       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS8       Counter32,
+    coDevWirCliStsPktsRxNSS2VHTMCS9       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS0       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS1       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS2       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS3       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS4       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS5       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS6       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS7       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS8       Counter32,
+    coDevWirCliStsPktsRxNSS3VHTMCS9       Counter32
+}
+
+coDevWirCliStsPktsTxNSS1VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS0 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 1 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS1 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 2 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS2 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 3 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS3 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 4 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS4 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 5 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS5 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 6 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS6 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 7 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS7 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 8 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS8 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 9 }
+
+coDevWirCliStsPktsTxNSS1VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS9 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 10 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS0 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 11 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS1 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 12 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS2 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 13 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS3 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 14 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS4 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 15 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS5 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 16 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS6 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 17 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS7 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 18 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS8 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 19 }
+
+coDevWirCliStsPktsTxNSS2VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS9 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 20 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS0 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 21 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS1 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 22 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS2 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 23 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS3 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 24 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS4 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 25 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS5 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 26 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS6 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 27 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS7 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 28 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS8 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 29 }
+
+coDevWirCliStsPktsTxNSS3VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames transmitted at MCS9 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 30 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS0 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 31 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS1 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 32 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS2 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 33 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS3 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 34 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS4 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 35 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS5 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 36 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS6 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 37 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS7 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 38 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS8 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 39 }
+
+coDevWirCliStsPktsRxNSS1VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS9 using NSS1 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 40 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS0 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 41 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS1 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 42 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS2 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 43 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS3 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 44 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS4 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 45 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS5 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 46 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS6 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 47 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS7 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 48 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS8 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 49 }
+
+coDevWirCliStsPktsRxNSS2VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS9 using NSS2 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 50 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS0 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS0 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 51 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS1 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS1 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 52 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS2 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS2 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 53 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS3 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS3 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 54 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS4 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS4 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 55 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS5 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS5 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 56 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS6 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS6 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 57 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS7 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS7 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 58 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS8 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS8 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 59 }
+
+coDevWirCliStsPktsRxNSS3VHTMCS9 OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "Number of frames received at MCS9 using NSS3 since the
+                 station associated."
+    ::= { coDeviceWirelessClientStatsVHTRatesEntry 60 }
 
 -- Device Wireless notifications
 colubrisDeviceWirelessMIBNotificationPrefix OBJECT IDENTIFIER ::= { colubrisDeviceWirelessMIB 2 }
@@ -1930,7 +2809,8 @@ colubrisDeviceWirelessMIBCompliance MODULE-COMPLIANCE
                         colubrisDeviceWirelessDetectedAPMIBGroup,
                         colubrisDeviceWirelessNotificationGroup,
                         colubrisDeviceWirelessClientStatsHTRatesMIBGroup,
-                        colubrisDeviceWirelessDetectedStationMIBGroup
+                        colubrisDeviceWirelessDetectedStationMIBGroup,
+                        colubrisDeviceWirelessClientStatsVHTRatesMIBGroup
                     }
     ::= { colubrisDeviceWirelessMIBCompliances 1 }
 
@@ -1963,7 +2843,8 @@ colubrisDeviceWirelessIfStatusMIBGroup OBJECT-GROUP
                     coDevWirIfStaAutoPowerInterval,
                     coDevWirIfStaResetStats,
                     coDevWirIfStaGreenfieldOptionEnabled,
-                    coDevWirIfStaNbDetectedStation
+                    coDevWirIfStaNbDetectedStation,
+                    coDevWirIfStaProtectionStatus
                 }
     STATUS      current
     DESCRIPTION "A collection of objects for the wireless interface
@@ -2000,7 +2881,8 @@ colubrisDeviceVscStatusMIBGroup OBJECT-GROUP
                     coDevWirVscStaMaximumNumberOfUsers,
                     coDevWirVscStaCurrentNumberOfUsers,
                     coDevWirVscStaAverageSNR,
-                    coDevWirVscStaResetStats
+                    coDevWirVscStaResetStats,
+                    coDevWirVscStaCurrentNumberOfPMFUsers
                 }
     STATUS      current
     DESCRIPTION "A collection of objects for Virtual Service
@@ -2053,7 +2935,15 @@ colubrisDeviceWirelessClientStatusMIBGroup OBJECT-GROUP
                     coDevWirCliStaChannelWidth,
                     coDevWirCliStaShortGI,
                     coDevWirCliDisassociate,
-                    coDevWirNbAssociatedStation
+                    coDevWirNbAssociatedStation,
+                    coDevWirCliStaNbStreams,
+                    coDevWirCliStaQOSLevel,
+                    coDevWirCliStaLegacyRates,
+                    coDevWirCliStaHTRates,
+                    coDevWirCliStaVHT,
+                    coDevWirCliStaVHTNbStreams,
+                    coDevWirCliStaVHTRates,
+                    coDevWirCliStaMFPC
                 }
     STATUS      current
     DESCRIPTION "A collection of objects for wireless client status
@@ -2148,6 +3038,14 @@ colubrisDeviceWirelessClientStatsHTRatesMIBGroup OBJECT-GROUP
                     coDevWirCliStsPktsTxMCS13,
                     coDevWirCliStsPktsTxMCS14,
                     coDevWirCliStsPktsTxMCS15,
+                    coDevWirCliStsPktsTxMCS16,
+                    coDevWirCliStsPktsTxMCS17,
+                    coDevWirCliStsPktsTxMCS18,
+                    coDevWirCliStsPktsTxMCS19,
+                    coDevWirCliStsPktsTxMCS20,
+                    coDevWirCliStsPktsTxMCS21,
+                    coDevWirCliStsPktsTxMCS22,
+                    coDevWirCliStsPktsTxMCS23,
                     coDevWirCliStsPktsRxMCS0,
                     coDevWirCliStsPktsRxMCS1,
                     coDevWirCliStsPktsRxMCS2,
@@ -2163,7 +3061,15 @@ colubrisDeviceWirelessClientStatsHTRatesMIBGroup OBJECT-GROUP
                     coDevWirCliStsPktsRxMCS12,
                     coDevWirCliStsPktsRxMCS13,
                     coDevWirCliStsPktsRxMCS14,
-                    coDevWirCliStsPktsRxMCS15
+                    coDevWirCliStsPktsRxMCS15,
+                    coDevWirCliStsPktsRxMCS16,
+                    coDevWirCliStsPktsRxMCS17,
+                    coDevWirCliStsPktsRxMCS18,
+                    coDevWirCliStsPktsRxMCS19,
+                    coDevWirCliStsPktsRxMCS20,
+                    coDevWirCliStsPktsRxMCS21,
+                    coDevWirCliStsPktsRxMCS22,
+                    coDevWirCliStsPktsRxMCS23
                 }
     STATUS      current
     DESCRIPTION "A collection of objects for wireless HT
@@ -2186,5 +3092,73 @@ colubrisDeviceWirelessDetectedStationMIBGroup OBJECT-GROUP
     STATUS      current
     DESCRIPTION "A collection of objects for detected station information."
     ::= { colubrisDeviceWirelessMIBGroups 12 }
+
+colubrisDeviceWirelessClientStatsVHTRatesMIBGroup OBJECT-GROUP
+    OBJECTS     {
+                    coDevWirCliStsPktsTxNSS1VHTMCS0,
+                    coDevWirCliStsPktsTxNSS1VHTMCS1,
+                    coDevWirCliStsPktsTxNSS1VHTMCS2,
+                    coDevWirCliStsPktsTxNSS1VHTMCS3,
+                    coDevWirCliStsPktsTxNSS1VHTMCS4,
+                    coDevWirCliStsPktsTxNSS1VHTMCS5,
+                    coDevWirCliStsPktsTxNSS1VHTMCS6,
+                    coDevWirCliStsPktsTxNSS1VHTMCS7,
+                    coDevWirCliStsPktsTxNSS1VHTMCS8,
+                    coDevWirCliStsPktsTxNSS1VHTMCS9,
+                    coDevWirCliStsPktsTxNSS2VHTMCS0,
+                    coDevWirCliStsPktsTxNSS2VHTMCS1,
+                    coDevWirCliStsPktsTxNSS2VHTMCS2,
+                    coDevWirCliStsPktsTxNSS2VHTMCS3,
+                    coDevWirCliStsPktsTxNSS2VHTMCS4,
+                    coDevWirCliStsPktsTxNSS2VHTMCS5,
+                    coDevWirCliStsPktsTxNSS2VHTMCS6,
+                    coDevWirCliStsPktsTxNSS2VHTMCS7,
+                    coDevWirCliStsPktsTxNSS2VHTMCS8,
+                    coDevWirCliStsPktsTxNSS2VHTMCS9,
+                    coDevWirCliStsPktsTxNSS3VHTMCS0,
+                    coDevWirCliStsPktsTxNSS3VHTMCS1,
+                    coDevWirCliStsPktsTxNSS3VHTMCS2,
+                    coDevWirCliStsPktsTxNSS3VHTMCS3,
+                    coDevWirCliStsPktsTxNSS3VHTMCS4,
+                    coDevWirCliStsPktsTxNSS3VHTMCS5,
+                    coDevWirCliStsPktsTxNSS3VHTMCS6,
+                    coDevWirCliStsPktsTxNSS3VHTMCS7,
+                    coDevWirCliStsPktsTxNSS3VHTMCS8,
+                    coDevWirCliStsPktsTxNSS3VHTMCS9,
+                    coDevWirCliStsPktsRxNSS1VHTMCS0,
+                    coDevWirCliStsPktsRxNSS1VHTMCS1,
+                    coDevWirCliStsPktsRxNSS1VHTMCS2,
+                    coDevWirCliStsPktsRxNSS1VHTMCS3,
+                    coDevWirCliStsPktsRxNSS1VHTMCS4,
+                    coDevWirCliStsPktsRxNSS1VHTMCS5,
+                    coDevWirCliStsPktsRxNSS1VHTMCS6,
+                    coDevWirCliStsPktsRxNSS1VHTMCS7,
+                    coDevWirCliStsPktsRxNSS1VHTMCS8,
+                    coDevWirCliStsPktsRxNSS1VHTMCS9,
+                    coDevWirCliStsPktsRxNSS2VHTMCS0,
+                    coDevWirCliStsPktsRxNSS2VHTMCS1,
+                    coDevWirCliStsPktsRxNSS2VHTMCS2,
+                    coDevWirCliStsPktsRxNSS2VHTMCS3,
+                    coDevWirCliStsPktsRxNSS2VHTMCS4,
+                    coDevWirCliStsPktsRxNSS2VHTMCS5,
+                    coDevWirCliStsPktsRxNSS2VHTMCS6,
+                    coDevWirCliStsPktsRxNSS2VHTMCS7,
+                    coDevWirCliStsPktsRxNSS2VHTMCS8,
+                    coDevWirCliStsPktsRxNSS2VHTMCS9,
+                    coDevWirCliStsPktsRxNSS3VHTMCS0,
+                    coDevWirCliStsPktsRxNSS3VHTMCS1,
+                    coDevWirCliStsPktsRxNSS3VHTMCS2,
+                    coDevWirCliStsPktsRxNSS3VHTMCS3,
+                    coDevWirCliStsPktsRxNSS3VHTMCS4,
+                    coDevWirCliStsPktsRxNSS3VHTMCS5,
+                    coDevWirCliStsPktsRxNSS3VHTMCS6,
+                    coDevWirCliStsPktsRxNSS3VHTMCS7,
+                    coDevWirCliStsPktsRxNSS3VHTMCS8,
+                    coDevWirCliStsPktsRxNSS3VHTMCS9
+                }
+    STATUS      current
+    DESCRIPTION "A collection of objects for wireless VHT
+                 client statistical rates information."
+    ::= { colubrisDeviceWirelessMIBGroups 13 }
 
 END
