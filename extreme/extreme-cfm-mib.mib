@@ -1,0 +1,405 @@
+-- ################################################################################
+
+EXTREME-CFM-MIB DEFINITIONS ::= BEGIN
+
+-- ******************************************************************
+-- Extreme CFM MIB
+-- ******************************************************************
+
+IMPORTS
+    NOTIFICATION-TYPE, MODULE-IDENTITY, OBJECT-TYPE,
+    Unsigned32               FROM SNMPv2-SMI    -- [RFC2578]
+    TEXTUAL-CONVENTION,
+    RowStatus, DisplayString FROM SNMPv2-TC     -- [RFC2579]
+    InterfaceIndexOrZero     FROM IF-MIB        -- [RFC2863]
+    extremeAgent             FROM EXTREME-BASE-MIB
+    dot1agCfmMdIndex, dot1agCfmMaIndex, dot1agCfmMepIdentifier,
+    Dot1afCfmIndexIntegerNextFree,
+    Dot1agCfmMepId           FROM IEEE8021-CFM-MIB   -- [IEEE 802.1ag]
+    ;
+    extremeCfm MODULE-IDENTITY
+        LAST-UPDATED "201505180000Z" -- 18 may 2015
+        ORGANIZATION "Extreme Networks, Inc."
+        CONTACT-INFO "www.extremenetworks.com"
+        DESCRIPTION
+            "Connectivity Fault Management Extreme Objects MIB.
+             This is an extension to IEEE8021-CFM-MIB for all 
+             extreme specific CFM objects.    
+            "
+        REVISION     "201505180000Z"
+        DESCRIPTION
+            "Initial creation of this MIB."
+        ::= { extremeAgent 47 }
+
+-- *****************************************************************************
+-- Object definitions in the CFM Groups MIB Module
+-- *****************************************************************************
+extremeCfmNotifications  OBJECT IDENTIFIER ::= { extremeCfm 0 }
+extremeCfmMibObjects     OBJECT IDENTIFIER ::= { extremeCfm 1 }
+extremeCfmMibConformance OBJECT IDENTIFIER ::= { extremeCfm 2 }
+
+-- *****************************************************************************
+-- Groups in the CFM Extreme Objects MIB Module
+-- *****************************************************************************
+extremeCfmGroup           OBJECT IDENTIFIER ::= { extremeCfmMibObjects 1 }
+
+-- ******************************************************************
+-- Textual conventions
+-- ******************************************************************
+
+ExtremeCfmGroupOperStatus ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+       "Indicates the operational status of a group associated with a MEP on a 
+        port of an association in a given domain:
+
+        down(1)    indicates group is non-operational. 
+        up(2)      indicates group is operational. 
+       "
+    SYNTAX      INTEGER {
+                  down  (1),
+                  up    (2)
+                }
+
+-- ******************************************************************
+-- CFM Group Next Index 
+-- ******************************************************************
+
+extremeCfmGroupNextIndexTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeCfmGroupNextIndexEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "This object contains an unused value for extremeCfmGroupIndex in
+        the extremeCfmGroupTable, or a zero to indicate that none exist.
+       "
+    ::= { extremeCfmGroup 1 }
+
+extremeCfmGroupNextIndexEntry OBJECT-TYPE
+    SYNTAX      ExtremeCfmGroupNextIndexEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "The conceptual row of extremeCfmGroupNextIndexTable."
+    INDEX { dot1agCfmMdIndex,
+            dot1agCfmMaIndex,
+            dot1agCfmMepIdentifier
+          }
+    ::= { extremeCfmGroupNextIndexTable 1 }
+
+ExtremeCfmGroupNextIndexEntry ::= SEQUENCE {
+      extremeCfmGroupNextIndex                Dot1afCfmIndexIntegerNextFree
+    }
+
+extremeCfmGroupNextIndex
+OBJECT-TYPE
+    SYNTAX          Dot1afCfmIndexIntegerNextFree
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+       "Value to be used as the index of the Group table entries, for this
+        Maintenance association End Point Identifier when the management 
+        entity wants to create a new row in that table.
+       "
+    ::= { extremeCfmGroupNextIndexEntry 1 }
+
+-- *****************************************************************************
+-- CFM Group Configuration
+-- *****************************************************************************
+
+extremeCfmGroupTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeCfmGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "This table includes configuration objects and operations for the 
+        Group function, mainly used by the registered clients like ERPS,EAPS 
+        to know link detection failure through CFM.
+
+        Each row in the table represents a Group for the defined MEP. This 
+        table uses four indices. The first three indices are the indices of 
+        the Maintenance Domain, MaNet, and MEP tables. The fourth index is the 
+        specific Group on the selected MEP. A Group is created on an existing MEP 
+        using extremeCfmGroupIndex in the row creation.
+
+        Only few objects are writable in this table. 
+
+        The writable objects in this table need to be persistent upon reboot 
+        or restart of a device. 
+       "
+    ::= { extremeCfmGroup 2 }
+
+extremeCfmGroupEntry OBJECT-TYPE
+    SYNTAX      ExtremeCfmGroupEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "The conceptual row of extremeCfmGroupTable."
+    INDEX { dot1agCfmMdIndex,
+            dot1agCfmMaIndex,
+            dot1agCfmMepIdentifier,
+            extremeCfmGroupIndex
+          }
+    ::= { extremeCfmGroupTable 1 }
+
+ExtremeCfmGroupEntry ::= SEQUENCE {
+      extremeCfmGroupIndex                    Unsigned32,
+      extremeCfmGroupName                     DisplayString,
+      extremeCfmGroupStatus                   ExtremeCfmGroupOperStatus,
+      extremeCfmMepIfIndex                    InterfaceIndexOrZero,
+      extremeCfmGroupRemoteMEPs               DisplayString,
+      extremeCfmGroupClients                  DisplayString,
+      extremeCfmGroupRowStatus                RowStatus
+    }
+
+extremeCfmGroupIndex
+OBJECT-TYPE
+    SYNTAX      Unsigned32(1..4294967295)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "An index to the CFM Groups configuration table which indicates
+        the specific group associated with a MEP.
+
+        extremeCfmGroupTableNextIndex needs to be inspected to find an
+        available index for row-creation.
+
+        Referential integrity is necessary, i.e., the index needs to be
+        persistent upon a reboot or restart of a device.  The index
+        is never reused for other groups on the same MEP while this
+        group is active.  The index value keeps increasing until it
+        wraps to 0. This is to facilitate access control based
+        on a fixed index for an EMS, since the index is not reused.
+       "
+    ::= { extremeCfmGroupEntry 1 }
+
+extremeCfmGroupName
+OBJECT-TYPE
+    SYNTAX          DisplayString (SIZE(1..31))
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+       "The name of a CFM group.
+        Group name can have alpha-numeric, '-' and '_'.
+        It should start with alphabet. 
+       "
+    ::= { extremeCfmGroupEntry 2 }
+
+extremeCfmGroupStatus
+OBJECT-TYPE
+    SYNTAX          ExtremeCfmGroupOperStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+       "Whether the group is operational or not.
+
+        The status is set based on associated MEP status and is informed to
+        registered clients. 
+        It is set to 'Up' when the group is operational.
+        It is set to 'Down' when the group is non-operational.
+       "
+    ::= { extremeCfmGroupEntry 3 }
+
+extremeCfmMepIfIndex
+OBJECT-TYPE
+    SYNTAX          InterfaceIndexOrZero
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+       "This object is the interface index of the interface either a
+        bridge port, or an aggregated IEEE 802.1 link within a bridge
+        port, to which the MEP and hence the group is attached.
+
+        Upon a restart of the system, the system SHALL, if necessary,
+        change the value of this variable so that it indexes the
+        entry in the interface table with the same value of ifAlias
+        that it indexed before the system restart.  If no such
+        entry exists, then the system SHALL set this variable to 0.
+       "
+    ::= { extremeCfmGroupEntry 4 }
+
+extremeCfmGroupRemoteMEPs
+OBJECT-TYPE
+    SYNTAX          DisplayString (SIZE(0..256))
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+       "Lists the Remote MEPs associated with a group.
+        Not all Remote MEPs of an MA may be associated with a group.
+       "
+    ::= { extremeCfmGroupEntry 5 }
+
+extremeCfmGroupClients
+OBJECT-TYPE
+    SYNTAX          DisplayString (SIZE(0..256))
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+       "Lists all the registered clients with a group.
+        The clients are informed with link failure or recovery through 
+        group status notifications.
+       "
+    ::= { extremeCfmGroupEntry 6 }
+
+extremeCfmGroupRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+       "The status of the row.
+        All columns must have a valid value before a row can be activated.
+       "
+   ::= { extremeCfmGroupEntry 7 }
+
+
+-- ******************************************************************
+-- The Group RMEP Database Table
+-- ******************************************************************
+
+extremeCfmGroupMepDbTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeCfmGroupMepDbEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "The group Remote MEP Database. A database, maintained by every group, that
+        maintains information about other MEPs in that group. 
+       "
+    ::= { extremeCfmGroup 3 }
+
+extremeCfmGroupMepDbEntry OBJECT-TYPE
+    SYNTAX      ExtremeCfmGroupMepDbEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "The Group Remote MEP Database table entry."
+    INDEX { dot1agCfmMdIndex,
+            dot1agCfmMaIndex,
+            dot1agCfmMepIdentifier,
+            extremeCfmGroupIndex,
+            extremeCfmGroupMepDbRMepId
+          }
+    ::= { extremeCfmGroupMepDbTable 1 }
+
+ExtremeCfmGroupMepDbEntry ::= SEQUENCE {
+      extremeCfmGroupMepDbRMepId        Dot1agCfmMepId,
+      extremeCfmGroupMepDbRowStatus     RowStatus
+    }
+
+extremeCfmGroupMepDbRMepId OBJECT-TYPE
+    SYNTAX      Dot1agCfmMepId
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+       "Maintenance association End Point Identifier of a remote MEP
+        whose information from the group MEP Database is to be returned.
+       "
+    ::= { extremeCfmGroupMepDbEntry 1 }
+
+extremeCfmGroupMepDbRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+       "The status of the row.
+        All columns must have a valid value before a row can be activated.
+       "
+   ::= { extremeCfmGroupMepDbEntry 2 }
+
+-- *****************************************************************************
+-- NOTIFICATIONS (TRAPS)
+-- *****************************************************************************
+
+extremeCfmGroupStatusDownUpAlarm NOTIFICATION-TYPE
+    OBJECTS     {
+                extremeCfmGroupStatus
+                }
+    STATUS      current
+    DESCRIPTION
+       "A Group status is changed. A notification (DownUpAlarm)
+        is sent to the management entity with the OID of the Group
+        that has detected the status change.
+
+        The management entity receiving the notification can identify
+        the system from the network source address of the
+        notification, and can identify the Group reporting the status 
+        by the indices in the OID of the extremeCfmGroupStatus
+        variable in the notification:
+
+           dot1agCfmMdIndex - Also the index of the MEP's
+                              Maintenance Domain table entry
+                              (dot1agCfmMdTable).
+           dot1agCfmMaIndex - Also an index (with the MD table index)
+                              of the MEP's Maintenance Association
+                              network table entry
+                              (dot1agCfmMaNetTable), and (with the MD
+                              table index and component ID) of the
+                              MEP's MA component table entry
+                              (dot1agCfmMaCompTable).
+           dot1agCfmMepIdentifier - MEP Identifier and final index
+                              into the MEP table (dot1agCfmMepTable).
+           extremeCfmGroupIndex -Group Identifier and final index
+                              into the Group table (extremeCfmGroupTable).
+       "
+    ::= { extremeCfmNotifications 1 }
+
+-- ******************************************************************
+-- Extreme CFM MIB Module - Conformance Information
+-- ******************************************************************
+
+extremeCfmMibCompliances OBJECT IDENTIFIER ::= { extremeCfmMibConformance 1 }
+extremeCfmMibGroups      OBJECT IDENTIFIER ::= { extremeCfmMibConformance 2 }
+
+-- ******************************************************************
+-- Extreme CFM MIB Units of conformance
+-- ******************************************************************
+
+extremeCfmMepGroup OBJECT-GROUP
+    OBJECTS {
+      extremeCfmGroupNextIndex,
+      extremeCfmGroupName,
+      extremeCfmGroupStatus,
+      extremeCfmMepIfIndex,
+      extremeCfmGroupRemoteMEPs,
+      extremeCfmGroupClients,
+      extremeCfmGroupRowStatus
+    }
+    STATUS      current
+    DESCRIPTION
+       "Objects for the cfm group."
+    ::= { extremeCfmMibGroups 1 }
+
+extremeCfmMepDbGroup OBJECT-GROUP
+    OBJECTS {
+      extremeCfmGroupMepDbRowStatus
+    }
+    STATUS      current
+    DESCRIPTION
+       "Objects for the cfm group Remote MEP."
+    ::= { extremeCfmMibGroups 2 }
+
+extremeCfmNotificationsGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+      extremeCfmGroupStatusDownUpAlarm
+    }
+    STATUS      current
+    DESCRIPTION
+       "Objects for the Notifications group."
+    ::= { extremeCfmMibGroups 3 }
+
+-- ******************************************************************
+-- MIB Module Compliance statements
+-- ******************************************************************
+
+extremeCfmCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+       "The compliance statement for support of the Extreme CFM MIB module."
+    MODULE
+        MANDATORY-GROUPS {
+            extremeCfmMepGroup,
+            extremeCfmMepDbGroup,
+            extremeCfmNotificationsGroup
+         }
+
+    ::= { extremeCfmMibCompliances 1 }
+END

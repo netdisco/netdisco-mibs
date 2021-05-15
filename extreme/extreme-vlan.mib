@@ -1,12 +1,3 @@
---/* 
--- *
--- * Copyright (c) 1997 - 2002 by Extreme Networks Inc.
--- * 
--- *	  Extreme Networks
--- *      http://www.extremenetworks.com
--- *
--- */
-
 -- ################################################################################
 
 EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
@@ -91,17 +82,20 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
 
     IMPORTS
         MODULE-IDENTITY             FROM SNMPv2-SMI
-        RowStatus, TruthValue       FROM SNMPv2-TC
-        DisplayString               FROM RFC1213-MIB
+        RowStatus, TruthValue,
+        MacAddress                  FROM SNMPv2-TC
+        DisplayString               FROM SNMPv2-TC
         OBJECT-TYPE                 FROM SNMPv2-SMI
         Integer32, IpAddress        FROM SNMPv2-SMI
         extremeAgent                FROM EXTREME-BASE-MIB
         PortList                    FROM EXTREME-BASE-MIB
         extremeSlotNumber           FROM EXTREME-SYSTEM-MIB
-        Counter64                   FROM SNMPv2-SMI;
+        Counter64                   FROM SNMPv2-SMI
+        InterfaceIndex              FROM IF-MIB
+        InterfaceIndexOrZero        FROM IF-MIB;
 
     extremeVlan MODULE-IDENTITY
-        LAST-UPDATED "0905240000Z"
+        LAST-UPDATED "201310230000Z"
         ORGANIZATION "Extreme Networks, Inc."
         CONTACT-INFO "www.extremenetworks.com"
         DESCRIPTION "Extreme Virtual LAN objects"
@@ -118,8 +112,9 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     extremeVlanOpaqueGroup      OBJECT IDENTIFIER ::= { extremeVlan 6 }
     extremeVlanStackGroup       OBJECT IDENTIFIER ::= { extremeVlan 7 }
     extremeVlanStatsGroup       OBJECT IDENTIFIER ::= { extremeVlan 8 }
-    extremeVlanAggregationGroup        OBJECT IDENTIFIER ::= { extremeVlan 9 }
+    extremeVlanAggregationGroup OBJECT IDENTIFIER ::= { extremeVlan 9 }
     extremeVlanTranslationGroup OBJECT IDENTIFIER ::= { extremeVlan 10 }
+    extremePrivateVlan          OBJECT IDENTIFIER ::= { extremeVlan 11 }
 
     --    
     --
@@ -774,7 +769,7 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     ::= { extremeVlanIpEntry 4 }
 
     -- 
-    -- Protocol Definition Table (extremeware)
+    -- Protocol Definition Table
     --
     -- we choose to define our own table as existing tables are 
     -- overcomplex (RMON Protocol MIB, etc.)
@@ -806,12 +801,17 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     ::= { extremeVlanProtocolTable 1 }
 
     ExtremeVlanProtocolEntry ::= SEQUENCE {
-        extremeVlanProtocolIndex           INTEGER,
-        extremeVlanProtocolIdIndex         INTEGER,
-        extremeVlanProtocolName            DisplayString,
-        extremeVlanProtocolDllEncapsType   INTEGER,
-        extremeVlanProtocolId              INTEGER,
-        extremeVlanProtocolStatus          RowStatus
+        extremeVlanProtocolIndex            INTEGER,
+        extremeVlanProtocolIdIndex          INTEGER,
+        extremeVlanProtocolName             DisplayString,
+        extremeVlanProtocolDllEncapsType    INTEGER,
+        extremeVlanProtocolId               INTEGER,
+        extremeVlanProtocolStatus           RowStatus,
+        extremeVlanProtocolDestAddress      MacAddress,
+        extremeVlanProtocolDestAddressValid TruthValue,
+        extremeVlanProtocolUserFieldOffset  Integer32,
+        extremeVlanProtocolUserFieldValue   OCTET STRING,
+        extremeVlanProtocolUserFieldMask    OCTET STRING
     }
         
     extremeVlanProtocolIndex OBJECT-TYPE
@@ -827,19 +827,19 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     ::= { extremeVlanProtocolEntry 1 }
 
     extremeVlanProtocolIdIndex OBJECT-TYPE
-        SYNTAX INTEGER (0..6)
+        SYNTAX INTEGER (0..16)
         MAX-ACCESS  read-create
         STATUS current
         DESCRIPTION
             "An index representing a particular protocol ID
             within a protocol grouping. A limited number of
             protocol IDs may be defined per 
-            extremeVlanProtocolIndex (up to 6 in ExtremeWare).
-            0 is used for internal purposes."
+            extremeVlanProtocolIndex (up to 6 in ExtremeWare
+            and 16 in EXOS). 0 is used for internal purposes."
     ::= { extremeVlanProtocolEntry 2 }
 
     extremeVlanProtocolName OBJECT-TYPE
-        SYNTAX  DisplayString (SIZE(0..31))
+        SYNTAX  DisplayString (SIZE(1..32))
         MAX-ACCESS  read-create
         STATUS current
         DESCRIPTION
@@ -891,6 +891,57 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
             row installation and removal conventions."
     ::= { extremeVlanProtocolEntry 6 }
 
+    extremeVlanProtocolDestAddress OBJECT-TYPE
+        SYNTAX      MacAddress
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION
+            "The destination MAC Address of the protocol. If the protocol
+             does not have a defined destination MAC address, then
+             extremeVlanProtocolDestAddressValid must be set to false."
+        DEFVAL      { '000000000000'H }
+        ::= { extremeVlanProtocolEntry 7 }
+
+    extremeVlanProtocolDestAddressValid OBJECT-TYPE
+        SYNTAX      TruthValue
+        MAX-ACCESS  read-create
+        STATUS      current
+        DESCRIPTION
+            "Indicates whether the protocol defines a destination MAC address
+             or not. If the protocol defines a destination MAC address, this
+             field should be set to true and
+             extremeVlanProtocolDestAddressValid must be set to the
+             destination MAC address for the protocol."
+        DEFVAL      { false }
+        ::= { extremeVlanProtocolEntry 8 }
+
+    extremeVlanProtocolUserFieldOffset OBJECT-TYPE
+        SYNTAX     Integer32 (0..65535)
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The offset of the user defined field, from the start of the PDU."
+        DEFVAL     { 0 }
+        ::= { extremeVlanProtocolEntry 9 }
+
+    extremeVlanProtocolUserFieldValue OBJECT-TYPE
+        SYNTAX     OCTET STRING (SIZE(0..16))
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The value of the user defined field. If the protocol does not use
+             user defined fields, this object must be set to zero length."
+        DEFVAL     { ''H }
+        ::= { extremeVlanProtocolEntry 10 }
+
+    extremeVlanProtocolUserFieldMask OBJECT-TYPE
+        SYNTAX     OCTET STRING (SIZE(0..16))
+        MAX-ACCESS read-create
+        STATUS     current
+        DESCRIPTION
+            "The mask for the user defined field. The length of this object
+             must be the same as that of extremeVlanProtocolUserFieldValue."
+        ::= { extremeVlanProtocolEntry 11 }
 
     --
     -- Protocol-based VLAN Table (extremeware)
@@ -960,12 +1011,14 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
 
 
     --
-    -- Protocol Definition Table (EXOS, supporting walk only )
+    -- Protocol Definition Table (Deprecated, supporting walk only )
+    -- This table will display only entries that do not define a destination
+    -- address and do not define an user field
     --
     extremeVlanProtocolDefTable OBJECT-TYPE
         SYNTAX  SEQUENCE OF ExtremeVlanProtocolDefEntry
         MAX-ACCESS  not-accessible
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "Table of defined combinations of protocols and
             DLLEncaps type. This table will
@@ -976,7 +1029,7 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     extremeVlanProtocolDefEntry OBJECT-TYPE
         SYNTAX  ExtremeVlanProtocolDefEntry
         MAX-ACCESS  not-accessible
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "One member representing combination of protocol and
             DLLEncaps Type."
@@ -993,9 +1046,9 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     }
 
     extremeVlanProtocolDefName OBJECT-TYPE
-        SYNTAX  DisplayString (SIZE(0..31))
+        SYNTAX  DisplayString (SIZE(1..32))
         MAX-ACCESS  not-accessible
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "A human-readable string representing this protocol.
             A ExtremeVlanProtocolEntry with 
@@ -1007,7 +1060,7 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
         SYNTAX  INTEGER { any(1), ethertype(2), 
                           llc(3), llcSnapEthertype(4), none(5) }
         MAX-ACCESS  not-accessible
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "Represents the type of data-link encapsulation 
             in which the protocol designated by 
@@ -1024,7 +1077,7 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     extremeVlanProtocolDefValue OBJECT-TYPE
         SYNTAX  INTEGER (0..65535)
         MAX-ACCESS  not-accessible
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "The protocol ID: for entries of type ethertype(2)
             or llcSnapEthertype(4) this represents a 16-bit
@@ -1038,7 +1091,7 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
     extremeVlanProtocolDefStatus OBJECT-TYPE
         SYNTAX RowStatus
         MAX-ACCESS  read-only
-        STATUS current
+        STATUS deprecated
         DESCRIPTION
             "The row status variable, used according to
             row installation and removal conventions."
@@ -1134,6 +1187,8 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
             extremeVlanOpaqueTaggedPorts
             PortList,
             extremeVlanOpaqueUntaggedPorts
+            PortList,
+            extremeVlanOpaqueTranslatedPorts
             PortList
         }
 
@@ -1157,6 +1212,17 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
              A 1 means that the port is an untagged port in that vlan. 
             The bit value for a port is 0 otherwise."
     ::= { extremeVlanOpaqueEntry 2 }
+
+    extremeVlanOpaqueTranslatedPorts OBJECT-TYPE
+        SYNTAX    PortList
+        MAX-ACCESS    read-only
+        STATUS    current
+        DESCRIPTION
+            "Each bit in the octet string represents one port.
+             A 1 means that the port is a translated port in that vlan. 
+             Translated ports are also tagged ports.
+             The bit value for a port is 0 otherwise."
+    ::= { extremeVlanOpaqueEntry 3}
 
     --
     -- The Extreme Networks VLAN Opaque Control Table
@@ -1220,7 +1286,8 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
         SYNTAX INTEGER {
           addTagged(1),
           addUntagged(2),
-          delete(3)
+          delete(3),
+          addTranslated(4)
         }
         MAX-ACCESS  read-create
         STATUS current
@@ -1239,13 +1306,19 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
                delete(3)      = Ports referred to in the extremeVlanOpaqueControlPorts 
                                  variable are removed from the VLAN indicated by the index.
                                  The ports belong to the slot number as indicated by the
-                                 second index of the variable."
+                                 second index of the variable.
+
+               addTranslated(4) = Ports referred to in the extremeVlanOpaqueControlPorts 
+                                  variable are added as tagged translated ports to the 
+                                  VLAN indicated by the index.  The ports belong to the 
+                                  slot number as indicated by the second index of the
+                                  variable."
 
     ::= { extremeVlanOpaqueControlEntry 2 }
     
     extremeVlanOpaqueControlStatus OBJECT-TYPE
     SYNTAX        RowStatus                      
-    MAX-ACCESS    read-write
+    MAX-ACCESS    read-create
     STATUS        current
     DESCRIPTION
         "The status of this entry as per standard RowStatus
@@ -1703,5 +1776,162 @@ EXTREME-VLAN-MIB DEFINITIONS ::= BEGIN
                   "The row status variable, used according to
                    row installation and removal conventions."
                ::= { extremePortVlanStatsEntry 14 }
+
+    --
+    -- Private VLAN Table 
+    --
+
+       extremePvlanTable OBJECT-TYPE
+               SYNTAX      SEQUENCE OF ExtremePvlanEntry
+               MAX-ACCESS  not-accessible
+               STATUS      current
+               DESCRIPTION
+                   "This table contains the Private VLAN information."
+               ::= { extremePrivateVlan 1 }
+
+       extremePvlanEntry       OBJECT-TYPE
+              SYNTAX      ExtremePvlanEntry
+              MAX-ACCESS  not-accessible
+              STATUS      current
+              DESCRIPTION
+                  "Information about the individual private VLAN entry."
+              INDEX   { extremePvlanName }
+              ::= { extremePvlanTable 1 }
+
+       ExtremePvlanEntry ::= SEQUENCE {
+                  extremePvlanName                     DisplayString,
+                  extremePvlanVrName                   DisplayString,
+                  extremePvlanNetworkVlanIfIndex       InterfaceIndexOrZero,
+                  extremePvlanRowStatus                RowStatus
+       }
+          
+       extremePvlanName    OBJECT-TYPE
+             SYNTAX      DisplayString (SIZE(1..32))
+             MAX-ACCESS  read-create
+             STATUS      current
+             DESCRIPTION
+                 "PVLAN Name"
+             ::= { extremePvlanEntry 1 }
+
+       extremePvlanVrName  OBJECT-TYPE
+             SYNTAX      DisplayString (SIZE(1..32))
+             MAX-ACCESS  read-create
+             STATUS      current
+             DESCRIPTION
+                 "VR Name for which PVLAN belongs."
+             DEFVAL      { "VR-Default" }
+             ::= { extremePvlanEntry 2 }
+
+       extremePvlanNetworkVlanIfIndex    OBJECT-TYPE
+             SYNTAX      InterfaceIndexOrZero
+             MAX-ACCESS  read-create
+             STATUS      current
+             DESCRIPTION
+                  "VLAN IfIndex of the PVLAN Network VLAN."
+             DEFVAL      {0}
+             ::= { extremePvlanEntry 3 }
+
+       extremePvlanRowStatus   OBJECT-TYPE
+             SYNTAX        RowStatus
+             MAX-ACCESS    read-create
+             STATUS        current
+             DESCRIPTION
+                 "Supported actions taken on this row entry.
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)"
+             ::= { extremePvlanEntry 4 }
+
+    --
+    -- Private VLAN Subscriber Table
+    --
+
+        extremePvlanSubscriberTable OBJECT-TYPE
+                SYNTAX      SEQUENCE OF ExtremePvlanSubscriberEntry
+                MAX-ACCESS  not-accessible
+                STATUS      current
+                DESCRIPTION
+                   "This table contains the Private VLAN Subscriber VLAN 
+                    information.  Subscriber VLANs carry user data traffic.  
+                    This data traffic is then aggregated and forwarded out 
+                    of a single Private VLAN Network VLAN.  The Network VLAN may
+                    or may not translate the Subscriber VLAN traffic tags into a 
+                    single tag depending on the Network VLAN configuration.  
+                    Subscriber VLANs can be Isolated or Non-Isolated.  Isolated 
+                    Subscriber VLANs do not allow ports within the isolated 
+                    Subscriber VLAN to communicate with each other. Communication 
+                    is strictly with the Network VLAN ports."
+                ::= { extremePrivateVlan 2 }
+
+        extremePvlanSubscriberEntry OBJECT-TYPE
+                SYNTAX ExtremePvlanSubscriberEntry
+                MAX-ACCESS not-accessible
+                STATUS current
+                DESCRIPTION
+                    "This represents information about the individual private 
+                     VLAN Subscriber entry."
+                INDEX   { extremePvlanName, extremePvlanSubscriberVlanIfIndex }
+                ::= { extremePvlanSubscriberTable 1 }
+
+        ExtremePvlanSubscriberEntry ::= SEQUENCE {
+                  extremePvlanSubscriberVlanIfIndex           InterfaceIndex,
+                  extremePvlanSubscriberType                  INTEGER,
+                  extremePvlanSubscriberLoopBackPortIfIndex   InterfaceIndexOrZero,
+                  extremePvlanSubscriberRowStatus             RowStatus
+        }
+
+        extremePvlanSubscriberVlanIfIndex    OBJECT-TYPE
+                SYNTAX      InterfaceIndex
+                MAX-ACCESS  read-create
+                STATUS      current
+                DESCRIPTION
+                    "VLAN IfIndex of Subscriber VLAN.  Subscriber VLANs are user 
+                     facing VLANs. There can be many Subscriber VLANs associated 
+                     with a private VLAN.  User traffic from Subscriber VLANs are 
+                     aggregated and sent out the network ports of the Network VLAN. 
+                     There can only be a single Network VLAN for each Private VLAN."
+                ::= { extremePvlanSubscriberEntry 1 }
+
+        extremePvlanSubscriberType  OBJECT-TYPE
+                SYNTAX      INTEGER {
+                  nonIsolated(1),
+                  isolated(2)
+                }
+                MAX-ACCESS  read-create
+                STATUS      current
+                DESCRIPTION
+                    "Ports belonging to isolated Subscriber VLANs may not communicate 
+                     with other ports on the VLAN.  Those ports may only communicate 
+                     with the network port.  Ports belonging to non-isolated Subscriber 
+                     VLANs behave like normal VLAN ports and can communicate with all 
+                     other ports of the Subscriber in addition to the network port.
+                     This cannot be modified.  To change this value, user must delete
+                     entry and re-create." 
+                DEFVAL      {2}
+                ::= { extremePvlanSubscriberEntry 2 }
+
+        extremePvlanSubscriberLoopBackPortIfIndex    OBJECT-TYPE
+                SYNTAX      InterfaceIndexOrZero
+                MAX-ACCESS  read-create
+                STATUS      current
+                DESCRIPTION
+                        "Loopback port for the Subscriber VLAN.  Some Subscriber VLAN 
+                         configurations that have overlapping ports (ports assigned to 
+                         both Subscriber VLANS) must have a dedicated loopback ports 
+                         configured."
+                DEFVAL      {0}
+                ::= { extremePvlanSubscriberEntry 3 }
+
+        extremePvlanSubscriberRowStatus          OBJECT-TYPE
+               SYNTAX        RowStatus
+               MAX-ACCESS    read-create
+               STATUS        current
+               DESCRIPTION
+                 "Supported actions taken on this row entry.
+                     active(1),
+                     createAndGo(4),
+                     destroy(6)"
+               ::= { extremePvlanSubscriberEntry 4 }
+
 
 END

@@ -1,0 +1,181 @@
+-- ################################################################################
+
+EXTREME-ACL-MIB DEFINITIONS ::= BEGIN
+        
+        IMPORTS
+                MODULE-IDENTITY, OBJECT-TYPE, Counter64
+                     				  FROM SNMPv2-SMI
+                extremeAgent          FROM EXTREME-BASE-MIB
+                InterfaceIndexOrZero  FROM IF-MIB
+                DisplayString         FROM SNMPv2-TC
+                Integer32             FROM SNMPv2-SMI
+                Unsigned32            FROM SNMPv2-SMI
+                OBJECT-GROUP          FROM SNMPv2-CONF
+                MODULE-COMPLIANCE     FROM SNMPv2-CONF
+                extremeAclDirection   FROM EXTREME-CLEARFLOW-MIB;
+
+        extremeAcl MODULE-IDENTITY
+                LAST-UPDATED "201512110000Z"
+                ORGANIZATION "Extreme Networks, Inc."
+                CONTACT-INFO "www.extremenetworks.com"
+                DESCRIPTION "Extreme Networks Access Control List MIB"
+
+                REVISION "201512110000Z"
+                DESCRIPTION "Initial version."
+
+        ::= { extremeAgent 48 }
+
+        extremeAclObjects        OBJECT IDENTIFIER
+        ::= { extremeAcl 1 }
+        
+--
+-- Access Control List Statistics table
+--	
+
+extremeAclStatsTable OBJECT-TYPE
+            SYNTAX  SEQUENCE OF ExtremeAclStatsEntry
+            MAX-ACCESS  not-accessible
+            STATUS current
+            DESCRIPTION
+               "This table provides ingress and egress statistics information for 
+                the access control list configured for the VLAN and Port interface 
+                in the system. Here is the usage guidelines for this MIB:
+                1) To retrieve the ingress/egress statistics information for a counter 
+                   installed on a port specify extremeAclStatsPortIfIndex with the corresponding 
+                   portIfIndex and extremeAclStatsVlanIfIndex with 0.
+
+                2) To retrieve the ingress/egress statistics information for a counter 
+                   installed on a VLAN specify extremeAclStatsVlanIfIndex with the corresponding
+                   vlanIfIndex and extremeAclStatsPortIfIndex with 0.			
+
+                3) To retrieve the ingress/egress statistics information for the wild card entry 
+                   (the rule applied all ports), specify both extremeAclStatsPortIfIndex and
+                   extremeAclStatsVlanIfIndex with 0.
+
+                4) Right now we do not support acls to be installed in vlan and port. If we start
+                   supporting the same, specifiy  extremeAclStatsVlanIfIndex with the corresponding
+                   vlanIfIndex and  extremeAclStatsPortIfIndex with the corresponding 
+                   portIfIndex. 
+
+                5) To retrieve statistics for a counter applied in ingress direction, specify 
+                   extremeAclDirection with the value 0 and for statistics for a counter
+                   applied in egress direction specify extremeAclDirection, with the value 1. "
+
+        ::= { extremeAclObjects 1 }
+
+        extremeAclStatsEntry OBJECT-TYPE
+            SYNTAX  ExtremeAclStatsEntry
+            MAX-ACCESS  not-accessible
+            STATUS current
+            DESCRIPTION
+               "An entry (conceptual row) in the extremeAclStatsTable."
+        INDEX { extremeAclStatsVlanIfIndex, 
+                extremeAclStatsPortIfIndex,
+                extremeAclDirection,
+                extremeAclStatsCounterName }
+        ::= { extremeAclStatsTable 1 }
+
+        ExtremeAclStatsEntry ::=
+            SEQUENCE {
+                extremeAclStatsVlanIfIndex
+                    InterfaceIndexOrZero,
+                extremeAclStatsPortIfIndex
+                    InterfaceIndexOrZero,
+                extremeAclDirection
+                    Integer32, 
+                extremeAclStatsCounterName
+                    DisplayString,
+                extremeAclStatsPktCount
+                    Counter64,
+                extremeAclStatsByteCount
+                    Counter64
+            }
+
+        extremeAclStatsVlanIfIndex OBJECT-TYPE
+            SYNTAX  InterfaceIndexOrZero 
+            MAX-ACCESS  not-accessible
+            STATUS current
+            DESCRIPTION
+               "The IfIndex of the VLAN in which this policy/rule is applied."
+        ::= { extremeAclStatsEntry 1 }
+
+        extremeAclStatsPortIfIndex OBJECT-TYPE
+            SYNTAX  InterfaceIndexOrZero 
+            MAX-ACCESS  not-accessible
+            STATUS current
+            DESCRIPTION
+               "The IfIndex of the the port in which this policy/rule is applied."
+        ::= { extremeAclStatsEntry 2 }
+
+        extremeAclDirection OBJECT-TYPE
+            SYNTAX  Integer32 (0..1) -- Ingress direction will have value zero and egress will have one.
+            MAX-ACCESS     not-accessible
+            STATUS current
+            DESCRIPTION
+                "The ingress/egress direction to which this policy/rule is applied."
+        ::= { extremeAclStatsEntry 3 }
+
+        extremeAclStatsCounterName OBJECT-TYPE
+            SYNTAX  DisplayString (SIZE(1..32)) 
+            MAX-ACCESS     not-accessible
+            STATUS current
+            DESCRIPTION
+                "Name of the counter for which the stats is requested."
+        ::= { extremeAclStatsEntry 4 }
+
+        extremeAclStatsPktCount OBJECT-TYPE
+            SYNTAX  Counter64
+            MAX-ACCESS     read-only
+            STATUS current
+            DESCRIPTION
+                "The total number of packets that matches this rule."
+        ::= { extremeAclStatsEntry 5 }
+
+        extremeAclStatsByteCount OBJECT-TYPE
+            SYNTAX  Counter64
+            MAX-ACCESS     read-only
+            STATUS current
+            DESCRIPTION
+                "The total number of bytes that matches this rule."
+        ::= { extremeAclStatsEntry 6 }
+
+-- conformance information
+
+aclConformance OBJECT IDENTIFIER ::= { extremeAcl 9}
+
+aclGroups      OBJECT IDENTIFIER ::= { aclConformance 1}
+aclCompliances OBJECT IDENTIFIER ::= { aclConformance 2}
+
+
+aclStatistics MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+          "The compliance statement for acl statistics"
+
+    MODULE
+        MANDATORY-GROUPS { aclCounterStatsGroup }
+
+        OBJECT extremeAclStatsPktCount
+            SYNTAX  Counter64
+            MIN-ACCESS     read-only
+            DESCRIPTION
+                "The total number of packets that matches this rule."
+
+        OBJECT extremeAclStatsByteCount
+            SYNTAX  Counter64
+            MIN-ACCESS     read-only
+            DESCRIPTION
+                "The total number of bytes that matches this rule."
+
+        ::= { aclCompliances 1 }
+
+aclCounterStatsGroup OBJECT-GROUP
+    OBJECTS { extremeAclStatsPktCount,
+              extremeAclStatsByteCount }
+    STATUS   current
+    DESCRIPTION
+             "A collection of objects providing statistical information
+              for rules applied to a port or vlan"
+
+    ::= { aclGroups 1}
+END
