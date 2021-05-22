@@ -1,0 +1,443 @@
+-- ################################################################################
+
+EXTREME-IDMGR-MIB DEFINITIONS ::= BEGIN
+
+        IMPORTS
+                MODULE-IDENTITY     FROM SNMPv2-SMI
+                OBJECT-TYPE         FROM SNMPv2-SMI
+                NOTIFICATION-TYPE   FROM SNMPv2-SMI
+                Integer32           FROM SNMPv2-SMI
+                MacAddress          FROM SNMPv2-TC
+                InetAddress, InetAddressType
+                                    FROM INET-ADDRESS-MIB
+                InterfaceIndex      FROM IF-MIB
+                extremeAgent        FROM EXTREME-BASE-MIB
+                DateAndTime, AutonomousType FROM SNMPv2-TC;
+
+        extremeIdMgr MODULE-IDENTITY
+                LAST-UPDATED "201312180000Z"
+                ORGANIZATION "Extreme Networks, Inc."
+                CONTACT-INFO "www.extremenetworks.com"
+                DESCRIPTION "Extreme Identity Management MIB"
+        ::= { extremeAgent 36 }
+
+        extremeIdMgrTraps          OBJECT IDENTIFIER
+        ::= { extremeIdMgr 1 }
+
+        extremeIdMgrTrapPrefix     OBJECT IDENTIFIER
+        ::= { extremeIdMgrTraps 0 }
+
+        extremeIdMgrObjects        OBJECT IDENTIFIER
+        ::= { extremeIdMgr 2 }
+        
+        extremeIdMgrConformance    OBJECT IDENTIFIER
+        ::= { extremeIdMgr 3 }
+
+--
+-- Textual conventions
+--
+
+ExtremeIdMgrInetAddrDetectMethod ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Represents the method by which the IP address of a location
+         was detected by the device."
+    SYNTAX      BITS {
+                    ipArp(1),
+                    dhcpSnooping(2)
+                }
+
+ExtremeIdMgrInetAddrSecViolation ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Represents the security violations that have been detected
+         on an IP address."
+    SYNTAX      BITS {
+                    arp(1),
+                    dos(2),
+                    garp(3),
+                    srcIpLockdown(4),
+                    dhcpSnooping(5)
+                }
+
+--
+-- Notifications
+--
+
+        extremeIdMgrMemLevelChange NOTIFICATION-TYPE
+                OBJECTS { extremeIdMgrTrapSeverity,
+                          extremeIdMgrMemUsageLevel,
+                          extremeIdMgrMemUsage,
+                          extremeIdMgrMemMaxSize,
+                          extremeIdMgrEffectiveStaleAgingTime }
+                STATUS      current
+                DESCRIPTION
+                    "If Identity Management feature is enabled, this trap will be generated when the memory usage level changes."
+        ::= { extremeIdMgrTrapPrefix 1 }
+
+-- internal object
+        extremeIdMgrTrapSeverity OBJECT-TYPE
+                SYNTAX INTEGER {
+                    critical(1),
+                    error(2),
+                    warning(3),
+                    notice(4),
+                    info(5),
+                    debug-summary(6),
+                    debug-verbose(7),
+                    debug-data(8)
+                }
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "Severity of Identity Management Trap"
+        ::= { extremeIdMgrTraps 1}
+
+        extremeIdMgrMemUsageLevel OBJECT-TYPE
+                SYNTAX INTEGER {
+                     normal(1),
+                     high(2),
+                     critical(3),
+                     maximum(4)
+                }
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "The current memory usage level
+                    -normal(1)
+                        The Memory usage is within normal usage limits, <= 80% of configured maximum database size.
+                    -high(2)
+                        The memory usage level is high.  Memory usage is more than 80% and less than or equal to 90% of configured maximum database size.
+                    -critical(3)
+                        The memory usage level is at critical level. Memory usage is more than 90% of configured maximum database size.
+                    -maximum(4)
+                        The memory usage level reached to maximum. Memory usage almost at 98% or more of configured maximum database size."
+        ::= { extremeIdMgrTraps 2 }
+
+        extremeIdMgrMemUsage  OBJECT-TYPE
+                SYNTAX Integer32
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "The current memory usage (in KBytes)."
+        ::= { extremeIdMgrTraps 3}
+
+        extremeIdMgrMemMaxSize  OBJECT-TYPE
+                SYNTAX Integer32
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "Configured identity management maximum database memory size (in KBytes)."
+        ::= { extremeIdMgrTraps 4}
+
+        extremeIdMgrEffectiveStaleAgingTime  OBJECT-TYPE
+                SYNTAX Integer32
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "The effective stale aging time because of memory usage level change (in seconds)."
+        ::= { extremeIdMgrTraps 5}
+
+--
+-- Identity manager location table
+--
+-- Limitations for EXOS:
+-- 1. Blackhole and static FDB entries are not displayed in this table
+extremeLocationTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeLocationEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table lists all locations known to the device.
+         A location is identified by its MAC address and the port
+         on which the location was detected. A location may be discovered
+         by the device via different methods like ARP, LLDP etc. The object
+         extremeLocationDetectMethods lists the methods by which the device
+         discovered the location. Entries are added or removed from this table
+         automatically by the device whenever a location is found or lost."
+    ::= { extremeIdMgrObjects 1 }
+
+extremeLocationEntry OBJECT-TYPE
+    SYNTAX      ExtremeLocationEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the extreme location table."
+    INDEX   { extremeLocationMacAddress, extremeLocationInterface }
+    ::= { extremeLocationTable 1 }
+
+ExtremeLocationEntry ::=
+    SEQUENCE {
+        extremeLocationMacAddress       MacAddress,
+        extremeLocationInterface        InterfaceIndex,
+        extremeLocationDetectMethods    BITS,
+        extremeLocationDetectTime       DateAndTime
+    }
+
+extremeLocationMacAddress OBJECT-TYPE
+    SYNTAX      MacAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The MAC address of the location."
+    ::= { extremeLocationEntry 1 }
+
+extremeLocationInterface OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The ifIndex of the interface on which the location
+         was detected."
+    ::= { extremeLocationEntry 2 }
+
+extremeLocationDetectMethods OBJECT-TYPE
+    SYNTAX      BITS {
+                    fdbLearn(1),
+                    ipArp(2),
+                    dhcpSnooping(3),
+                    lldp(4),
+                    kerberos(5),
+                    netloginMac(6),
+                    netloginWeb(7),
+                    netloginDot1x(8)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The methods by which the location was detected
+         by the device."
+    ::= { extremeLocationEntry 3 }
+
+extremeLocationDetectTime OBJECT-TYPE
+    SYNTAX      DateAndTime
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The time at which the location was detected by the device."
+    ::= { extremeLocationEntry 4 }
+
+--
+-- Locations detection method table
+--
+
+extremeLocationDetectMethodTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeLocationDetectMethodEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table lists the locations known to the device
+         indexed by the detection method."
+    ::= { extremeIdMgrObjects 2 }
+
+extremeLocationDetectMethodEntry OBJECT-TYPE
+    SYNTAX      ExtremeLocationDetectMethodEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the extreme location detection method table."
+    INDEX {
+            extremeLocationDetectMethod,
+            extremeLocationMacAddress,
+            extremeLocationInterface
+    }
+    ::= { extremeLocationDetectMethodTable 1 }
+
+ExtremeLocationDetectMethodEntry ::=
+    SEQUENCE {
+        extremeLocationDetectMethod     INTEGER,
+        extremeLocationDetectMethodData AutonomousType
+    }
+
+extremeLocationDetectMethod OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    fdbLearn(1),
+                    ipArp(2),
+                    dhcpSnooping(3),
+                    lldp(4),
+                    kerberos(5),
+                    netloginMac(6),
+                    netloginWeb(7),
+                    netloginDot1x(8)
+                }
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The method by which the location was detected."
+    ::= { extremeLocationDetectMethodEntry 1 }
+
+extremeLocationDetectMethodData OBJECT-TYPE
+    SYNTAX      AutonomousType
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Provides additional information regarding the location. The value
+         of this object depends on the detection method:
+
+         If extremeLocationDetectMethod is lldp, extremeLocationDetectMethodData
+         shall be a pointer (rowPointer) to the entry in lldpRemTable corresponding
+         to this location.
+
+         For all other values of extremeLocationDetectMethod this object shall be 0.0."
+    ::= { extremeLocationDetectMethodEntry 2 }
+
+--
+-- Location VLAN table
+--
+
+extremeLocationVlanTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeLocationVlanEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table lists the VLANs associated with a location."
+    ::= { extremeIdMgrObjects 3 }
+
+extremeLocationVlanEntry OBJECT-TYPE
+    SYNTAX      ExtremeLocationVlanEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the extreme location VLAN table."
+    INDEX {
+            extremeLocationMacAddress,
+            extremeLocationInterface,
+            extremeLocationVlanIfIndex
+    }
+    ::= { extremeLocationVlanTable 1 }
+
+ExtremeLocationVlanEntry ::=
+    SEQUENCE {
+        extremeLocationVlanIfIndex      InterfaceIndex
+    }
+
+extremeLocationVlanIfIndex OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The interface index of the VLAN on which the location was detected."
+    ::= { extremeLocationVlanEntry 1 }
+
+--
+-- Location IP address table
+--
+
+extremeLocationInetAddrTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeLocationInetAddrEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table lists the IP addresses associated with a location."
+    ::= { extremeIdMgrObjects 4 }
+
+extremeLocationInetAddrEntry OBJECT-TYPE
+    SYNTAX      ExtremeLocationInetAddrEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the extreme location IP addresses table."
+    INDEX {
+            extremeLocationMacAddress,
+            extremeLocationInterface,
+            extremeLocationVlanIfIndex,
+            extremeLocationInetAddrType,
+            extremeLocationInetAddr
+    }
+    ::= { extremeLocationInetAddrTable 1 }
+
+ExtremeLocationInetAddrEntry ::=
+    SEQUENCE {
+        extremeLocationInetAddrType             InetAddressType,
+        extremeLocationInetAddr                 InetAddress,
+        extremeLocationInetAddrDetectMethod     ExtremeIdMgrInetAddrDetectMethod,
+        extremeLocationInetAddrSecViolations    ExtremeIdMgrInetAddrSecViolation
+    }
+
+extremeLocationInetAddrType OBJECT-TYPE
+    SYNTAX      InetAddressType
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This object indicates the type of IP address contained
+         by extremeLocationInetAddr."
+    ::= { extremeLocationInetAddrEntry 1 }
+
+extremeLocationInetAddr OBJECT-TYPE
+    SYNTAX      InetAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The IP address detected at the location."
+    ::= { extremeLocationInetAddrEntry 2 }
+
+extremeLocationInetAddrDetectMethod OBJECT-TYPE
+    SYNTAX      ExtremeIdMgrInetAddrDetectMethod
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object indicates the method by which the IP address was
+         detected on this location by the device."
+    ::= { extremeLocationInetAddrEntry 3 }
+
+extremeLocationInetAddrSecViolations OBJECT-TYPE
+    SYNTAX      ExtremeIdMgrInetAddrSecViolation
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The object lists the security violations that were detected
+         on the IP address."
+    ::= { extremeLocationInetAddrEntry 4 }
+
+--
+-- Inverse location IP address table
+--
+
+extremeLocationInetAddrInvTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ExtremeLocationInetAddrInvEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "This table lists the locations associated with an IP address."
+    ::= { extremeIdMgrObjects 5 }
+
+extremeLocationInetAddrInvEntry OBJECT-TYPE
+    SYNTAX      ExtremeLocationInetAddrInvEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the extreme inverse location IP addresses table."
+    INDEX {
+            extremeLocationInetAddrType,
+            extremeLocationInetAddr,
+            extremeLocationVlanIfIndex,
+            extremeLocationInterface,
+            extremeLocationMacAddress
+    }
+    ::= { extremeLocationInetAddrInvTable 1 }
+
+ExtremeLocationInetAddrInvEntry ::=
+    SEQUENCE {
+        extremeLocationInetAddrInvDetectMethod  ExtremeIdMgrInetAddrDetectMethod,
+        extremeLocationInetAddrInvSecViolations ExtremeIdMgrInetAddrSecViolation
+    }
+
+extremeLocationInetAddrInvDetectMethod OBJECT-TYPE
+    SYNTAX      ExtremeIdMgrInetAddrDetectMethod
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "This object indicates the method by which the IP address was
+         detected on this location by the device."
+    ::= { extremeLocationInetAddrInvEntry 1 }
+
+extremeLocationInetAddrInvSecViolations OBJECT-TYPE
+    SYNTAX      ExtremeIdMgrInetAddrSecViolation
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The object lists the security violations that were detected
+         on the IP address."
+    ::= { extremeLocationInetAddrInvEntry 2 }
+
+END
