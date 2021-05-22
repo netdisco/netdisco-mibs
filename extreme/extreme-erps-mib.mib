@@ -1,0 +1,982 @@
+-- ################################################################################
+
+EXTREME-ERPS-MIB DEFINITIONS ::= BEGIN
+
+        IMPORTS
+                MODULE-IDENTITY         FROM SNMPv2-SMI
+                MODULE-COMPLIANCE       FROM SNMPv2-CONF
+                OBJECT-GROUP            FROM SNMPv2-CONF
+		        OBJECT-TYPE             FROM SNMPv2-SMI
+                NOTIFICATION-GROUP      FROM SNMPv2-CONF
+                NOTIFICATION-TYPE       FROM SNMPv2-SMI
+                Integer32               FROM SNMPv2-SMI
+                Counter32               FROM SNMPv2-SMI
+                InterfaceIndex          FROM IF-MIB
+                InterfaceIndexOrZero    FROM IF-MIB
+                DisplayString           FROM SNMPv2-TC
+                RowStatus               FROM SNMPv2-TC
+                TEXTUAL-CONVENTION      FROM SNMPv2-TC
+                TruthValue              FROM SNMPv2-TC
+                VlanId                  FROM Q-BRIDGE-MIB  -- [RFC4363]
+                extremeAgent            FROM EXTREME-BASE-MIB;
+
+    extremeErps MODULE-IDENTITY
+        LAST-UPDATED "201801180000Z" -- January 18, 2018
+        ORGANIZATION "Extreme Networks, Inc."
+        CONTACT-INFO "www.extremenetworks.com"
+        DESCRIPTION "Ethernet Ring Protection Switching information. This
+                     MIB provides a set of known, standard setting to get
+                     the information on protected Vlan entries per ERPS doamin,
+                     ERPS rign information, the configration information related
+                     to the monitoring entries of the rign entry, ERPS ring stats,
+                     ERPS global information, and ERPS notification."
+
+        REVISION     "201801180000Z" -- January 18, 2018
+        DESCRIPTION "Changed extremeErpsGlobalMulticastTemporaryFloodingDuration from TruthValue to Counter32"
+
+        REVISION     "201703270000Z" -- March 27, 2017
+        DESCRIPTION "Added extremeErpsRingCfmRowStatus definiation"
+
+        REVISION     "201505150000Z" -- May 15, 2015
+        DESCRIPTION "The initial version of EXTREME-ERPS-MIB"               
+        ::= { extremeAgent 46 }
+
+-- -------------------------------------------------------------
+-- Textual Conventions
+-- -------------------------------------------------------------
+RingMonitorMechanismType ::= TEXTUAL-CONVENTION
+    STATUS      current
+    DESCRIPTION
+        "Object represents the type of monitoring mechanism used to monitor 
+         a Ring Entry. The value can be one of the following: 
+
+         cfm(1)        Using Connectivity Fault Management via OAM functions 
+                       and mechanisms for Ethernet based networks (ITU-T 
+                       Y.1731)
+         reserved(x)   Reserved for other monitoring mechanisms for future use" 
+    SYNTAX      INTEGER { cfm(1) }
+
+VlanType
+    ::= TEXTUAL-CONVENTION
+        STATUS      current
+        DESCRIPTION "Indicates the type of vlan, whether it is control or
+                     protected vlan, that is being added to the
+                     ERPS domain."
+        SYNTAX      INTEGER { unassigned (0),
+                              control    (1),
+                              protected  (2)
+                            }
+-- -------------------------------------------------------------
+-- Notifications
+-- -------------------------------------------------------------
+extremeErpsNotifications OBJECT IDENTIFIER ::= { extremeErps 0 }
+
+-- -------------------------------------------------------------
+-- extremeErpsProtectedVlanTable
+-- -------------------------------------------------------------
+extremeErpsProtectedVlanTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF ExtremeErpsProtectedVlanEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+      "This table contains the grouping of set of protected vlans.
+      By default a group with GroupId 64 will be created and all vlans
+      will get mapped to it."
+   ::= { extremeErps 1 }
+
+extremeErpsProtectedVlanEntry OBJECT-TYPE
+   SYNTAX      ExtremeErpsProtectedVlanEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "This entry contains vlan id and group id related to ERPS domain."
+   INDEX { extremeErpsRingName,  extremeErpsProtectedVlanName }
+   ::= { extremeErpsProtectedVlanTable 1 }
+
+ExtremeErpsProtectedVlanEntry::= SEQUENCE {
+    extremeErpsProtectedVlanName           DisplayString,
+    extremeErpsProtectedVlanId             VlanId,
+    extremeErpsProtectedVlanRowStatus      RowStatus
+}    
+
+extremeErpsProtectedVlanName OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE(1..32))
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION 
+      "The member Protected VLAN's name."
+    ::= { extremeErpsProtectedVlanEntry 1 }
+
+extremeErpsProtectedVlanId OBJECT-TYPE
+    SYNTAX      VlanId
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+      "This is the Protected vlan id which is mapped to this group."
+   ::= { extremeErpsProtectedVlanEntry 2 }
+
+extremeErpsProtectedVlanRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION 
+      "The status of this entry as per standard RowStatus conventions."
+   ::= { extremeErpsProtectedVlanEntry 3}
+
+-- -------------------------------------------------------------
+-- extremeErpsRingTable
+-- -------------------------------------------------------------
+extremeErpsRingTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF ExtremeErpsRingEntry
+    MAX-ACCESS not-accessible
+    STATUS     current
+    DESCRIPTION
+      " The table for creating and configuring the ring entries. Each entry 
+       has information about one ring in the switch."
+   ::= { extremeErps 2 }
+
+extremeErpsRingEntry OBJECT-TYPE
+   SYNTAX      ExtremeErpsRingEntry
+   MAX-ACCESS  not-accessible
+   STATUS      current
+   DESCRIPTION
+      "The ring table entry, each entry in this table contains the attributes
+       which define a ring."
+   INDEX { extremeErpsRingName }
+   ::= { extremeErpsRingTable 1 }
+      
+ExtremeErpsRingEntry ::= SEQUENCE {
+      extremeErpsRingName                        DisplayString,
+      extremeErpsRingVlanId                      VlanId,
+      extremeErpsRingEast                        InterfaceIndex,
+      extremeErpsRingWest                        InterfaceIndexOrZero,
+      extremeErpsRingRplPort                     InterfaceIndexOrZero,
+      extremeErpsRingPortBlockingOnVcRecovery    TruthValue,
+      extremeErpsRingNodeType                    INTEGER,
+      extremeErpsRingOperatingMode               INTEGER, 
+      extremeErpsRingMonitorMechanism            RingMonitorMechanismType,
+      extremeErpsRingEastStatus                  INTEGER,
+      extremeErpsRingWestStatus                  INTEGER,
+      extremeErpsRingSemState                    INTEGER,
+      extremeErpsRingNodeStatus                  BITS,
+      extremeErpsRingRplNeighbourPort            InterfaceIndexOrZero, 
+      extremeErpsRingProtectionType              INTEGER,
+      extremeRingCfmGroup1                       DisplayString,
+      extremeRingCfmGroup2                       DisplayString,
+      extremeErpsRingCfmRowStatus                RowStatus 
+}
+
+extremeErpsRingName  OBJECT-TYPE
+    SYNTAX DisplayString (SIZE(1..32))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+      "The ERPS domain name."
+    ::= { extremeErpsRingEntry 1 }
+
+extremeErpsRingVlanId OBJECT-TYPE
+    SYNTAX      VlanId
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "This object identifies the dedicated VLAN Id used by a ring for its 
+       R-APS messages communication.  
+
+       It is recommended that the,
+         * R-APS VLANs should be used only for ring R-APS message 
+           communication  and should not be used for data switching and 
+           management purposes.
+
+       It is recommended that R-APS VLAN is created first through the VLAN 
+       configuration before making the ring entry active, in order to avoid 
+       any loss of R-APS PDU Tx/Rx. 
+ 
+       It is not recommended to use the same R-APS VLAN ID for more than 
+       one ring."
+   ::= { extremeErpsRingEntry 2 }
+
+extremeErpsRingEast OBJECT-TYPE
+    SYNTAX      InterfaceIndex
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "First port of the two ring ports participating in the ring. Any 
+      interface with valid interface ID can be configured as a ring port."
+   ::= { extremeErpsRingEntry 3 }
+
+extremeErpsRingWest OBJECT-TYPE
+    SYNTAX      InterfaceIndexOrZero 
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "Second port of the two ring ports participating in the ring. Any 
+       interface with valid interface ID can be configured as a ring port.
+       On the interconnected node of a sub-ring, this port should be 
+       configured as zero."
+   ::= { extremeErpsRingEntry 4 }
+
+extremeErpsRingRplPort OBJECT-TYPE
+    SYNTAX      InterfaceIndexOrZero
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "This object identifies the RPL port of the ring. 
+
+       Valid values for this object are '0', 'IfIndex of extremeErpsRingEast' and 
+       'IfIndex of extremeErpsRingWest'. 
+
+       When a port is configured as a RPL port,  that node becomes RPL 
+       owner for that ring.
+
+       Value '0' indicates that none of the ring ports is a RPL port
+       and hence the node is not a RPL owner.
+
+       In an interconnected node of a sub-ring, the 'extremeErpsRingEast' alone 
+       can be chosen as an RPL port when administrator decides to have the 
+       interconnected node as the RPL Owner of the sub-ring.
+
+       Administrator has to ensure that, only one node in a ring is 
+       configured as RPL owner."
+   DEFVAL { 0 } 
+   ::= { extremeErpsRingEntry 5 }
+
+extremeErpsRingPortBlockingOnVcRecovery OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-write
+   STATUS      current
+   DESCRIPTION
+      "This object is applicable for the interconnected nodes of a sub-ring. 
+      This configuration helps to avoid the possibility of temporary loops 
+      getting formed in the sub-ring during the virtual channel recovery.
+      This object should be set to 'true' on only one of the interconnected
+      node of the sub-ring. (If 'extremeErpsRingPortBlockingOnVcRecovery' is 
+      configured to be 'true' on both the interconnected node of a sub-ring,
+      then that sub-ring will be temporary cutoff from the rest of network).
+      When this object value is set to 'true',  the fsErpsRingEast of this 
+      ring node will be blocked in the event of virtual channel recovery. 
+      The extremeErpsRingEast of the sub-ring will be unblocked when the RPL port
+      of the sub-ring is blocked and NRRB messages from the RPL Owner is 
+      received by this node."
+   DEFVAL { false }
+   ::= { extremeErpsRingEntry 6 }
+
+extremeErpsRingNodeType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                        rplOwner(1), 
+                        nonRplOwner(2),
+                        interConnectionNode(3)
+                        }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+      "This object identifies the node state of this ring node. 
+       If extremeErpsRingRplPort is configured for a ring node, then that ring
+       node becomes 'rplOwner', otherwise the node remains as 'nonRplOwner'."
+   ::= { extremeErpsRingEntry 7 }
+
+extremeErpsRingOperatingMode OBJECT-TYPE
+   SYNTAX      INTEGER {
+                 revertive(1), 
+                 nonRevertive(2) 
+               }
+   MAX-ACCESS  read-write
+   STATUS      current
+   DESCRIPTION
+      "This object identifies whether the ring is operating in revertive or
+       nonRevertive manner.
+       In revertive mode of operation, once the failed link recovers, the data
+       path will be switched back from protection path to working path.
+
+       In nonRevertive mode of operation, once the failed link recovers, one 
+       of the recovered link port will remain in blocked state and the data
+       still remains in the protection path. 
+
+       This object can be changed, only when the rowstatus for this ring is 
+       not active."
+   DEFVAL { revertive }
+   ::= { extremeErpsRingEntry 8 }
+
+extremeErpsRingMonitorMechanism OBJECT-TYPE
+   SYNTAX      RingMonitorMechanismType
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the type of monitoring mechanism used for 
+       detecting faults of the ring link. 
+
+       Currently 'cfm' is supported as monitoring mechanism. For 'cfm' 
+       monitoring mechanism to monitor the ring ports, appropriate down 
+       MEPs on the R-APS VLAN of the ring has to be provisioned through 
+       extremeErpsRingCfmTable.
+       For sub-rings, a Up & Down MEP on the sub-ring R-APS VLAN needs to
+       be installed on fsErpsRingEast of the interconnecting nodes using
+       the same extremeErpsRingCfmTable."
+   ::= { extremeErpsRingEntry 9 }
+
+extremeErpsRingEastStatus OBJECT-TYPE
+   SYNTAX      INTEGER {
+                        blocked(1),
+                        unblocked(2)
+                }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates ring port1's current status updated by 
+      ERPS control process of this ring. 
+      If the status is blocked then:
+          - Data traffic will be blocked on this port.
+          - R-APS messages received on this port will be given to ERPS 
+            control process but will not be forwarded.
+          - Similarly R-APS messages received at other member ports of
+            R-APS VLAN will not be forwarded on this port.
+          - Locally regenerated R-APS packets will be transmitted out of
+            this port.
+      If the status is unblocked then:
+          - Data traffic will be unblocked on this port.
+          - R-APS messages received on this port will be given to ERPS 
+            control process and will be forwarded to R-APS VLAN member ports.
+          - Similarly R-APS messages received at other member ports of R-APS
+            VLAN can be forwarded on this port."
+   ::= { extremeErpsRingEntry 10 }
+
+extremeErpsRingWestStatus OBJECT-TYPE
+   SYNTAX      INTEGER {
+                        blocked(1),
+                        unblocked(2)
+                        }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object indicates ring port2's current status updated by 
+      ERPS control process of this ring.
+      If the status is blocked then:
+          - Data traffic will be blocked on this port.
+          - R-APS messages received on this port will be given to ERPS 
+            control process but will not be forwarded.
+          - Similarly R-APS messages received at other member ports of
+            R-APS VLAN will not be forwarded on this port.
+          - Locally regenerated R-APS packets will be transmitted out of
+            this port.
+      If the status is unblocked then:
+          - Data traffic will be unblocked on this port.
+          - R-APS messages received on this port will be given to ERPS 
+            control process and will be forwarded to R-APS VLAN member ports.
+          - Similarly R-APS messages received at other member ports of R-APS
+            VLAN can be forwarded on this port.
+      For sub-rings in interconnected nodes, this object is not valid,
+      and get on this object will always return 'unblocked'."
+   ::= { extremeErpsRingEntry 11 }
+
+extremeErpsRingSemState OBJECT-TYPE
+   SYNTAX      INTEGER {
+                        disabled(0),
+                        idle(1),
+                        protection(2),
+                        manualswitch(3),
+                        forcedswitch(4),
+                        pending(5)
+                        }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+      "This object gives the node state as per the  G.8032 state event
+       machine. When ring Row status is not active or when ERPS is disabled
+       in the virtual context, this object will show 'disabled(0)' status."
+   ::= { extremeErpsRingEntry 12 }
+
+extremeErpsRingNodeStatus OBJECT-TYPE
+    SYNTAX      BITS {
+                signalFailOnEast(0),
+                signalFailOnWest(1),
+                remoteSignalFailOnEast(2),
+                remoteSignalFailOnWest(3),
+                rplBlocked(4),
+                waitToRestoreTimerRunning(5),
+                holdTimerRunning(6),
+                guardTimerRunning(7)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+      " General attributes giving the current status of the ring by specifying the
+       events/status currently present.
+
+         signalFailOnEast(0)          - Signal-failure on Ring Port 1
+         signalFailOnWest(1)          - Signal-failure on Ring Port 2
+         remoteSignalFailOnEast(2)    - Remote-signal-failure received on Ring Port 1
+         remoteSignalFailOnWest(3)    - Remote-signal-failure received on Ring Port 2
+         rplBlocked(4)                - Rpl-blocked
+         waitToRestoreTimerRunning(5) - Wait-to-restore-timer-running
+         holdTimerRunning(6)          - Hold-timer-running
+         guardTimerRunning(7)         - Guard-timer-running
+
+      Value 1 of the bit signifies the presence of the event associated with
+      that bit and value zero signifies the absence of that event
+      For example: If a signal failure is received on Ring port 1 and R-APS(SF)
+      is received on port 2, then Bit 1 and 4 will have the value as 1.
+
+      Signal failure on a port represents Port failure indication received from 
+      the monitoring entity. This does not depend on hold off timer status. 
+      If signal failure is received on ring port 1 and hold-off timer is 
+      started, then both signalFailOnEast and holdTimerRunning will have the value as 1."
+   ::= { extremeErpsRingEntry 13 }
+
+extremeErpsRingRplNeighbourPort OBJECT-TYPE
+    SYNTAX      InterfaceIndexOrZero
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+      "This object identifies the RPL Neighbour port of the ring .
+        
+       Valid values for this object are '0', 'IfIndex of extremeErpsRingEast' and 
+       'IfIndex of extremeErpsRingWest'. 
+
+       When a port is configured as a RPL Neighbour port,  that node becomes RPL 
+       Neighbour for that ring. [Reference : Section 10.1 of ITU-T G.8032 Y.1344 (03/2010)] 
+
+       Value '0' indicates that none of the ring ports is a RPL Neighbour port
+       and hence the node is not a RPL Neighbour.
+
+       In an interconnected node of a sub-ring, the 'extremeErpsRingEast' alone 
+       can be chosen as an RPL Neighbour port when administrator decides to have the 
+       interconnected node as the RPL Neighbour of the sub-ring.
+
+       Both the RPL owner and RPL Neighbor node cannot be enabled at the same 
+       Ethernet Ring Node.
+
+       Administrator has to ensure that, only one node in a ring is 
+       configured as RPL Neighbour ,and the node is adjacent to the RPL ."
+    DEFVAL { 0 }
+    ::= { extremeErpsRingEntry 14 }
+
+extremeErpsRingProtectionType OBJECT-TYPE
+   SYNTAX      INTEGER { portBased(1), serviceBased(2) }
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+      "This object specifies the type of protection being provided by this
+      ring instance. The following two protection switching types are
+      possible:
+           portBased - Port Based Protection 
+                       This ring applies the protection switching mechanism
+                       for all traffic that pass through its ring ports.
+                       Hence when ERP control process decides to block or
+                       unblock a ring port, all data traffic that passes 
+                       through that port gets affected.
+           serviceBased - Service Based Protection.
+                       This ring applies the protection switching mechanism
+                       only for the set of vlans mapped to this ring instance.
+                       Hence when ERP control process decides to block or
+                       unblock a ring port, only the data traffic of the vlans
+                       that are mapped to this ring instance and that passes 
+                       through that port gets affected.
+      
+      All ring nodes in a single ring instance must be configured with the
+      same protection type.
+
+      In a single virtual context one ring can run in port based protection
+      mode and another ring can run in service based protection mode. 
+
+      It is not recommended to configure a port as ring port in a port based
+      ring instance as well as in a service based  ring instance.
+
+      It is not recommended to configure a port as ring port in multiple port 
+      based ring instance.
+
+      The ring protection type can be modified only when the row status of 
+      the ring entry in not in service."
+   DEFVAL { portBased }
+   ::= { extremeErpsRingEntry 15 }
+
+extremeRingCfmGroup1 OBJECT-TYPE
+   SYNTAX      DisplayString (SIZE (0..255)) 
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      " Connectivity Fault Management group 1"
+   ::= { extremeErpsRingEntry 16 }
+
+extremeRingCfmGroup2 OBJECT-TYPE
+   SYNTAX      DisplayString (SIZE (0..255))
+   MAX-ACCESS  read-create
+   STATUS      current
+   DESCRIPTION
+      " Connectivity Fault Management group 2 "
+   ::= { extremeErpsRingEntry 17 }
+
+extremeErpsRingCfmRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION 
+      "The status of this entry as per standard RowStatus conventions."
+   ::= { extremeErpsRingEntry 18}
+
+-- -------------------------------------------------------------
+-- extremeErpsStatsTable
+-- -------------------------------------------------------------
+extremeErpsRingStatsTable OBJECT-TYPE
+   SYNTAX        SEQUENCE OF ExtremeErpsRingStatsEntry
+   MAX-ACCESS    not-accessible
+   STATUS        current
+   DESCRIPTION
+     "This table contains statistics information for each of the ring
+      present in the system. Entries in this table are created 
+      implicitly by the creation of entries in the extreneErpsRingTable."
+   ::={ extremeErps 4 }
+
+extremeErpsRingStatsEntry OBJECT-TYPE
+   SYNTAX       ExtremeErpsRingStatsEntry
+   MAX-ACCESS   not-accessible
+   STATUS       current
+   DESCRIPTION
+     "There is one entry in this table for each entry in the extremeErpsRingTable.
+      Each entry contains the statistics for both ring ports. For a sub-ring 
+      in an interconnected node, Port 2 statistics represent the statistics 
+      of the UP MEP installed on extremeErpsRingEast."
+   INDEX { extremeErpsRingName }
+   ::= { extremeErpsRingStatsTable 1 }
+
+ExtremeErpsRingStatsEntry ::= SEQUENCE {
+      extremeErpsRingEastRapsPduSentCount    Counter32,
+      extremeErpsRingWestRapsPduSentCount    Counter32,
+      extremeErpsRingEastRapsPduRcvdCount    Counter32,
+      extremeErpsRingWestRapsPduRcvdCount    Counter32,
+      extremeErpsRingEastRapsPduDiscardCount Counter32,
+      extremeErpsRingWestRapsPduDiscardCount Counter32,
+      extremeErpsRingEastBlockedCount        Counter32,
+      extremeErpsRingWestBlockedCount        Counter32,
+      extremeErpsRingEastUnblockedCount      Counter32,
+      extremeErpsRingWestUnblockedCount      Counter32,
+      extremeErpsRingEastFailedCount         Counter32,
+      extremeErpsRingWestFailedCount         Counter32,
+      extremeErpsRingEastRecoveredCount      Counter32,
+      extremeErpsRingWestRecoveredCount      Counter32
+}
+
+extremeErpsRingEastRapsPduSentCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of valid R-APS PDUs sent on the 
+       extremeErpsRingEast of the ring. R-APS PDUs include all types like R-APS(SF),
+       R-APS(NR) & R-APS (NR, RB)."
+   ::= { extremeErpsRingStatsEntry 1 }
+
+extremeErpsRingWestRapsPduSentCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of valid R-APS PDUs sent on the 
+       extremeErpsRingWest of the ring. R-APS PDUs include all types like 
+       R-APS(SF), R-APS(NR) & R-APS (NR, RB)."
+   ::= { extremeErpsRingStatsEntry 2 }
+
+extremeErpsRingEastRapsPduRcvdCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of valid R-APS PDUs received on the 
+       extremeErpsRingEast of the ring. R-APS PDUs include all types like 
+       R-APS(SF), R-APS(NR) & R-APS (NR, RB)."
+   ::= { extremeErpsRingStatsEntry 3 }
+
+extremeErpsRingWestRapsPduRcvdCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of valid R-APS PDUs received on the 
+       extremeErpsRingWest of the ring. R-APS PDUs include all types like R-APS(SF),
+       R-APS(NR) & R-APS (NR, RB)."
+   ::= { extremeErpsRingStatsEntry 4 }
+
+extremeErpsRingEastRapsPduDiscardCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of R-APS PDUs discarded on the 
+       extremeErpsRingEast of the ring. R-APS PDUs include all types like R-APS(SF),
+       R-APS(NR) & R-APS (NR, RB). R-APS PDUs with invalid RAPS header 
+       information(wrong request/state) will be discarded."
+   ::= { extremeErpsRingStatsEntry 5 }
+
+extremeErpsRingWestRapsPduDiscardCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of R-APS PDUs discarded on the 
+       extremeErpsRingWest of the ring. R-APS PDUs include all types like R-APS(SF),
+       R-APS(NR) & R-APS (NR, RB). R-APS PDUs with invalid RAPS header 
+       information(wrong request/state) will be discarded."
+   ::= { extremeErpsRingStatsEntry 6 }
+
+extremeErpsRingEastBlockedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number times the extremeErpsRingEast is blocked.
+       A port might be blocked because of local failure, or because of link
+       configured as RPL, or if Force/Manual switch is configured"
+   ::= { extremeErpsRingStatsEntry 7 }
+
+extremeErpsRingWestBlockedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number times the extremeErpsRingWest is blocked. 
+       A port might be blocked because of local failure, or because of link
+       configured as RPL, or if Force/Manual switch is configured"
+   ::= { extremeErpsRingStatsEntry 8 }
+
+extremeErpsRingEastUnblockedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number times the extremeErpsRingEast is unblocked.
+       A port might be unblocked because of recovery from local failure, or 
+       if the link is configured as RPL link and there is any other failure
+       in the network, or if Force/Manual switch configuration is removed."
+   ::= { extremeErpsRingStatsEntry 9 }
+
+extremeErpsRingWestUnblockedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number times the extremeErpsRingWest is unblocked.
+       A port might be unblocked because of recovery from local failure, or 
+       if the link is configured as RPL link and there is any other failure
+       in the network, or if Force/Manual switch configuration is removed."
+   ::= { extremeErpsRingStatsEntry 10 }
+
+extremeErpsRingEastFailedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of times the extremeErpsRingEast failed 
+       because of local SF condition." 
+   ::= { extremeErpsRingStatsEntry 11 }
+
+extremeErpsRingWestFailedCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of times the extremeErpsRingWest failed 
+       because of local SF condition." 
+   ::= { extremeErpsRingStatsEntry 12 }
+
+extremeErpsRingEastRecoveredCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of times the extremeErpsRingEast recovered 
+       from a failure (local clear SF condition)." 
+   ::= { extremeErpsRingStatsEntry 13 }
+
+extremeErpsRingWestRecoveredCount OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only 
+   STATUS      current
+   DESCRIPTION
+      "This object indicates the number of times the extremeErpsRingWest recovered 
+       from a failure (local clear SF condition)." 
+   ::= { extremeErpsRingStatsEntry 14 }
+
+-- -------------------------------------------------------------
+-- extremeErpsGlobalInfo
+-- ------------------------------------------------------------
+extremeErpsGlobalInfo OBJECT IDENTIFIER
+        ::= { extremeErps 5 }
+        
+extremeErpsGlobalEnabled OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+      "This object indicates if ERPS is enabled globally on the switch."
+   ::= { extremeErpsGlobalInfo 1 }
+
+extremeErpsGlobalDisplayConfigWarnings OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+       "This object indicates if Display Config Warnings is enabled globally on the 
+        switch."
+   ::= { extremeErpsGlobalInfo 2 }
+
+extremeErpsGlobalMulticastAddRingPorts OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+       "This object indicates if Multicast Add Ring Ports is enabled globally on the 
+        switch."
+   ::= { extremeErpsGlobalInfo 3 }
+
+extremeErpsGlobalMulticastSendIGMPAndMLDQuery OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+      "This object indicates if Multicast Send IGMP and MLD Query is enabled globally on the 
+       switch."
+   ::= { extremeErpsGlobalInfo 4 }
+
+extremeErpsGlobalMulticastTemporaryFlooding OBJECT-TYPE
+   SYNTAX      TruthValue
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+      "This object indicates if Multicast Temporary Flooding is enabled globally on the 
+       switch."
+   ::= { extremeErpsGlobalInfo 5 }
+
+extremeErpsGlobalMulticastTemporaryFloodingDuration OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION
+       "This object indicates the duration of Multicast Temporary Flooding on the 
+        switch."
+   ::= { extremeErpsGlobalInfo 6 }
+
+extremeErpsGlobalNumberOfERPSInstances OBJECT-TYPE
+   SYNTAX      Counter32
+   MAX-ACCESS  read-only
+   STATUS      current
+   DESCRIPTION 
+      "This object indicates the Number of ERPS instances is configured globally on the switch."
+   ::= { extremeErpsGlobalInfo 7 }
+
+-- -------------------------------------------------------------
+-- extremeErpsNotification
+-- ------------------------------------------------------------
+extremeErpsTraps OBJECT IDENTIFIER ::= { extremeErpsNotifications 0 }
+
+extremeErpsTypeOfFailure OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (1..32))
+    MAX-ACCESS  accessible-for-notify
+    STATUS      current
+    DESCRIPTION
+        "This object provides the text indicating a particular failure 
+         condition. 
+
+         'R-APSPduTxFailure' will be set, when the state machine is unable to 
+          transmit an R-APS PDU.
+
+         'HwProgramFailure' will be set, when hardware programming for the ring
+          fails. 
+
+         'BufferAllocFailure' will be set, when there is memory allocation 
+         failure issues.
+
+         'TimerFailure' will be set, when there is any failure in the 
+         timer start."
+    ::= { extremeErpsNotifications 1 }
+
+extremeErpsStateChangeTrap NOTIFICATION-TYPE
+    OBJECTS  {
+        extremeErpsRingName,
+        extremeErpsRingSemState,
+        extremeErpsRingNodeStatus
+    }
+    STATUS   current
+    DESCRIPTION
+         "This trap is generated on the following events:
+               - Local SF is received for the ring.
+               - Local Clear SF is received for the ring.
+               - Remote failure is detected on this ring.
+               - Remote failure is cleared on this ring.
+               - Force Switch is issued for a ring (ForcedSwitch).
+               - Manual Switch is issued for a ring (ManualSwitch)."
+    ::= { extremeErpsTraps 1 }
+
+extremeErpsFailureTrap NOTIFICATION-TYPE
+    OBJECTS  {
+        extremeErpsRingName,
+        extremeErpsTypeOfFailure
+    }
+    STATUS   current
+    DESCRIPTION
+        "This trap is generated when there is any failure on a ring."
+    ::= { extremeErpsTraps 2 }
+
+-- -------------------------------------------------------------
+-- Conformance Information
+-- -------------------------------------------------------------
+extremeErpsMIBConformance  OBJECT IDENTIFIER ::= { extremeErps 6 }
+extremeErpsMIBCompliances  OBJECT IDENTIFIER ::= { extremeErpsMIBConformance 1 }
+extremeErpsMIBGroups       OBJECT IDENTIFIER ::= { extremeErpsMIBConformance 2 }
+
+-- -------------------------------------------------------------
+-- Compliance Statements
+-- -------------------------------------------------------------
+extremeErpsMIBCompliance MODULE-COMPLIANCE
+     STATUS deprecated
+     DESCRIPTION
+        "The core compliance statement for all ERPS implementations."
+     MODULE -- this module
+     MANDATORY-GROUPS  {
+         extremeErpsProtectedVlanEntryGroup,
+         extremeErpsRingGroup,
+         extremeErpsRingCfmGroup,
+         extremeErpsRingStatsGroup,
+         extremeErpsGlobalInfoGroup
+     }
+     ::= { extremeErpsMIBCompliances 1 }
+
+extremeErpsMIBCompliance2 MODULE-COMPLIANCE
+     STATUS current
+     DESCRIPTION
+        "The core compliance statement for all ERPS implementations."
+     MODULE -- this module
+     MANDATORY-GROUPS  {
+         extremeErpsProtectedVlanEntryGroup2,
+         extremeErpsRingGroup2,
+         extremeErpsRingCfmGroup,
+         extremeErpsRingStatsGroup,
+         extremeErpsGlobalInfoGroup
+     }
+     ::= { extremeErpsMIBCompliances 2 }
+
+-- -------------------------------------------------------------
+-- Conformance Groups
+-- -------------------------------------------------------------
+extremeErpsProtectedVlanEntryGroup OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsProtectedVlanId,
+         extremeErpsProtectedVlanRowStatus
+         }
+     STATUS deprecated
+     DESCRIPTION
+        "Conformance group for ERPS Protected Vlan Entry."
+     ::= { extremeErpsMIBGroups 1 }
+
+extremeErpsRingGroup OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsRingVlanId,
+         extremeErpsRingEast,
+         extremeErpsRingWest,
+         extremeErpsRingRplPort,
+         extremeErpsRingPortBlockingOnVcRecovery,
+         extremeErpsRingNodeType,
+         extremeErpsRingOperatingMode, 
+         extremeErpsRingMonitorMechanism,
+         extremeErpsRingEastStatus,
+         extremeErpsRingWestStatus,
+         extremeErpsRingSemState,
+         extremeErpsRingNodeStatus,
+         extremeErpsRingRplNeighbourPort, 
+         extremeErpsRingProtectionType
+         }
+     STATUS deprecated
+     DESCRIPTION
+        "Conformance group for ERPS Ring Entry."
+     ::= { extremeErpsMIBGroups 2 }
+
+extremeErpsRingCfmGroup OBJECT-GROUP
+     OBJECTS  {
+         extremeRingCfmGroup1,
+         extremeRingCfmGroup2,
+         extremeErpsRingCfmRowStatus
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS Ring Cfm Entry."
+     ::= { extremeErpsMIBGroups 3 }
+
+extremeErpsRingStatsGroup OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsRingEastRapsPduSentCount,
+         extremeErpsRingWestRapsPduSentCount,
+         extremeErpsRingEastRapsPduRcvdCount,
+         extremeErpsRingWestRapsPduRcvdCount,
+         extremeErpsRingEastRapsPduDiscardCount,
+         extremeErpsRingWestRapsPduDiscardCount,
+         extremeErpsRingEastBlockedCount,
+         extremeErpsRingWestBlockedCount,
+         extremeErpsRingEastUnblockedCount,
+         extremeErpsRingWestUnblockedCount,
+         extremeErpsRingEastFailedCount,
+         extremeErpsRingWestFailedCount,
+         extremeErpsRingEastRecoveredCount,
+         extremeErpsRingWestRecoveredCount
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS Ring Stats Entry."
+     ::= { extremeErpsMIBGroups 4 }
+
+extremeErpsGlobalInfoGroup OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsGlobalEnabled,
+         extremeErpsGlobalDisplayConfigWarnings,
+         extremeErpsGlobalMulticastAddRingPorts,
+         extremeErpsGlobalMulticastSendIGMPAndMLDQuery,
+         extremeErpsGlobalMulticastTemporaryFlooding,
+         extremeErpsGlobalMulticastTemporaryFloodingDuration,
+         extremeErpsGlobalNumberOfERPSInstances,
+         extremeErpsTypeOfFailure
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS global information."
+     ::= { extremeErpsMIBGroups 5 }
+
+extremeErpsNotificationGroup NOTIFICATION-GROUP
+     NOTIFICATIONS  {
+         extremeErpsStateChangeTrap,
+         extremeErpsFailureTrap  
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS notification."
+     ::= { extremeErpsMIBGroups 6 }
+
+extremeErpsProtectedVlanEntryGroup2 OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsProtectedVlanName,
+         extremeErpsProtectedVlanId,
+         extremeErpsProtectedVlanRowStatus
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS Protected Vlan Entry."
+     ::= { extremeErpsMIBGroups 7 }
+
+extremeErpsRingGroup2 OBJECT-GROUP
+     OBJECTS  {
+         extremeErpsRingName,
+         extremeErpsRingVlanId,
+         extremeErpsRingEast,
+         extremeErpsRingWest,
+         extremeErpsRingRplPort,
+         extremeErpsRingPortBlockingOnVcRecovery,
+         extremeErpsRingNodeType,
+         extremeErpsRingOperatingMode,
+         extremeErpsRingMonitorMechanism,
+         extremeErpsRingEastStatus,
+         extremeErpsRingWestStatus,
+         extremeErpsRingSemState,
+         extremeErpsRingNodeStatus,
+         extremeErpsRingRplNeighbourPort,
+         extremeErpsRingProtectionType
+         }
+     STATUS current
+     DESCRIPTION
+        "Conformance group for ERPS Ring Entry."
+     ::= { extremeErpsMIBGroups 8 }
+END
