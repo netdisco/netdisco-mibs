@@ -1,0 +1,580 @@
+-- ****************************************************************************
+-- DELLEMC-OS10-PORT-SECURITY-MIB
+--
+--
+-- Copyright (c) 2019 by Dell Inc.
+-- All rights reserved.
+--
+-- ****************************************************************************
+--
+
+DELLEMC-OS10-PORT-SECURITY-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, 
+    OBJECT-TYPE, 
+	Unsigned32,
+	Integer32						    FROM SNMPv2-SMI
+	MODULE-COMPLIANCE,
+    OBJECT-GROUP	                    FROM SNMPv2-CONF
+	TruthValue,
+	MacAddress,
+    TEXTUAL-CONVENTION                  FROM SNMPv2-TC
+	VlanIndex                           FROM Q-BRIDGE-MIB
+	InterfaceIndex                      FROM IF-MIB
+    os10                                FROM DELLEMC-OS10-SMI-MIB;
+
+-- ****************************************************************************
+-- *   MODULE IDENTITY
+-- ****************************************************************************
+
+os10PortSecurityMib MODULE-IDENTITY
+
+       LAST-UPDATED         "201907220000Z"
+       ORGANIZATION         "Dell Inc"
+       CONTACT-INFO
+                            "http://www.dell.com/support"
+       DESCRIPTION
+                "The Mib module for managing Dell Networking L2 Port Security feature."
+
+       REVISION             "201907220000Z"    -- 22 July, 2019 
+       DESCRIPTION
+                "Initial version of this Mib module."
+     
+       ::= {os10 5}
+
+--*****************************************************************
+--Top level components of this MIB module
+--******************************************************************
+	   
+os10PortSecurityMibObjects     OBJECT IDENTIFIER ::= 
+                                    { os10PortSecurityMib 1 }
+
+os10PortSecurityGlobalObjects        OBJECT IDENTIFIER ::= 
+                                    { os10PortSecurityMibObjects 1 }
+
+os10PortSecurityInterfaceObjects     OBJECT IDENTIFIER ::= 
+                                    { os10PortSecurityMibObjects 2 }
+
+os10PortSecurityMacObjects           OBJECT IDENTIFIER ::=
+                                    { os10PortSecurityMibObjects 3 }
+
+--
+-- textual conventions
+--
+
+SecureMacAddrType ::= TEXTUAL-CONVENTION
+    STATUS       current
+    DESCRIPTION  
+                 "Represents Secure mac address type.
+                 none(0)    - Neither secure dynamic nor sticky macs
+                              are flushed. 0 will be returned on GET
+                              operation of os10PortSecurityGlobalClearSecureMacAddresses
+                              and os10PortSecurityIfClearSecureMacAddresses MIB objects .
+
+                 dynamic(1) - All secure MAC addresses which are 
+                              learnt on the switch.
+
+                 sticky(2) -  All secure MAC addresses which 
+                              are learnt and retained across 
+                              reboots. This will clear sticky MACs
+
+                 all(3)    -  All the secure dynamic and sticky  mac addresses 
+				              will be flushed."
+
+    SYNTAX INTEGER {
+        none(0),
+        dynamic(1), 
+        sticky(2),
+        all(3)
+    }
+
+SecureMacViolationType  ::= TEXTUAL-CONVENTION
+    STATUS       current
+    DESCRIPTION
+                "Represents secure mac address violation type.
+                 none (0)		
+                 macLimitViolation(1)  - Secure Mac Learn Limit violation.
+                 stmvViolation(2) - Station move violation."
+
+    SYNTAX INTEGER {
+        none(0),
+        macLimitViolation (1),
+        stmvViolation(2)
+    }
+ 
+--
+-- Port Security Global Configuration Objects
+--
+
+os10PortSecurityGlobalEnable OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to enable or disable 
+                      port security feature globally on the device."
+        DEFVAL       { true }
+        ::= { os10PortSecurityGlobalObjects 1 }
+
+os10PortSecurityGlobalTotalSecureAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of MAC addresses secured
+                      in the device."
+        ::= { os10PortSecurityGlobalObjects 2 }
+		
+os10PortSecurityGlobalTotalSecureDynamicAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure dynamic MAC addresses
+                      in the device."
+        ::= { os10PortSecurityGlobalObjects 3 }
+		
+os10PortSecurityGlobalTotalSecureStickyAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure sticky MAC addresses
+                      in the device."
+        ::= { os10PortSecurityGlobalObjects 4 }
+
+os10PortSecurityGlobalTotalSecureStaticAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure static MAC addresses
+                      in the device."
+        ::= { os10PortSecurityGlobalObjects 5 }
+
+os10PortSecurityGlobalClearSecureMacAddresses OBJECT-TYPE
+        SYNTAX        SecureMacAddrType
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to delete all the
+                      secure MAC addresses in the device based on the specified
+                      type."
+        ::= { os10PortSecurityGlobalObjects 6 }
+
+os10PortSecurityGlobalResetViolation OBJECT-TYPE
+        SYNTAX        SecureMacViolationType
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to reset the selected violation type
+		               on all port security interfaces in the device. Get request
+					   of this object always returns zero as value set through this
+					   object will not be stored in database"
+        ::= { os10PortSecurityGlobalObjects 7}
+		  
+-- Port Security Interface Configuration Table
+--
+
+os10PortSecurityIfConfigTable OBJECT-TYPE
+        SYNTAX          SEQUENCE OF Os10PortSecurityIfConfigEntry
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     
+                "A table for Port Security configuration entries.  
+                The number of entries is determined by the number of 
+                interfaces in the system that can support the 
+                port security feature." 
+        ::= { os10PortSecurityInterfaceObjects 1 }
+
+os10PortSecurityIfConfigEntry OBJECT-TYPE
+        SYNTAX         Os10PortSecurityIfConfigEntry
+        MAX-ACCESS     not-accessible
+        STATUS         current
+        DESCRIPTION     
+                "Entry containing port security information for a 
+                particular interface."
+        INDEX           { os10PortSecurityIfIndex}
+        ::= { os10PortSecurityIfConfigTable 1 }
+
+Os10PortSecurityIfConfigEntry ::=
+        SEQUENCE {
+                os10PortSecurityIfIndex                      InterfaceIndex, 
+                os10PortSecurityIfPortSecurityEnable         TruthValue,
+                os10PortSecurityIfViolationStatus            INTEGER,
+                os10PortSecurityIfSecureMacLearnLimit        Unsigned32,
+                os10PortSecurityIfStationMoveEnable          TruthValue,
+                os10PortSecurityIfMacViolationAction         INTEGER,
+                os10PortSecurityIfStmvViolationAction        INTEGER,
+                os10PortSecurityIfStickyEnable               TruthValue,
+                os10PortSecurityIfClearSecureMacAddresses    SecureMacAddrType,
+                os10PortSecurityIfSecureMacAgeEnable          TruthValue,
+                os10PortSecurityIfTotalSecureAddresses     	  Integer32,
+                os10PortSecurityIfTotalSecureDynamicAddresses Integer32,
+                os10PortSecurityIfTotalSecureStickyAddresses    Integer32,
+                os10PortSecurityIfTotalSecureStaticAddresses    Integer32
+				}
+				
+os10PortSecurityIfIndex OBJECT-TYPE
+        SYNTAX          InterfaceIndex
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "Index to this table. 
+		                 The index value used to identify the port security configurations associated with this entry"
+        ::= { os10PortSecurityIfConfigEntry 1 }
+		
+os10PortSecurityIfPortSecurityEnable OBJECT-TYPE
+        SYNTAX          TruthValue
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This Mib object specifies if the port 
+                         security feature is enabled or not on an interface.  
+                         The value of this object has no effect when the value of
+                         os10PortSecurityGlobalEnable is set to 'false'."
+        DEFVAL       { false }
+        ::= { os10PortSecurityIfConfigEntry 2 }
+
+os10PortSecurityIfViolationStatus OBJECT-TYPE
+        SYNTAX          INTEGER { 
+                        normal(1),
+                        macLearnLimitErrDisable(2),
+                        stationMoveErrDisable(3)
+                        }                   
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "This object represents the port security
+                         status of an interface.
+
+                        normal(1) - This indicates port is operating normally
+                                     without any violation.
+
+                        macLearnLimitErrDisable(2) - This indicates that the port
+                                     is shutdown due to mac learn
+                                     limit violation when the object 
+                                     os10PortSecurityIfMacViolationAction
+                                     is of type 'shutdown'.
+ 
+                        stationMoveErrDisable(3) - This indicates that the port
+                                     is shutdown due to station move violation 
+                                     when the object
+                                     os10PortSecurityIfStmvViolationAction
+                                     is of type 'shutdownOrig' or 
+                                     'shutdownOffending' or 'shutdownBoth'."
+                                     
+        ::= { os10PortSecurityIfConfigEntry 3 }
+
+os10PortSecurityIfSecureMacLearnLimit  OBJECT-TYPE
+        SYNTAX        Unsigned32 (0..4294967295)
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "The maximum  number of MAC addresses to be secured on the interface.
+                       User can secure a minimum of one and maximum of 3072 mac addresses on a port. 
+                       i.e set operation is allowed only with in range 1-3072.
+                       If the newly configured mac learning limit value is smaller than already
+                       learnt secure MAC addresses, then all the secure MAC addresses learnt so far
+                       (secure sticky or secure dynamic) will be flushed. In case, total 
+                       number of secure static mac addresses (configured) count is 
+                       greater than newly specified mac learn limit, configuration 
+                       will be rejected. Administrator has to delete the extra secure 
+                       static addresses or mac learn limit should be modified to accomodate 
+                       existing secure static mac addresses. User can remove the mac learing limit 
+                       restriction by setting value 4294967295."
+       DEFVAL         { 1 }
+
+        ::= { os10PortSecurityIfConfigEntry 4 }
+
+os10PortSecurityIfStationMoveEnable  OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to enable or disable
+                      station movement on the dynamically secured
+                      mac addresses learnt on the interface.
+                      By default, this is set to false. It is not possible to enable
+                      the station movement on a port with sticky feature enabled"
+        DEFVAL       { false }
+        ::= { os10PortSecurityIfConfigEntry 5 }
+
+os10PortSecurityIfMacViolationAction OBJECT-TYPE
+        SYNTAX        INTEGER {
+                      drop(1),
+                      dropAndNotify(2),
+                      shutdown(3),
+                      forward(4)
+                      }
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Determines the action to be taken when
+                       mac limit violation occurs in the system.
+
+                        drop(1) - No further MAC learning is allowed on the interface.
+                                  Packets received with a source MAC address which is not in
+                                  the secured MAC address list will be dropped.
+
+                        dropAndNotify(2) - No further MAC learning is allowed on the interface
+                                           and a syslog message or an event is emitted to notify 
+                                           about port security violation.
+
+                        shutdown(3) - The interface will be shut down.
+
+                        forward(4) -  No further MAC learning is allowed on the interface.
+                                    Packets received with a source MAC address which is not
+                                    in the secured MAC address list will be flooded or forwarded." 
+        DEFVAL        { dropAndNotify }
+
+        ::= { os10PortSecurityIfConfigEntry 6 }
+
+os10PortSecurityIfStmvViolationAction  OBJECT-TYPE
+        SYNTAX        INTEGER {
+                      drop(1),
+                      dropAndNotify(2),
+                      shutdownOrigPort(3),
+                      shutDownOffendingPort(4),
+                      shutdownBoth(5)
+                      }
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Determines the action to be taken when
+                       a secure dynamic mac address move violation occurs
+					   in the system. 
+
+                        drop(1)     - The MAC address that triggered the violation
+                                      shall not be learned on the new port (offending port).
+                                      The packets that triggered the violation shall be dropped.
+
+                        dropAndNotify(2)   - Raises a syslog to notify about
+                                      station movement violation. The log
+                                      will contain MAC causing violation,
+                                      vlanId, original interface name
+                                      and offending interface name.
+
+                        shutdownOrigPort(3) - The original interface on which
+                                              MAC is learnt will be shutdown.
+
+                        shutdownOffendigPort(4) - The offending interface causing 
+                                                  station move will be shutdown.
+                        
+                        shutdowBoth(5) - Both the original and offending interfaces
+                                         will be shutdown."
+        DEFVAL        { dropAndNotify }
+        ::= { os10PortSecurityIfConfigEntry 7 }
+
+os10PortSecurityIfStickyEnable  OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "Set to 'true' to enable and 'false' to disable Sticky port security feature
+                       on this interface.  Enabling this feature allows the 
+                       device to secure learnt MAC addresses on this interface permanently. 
+                       In order to remove the sticky addresses on this interface, user has to 
+                       manually delete the sticky MAC address(es) or disable the sticky feature itself. 
+                       Manual deletion of all addresses can be accomplished by 
+                       os10PortSecurityIfClearSecureMacAddresses object.
+                       It is possible to enable sticky feature on a port only if mac learning limit restriction 
+                       is enabled with os10PortSecurityIfSecureMacLearnLimit."
+       DEFVAL         { false }
+
+        ::= { os10PortSecurityIfConfigEntry 8 }
+
+os10PortSecurityIfClearSecureMacAddresses  OBJECT-TYPE
+        SYNTAX        SecureMacAddrType
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to delete
+                      secure MAC addresses based on the specified
+                      type."
+        ::= { os10PortSecurityIfConfigEntry 9 }
+os10PortSecurityIfSecureMacAgeEnable  OBJECT-TYPE
+        SYNTAX        TruthValue
+        MAX-ACCESS    read-write
+        STATUS        current
+        DESCRIPTION   "This object is used to enable aging of 
+                       the dynamically secured mac addresses learnt 
+                       on the interface. Sticky and static macs will 
+                       never age out. It is not possible to enable aging
+                       on a port on which sticky feature is enabled.
+                       By default, this is set to false."
+        DEFVAL       { false }
+        ::= { os10PortSecurityIfConfigEntry 10 }
+		
+os10PortSecurityIfTotalSecureAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secured MAC addresses learnt (dynamic or stickt) 
+		               or configured (static) on a particular interface."
+        ::= { os10PortSecurityIfConfigEntry 11 }
+		
+os10PortSecurityIfTotalSecureDynamicAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure dynamic MAC addresses learnt on a particular
+                       interface."
+        ::= { os10PortSecurityIfConfigEntry 12 }
+		
+os10PortSecurityIfTotalSecureStickyAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure sticky MAC addresses learnt on a particular
+                      interface."
+        ::= { os10PortSecurityIfConfigEntry 13 }
+
+os10PortSecurityIfTotalSecureStaticAddresses  OBJECT-TYPE
+        SYNTAX        Integer32 (0..2147483647)
+        MAX-ACCESS    read-only
+        STATUS        current
+        DESCRIPTION   "The total number of secure static MAC addresses configured on a particular
+                      interface."
+        ::= { os10PortSecurityIfConfigEntry 14}
+		
+-- Displaying Port Security Secure MAC Address Table
+
+os10PortSecuritySecureMacAddrTable OBJECT-TYPE
+        SYNTAX        SEQUENCE OF Os10PortSecuritySecureMacAddrEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current 
+        DESCRIPTION   "A table containing the list of
+                      secure MAC addresses."
+       ::= { os10PortSecurityMacObjects 1 }
+
+os10PortSecuritySecureMacAddrEntry OBJECT-TYPE
+        SYNTAX        Os10PortSecuritySecureMacAddrEntry
+        MAX-ACCESS    not-accessible
+        STATUS        current 
+        DESCRIPTION   "Entry containing secure MAC address 
+                      information for a particular interface."
+        INDEX         {os10PortSecuritySecureMacVlanId,
+					   os10PortSecuritySecureMacAddress
+					  }
+        ::= { os10PortSecuritySecureMacAddrTable 1 }
+
+Os10PortSecuritySecureMacAddrEntry ::=
+        SEQUENCE {
+                os10PortSecuritySecureMacVlanId              VlanIndex,
+                os10PortSecuritySecureMacAddress             MacAddress,
+                os10PortSecuritySecureMacIfIndex             InterfaceIndex,
+                os10PortSecuritySecureMacAddrType            INTEGER
+        }
+
+
+os10PortSecuritySecureMacVlanId    OBJECT-TYPE
+        SYNTAX          VlanIndex
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "This is the vlan on which the
+                         os10PortSecuritySecureMacAddress is
+                         configured or learnt."
+        ::= { os10PortSecuritySecureMacAddrEntry 1 }
+
+os10PortSecuritySecureMacAddress OBJECT-TYPE
+        SYNTAX          MacAddress
+        MAX-ACCESS      not-accessible
+        STATUS          current
+        DESCRIPTION     "This is a secure MAC
+                        address configured or learnt on an
+                        interface."
+        ::= { os10PortSecuritySecureMacAddrEntry 2 }
+
+os10PortSecuritySecureMacIfIndex    OBJECT-TYPE
+        SYNTAX          InterfaceIndex
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "This is the interface on which the
+                         os10PortSecuritySecureMacAddress is
+                         configured or learnt."
+        ::= { os10PortSecuritySecureMacAddrEntry 3 }
+
+os10PortSecuritySecureMacAddrType  OBJECT-TYPE
+        SYNTAX          INTEGER { static(1),
+				  dynamic(2),
+				  sticky(3)
+				}
+        MAX-ACCESS      read-only
+        STATUS          current
+        DESCRIPTION     "This object indicates if the secure MAC address
+                        is a configured 'static' or learnt 'dynamic' or
+                        learnt and retained across reboots 'sticky'."
+        ::= { os10PortSecuritySecureMacAddrEntry 4 }
+
+-- ****************************************************************************
+-- Conformance Information
+-- ****************************************************************************
+
+os10PortSecurityMibConformance     OBJECT IDENTIFIER
+       ::= { os10PortSecurityMib 2}
+
+os10PortSecurityCompliances     OBJECT IDENTIFIER
+       ::= { os10PortSecurityMibConformance 1 }
+
+os10PortSecurityGroups          OBJECT IDENTIFIER
+       ::= { os10PortSecurityMibConformance 2 }
+
+
+-- ****************************************************************************
+-- * Compliance Statements
+-- ****************************************************************************
+
+os10PortSecurityMibConform   MODULE-COMPLIANCE
+       STATUS                   current
+       DESCRIPTION
+              "The compliance statement for the Dell Networking OS Port Security Mib."
+       MODULE
+       MANDATORY-GROUPS {
+                     os10PortSecurityGlobalGroup, 
+                     os10PortSecurityInterfaceGroup,
+                     os10PortSecuritySecureMacAddrGroup
+              }
+       ::= { os10PortSecurityCompliances 1}
+
+
+
+-- ****************************************************************************
+-- Units of Conformance
+-- ****************************************************************************
+
+os10PortSecurityGlobalGroup   OBJECT-GROUP
+        OBJECTS {
+                os10PortSecurityGlobalEnable,
+                os10PortSecurityGlobalTotalSecureAddresses,
+                os10PortSecurityGlobalTotalSecureDynamicAddresses,
+                os10PortSecurityGlobalTotalSecureStickyAddresses,
+                os10PortSecurityGlobalTotalSecureStaticAddresses,
+                os10PortSecurityGlobalClearSecureMacAddresses,
+                os10PortSecurityGlobalResetViolation
+               }
+        STATUS current
+        DESCRIPTION
+                "A set of global objects for use with the Port
+                Security feature."
+        ::= { os10PortSecurityGroups 1}
+		
+os10PortSecurityInterfaceGroup   OBJECT-GROUP
+        OBJECTS {
+				os10PortSecurityIfPortSecurityEnable,  
+                os10PortSecurityIfViolationStatus,
+                os10PortSecurityIfSecureMacLearnLimit,
+                os10PortSecurityIfStationMoveEnable,
+                os10PortSecurityIfMacViolationAction,
+                os10PortSecurityIfStmvViolationAction,
+                os10PortSecurityIfStickyEnable,
+                os10PortSecurityIfSecureMacAgeEnable,
+				os10PortSecurityIfTotalSecureAddresses,
+                os10PortSecurityIfTotalSecureDynamicAddresses,
+                os10PortSecurityIfTotalSecureStickyAddresses,
+                os10PortSecurityIfTotalSecureStaticAddresses,
+                os10PortSecurityIfClearSecureMacAddresses
+	            }
+        STATUS current
+        DESCRIPTION
+                "A set of interface level objects for use with the Port
+                Security feature."
+        ::= { os10PortSecurityGroups 2}
+		
+os10PortSecuritySecureMacAddrGroup  OBJECT-GROUP
+        OBJECTS {
+                os10PortSecuritySecureMacIfIndex,		 
+                os10PortSecuritySecureMacAddrType         
+                }
+        STATUS current
+        DESCRIPTION
+                "Static secure MAC addresss
+                 configuration parameters on an interface."
+        ::= { os10PortSecurityGroups 3 }
+
+END
