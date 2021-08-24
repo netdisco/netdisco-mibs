@@ -10,20 +10,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Get the Tag
-        id: get_tag
-        run: echo ::set-output name=TAGVALUE::${GITHUB_REF#refs/tags/}
+        run: echo "GH_REF_SHORT=$(echo ${GITHUB_REF##*/})" >> $GITHUB_ENV
+
       - name: Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: netdisco-mibs-${{ steps.get_tag.outputs.TAGVALUE }}
+          name: netdisco-mibs-${{ env.GH_REF_SHORT }}
+        continue-on-error: true
+
       - name: Download tarball
-        run: curl -LO https://github.com/netdisco/netdisco-mibs/archive/refs/tags/${{ steps.get_tag.outputs.TAGVALUE }}.tar.gz
+        run: curl -LO https://github.com/netdisco/netdisco-mibs/archive/refs/tags/${{ env.GH_REF_SHORT }}.tar.gz
       - name: Rename tarball
-        run: mv ${{ steps.get_tag.outputs.TAGVALUE }}.tar.gz netdisco-mibs.tar.gz
+        run: mv ${{ env.GH_REF_SHORT }}.tar.gz netdisco-mibs.tar.gz
       - name: Get upload URL
         run: echo UPLOAD_URL=${{ steps.create_release.outputs.upload_url }} | cut -d ' ' -f 1 >> $GITHUB_ENV
       - name: Upload tarball
+        id: upload_tarball_after_release
         run: |
           curl \
             -f \
@@ -33,3 +36,23 @@ jobs:
             -H 'Content-Type: application/gzip' \
             --upload-file 'netdisco-mibs.tar.gz' \
             '${{ env.UPLOAD_URL }}=netdisco-mibs.tar.gz'
+        continue-on-error: true
+
+      - name: IRC upload failure notification
+        if: (steps.create_release.outcome == 'failure') || (steps.upload_tarball_after_release.outcome == 'failure')
+        uses: Gottox/irc-message-action@v2
+        with:
+          channel: '#netdisco'
+          nickname: github-actions
+          message: |-
+            🤖 Failed to release Netdisco MIBS ${{ env.GH_REF_SHORT }} 😭
+            👀 https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: IRC upload success notification
+        if: steps.upload_tarball_after_release.outcome == 'success'
+        uses: Gottox/irc-message-action@v2
+        with:
+          channel: '#netdisco'
+          nickname: github-actions
+          message: |-
+            🤖 Released Netdisco MIBS ${{ env.GH_REF_SHORT }} 🎉
+
