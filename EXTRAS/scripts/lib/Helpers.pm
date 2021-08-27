@@ -31,6 +31,7 @@ $ENV{MIBS} = 'SNMPv2-MIB';
 $ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc";
 
 sub blank {
+  select((select(STDOUT), $|=1)[0]);
   print "\r\e[K"; # blank line
 }
 
@@ -49,6 +50,7 @@ sub status {
   );
   $i = (!defined $i) ? "\N{BRAILLE PATTERN DOTS-2345678}" : $spinner{$i};
   blank();
+  select((select(STDOUT), $|=1)[0]);
   print YELLOW, "$i ", CYAN, $note, RESET;
 }
 
