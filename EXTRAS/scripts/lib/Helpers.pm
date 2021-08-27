@@ -8,11 +8,14 @@ binmode STDOUT, ':utf8';
 
 use File::Temp;
 use File::Copy;
+use File::Slurper 'read_text';
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
+use Try::Tiny;
+use DDP; #FIXME
 
 use Exporter 'import';
-our @EXPORT = qw(status blank build_index parse_index2);
+our @EXPORT = qw(status blank build_index mkindex parse_index2);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -49,42 +52,49 @@ sub status {
   print YELLOW, "$i ", CYAN, $note, RESET;
 }
 
-# Given a directory ($bundle) where some new/untested MIBs are waiting, run
-# snmptranslate over those MIBs and return maps of MIB<->file and file<->MIB.
-# TODO: make this work also for rfc:net-snmp MIBs.
+# Given a directory ($bundle) where some new/untested MIBs are waiting,
+# grep them for DEFINITIONS statements to build a map of MIB<->file
+# and file<->[MIBs] (yes there can be more than one MIB in a file!).
 sub build_index {
-  my ($bundle, $keep) = @_;
-  my (%mib_for, %file_for);
+  my $bundle = shift;
+  my (%mibs_for, %file_for);
+  return ({},{}) unless -d "$ENV{MIBHOME}/$bundle";
 
-  # change net-snmp persistent dir and establish index baseline
-  my $tmpdir = File::Temp->newdir();
-  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
-  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
-  # now run snmptranslate to get the new index file
-  my $newmibdirs = $ENV{MIBDIRS} .":$bundle";
-  qx(snmptranslate -M'$newmibdirs' -IR sysName 2>&1 >/dev/null);
-  # restore persistent dir
-  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
-
-  # read the index file ('2' is the new/untested MIBs over baseline)
-  open(my $cache, '<', "$tmpdir/mib_indexes/2") or die $!;
-  while (my $line = <$cache>) {
-    next if $line =~ m/^DIR /;
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(.+)/);
-
-    # store mib-file mapping
-    $mib_for{$file} = $mib;
-    $file_for{$mib} = $file;
-  }
-  close $cache;
-
-  # keep a copy of the mib index file to help the dev
-  if ($keep) {
-    mkdir(catfile($bundle, 'skip'));
-    copy("$tmpdir/mib_indexes/2", catfile($bundle, 'skip', 'dotindex.txt'));
+  foreach my $filepath (sort grep {-f} glob("$ENV{MIBHOME}/${bundle}/*")) {
+    my $content = try { read_text $filepath, 'latin1' } or next;
+    my $file = (splitdir($filepath))[-1];
+    my @matches = ( $content =~ m{ ([A-Z][\w-]*+) \s+ DEFINITIONS }xg );
+    foreach my $mib (@matches) {
+      push @{ $mibs_for{$file} }, $mib;
+      $file_for{$mib} = $file;
+    }
   }
 
-  return (\%mib_for, \%file_for);
+  return (\%mibs_for, \%file_for);
+}
+
+sub mkindex {
+  my $rebuild = shift;
+  return if !$rebuild and -f "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt";
+
+  open(my $mibindex2, '>', "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt") or die $!;
+  print $mibindex2 "MIB Index v2\n";
+
+  foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
+    next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
+    status($vendor);
+
+    print $mibindex2 "VENDOR $vendor\n";
+    my ($mibs_for, $file_for) = build_index($vendor);
+
+    foreach my $mib (sort keys %$file_for) {
+      print $mibindex2 "$mib $file_for->{$mib}\n";
+    }
+  }
+  
+  close $mibindex2;
+  blank();
+  print "\N{HEAVY CHECK MARK} Cache rebuilt.\n";
 }
 
 # Read the netdisco-mibs mib_index2.txt file and return all the data within.
