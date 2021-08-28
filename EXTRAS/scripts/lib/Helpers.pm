@@ -8,8 +8,8 @@ binmode STDOUT, ':utf8';
 
 use File::Temp;
 use File::Copy;
-use File::Slurper 'read_text';
-use File::Spec::Functions qw(splitdir catfile);
+use Path::Tiny 'path';
+use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 use Try::Tiny;
 use DDP; #FIXME
@@ -26,9 +26,9 @@ if (!defined $ENV{MIBHOME}) {
 $ENV{LC_COLLATE} = 'C';
 
 $ENV{SNMPCONFPATH} = '';
-$ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
+$ENV{SNMP_PERSISTENT_DIR} = catdir($ENV{MIBHOME}, 'EXTRAS', 'indexes');
 $ENV{MIBS} = 'SNMPv2-MIB';
-$ENV{MIBDIRS} = "$ENV{MIBHOME}/net-snmp:$ENV{MIBHOME}/rfc";
+$ENV{MIBDIRS} = catdir($ENV{MIBHOME}, 'net-snmp') .':'. catdir($ENV{MIBHOME}, 'rfc');
 
 sub blank {
   select((select(STDOUT), $|=1)[0]);
@@ -60,10 +60,10 @@ sub status {
 sub build_index {
   my $bundle = shift;
   my (%mibs_for, %file_for);
-  return ({},{}) unless -d "$ENV{MIBHOME}/$bundle";
+  return ({},{}) unless -d catdir($ENV{MIBHOME}, $bundle);
 
   foreach my $filepath (sort grep {-f} glob("$ENV{MIBHOME}/${bundle}/*")) {
-    my $content = try { read_text $filepath, 'latin1' } or next;
+    my $content = try { path($filepath)->slurp } or next;
     my $file = (splitdir($filepath))[-1];
     my @matches = ( $content =~ m{ ([A-Z][\w-]*+) \s+ DEFINITIONS }xg );
     foreach my $mib (@matches) {
@@ -77,12 +77,12 @@ sub build_index {
 
 sub mkindex {
   my $rebuild = shift;
-  return if !$rebuild and -f "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt";
+  return if !$rebuild and -f catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
 
-  open(my $mibindex2, '>', "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt") or die $!;
+  open(my $mibindex2, '>', catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt')) or die $!;
   print $mibindex2 "MIB Index v2\n";
 
-  foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
+  foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
     status($vendor);
 
