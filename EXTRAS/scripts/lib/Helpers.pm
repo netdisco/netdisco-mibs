@@ -54,48 +54,72 @@ sub status {
   print YELLOW, "$i ", CYAN, $note, RESET;
 }
 
-# Given a directory ($bundle) where some new/untested MIBs are waiting,
-# grep them for DEFINITIONS statements to build a map of MIB<->file
-# and file<->[MIBs] (yes there can be more than one MIB in a file!).
+# Given a directory ($bundle) where some MIBs are waiting, grep them for
+# DEFINITIONS statements to build a map of MIB<->[files] and file<->[MIBs]
 sub build_index {
   my $bundle = shift;
-  my (%mibs_for, %file_for);
+  my (%mibs_for, %files_for);
   return ({},{}) unless -d catdir($ENV{MIBHOME}, $bundle);
 
-  foreach my $filepath (sort grep {-f} glob("$ENV{MIBHOME}/${bundle}/*")) {
+  foreach my $filepath (sort grep {-f} glob(catdir($ENV{MIBHOME}, $bundle, '*'))) {
     my $content = try { path($filepath)->slurp } or next;
     my $file = (splitdir($filepath))[-1];
-    my @matches = ( $content =~ m{ ([A-Z][\w-]*+) \s+ DEFINITIONS }xg );
+    # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
+    my @matches = ( $content =~ m{ ([A-Za-z][\w-]*+) \s+ DEFINITIONS }xg );
     foreach my $mib (@matches) {
       push @{ $mibs_for{$file} }, $mib;
-      $file_for{$mib} = $file;
+      push @{ $files_for{$mib} }, $file;  # yeah, trust issues
     }
   }
 
-  return (\%mibs_for, \%file_for);
+  return (\%mibs_for, \%files_for);
 }
 
 sub mkindex {
-  my $rebuild = shift;
+  my ($rebuild, $strict) = @_;
   return if !$rebuild and -f catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
 
   open(my $mibindex2, '>', catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt')) or die $!;
   print $mibindex2 "MIB Index v2\n";
 
+  # TODO put rfc and net-snmp in different order?
   foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
     status($vendor);
 
-    print $mibindex2 "VENDOR $vendor\n";
-    my ($mibs_for, $file_for) = build_index($vendor);
+    print $mibindex2 "\nVENDOR $vendor\n";
+    my ($mibs_for, $files_for) = build_index($vendor);
 
-    foreach my $mib (sort keys %$file_for) {
-      print $mibindex2 "$mib $file_for->{$mib}\n";
+    foreach my $mib (keys %$files_for) {
+      # hygiene check
+      if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
+        blank();
+        print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib, CYAN, " is named using invalid characters (from $vendor/$file_for->{$mib})", RESET, "\n";
+        status($vendor);
+        return ({},{}) if $strict;
+      }
+
+      # TODO check prescedence order of net-snmp when loading
+      print $mibindex2 "$mib $files_for->{$mib}->[-1]\n";
     }
   }
-  
+
   close $mibindex2;
   blank();
+
+  # hygiene check
+  
+
+
+
+  foreach my $mib (keys %$vendor_for) {
+    my $count = scalar @{ $vendor_for->{$mib} };
+    next unless $count > 1;
+
+    my $files = join ',', grep { scalar grep { } @{$mibs_for{$_}} } keys %$mibs_for
+    print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib, CYAN, ' was defined ', (scalar @{ $vendor_for->{$mib} }), ' times', RESET, "\n";
+  }
+
   print "\N{HEAVY CHECK MARK} Cache rebuilt.\n";
 }
 
