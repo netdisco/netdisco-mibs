@@ -81,6 +81,7 @@ sub mkindex {
 
   open(my $mibindex2, '>', catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt')) or die $!;
   print $mibindex2 "MIB Index v2\n";
+  my $all_mibs_files = {};
 
   # TODO put rfc and net-snmp in different order?
   foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
@@ -94,13 +95,18 @@ sub mkindex {
       # hygiene check
       if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
         blank();
-        print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib, CYAN, " is named using invalid characters (from $vendor/$file_for->{$mib})", RESET, "\n";
+        print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
+              CYAN, ' is named using invalid characters ',
+              RESET, "(from $vendor/$files_for->{$mib}->[-1])\n";
         status($vendor);
         return ({},{}) if $strict;
       }
 
       # TODO check prescedence order of net-snmp when loading
       print $mibindex2 "$mib $files_for->{$mib}->[-1]\n";
+
+      push @{ $all_mibs_files->{ $mib } },
+           map { catfile($vendor, $_) } @{ $files_for->{$mib} };
     }
   }
 
@@ -108,16 +114,23 @@ sub mkindex {
   blank();
 
   # hygiene check
-  
+  foreach my $mib (keys %$all_mibs_files) {
+    next unless scalar @{ $all_mibs_files->{$mib} } > 1;
 
+    print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
+          CYAN, ' was defined ', (scalar @{ $all_mibs_files->{$mib} }), ' times: ', RESET;
 
+    my @vendors = map m{^([^/]+)}, @{ $all_mibs_files->{$mib} };
 
-  foreach my $mib (keys %$vendor_for) {
-    my $count = scalar @{ $vendor_for->{$mib} };
-    next unless $count > 1;
-
-    my $files = join ',', grep { scalar grep { } @{$mibs_for{$_}} } keys %$mibs_for
-    print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib, CYAN, ' was defined ', (scalar @{ $vendor_for->{$mib} }), ' times', RESET, "\n";
+    if (scalar keys %{{ map {$_, 1} @vendors }} == 1) {
+      print 'all within vendor ', $vendors[0], "\n";
+    }
+    elsif (scalar grep {$_ eq 'rfc'} @vendors) {
+      print "overridden by rfc\n";
+    }
+    else {
+      print join ',', @{ $all_mibs_files->{$mib} }; print "\n";
+    }
   }
 
   print "\N{HEAVY CHECK MARK} Cache rebuilt.\n";
