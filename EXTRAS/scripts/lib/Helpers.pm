@@ -76,7 +76,7 @@ sub build_index {
 }
 
 sub mkindex {
-  my ($rebuild, $strict) = @_;
+  my ($rebuild, $squawk) = @_;
   return if !$rebuild and -f catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
 
   open(my $mibindex2, '>', catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt')) or die $!;
@@ -93,13 +93,12 @@ sub mkindex {
 
     foreach my $mib (keys %$files_for) {
       # hygiene check
-      if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
+      if ($squawk and (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/))) {
         blank();
         print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
               CYAN, ' is named using invalid characters ',
               RESET, "(from $vendor/$files_for->{$mib}->[-1])\n";
         status($vendor);
-        return ({},{}) if $strict;
       }
 
       # TODO check prescedence order of net-snmp when loading
@@ -114,22 +113,24 @@ sub mkindex {
   blank();
 
   # hygiene check
-  foreach my $mib (keys %$all_mibs_files) {
-    next unless scalar @{ $all_mibs_files->{$mib} } > 1;
+  if ($squawk) {
+    foreach my $mib (keys %$all_mibs_files) {
+      next unless scalar @{ $all_mibs_files->{$mib} } > 1;
 
-    print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
-          CYAN, ' was defined ', (scalar @{ $all_mibs_files->{$mib} }), ' times: ', RESET;
+      print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
+            CYAN, ' was defined ', (scalar @{ $all_mibs_files->{$mib} }), ' times: ', RESET;
 
-    my @vendors = map m{^([^/]+)}, @{ $all_mibs_files->{$mib} };
+      my @vendors = map m{^([^/]+)}, @{ $all_mibs_files->{$mib} };
 
-    if (scalar keys %{{ map {$_, 1} @vendors }} == 1) {
-      print 'all within vendor ', $vendors[0], "\n";
-    }
-    elsif (scalar grep {$_ eq 'rfc'} @vendors) {
-      print "overridden by rfc\n";
-    }
-    else {
-      print join ',', @{ $all_mibs_files->{$mib} }; print "\n";
+      if (scalar keys %{{ map {$_, 1} @vendors }} == 1) {
+        print 'all within vendor ', $vendors[0], "\n";
+      }
+      elsif (scalar grep {$_ eq 'rfc'} @vendors) {
+        print "overridden by rfc\n";
+      }
+      else {
+        print join ',', @{ $all_mibs_files->{$mib} }; print "\n";
+      }
     }
   }
 
