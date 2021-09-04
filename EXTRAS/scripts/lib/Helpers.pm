@@ -54,24 +54,27 @@ sub status {
   print YELLOW, "$i ", CYAN, $note, RESET;
 }
 
-# Given a directory ($vendor) where some MIBs are waiting, grep them for
+# Given a directory ($target) where some MIBs are waiting, grep them for
 # DEFINITIONS statements to build a map of file<->[MIBs] and MIB<->[files]
+# also works when given a plain MIB file.
 sub build_index {
-  my $vendor = shift;
+  my $target = shift;
   my (%file_mibs, %mib_files);
-  return ({},{}) unless -d catdir($ENV{MIBHOME}, $vendor);
 
-  foreach my $filepath (sort grep {-f} glob(catdir($ENV{MIBHOME}, $vendor, '*'))) {
+  my @files = (-f $target ? ($target)
+    : (sort grep {-f} glob(catdir($ENV{MIBHOME}, $target, '*'))) );
+
+  foreach my $filepath (@files) {
     my $content = try { path($filepath)->slurp } or next;
-    my $file = (splitdir($filepath))[-1];
     # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
     my @matches = ( $content =~ m{ ([A-Za-z][\w-]*+) \s+ DEFINITIONS }xg );
     foreach my $mib (@matches) {
-      push @{ $file_mibs{catfile($vendor, $file)} }, $mib;
-      push @{ $mib_files{$mib} }, catfile($vendor, $file);
+      push @{ $file_mibs{ catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
+      push @{ $mib_files{$mib} }, catfile( (splitdir($filepath))[-2,-1] );
     }
   }
 
+  #use DDP; p %file_mibs; p %mib_files;
   return (\%file_mibs, \%mib_files);
 }
 

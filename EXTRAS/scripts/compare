@@ -13,29 +13,28 @@ use FindBin;
 use lib catfile($FindBin::Bin, 'lib');
 use Helpers;
 
-# make an index so that net-snmp tells us what MIB is in the file
 my $newmib = shift;
 if (!defined $newmib or not -f $newmib) {
   print "usage: $0 new_mib_file\n";
   exit(1);
 }
 
-# find the MIB name
-my ($newfile, $newdir) = fileparse($newmib);
-my ($mib_for, $file_for) = build_index($newdir);
-if (!exists $mib_for->{$newfile}) {
-  print "error: net-snmp unable to parse $newfile as a MIB\n";
+# make an index so that net-snmp tells us what MIB is in the file
+my ($mibs_for, $files_for) = build_index($newmib);
+
+if ((scalar keys %$files_for) == 0) {
+  print "error: unable to parse MIB DEFINITIONS in $newmib\n";
   exit(1);
 }
 
-# find the file in netdisco-mibs with the same MIB
-my $mib = $mib_for->{$newfile};
-my ($vendor_for, $oldfile_for) = parse_index2();
-if (!exists $vendor_for->{$mib} or !exists $oldfile_for->{$mib}) {
-  print "error: MIB $mib is unknown to netdisco-mibs (run mkindex?)\n";
+my $mib = (keys %$files_for)[0];
+my ($file_mibs, $mib_vendors, $mib_files, $vendor_files) = mkindex();
+
+if (!exists $mib_vendors->{$mib} or !exists $mib_files->{$mib}) {
+  print "error: MIB $mib is unknown to netdisco-mibs\n";
   exit(1);
 }
 
 # run a diff
-my $oldmib = catfile($ENV{MIBHOME}, $vendor_for->{$mib}, $oldfile_for->{$mib});
+my $oldmib = catfile($ENV{MIBHOME}, $mib_files->{$mib}->[0]);
 exec(qq{diff -b -B -w --strip-trailing-cr '$oldmib' '$newmib' | less});
