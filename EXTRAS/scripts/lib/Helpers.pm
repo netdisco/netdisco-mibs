@@ -15,7 +15,7 @@ use Try::Tiny;
 use DDP; #FIXME
 
 use Exporter 'import';
-our @EXPORT = qw(status blank build_index mkindex parse_index2);
+our @EXPORT = qw(status blank build_index mkindex);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -75,20 +75,18 @@ sub build_index {
   return (\%mibs_for, \%files_for);
 }
 
+# Scan all the MIBs in $ENV{MIBHOME} and return maps of:
+#   file<->[MIBs], MIB<->[vendors], MIB<->[files], vendor->[files]
+# $squawk to show warnings about strange things
 sub mkindex {
-  my ($rebuild, $squawk) = @_;
-  return if !$rebuild and -f catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
-
-  open(my $mibindex2, '>', catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt')) or die $!;
-  print $mibindex2 "MIB Index v2\n";
-  my $all_mibs_files = {};
+  my $squawk = shift;
+  my ($mib_files, $file_mibs, $mib_vendors, $vendors_mib);
 
   # TODO put rfc and net-snmp in different order?
   foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
-    status($vendor);
 
-    print $mibindex2 "\nVENDOR $vendor\n";
+    status($vendor);
     my ($mibs_for, $files_for) = build_index($vendor);
 
     foreach my $mib (keys %$files_for) {
@@ -101,26 +99,23 @@ sub mkindex {
         status($vendor);
       }
 
-      # TODO check prescedence order of net-snmp when loading
-      print $mibindex2 "$mib $files_for->{$mib}->[-1]\n";
-
-      push @{ $all_mibs_files->{ $mib } },
+      push @{ $mib_files->{ $mib } },
            map { catfile($vendor, $_) } @{ $files_for->{$mib} };
     }
+    map { push @{ $file_mibs->{ $_ } }, @{ $mibs_for->{$_} }  }
+        keys %$mibs_for;
   }
-
-  close $mibindex2;
   blank();
 
   # hygiene check
   if ($squawk) {
-    foreach my $mib (keys %$all_mibs_files) {
-      next unless scalar @{ $all_mibs_files->{$mib} } > 1;
+    foreach my $mib (keys %$mib_files) {
+      next unless scalar @{ $mib_files->{$mib} } > 1;
 
       print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
-            CYAN, ' was defined ', (scalar @{ $all_mibs_files->{$mib} }), ' times: ', RESET;
+            CYAN, ' was defined ', (scalar @{ $mib_files->{$mib} }), ' times: ', RESET;
 
-      my @vendors = map m{^([^/]+)}, @{ $all_mibs_files->{$mib} };
+      my @vendors = map m{^([^/]+)}, @{ $mib_files->{$mib} };
 
       if (scalar keys %{{ map {$_, 1} @vendors }} == 1) {
         print 'all within vendor ', $vendors[0], "\n";
@@ -129,43 +124,12 @@ sub mkindex {
         print "overridden by rfc\n";
       }
       else {
-        print join ',', @{ $all_mibs_files->{$mib} }; print "\n";
+        print join ',', @{ $mib_files->{$mib} }; print "\n";
       }
     }
   }
 
   print "\N{HEAVY CHECK MARK} Cache rebuilt.\n";
-}
-
-# Read the netdisco-mibs mib_index2.txt file and return all the data within.
-# maps of: MIB<->file, MIB<->vendor, vendor<->[MIBs]
-#   also a list of all MIBs known to netdisco-mibs
-sub parse_index2 {
-  my $indexfile = catfile($ENV{SNMP_PERSISTENT_DIR}, 'mib_index2.txt');
-  if (! -f $indexfile) {
-    print "error: missing mib_index2.txt (run mkindex)\n";
-    exit(1);
-  }
-
-  # load mib_index2.txt mapping all current known MIBs
-  my (%vendor_for, %oldfile_for, %mibs_for, @allmibs, $currvendor);
-  open(my $index, '<', $indexfile) or die $!;
-  while (my $line = <$index>) {
-    next if $line =~ m/^MIB Index/ or $line =~ m/^\s*$/;
-    if ($line =~ m/^VENDOR\s+(.+)/) {
-      $currvendor = (grep {m/\S/} splitdir($1))[-1];
-      next;
-    }
-    my ($mib, $file) = ($line =~ m/^(\S+)\s+(.+)/);
-
-    $oldfile_for{$mib} = $file;
-    $vendor_for{$mib} = $currvendor;
-    push @{$mibs_for{$currvendor}}, $mib;
-    push @allmibs, $mib;
-  }
-  close $index;
-
-  return (\%vendor_for, \%oldfile_for, \%mibs_for, \@allmibs);
 }
 
 1;
