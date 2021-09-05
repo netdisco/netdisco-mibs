@@ -8,6 +8,7 @@ use warnings;
 use File::Temp;
 use File::Basename;
 use File::Spec::Functions qw(splitdir catfile);
+use List::MoreUtils 'singleton';
 
 use FindBin;
 use lib catfile($FindBin::Bin, 'lib');
@@ -21,18 +22,34 @@ if (!defined $newmib or not -f $newmib) {
 
 # make an index so that net-snmp tells us what MIB is in the file
 my ($mibs_for, $files_for) = build_index($newmib);
+#use se DDP; p $mibs_for; p $files_for;
 
 if ((scalar keys %$files_for) == 0) {
   print "error: unable to parse MIB DEFINITIONS in $newmib\n";
   exit(1);
 }
 
-my $mib = (keys %$files_for)[0];
+print "\N{EYES} Scanning for matching MIBs\n";
 my ($file_mibs, $mib_vendors, $mib_files, $vendor_files) = mkindex();
 
+my $mib = (keys %$files_for)[0];
 if (!exists $mib_vendors->{$mib} or !exists $mib_files->{$mib}) {
   print "error: MIB $mib is unknown to netdisco-mibs\n";
   exit(1);
+}
+
+# find a candidate file to compare, or abort
+my @mibset = keys %$files_for;
+my @fileset = grep { (scalar singleton (@mibset, @{ $file_mibs->{$_} })) == 0 } keys %$file_mibs;
+if (scalar @fileset > 1) {
+    print "error: multiple candidate files to compare:\n";
+    print join "\n", @fileset, '';
+    exit(1);
+}
+if (scalar @fileset == 0) {
+    print "error: no netdisco-mibs file has the same MIBs in it:\n";
+    print join "\n", @mibset, '';
+    exit(1);
 }
 
 # run a diff

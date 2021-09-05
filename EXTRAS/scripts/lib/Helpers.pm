@@ -9,7 +9,7 @@ binmode STDOUT, ':utf8';
 use File::Temp;
 use File::Copy;
 use Path::Tiny 'path';
-use List::Util 'uniq';
+use List::Util 'uniqstr';
 use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 use Try::Tiny;
@@ -69,8 +69,15 @@ sub build_index {
     # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
     my @matches = ( $content =~ m{ ([A-Za-z][\w-]*+) \s+ DEFINITIONS }xg );
     foreach my $mib (@matches) {
-      push @{ $file_mibs{ catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
-      push @{ $mib_files{$mib} }, catfile( (splitdir($filepath))[-2,-1] );
+      push @{ $file_mibs{ -f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
+      push @{ $mib_files{$mib} }, (-f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ));
+    }
+  }
+
+  # clean up the lookup values
+  foreach my $lookup (\%file_mibs, \%mib_files) {
+    foreach my $key (keys %$lookup) {
+      $lookup->{$key} = [sort {$a cmp $b} uniqstr @{ $lookup->{$key} }];
     }
   }
 
@@ -103,6 +110,13 @@ sub mkindex {
   }
   blank();
 
+  # clean up the lookup values
+  foreach my $lookup ($file_mibs, $mib_vendors, $mib_files, $vendor_files) {
+    foreach my $key (keys %$lookup) {
+      $lookup->{$key} = [sort {$a cmp $b} uniqstr @{ $lookup->{$key} }];
+    }
+  }
+
   # hygiene checks
   if ($squawk) {
     foreach my $mib (keys %$mib_files) {
@@ -118,7 +132,7 @@ sub mkindex {
       print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
             CYAN, ' was ', RESET ,'defined ', (scalar @vendors), ' times ', CYAN;
 
-      if ((scalar uniq @vendors) == 1) {
+      if ((scalar uniqstr @vendors) == 1) {
         print 'in vendor ', $vendors[0];
       }
       elsif (scalar grep {$_ eq 'rfc'} @vendors) {
