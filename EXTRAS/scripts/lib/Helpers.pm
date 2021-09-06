@@ -67,8 +67,9 @@ sub build_index {
   foreach my $filepath (@files) {
     my $content = try { path($filepath)->slurp } or next;
     # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
-    my @matches = ( $content =~ m{ ([A-Za-z][\w-]*+) \s+ DEFINITIONS }xg );
+    my @matches = ( $content =~ m{ ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN}xg );
     foreach my $mib (@matches) {
+      next if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/));
       push @{ $file_mibs{ -f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
       push @{ $mib_files{$mib} }, (-f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ));
     }
@@ -86,11 +87,11 @@ sub build_index {
 }
 
 # Scan all the MIBs in $ENV{MIBHOME} and return maps of:
-#   file<->[MIBs], MIB<->[vendors], MIB<->[files], vendor->[files]
+#   file->[MIBs], MIB->[files], vendor->[MIBs], vendor->[files]
 # $squawk to show warnings about strange things
 sub mkindex {
   my $squawk = shift;
-  my ($file_mibs, $mib_vendors, $mib_files, $vendor_files);
+  my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
 
   # TODO put rfc and net-snmp in different order?
   foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
@@ -99,19 +100,20 @@ sub mkindex {
     status($vendor);
     my ($mibs_for, $files_for) = build_index($vendor);
 
-    # MIB<->[files]
+    # MIB->[files]
     map { push @{ $mib_files->{ $_ } }, @{ $files_for->{ $_ } } } keys %$files_for;
-    # file<->[MIBs]
+    # file->[MIBs]
     map { push @{ $file_mibs->{ $_ } }, @{ $mibs_for->{ $_ } }  } keys %$mibs_for;
-    # MIB<->[vendors]
-    map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$files_for;
+    # vendor->[MIBs]
+    $vendor_mibs->{$vendor} = [keys %$files_for];
+    # map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$files_for;
     # vendor->[files]
     push @{ $vendor_files->{ $vendor } }, keys %$mibs_for;
   }
   blank();
 
   # clean up the lookup values
-  foreach my $lookup ($file_mibs, $mib_vendors, $mib_files, $vendor_files) {
+  foreach my $lookup ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) {
     foreach my $key (keys %$lookup) {
       $lookup->{$key} = [sort {$a cmp $b} uniqstr @{ $lookup->{$key} }];
     }
@@ -145,9 +147,9 @@ sub mkindex {
     }
   }
 
-  print "\N{HEAVY CHECK MARK} Cache rebuilt.\n";
-  # use DDP; map {p $_} ($file_mibs, $mib_vendors, $mib_files, $vendor_files);
-  return ($file_mibs, $mib_vendors, $mib_files, $vendor_files);
+  print "\N{HEAVY CHECK MARK} Index rebuilt.\n";
+  # use DDP; map {p $_} ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
+  return ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
 }
 
 1;

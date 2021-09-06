@@ -11,7 +11,7 @@ $|++;
 
 use Time::HiRes 'sleep';
 use File::Temp;
-use File::Spec::Functions qw(splitdir catfile);
+use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 use POSIX qw(:sys_wait_h);
 
@@ -21,23 +21,24 @@ use Helpers;
 
 # TODO: arguably rfc:net-snmp should be enough!
 # but it seems cisco, nortel, etc are required. maybe in the future, fix this.
-my @mibdirs = sort grep { -d and $_ !~ m#/EXTRAS$# } glob("$ENV{MIBHOME}/*");
+my @mibdirs = sort grep { -d and $_ !~ m#/EXTRAS$# } glob( catdir($ENV{MIBHOME},'*') );
 $ENV{MIBDIRS} = join ':', @mibdirs;
 
 # load mib_index2.txt mapping all current known MIBs
-my (undef, undef, $mibs_for) = parse_index2();
+print "\N{EYES} Building MIBs index\n";
+my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) = mkindex();
 
 my $vendor = shift;
-if ($vendor and !exists $mibs_for->{$vendor} and $vendor ne '*') {
+if ($vendor and !exists $vendor_mibs->{$vendor} and $vendor ne '*') {
   print "error: vendor arg must exist in MIBHOME\n";
   exit(1);
 }
 my @vendors = (defined $vendor)
-  ? (($vendor eq '*') ? (sort keys %{$mibs_for}) : ($vendor, 'all'))
-  : ((sort keys %{$mibs_for}), 'all');
+  ? (($vendor eq '*') ? (sort keys %{$vendor_mibs}) : ($vendor, 'all'))
+  : ((sort keys %{$vendor_mibs}), 'all');
 
 foreach my $v (@vendors) {
-  my $mibs = ($v eq 'all') ? 'ALL' : (join ':', sort @{$mibs_for->{$v}});
+  my $mibs = ($v eq 'all') ? 'ALL' : (join ':', reverse sort @{$vendor_mibs->{$v}});
   my $out = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', $v);
   my $err = File::Temp->new();
   status("Parsing $v");
