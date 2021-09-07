@@ -8,7 +8,7 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
-use File::Spec::Functions qw(splitdir catfile);
+use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 
 use FindBin;
@@ -17,18 +17,19 @@ use Helpers;
 
 # TODO: arguably rfc:net-snmp should be enough!
 # but it seems cisco, nortel, etc are required. maybe in the future, fix this.
-my @mibdirs = grep { -d and $_ !~ m#/EXTRAS$# } glob("$ENV{MIBHOME}/*");
+my @mibdirs = grep { -d and $_ !~ m#/EXTRAS$# } glob( catdir($ENV{MIBHOME},'*') );
 $ENV{MIBDIRS} = join ':', @mibdirs;
 
-# load mib_index2.txt mapping all current known MIBs
-my ($vendor_for, $file_for, $mibs_for, $allmibs) = parse_index2();
+# index the MIBs in MIBHOME
+print "\N{EYES} Building MIBs index\n";
+my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) = mkindex();
 
 my $vendor = shift;
-if ($vendor and !exists $mibs_for->{$vendor}) {
+if ($vendor and !exists $vendor_mibs->{$vendor}) {
   print "error: vendor arg must exist in MIBHOME\n";
   exit(1);
 }
-my @mibs = (defined $vendor) ? @{$mibs_for->{$vendor}} : @{$allmibs};
+my @mibs = (defined $vendor) ? @{$vendor_mibs->{$vendor}} : (keys %$mib_files);
 
 foreach my $mib (sort @mibs) {
   status("Testing $mib");
@@ -39,7 +40,7 @@ foreach my $mib (sort @mibs) {
     blank();
     print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ', MAGENTA,
       $mib, RESET, FAINT, ' in ',
-      catfile($vendor_for->{$mib}, $file_for->{$mib}), "\n", RESET;
+      (join ',', @{ $mib_files->{$mib} }), "\n", RESET;
     print $check;
   }
 }
