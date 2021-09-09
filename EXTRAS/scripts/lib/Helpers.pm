@@ -6,6 +6,7 @@ use warnings;
 use charnames ':full';
 binmode STDOUT, ':utf8';
 
+use Cwd 'realpath';
 use File::Temp;
 use File::Copy;
 use Path::Tiny 'path';
@@ -62,7 +63,7 @@ sub build_index {
   my (%file_mibs, %mib_files);
 
   my @files = (-f $target ? ($target)
-    : (sort grep {-f} glob(catdir($ENV{MIBHOME}, $target, '*'))) );
+    : (sort grep {-f} glob(catdir(realpath($target), '*'))) );
 
   foreach my $filepath (@files) {
     my $content = try { path($filepath)->slurp } or next;
@@ -98,7 +99,7 @@ sub mkindex {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
 
     status($vendor);
-    my ($mibs_for, $files_for) = build_index($vendor);
+    my ($mibs_for, $files_for) = build_index(catdir($ENV{MIBHOME}, $vendor));
 
     # MIB->[files]
     map { push @{ $mib_files->{ $_ } }, @{ $files_for->{ $_ } } } keys %$files_for;
