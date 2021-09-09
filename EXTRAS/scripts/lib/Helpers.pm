@@ -67,7 +67,7 @@ sub build_index {
   foreach my $filepath (@files) {
     my $content = try { path($filepath)->slurp } or next;
     # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
-    my @matches = ( $content =~ m{ ^ \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }xg );
+    my @matches = ( $content =~ m{ ^ \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }mxg );
     foreach my $mib (@matches) {
       next if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/));
       push @{ $file_mibs{ -f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
