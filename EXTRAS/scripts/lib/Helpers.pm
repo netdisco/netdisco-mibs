@@ -9,7 +9,7 @@ binmode STDOUT, ':utf8';
 use Cwd 'realpath';
 use File::Temp;
 use File::Copy;
-use Path::Tiny 'path';
+use File::Slurper 'read_text';
 use List::Util 'uniqstr';
 use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
@@ -43,7 +43,7 @@ sub build_index {
     : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
 
   while (my ($fileref, $filepath) = each %files) {
-    my $content = try { path($filepath)->slurp } or next;
+    my $content = try { read_text($filepath, 'latin1') } or next;
     $content =~ s/ ^ \s* -- .* $ //mxg;
 
     my @matches = ( $content =~ m{  \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }mxg );
@@ -99,7 +99,9 @@ sub mkindex {
     $mib_files->{$mib} = [sort {$a cmp $b} uniqstr @{ $mib_files->{$mib} }];
   }
 
-  print "\N{HEAVY CHECK MARK} Index rebuilt.\n";
+  printf "\N{HEAVY CHECK MARK} Index rebuilt (%s vendors, %s mibs).\n",
+    (scalar keys %$vendor_mibs), (scalar keys %$mib_for_file);
+
   # use DDP; map {p $_} ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
   return ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
 }

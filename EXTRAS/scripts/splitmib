@@ -1,0 +1,66 @@
+#!/usr/bin/env perl
+# splitmib mib_file [$safe]
+# will split MIB module DEFINITIONS in mib_file into their own files
+# deletes mib_file (unless safe); overwrites targets with same name
+
+use strict;
+use warnings;
+
+use Cwd 'realpath';
+use File::Slurper qw(read_lines write_text);
+use File::Spec::Functions qw(splitpath catfile);
+use Try::Tiny;
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+my $mibfile = shift;
+if (!defined $mibfile or not -f $mibfile) {
+  print "usage: $0 mib_file\n";
+  exit(1);
+}
+
+my $safe = shift || 0;
+my $oldfile = realpath($mibfile);
+my (undef, $path, undef) = splitpath($oldfile);
+
+my @content = try { read_lines($oldfile, 'latin1') };
+unless (scalar @content) {
+  print "error: unable to read $oldfile\n";
+  exit(1);
+}
+
+my (%mibs, @temp, $mib);
+foreach my $line (@content) {
+    if ($line =~ m{  \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }x) {
+        $mib = uc $1;
+        undef $mibs{$mib};
+        push @{ $mibs{$mib} }, @temp, $line;
+        @temp = ();
+    }
+    elsif ($line =~ m{ \s* END \s* }x) {
+        push @{ $mibs{$mib} }, $line;
+        undef $mib;
+    }
+    else {
+        if ($mib) {
+            push @{ $mibs{$mib} }, $line;
+        }
+        else {
+            push @temp, $line;
+        }
+    }
+}
+
+foreach my $mib (keys %mibs) {
+  my $newfile = catfile($path, "${mib}.mib");
+  write_text($newfile, (join "\n", @{ $mibs{$mib} }, ''), 'latin1');
+  print "\N{HEAVY CHECK MARK} Wrote $mib\n";
+}
+
+unless ($safe) {
+  unlink $oldfile or die $?;
+  print "\N{BLACK FLAG} Removed ${oldfile}.\n";
+}
+
