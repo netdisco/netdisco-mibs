@@ -31,6 +31,79 @@ $ENV{SNMP_PERSISTENT_DIR} = catdir($ENV{MIBHOME}, 'EXTRAS', 'indexes');
 $ENV{MIBS} = 'SNMPv2-MIB';
 $ENV{MIBDIRS} = catdir($ENV{MIBHOME}, 'net-snmp') .':'. catdir($ENV{MIBHOME}, 'rfc');
 
+# Given a directory ($target) where some MIBs are waiting, grep them for
+# DEFINITIONS statements to build a map of file->MIB and MIB<->[files]
+# also works when given a plain MIB file.
+# Will bomb when MIB name has illegal chars, or file has multiple MIB defs
+sub build_index {
+  my $target = shift;
+  my (%mib_for_file, %mib_files);
+
+  my %files = (-f $target ? ($target => $target)
+    : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
+
+  while (my ($fileref, $filepath) = each %files) {
+    my $content = try { path($filepath)->slurp } or next;
+    $content =~ s/ ^ \s* -- .* $ //mxg;
+
+    my @matches = ( $content =~ m{  \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }mxg );
+    next unless scalar @matches;
+
+    if (scalar @matches > 1) {
+      print RED, "\n\N{HEAVY BALLOT X} stopped: ", MAGENTA, $filepath, CYAN,
+        ' has multiple MIB DEFINITIONS: ', RESET, (join ',', @matches), "\n";
+      exit (1);
+    }
+
+    my $mib = $matches[0];
+    if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
+      print RED, "\n\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
+        ' is named using invalid characters in ', RESET, $filepath, "\n";
+      exit (1);
+    }
+
+    $mib_for_file{ $fileref } = $mib;
+    push @{ $mib_files{$mib} }, $fileref;
+  }
+
+  #use DDP; p %mib_for_file; p %mib_files;
+  return (\%mib_for_file, \%mib_files);
+}
+
+# Scan all the MIBs in $ENV{MIBHOME} and return maps of:
+#   file->MIB, MIB->[files], vendor->[MIBs], MIB->[vendors]
+# $squawk to show warnings about strange things
+sub mkindex {
+  my ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors) = ({}, {}, {}, {});
+
+  # TODO put rfc and net-snmp in different order?
+  foreach my $vendor (map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
+    next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
+
+    status($vendor);
+    my ($mib_for, $files_for) = build_index(catdir($ENV{MIBHOME}, $vendor));
+
+    # file->MIB
+    $mib_for_file = { %$mib_for_file, %$mib_for };
+    # MIB->[files]
+    map { push @{ $mib_files->{ $_ } }, @{ $files_for->{ $_ } } } keys %$files_for;
+    # vendor->[MIBs]
+    $vendor_mibs->{$vendor} = [ sort {$a cmp $b} uniqstr keys %$files_for ];
+    # MIB->[vendors]
+    map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$files_for;
+  }
+  blank();
+
+  # clean up the lookup values
+  foreach my $mib (keys %$mib_files) {
+    $mib_files->{$mib} = [sort {$a cmp $b} uniqstr @{ $mib_files->{$mib} }];
+  }
+
+  print "\N{HEAVY CHECK MARK} Index rebuilt.\n";
+  # use DDP; map {p $_} ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
+  return ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
+}
+
 sub blank {
   select((select(STDOUT), $|=1)[0]);
   print "\r\e[K"; # blank line
@@ -53,104 +126,6 @@ sub status {
   blank();
   select((select(STDOUT), $|=1)[0]);
   print YELLOW, "$i ", CYAN, $note, RESET;
-}
-
-# Given a directory ($target) where some MIBs are waiting, grep them for
-# DEFINITIONS statements to build a map of file<->[MIBs] and MIB<->[files]
-# also works when given a plain MIB file.
-sub build_index {
-  my $target = shift;
-  my (%file_mibs, %mib_files);
-
-  my @files = (-f $target ? ($target)
-    : (sort grep {-f} glob(catdir(realpath($target), '*'))) );
-
-  foreach my $filepath (@files) {
-    my $content = try { path($filepath)->slurp } or next;
-    # could also use # @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
-    my @matches = ( $content =~ m{ ^ \s* ([A-Za-z][\w-]*+) \s+ DEFINITIONS \s* ::= \s* BEGIN }mxg );
-    foreach my $mib (@matches) {
-      next if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/));
-      push @{ $file_mibs{ -f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ) } }, $mib;
-      push @{ $mib_files{$mib} }, (-f $target ? $target : catfile( (splitdir($filepath))[-2,-1] ));
-    }
-  }
-
-  # clean up the lookup values
-  foreach my $lookup (\%file_mibs, \%mib_files) {
-    foreach my $key (keys %$lookup) {
-      $lookup->{$key} = [sort {$a cmp $b} uniqstr @{ $lookup->{$key} }];
-    }
-  }
-
-  #use DDP; p %file_mibs; p %mib_files;
-  return (\%file_mibs, \%mib_files);
-}
-
-# Scan all the MIBs in $ENV{MIBHOME} and return maps of:
-#   file->[MIBs], MIB->[files], vendor->[MIBs], vendor->[files]
-# $squawk to show warnings about strange things
-sub mkindex {
-  my $squawk = shift;
-  my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
-
-  # TODO put rfc and net-snmp in different order?
-  foreach my $vendor (sort map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
-    next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
-
-    status($vendor);
-    my ($mibs_for, $files_for) = build_index(catdir($ENV{MIBHOME}, $vendor));
-
-    # MIB->[files]
-    map { push @{ $mib_files->{ $_ } }, @{ $files_for->{ $_ } } } keys %$files_for;
-    # file->[MIBs]
-    map { push @{ $file_mibs->{ $_ } }, @{ $mibs_for->{ $_ } }  } keys %$mibs_for;
-    # vendor->[MIBs]
-    $vendor_mibs->{$vendor} = [keys %$files_for];
-    # map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$files_for;
-    # vendor->[files]
-    push @{ $vendor_files->{ $vendor } }, keys %$mibs_for;
-  }
-  blank();
-
-  # clean up the lookup values
-  foreach my $lookup ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) {
-    foreach my $key (keys %$lookup) {
-      $lookup->{$key} = [sort {$a cmp $b} uniqstr @{ $lookup->{$key} }];
-    }
-  }
-
-  # hygiene checks
-  if ($squawk) {
-    foreach my $mib (keys %$mib_files) {
-      if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
-        print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
-              CYAN, ' is named using ', RESET, 'invalid characters ', CYAN, '(',
-              join ',', @{ $mib_files->{$mib} }; print ')', RESET, "\n";
-      }
-
-      my @vendors = map m{^([^/]+)}, @{ $mib_files->{$mib} };
-      next if scalar @vendors == 1;
-
-      print YELLOW, "\N{WARNING SIGN} ", MAGENTA, $mib,
-            CYAN, ' was ', RESET ,'defined ', (scalar @vendors), ' times ', CYAN;
-
-      if ((scalar uniqstr @vendors) == 1) {
-        print 'in vendor ', $vendors[0];
-      }
-      elsif (scalar grep {$_ eq 'rfc'} @vendors) {
-        print 'overridden by rfc';
-      }
-      else {
-        print join ',', @{ $mib_files->{$mib} };
-      }
-      print RESET, "\n";
-    }
-  }
-
-  print "\N{HEAVY CHECK MARK} Index rebuilt.\n";
-  # use DDP; map {p $_} ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
-  return ($file_mibs, $vendor_mibs, $mib_files, $vendor_files);
 }
 
 1;

@@ -58,24 +58,20 @@ foreach my $filepath (grep {-f} glob(catfile($from, '*'))) {
   ++$newfiles{$newname};
 }
 
-# let net-snmp find MIBs in the new bundle
-# leaves a copy of the mib index file in $from/skip/dotindex.txt
-my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
+# make an index so we know what's in the proposed new files
+print "\N{EYES} Scanning new MIBs\n";
+my ($mibs_for, $files_for) = build_index($from);
+# XXX my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
 
-# load mib_index2.txt mapping all current known MIBs
-my ($vendor_for, $oldfile_for) = parse_index2();
+# index the MIBs in MIBHOME
+print "\N{EYES} Building MIBs baseline\n";
+my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) = mkindex();
+# XXX my ($vendor_for, $oldfile_for) = parse_index2();
 
 foreach my $mib (sort keys %{$file_for}) {
-  my $mibfile = catfile($from, $file_for->{$mib});
+  my $mibfile = catfile( $from, (splitdir($file_for->{$mib}))[-1] );
   delete $newfiles{ $file_for->{$mib} };
   status($mib);
-
-  # check for multiple MIB defs within one file (net-snmp cannot detect)
-  my @defs = qx(egrep '^\\s*\\w(\\w|-)+\\s+DEFINITIONS\\s*::=\\s*BEGIN' '$mibfile');
-  if (scalar @defs > 1) {
-    $res{multi}->{ $file_for->{$mib} } = scalar @defs;
-    next;
-  }
 
   # check whether MIB is featured in another vendor's bundle
   if (exists $vendor_for->{$mib} and $vendor_for->{$mib} ne $vendor) {
