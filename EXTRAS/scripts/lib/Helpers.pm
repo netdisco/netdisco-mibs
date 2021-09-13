@@ -72,7 +72,6 @@ sub build_index {
 
 # Scan all the MIBs in $ENV{MIBHOME} and return maps of:
 #   file->MIB, MIB->[files], vendor->[MIBs], MIB->[vendors]
-# $squawk to show warnings about strange things
 sub mkindex {
   my ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors) = ({}, {}, {}, {});
 
