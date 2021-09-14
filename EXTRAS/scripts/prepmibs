@@ -5,7 +5,7 @@
 # - Take a look at items in the "skip" folder, just in case.
 # - Watch out for new entries that could be RFCs.
 # - MIBs belonging to other vendors will be moved to "other" folder.
-# - Run "prepmibs/importmibs" on each folder in "other" before continuing.
+# - Run "prepmibs" on each folder in "other" before continuing.
 # - Renames known MIB files to be the same as the equiv in netdisco-mibs.
 
 use strict;
@@ -16,8 +16,6 @@ binmode STDOUT, ':utf8';
 
 use Cwd 'realpath';
 use List::Util 'max';
-use File::Temp;
-use File::Copy;
 use File::Spec::Functions qw(splitdir catfile);
 use Term::ANSIColor qw(:constants);
 
@@ -48,7 +46,7 @@ print "\N{BLACK FLAG} Running on netdisco-mibs/$vendor, reporting only.\n"
 # change file mode to be cleaner before commit
 # remove spaces from filenames (it's just confusing in the output)
 # build lookup of all filenames
-foreach my $filepath (grep {-f} glob(catfile($from, '*'))) {
+foreach my $filepath (grep {-f} glob(catfile(realpath($from), '*'))) {
   chmod(0644, $filepath);
   my $fname = (splitdir($filepath))[-1];
   (my $newname = $fname) =~ s/\s+/-/g;
@@ -59,62 +57,70 @@ foreach my $filepath (grep {-f} glob(catfile($from, '*'))) {
 }
 
 # make an index so we know what's in the proposed new files
-print "\N{EYES} Scanning new MIBs\n";
-my ($mibs_for, $files_for) = build_index($from);
-# XXX my ($mib_for, $file_for) = build_index($from, ($onself ? () : 'keep'));
+print "\N{EYES} Scanning submitted files\n";
+my $file_for = build_index($from);
+
+# get rid of vendor directory prefix on the file names
+map { $file_for->{$_} = (splitdir($file_for->{$_}))[-1] } keys %$file_for;
 
 # index the MIBs in MIBHOME
 print "\N{EYES} Building MIBs baseline\n";
-my ($file_mibs, $vendor_mibs, $mib_files, $vendor_files) = mkindex();
-# XXX my ($vendor_for, $oldfile_for) = parse_index2();
+my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
 
 foreach my $mib (sort keys %{$file_for}) {
-  my $mibfile = catfile( $from, (splitdir($file_for->{$mib}))[-1] );
+  my $newmibfile = catfile( $from, $file_for->{$mib} );
   delete $newfiles{ $file_for->{$mib} };
   status($mib);
 
-  # check whether MIB is featured in another vendor's bundle
-  if (exists $vendor_for->{$mib} and $vendor_for->{$mib} ne $vendor) {
-    $res{other}->{$mib} = $vendor_for->{$mib};
-  }
-  elsif (!exists $oldfile_for->{$mib}) {
+  # if not known at all
+  if (!exists $mib_files->{$mib}) {
       $res{new}->{$mib} = 1;
+      next;
   }
-  else {
-    my $oldmibfile = catfile($to, $oldfile_for->{$mib});
 
-    # Look for version numbers - https://tools.ietf.org/html/rfc2578
-    my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$oldmibfile')
-      =~ m/"(\d{10}|\d{12})Z?"/g);
-    my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$mibfile')
-      =~ m/"(\d{10}|\d{12})Z?"/g);
+  # if known only to other vendor(s)
+  if ((scalar grep {$_ eq $vendor} @{ $mib_vendors->{$mib} }) == 0) {
+      $res{other}->{$mib} = $mib_vendors->{$mib};
+      next;
+  }
 
-    if ($oldv and $newv) {
-      if (length($oldv) == 10) {
-        $oldv = ($oldv =~ m/^[789]/) ? "19$oldv" : "20$oldv";
-      }
-      if (length($newv) == 10) {
-        $newv = ($newv =~ m/^[789]/) ? "19$newv" : "20$newv";
-      }
+  # known to vendor (and possibly others but we don't care)
+  # tortuous way to get the netdisco-mibs equiv filename 
+  my $oldfile = catfile($ENV{MIBHOME},
+    (grep { (splitdir($_))[0] eq $vendor } @{ $mib_files->{$mib} })[0] );
+  my $shortoldfile = catfile((splitdir($oldfile))[-2,-1]);
 
-      if ($oldv < $newv) {
-        $res{newer}->{$mib} = [$newv, $oldv];
-      }
-      elsif ($oldv > $newv) {
-        $res{older}->{$mib} = [$newv, $oldv];
-      }
-      else {
-        $res{same}->{$mib} = 1;
-      }
+  # Look for version numbers - https://tools.ietf.org/html/rfc2578
+  my $oldv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$oldfile')
+    =~ m/"(\d{10}|\d{12})Z?"/g);
+  my $newv = max(qx(egrep -A1 '(REVISION|LAST-UPDATED)' '$newmibfile')
+    =~ m/"(\d{10}|\d{12})Z?"/g);
+
+  if ($oldv and $newv) {
+    if (length($oldv) == 10) {
+      $oldv = ($oldv =~ m/^[789]/) ? "19$oldv" : "20$oldv";
+    }
+    if (length($newv) == 10) {
+      $newv = ($newv =~ m/^[789]/) ? "19$newv" : "20$newv";
+    }
+
+    if ($oldv < $newv) {
+      $res{newer}->{$shortoldfile} = [$newv, $oldv];
+    }
+    elsif ($oldv > $newv) {
+      $res{older}->{$shortoldfile} = [$newv, $oldv];
     }
     else {
-      my $diff = qx(diff -q -b -B -w '$oldmibfile' '$mibfile' 2>/dev/null);
-      if ($diff =~ m/^\s*$/) {
-        $res{same}->{$mib} = 1;
-      }
-      else {
-        $res{nover}->{$mib} = 1;
-      }
+      $res{same}->{$shortoldfile} = 1;
+    }
+  }
+  else {
+    my $diff = qx(diff -q -b -B -w '$oldfile' '$newmibfile' 2>/dev/null);
+    if ($diff =~ m/^\s*$/) {
+      $res{same}->{$shortoldfile} = 1;
+    }
+    else {
+      $res{nover}->{$shortoldfile} = 1;
     }
   }
 }
@@ -124,92 +130,92 @@ $res{skip} = \%newfiles;
 status('Preparing to organise files...');
 
 if (not $onself) {
-  foreach (qw(other skip older same)) {
-    mkdir(catfile($from, $_)) if scalar keys %{$res{$_}};
-  }
-  if (scalar keys %{$res{other}}) {
-    mkdir(catfile($from, 'other', $_)) for values %{$res{other}};
-  }
-  if (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+  map { mkdir(catfile($from, $_)) if scalar keys %{$res{$_}} }
+      qw(other older same skip);
+
+  if (scalar keys %{$res{nover}}) {
     mkdir(catfile($from, 'error'));
   }
 }
 blank();
 
-foreach my $mib (sort keys %{$res{other}}) {
-  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib), CYAN,
-    " already known ";
-  print CLEAR, FAINT, "(in '", $res{other}->{$mib};
-  print "/", $oldfile_for->{$mib} if uc($mib) ne $oldfile_for->{$mib};
-  print "')";
-  print "\n", RESET;
-  mymove(catfile($from, $file_for->{$mib}),
-       catfile($from, 'other', $res{other}->{$mib}, $oldfile_for->{$mib}));
-}
-
-foreach my $mib (sort keys %{$res{older}}) {
-  my ($newv, $oldv) = @{ $res{older}->{$mib} };
-  print FAINT, "\N{LESS-THAN SIGN} ", uc($mib), " is older ($newv < $oldv)";
-  print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
-  print "\n", RESET;
-  mymove(catfile($from, $file_for->{$mib}),
-       catfile($from, 'older', $oldfile_for->{$mib}));
-}
-
-if (not $onself) {
-  foreach my $mib (sort keys %{$res{same}}) {
-    print FAINT, "\N{EQUALS SIGN} ", uc($mib), " is the same revision";
-    print " (in '", $oldfile_for->{$mib}, "')" if uc($mib) ne $oldfile_for->{$mib};
-    print "\n", RESET;
-    mymove(catfile($from, $file_for->{$mib}),
-         catfile($from, 'same', $oldfile_for->{$mib}));
-  }
-}
-
-foreach my $mib (sort keys %{$res{newer}}) {
-  my ($newv, $oldv) = @{ $res{newer}->{$mib} };
-  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, uc($mib),
-    CYAN, " is newer ($newv > $oldv)";
-  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
-    if uc($mib) ne $oldfile_for->{$mib};
-  print "\n", RESET;
-  mymove(catfile($from, $file_for->{$mib}),
-       catfile($from, $oldfile_for->{$mib}));
-}
-
 foreach my $mib (sort keys %{$res{new}}) {
-  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, uc($mib), CLEAR, FAINT;
-  print (" (in '". $file_for->{$mib} ."')") if uc($mib) ne $file_for->{$mib};
-  print "\n", RESET;
+  print YELLOW, "\N{BLACK SMALL STAR} ", GREEN, $mib,
+    CLEAR, FAINT, " (in $file_for->{$mib})\n", RESET;
 }
 
-foreach my $mib (sort keys %{$res{nover}}) {
-  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, uc($mib),
-    CYAN, " has no parsable revision date";
-  print CLEAR, FAINT, " (in '", $oldfile_for->{$mib}, "')"
-    if uc($mib) ne $oldfile_for->{$mib};
-  print "\n", RESET;
+foreach my $shortoldfile (sort keys %{$res{newer}}) {
+  my ($newv, $oldv) = @{ $res{newer}->{$shortoldfile} };
+  my $mib = $mib_for_file->{$shortoldfile};
+
+  print YELLOW, "\N{GREATER-THAN SIGN} ", GREEN, $mib,
+    CYAN, " is newer ($newv > $oldv)",
+    CLEAR, FAINT, " (in $file_for->{$mib})\n", RESET;
+
+  # rename to netdisco-mibs' filename
   mymove(catfile($from, $file_for->{$mib}),
-       catfile($from, 'error', $oldfile_for->{$mib}));
+       catfile($from, (splitdir($shortoldfile))[-1]));
 }
 
-foreach my $file (sort keys %{$res{multi}}) {
-  print RED, "\N{HEAVY BALLOT X} ", CYAN, 'file ', MAGENTA, $file,
-    CYAN, " defines multiple (", $res{multi}->{$file}, ") MIBs\n", RESET;
-  mymove(catfile($from, $file), catfile($from, 'error'));
+foreach my $mib (sort keys %{$res{other}}) {
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib, CYAN,
+    " already known ", CLEAR, FAINT,
+    '(in ', (join ', ', @{ $res{other}->{$mib} }), ")\n", RESET;
+
+  # can't rename it as each vendor might have a different name
+  mymove(catfile($from, $file_for->{$mib}), catfile($from, 'other'));
+}
+
+foreach my $shortoldfile (sort keys %{$res{older}}) {
+  my ($newv, $oldv) = @{ $res{older}->{$shortoldfile} };
+  my $mib = $mib_for_file->{$shortoldfile};
+
+  print FAINT, "\N{LESS-THAN SIGN} ", $mib,
+    " is older ($newv < $oldv) (in $file_for->{$mib})\n", RESET;
+
+  # rename to netdisco-mibs' filename
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'older', (splitdir($shortoldfile))[-1]));
+}
+
+# none of the above should happen when running on self ;-)
+if (not $onself) {
+  foreach my $shortoldfile (sort keys %{$res{same}}) {
+    my $mib = $mib_for_file->{$shortoldfile};
+
+    print FAINT, "\N{EQUALS SIGN} $mib is the same revision",
+          " (in $file_for->{$mib})\n", RESET;
+
+    # rename to netdisco-mibs' filename
+    mymove(catfile($from, $file_for->{$mib}),
+         catfile($from, 'same', (splitdir($shortoldfile))[-1]));
+  }
 }
 
 foreach my $file (sort keys %{$res{skip}}) {
   print YELLOW, "\N{WARNING SIGN} ", CYAN, 'file ', MAGENTA,
-    $file, CYAN, " was skipped by net-snmp\n", RESET;
+    $file, CYAN, " was skipped by our indexer\n", RESET;
+
   mymove(catfile($from, $file), catfile($from, 'skip'));
+}
+
+foreach my $shortoldfile (sort keys %{$res{nover}}) {
+  my $mib = $mib_for_file->{$shortoldfile};
+
+  print RED, "\N{HEAVY BALLOT X} ", MAGENTA, $mib,
+    CYAN, " has no parsable revision date",
+    CLEAR, FAINT, " (in $file_for->{$mib} or $shortoldfile)\n", RESET;
+
+  # rename to netdisco-mibs' filename
+  mymove(catfile($from, $file_for->{$mib}),
+       catfile($from, 'error', (splitdir($shortoldfile))[-1]));
 }
 
 if ($onself) {
   print "\N{BLACK FLAG} MIBs inspected.\n";
   exit(0);
 }
-elsif (scalar keys %{$res{multi}} or scalar keys %{$res{nover}}) {
+elsif (scalar keys %{$res{nover}}) {
   print "\N{BLACK FLAG} MIBs inspected, with errors.\n";
   exit(1);
 }

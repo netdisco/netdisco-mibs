@@ -67,7 +67,7 @@ sub build_index {
       blank();
       print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
         ' from ', RESET, $mib_file{$mib}, CYAN,
-        ' is being redefined in ', RESET $fileref, "\n";
+        ' is redefined in ', RESET $fileref, "\n";
     }
 
     $mib_file{$mib} = $fileref;
