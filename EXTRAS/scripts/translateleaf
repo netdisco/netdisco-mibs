@@ -10,7 +10,7 @@ binmode STDOUT, ':utf8';
 $|++;
 
 use Time::HiRes 'sleep';
-use File::Spec::Functions qw(splitdir catfile);
+use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 use POSIX qw(:sys_wait_h);
 
@@ -20,23 +20,24 @@ use Helpers;
 
 # TODO: arguably rfc:net-snmp should be enough!
 # but it seems cisco, nortel, etc are required. maybe in the future, fix this.
-my @mibdirs = sort grep { -d and $_ !~ m#/EXTRAS$# } glob("$ENV{MIBHOME}/*");
+my @mibdirs = grep { -d and $_ !~ m#/EXTRAS$# } glob( catdir($ENV{MIBHOME},'*') );
 $ENV{MIBDIRS} = join ':', @mibdirs;
 
-# load mib_index2.txt mapping all current known MIBs
-my (undef, undef, $mibs_for) = parse_index2();
+# index the MIBs in MIBHOME
+print "\N{EYES} Building MIBs index\n";
+my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
 
 my $oid = $ARGV[0];
 die "error: oid arg is required" unless $oid;
 
 my $vendor = $ARGV[1];
-if ($vendor and !exists $mibs_for->{$vendor}) {
+if ($vendor and !exists $vendor_mibs->{$vendor}) {
   print "error: vendor arg must exist in MIBHOME\n";
   exit(1);
 }
 $vendor ||= 'all';
 
-my $mibs = ($vendor eq 'all') ? 'ALL' : (join ':', sort @{$mibs_for->{$vendor}});
+my $mibs = ($vendor eq 'all') ? 'ALL' : (join ':', @{$vendor_mibs->{$vendor}});
 print CYAN, "\N{ALMOST EQUAL TO} translating for '$vendor'", CLEAR "\n";
 
 defined(my $pid = fork) or die "Couldn't fork: $!";

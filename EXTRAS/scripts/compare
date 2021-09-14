@@ -5,37 +5,44 @@
 use strict;
 use warnings;
 
-use File::Temp;
-use File::Basename;
-use File::Spec::Functions qw(splitdir catfile);
+use File::Spec::Functions qw(catfile);
 
 use FindBin;
 use lib catfile($FindBin::Bin, 'lib');
 use Helpers;
 
-# make an index so that net-snmp tells us what MIB is in the file
 my $newmib = shift;
 if (!defined $newmib or not -f $newmib) {
   print "usage: $0 new_mib_file\n";
   exit(1);
 }
 
-# find the MIB name
-my ($newfile, $newdir) = fileparse($newmib);
-my ($mib_for, $file_for) = build_index($newdir);
-if (!exists $mib_for->{$newfile}) {
-  print "error: net-snmp unable to parse $newfile as a MIB\n";
+# make an index so we know what's in the file
+my $file_for = build_index($newmib);
+my $mib = (keys %$file_for)[0];
+#use DDP; p $file_for;
+
+unless (scalar keys %$file_for) {
+  print "error: unable to parse MIB DEFINITIONS in $newmib\n";
   exit(1);
 }
 
-# find the file in netdisco-mibs with the same MIB
-my $mib = $mib_for->{$newfile};
-my ($vendor_for, $oldfile_for) = parse_index2();
-if (!exists $vendor_for->{$mib} or !exists $oldfile_for->{$mib}) {
-  print "error: MIB $mib is unknown to netdisco-mibs (run mkindex?)\n";
+print "\N{EYES} Scanning for matching MIBs\n";
+my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
+
+unless (exists $mib_files->{$mib}) {
+  print "error: MIB $mib is unknown to netdisco-mibs\n";
   exit(1);
+}
+
+# find a candidate file to compare, or abort
+if (scalar @{ $mib_vendors->{$mib} } > 1) {
+    print "error: multiple candidate vendors to compare:\n";
+    print join "\n", @{ $mib_vendors->{$mib} }, '';
+    exit(1);
 }
 
 # run a diff
-my $oldmib = catfile($ENV{MIBHOME}, $vendor_for->{$mib}, $oldfile_for->{$mib});
+my $oldmib = catfile($ENV{MIBHOME}, $mib_files->{$mib}->[0]);
 exec(qq{diff -b -B -w --strip-trailing-cr '$oldmib' '$newmib' | less});
+
