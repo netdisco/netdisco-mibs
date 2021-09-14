@@ -7,10 +7,7 @@ use charnames ':full';
 binmode STDOUT, ':utf8';
 
 use Cwd 'realpath';
-use File::Temp;
-use File::Copy;
 use File::Slurper 'read_text';
-use List::Util 'uniqstr';
 use File::Spec::Functions qw(splitdir catfile catdir);
 use Term::ANSIColor qw(:constants);
 use Try::Tiny;
@@ -34,10 +31,12 @@ $ENV{MIBDIRS} = catdir($ENV{MIBHOME}, 'net-snmp') .':'. catdir($ENV{MIBHOME}, 'r
 # Given a directory ($target) where some MIBs are waiting, grep them for
 # DEFINITIONS statements to build a map of file->MIB and MIB<->[files]
 # also works when given a plain MIB file.
-# Will bomb when MIB name has illegal chars, or file has multiple MIB defs
+# Will bomb when MIB name has illegal chars,
+#                or file has multiple MIB defs
+#                or MIB is defined multiple times in the bundle
 sub build_index {
   my $target = shift;
-  my (%mib_for_file, %mib_files);
+  my (%mib_file);
 
   my %files = (-f $target ? ($target => $target)
     : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
@@ -50,59 +49,70 @@ sub build_index {
     next unless scalar @matches;
 
     if (scalar @matches > 1) {
-      print RED, "\n\N{HEAVY BALLOT X} stopped: ", MAGENTA, $filepath, CYAN,
-        ' has multiple MIB DEFINITIONS: ', RESET, (join ',', @matches), "\n";
-      exit (1);
+      blank();
+      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $filepath, CYAN,
+        ' contains multiple MIB DEFINITIONS: ', RESET, (join ',', @matches), "\n";
+      exit (1) unless $ENV{ONLY_SQUAWK};
     }
 
     my $mib = $matches[0];
     if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
-      print RED, "\n\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
+      blank();
+      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
         ' is named using invalid characters in ', RESET, $filepath, "\n";
-      exit (1);
+      exit (1) unless $ENV{ONLY_SQUAWK};
     }
 
-    $mib_for_file{ $fileref } = $mib;
-    push @{ $mib_files{$mib} }, $fileref;
+    if (exists $mib_file{$mib}) {
+      blank();
+      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
+        ' from ', RESET, $mib_file{$mib}, CYAN,
+        ' is being redefined in ', RESET $fileref, "\n";
+    }
+
+    $mib_file{$mib} = $fileref;
   }
 
-  #use DDP; p %mib_for_file; p %mib_files;
-  return (\%mib_for_file, \%mib_files);
+  #use DDP; p %mib_file;
+  return \%mib_file;
 }
 
 # Scan all the MIBs in $ENV{MIBHOME} and return maps of:
 #   file->MIB, MIB->[files], vendor->[MIBs], MIB->[vendors]
 sub mkindex {
-  my ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors) = ({}, {}, {}, {});
+  my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = ({}, {}, {});
 
   # TODO put rfc and net-snmp in different order?
   foreach my $vendor (map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
 
     status($vendor);
-    my ($mib_for, $files_for) = build_index(catdir($ENV{MIBHOME}, $vendor));
+    my $file_for = build_index(catdir($ENV{MIBHOME}, $vendor));
 
     # file->MIB
-    $mib_for_file = { %$mib_for_file, %$mib_for };
+    $mib_for_file = { %$mib_for_file, reverse %$file_for };
+
     # MIB->[files]
-    map { push @{ $mib_files->{ $_ } }, @{ $files_for->{ $_ } } } keys %$files_for;
+    map { push @{ $mib_files->{ $_ } }, $file_for->{$_} } keys %$file_for;
+
     # vendor->[MIBs]
-    $vendor_mibs->{$vendor} = [ sort {$a cmp $b} uniqstr keys %$files_for ];
+    $vendor_mibs->{$vendor} = [ sort {$a cmp $b} keys %$file_for ];
+
     # MIB->[vendors]
-    map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$files_for;
+    map { push @{ $mib_vendors->{ $_ } }, $vendor } keys %$file_for;
   }
   blank();
 
   # clean up the lookup values
   foreach my $mib (keys %$mib_files) {
-    $mib_files->{$mib} = [sort {$a cmp $b} uniqstr @{ $mib_files->{$mib} }];
+    $mib_files->{$mib} = [sort {$a cmp $b} @{ $mib_files->{$mib} }];
   }
 
   printf "\N{HEAVY CHECK MARK} Index rebuilt (%s vendors, %s mibs).\n",
     (scalar keys %$vendor_mibs), (scalar keys %$mib_for_file);
 
-  # use DDP; map {p $_} ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
-  return ($mib_for_file, $vendor_mibs, $mib_files, $mib_vendors);
+  #use DDP; map {p $_} ($mib_for_file, $vendor_mibs, $mib_vendors);
+  return ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors);
 }
 
 sub blank {
