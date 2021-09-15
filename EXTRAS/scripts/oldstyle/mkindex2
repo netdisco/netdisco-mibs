@@ -1,0 +1,101 @@
+#!/usr/bin/env perl
+# mkindex - make portable net-snmp index cache and rebuild mib_index2.txt
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
+use File::Find;
+use File::Temp;
+use File::Copy;
+use File::Spec::Functions qw(splitdir catfile);
+use Term::ANSIColor qw(:constants);
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+# first setup
+mkdir "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes";
+mkdir "$ENV{SNMP_PERSISTENT_DIR}/cache";
+
+# clean out any live indexes
+find(sub{ -d or unlink or die $! },
+  "$ENV{SNMP_PERSISTENT_DIR}/cache");
+find(sub{ -d or unlink or die $! },
+  "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
+
+# bootstrap initial three indexes
+status('net-snmp:rfc');
+system(q(snmptranslate -IR sysName | egrep -v '^SNMPv2-MIB::sysName$'));
+
+# now for all the other dirs
+my $next = 2;
+foreach (sort map {(splitdir($_))[-1]} grep {-d} glob("$ENV{MIBHOME}/*")) {
+  next if m/^(?:net-snmp|rfc|EXTRAS)$/ or m/\./;
+  status($_);
+
+  my $tmpdir = File::Temp->newdir();
+  my $newmibdirs = $ENV{MIBDIRS} .":$ENV{MIBHOME}/$_";
+
+  $ENV{SNMP_PERSISTENT_DIR} = $tmpdir->dirname;
+  qx(snmptranslate -IR sysName 2>&1 >/dev/null);
+  system(qq(snmptranslate -M'$newmibdirs' -IR sysName | egrep -v '^SNMPv2-MIB::sysName\$'));
+  $ENV{SNMP_PERSISTENT_DIR} = "$ENV{MIBHOME}/EXTRAS/indexes";
+
+  copy("$tmpdir/mib_indexes/2", "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes/$next");
+  ++$next;
+}
+
+# sort each index and remove DIR line, copy to cache folder
+status('Building cache...');
+find(sub{
+  return if -d;
+
+  # retrieve vendor name from the index
+  my $vendor = undef;
+  open(my $index, '<', $_) or die $!;
+  while (my $line = <$index>) {
+    $vendor = $1 if ($line =~ m/$ENV{MIBHOME}.(.+)$/);
+    last if $vendor;
+  }
+  close $index;
+  die "no vendor: $File::Find::name" if !defined $vendor;
+
+  # copy over sorted content of the index
+  my $dest = "$ENV{SNMP_PERSISTENT_DIR}/cache/$vendor";
+  system(qq(egrep -v '^DIR ' '$_' | sort -dfs > '$dest')) and die ($? >> 8);
+
+  # copy the cache *back* to the index so the index is properly sorted
+  system(qq(echo 'DIR $ENV{MIBHOME}/$vendor' > '$_')) and die ($? >> 8);
+  system(qq(cat '$dest' >> '$_')) and die ($? >> 8);
+
+}, "$ENV{SNMP_PERSISTENT_DIR}/mib_indexes");
+
+# build the mib_index2.txt file
+open(my $mibindex2, '>', "$ENV{SNMP_PERSISTENT_DIR}/mib_index2.txt") or die $!;
+print $mibindex2 "MIB Index v2\n";
+
+foreach (sort grep {-f} glob("$ENV{SNMP_PERSISTENT_DIR}/cache/*")) {
+  my $vendor = (splitdir($_))[-1];
+  next if $vendor eq 'mib_indexes';
+
+  open(my $src, '<', $_) or die $!;
+
+  print $mibindex2 "\n";
+  print $mibindex2 "VENDOR $vendor\n";
+
+  while (my $line = <$src>) {
+    print $mibindex2 $line;
+  }
+
+  close $src;
+}
+
+close $mibindex2;
+
+blank();
+print "\N{HEAVY CHECK MARK} Indexes rebuilt.\n";
+exit(0);
