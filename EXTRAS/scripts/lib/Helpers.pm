@@ -112,10 +112,8 @@ sub mkindex {
     $mib_files->{$mib} = [sort {$a cmp $b} @{ $mib_files->{$mib} }];
   }
 
-  printf "\N{HEAVY CHECK MARK} Index rebuilt %s(%s vendors, %s mibs).\n",
-    (scalar keys %$vendor_mibs),
-    ($errors ? 'with errors ' : ''),
-    (scalar keys %$mib_for_file);
+  printf "\N{HEAVY CHECK MARK} Index rebuilt (%s errors, %s vendors, %s mibs).\n",
+    $errors, (scalar keys %$vendor_mibs), (scalar keys %$mib_for_file);
 
   exit(1) if $errors;
 
