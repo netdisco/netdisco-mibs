@@ -36,7 +36,8 @@ $ENV{MIBDIRS} = catdir($ENV{MIBHOME}, 'net-snmp') .':'. catdir($ENV{MIBHOME}, 'r
 #                or MIB is defined multiple times in the bundle
 sub build_index {
   my $target = shift;
-  my (%mib_file);
+  my %mib_file;
+  my $errors = 0;
 
   my %files = (-f $target ? ($target => $target)
     : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
@@ -50,44 +51,47 @@ sub build_index {
 
     if (scalar @matches > 1) {
       blank();
-      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $filepath, CYAN,
+      print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $filepath, CYAN,
         ' contains multiple MIB DEFINITIONS: ', RESET, (join ',', @matches), "\n";
-      exit (1) unless $ENV{ONLY_SQUAWK};
+      ++$errors;
     }
 
     my $mib = $matches[0];
     if (($mib !~ m/^[A-Z][A-Za-z0-9-]*$/) or ($mib =~ m/--/) or ($mib =~ m/-$/)) {
       blank();
-      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
+      print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $mib, CYAN,
         ' is named using invalid characters in ', RESET, $filepath, "\n";
-      exit (1) unless $ENV{ONLY_SQUAWK};
+      ++$errors;
     }
 
     if (exists $mib_file{$mib}) {
       blank();
-      print RED, "\N{HEAVY BALLOT X} stopped: ", MAGENTA, $mib, CYAN,
+      print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $mib, CYAN,
         ' from ', RESET, $mib_file{$mib}, CYAN,
         ' is redefined in ', RESET $fileref, "\n";
+      ++$errors;
     }
 
     $mib_file{$mib} = $fileref;
   }
 
-  #use DDP; p %mib_file;
-  return \%mib_file;
+  #use DDP; p %mib_file; p $errors;
+  return (\%mib_file, $errors);
 }
 
 # Scan all the MIBs in $ENV{MIBHOME} and return maps of:
 #   file->MIB, MIB->[files], vendor->[MIBs], MIB->[vendors]
 sub mkindex {
-  my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = ({}, {}, {});
+  my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = ({}, {}, {}, {});
+  my $errors = 0;
 
   # TODO put rfc and net-snmp in different order?
   foreach my $vendor (map {(splitdir($_))[-1]} grep {-d} glob(catdir($ENV{MIBHOME},'*'))) {
     next if $vendor =~ m/^(?:EXTRAS)$/ or $vendor =~ m/\./;
 
     status($vendor);
-    my $file_for = build_index(catdir($ENV{MIBHOME}, $vendor));
+    my ($file_for, $err) = build_index(catdir($ENV{MIBHOME}, $vendor));
+    $errors += $err;
 
     # file->MIB
     $mib_for_file = { %$mib_for_file, reverse %$file_for };
@@ -108,8 +112,10 @@ sub mkindex {
     $mib_files->{$mib} = [sort {$a cmp $b} @{ $mib_files->{$mib} }];
   }
 
-  printf "\N{HEAVY CHECK MARK} Index rebuilt (%s vendors, %s mibs).\n",
-    (scalar keys %$vendor_mibs), (scalar keys %$mib_for_file);
+  printf "\N{HEAVY CHECK MARK} Index rebuilt (%s errors, %s vendors, %s mibs).\n",
+    $errors, (scalar keys %$vendor_mibs), (scalar keys %$mib_for_file);
+
+  exit(1) if $errors;
 
   #use DDP; map {p $_} ($mib_for_file, $vendor_mibs, $mib_vendors);
   return ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors);
