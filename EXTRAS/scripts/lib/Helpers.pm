@@ -67,9 +67,19 @@ sub build_index {
     if (exists $mib_file{$mib}) {
       blank();
       print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $mib, CYAN,
-        ' from ', RESET, $mib_file{$mib}, CYAN,
-        ' is redefined in ', RESET $fileref, "\n";
+        ' from ', RESET, $mib_file{$mib}, CYAN, ' is ';
+
+      my $oldfile = $files{ $mib_file{$mib} };
+      my $diff = qx(diff -q -b -B -w '$oldfile' '$filepath' 2>/dev/null);
+      if ($diff =~ m/^\s*$/) {
+        print 'redefined identically in ', RESET "$fileref\n";
+      }
+      else {
+        print 'defined ', RED, 'differently', CYAN, ' in ', RESET "$fileref\n";
+      }
+
       ++$errors;
+      next; # do not overwrite "original" module definition
     }
 
     $mib_file{$mib} = $fileref;
