@@ -42,7 +42,8 @@ sub build_index {
   my %files = (-f $target ? ($target => $target)
     : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
 
-  while (my ($fileref, $filepath) = each %files) {
+  foreach my $fileref (sort keys %files) {
+    my $filepath = $files{$fileref};
     my $content = try { read_text($filepath, 'latin1') } or next;
     $content =~ s/ ^ \s* -- .* $ //mxg;
 
@@ -66,16 +67,17 @@ sub build_index {
 
     if (exists $mib_file{$mib}) {
       blank();
-      print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $mib, CYAN,
-        ' from ', RESET, $mib_file{$mib}, CYAN, ' is ';
+      print RED, "\N{HEAVY BALLOT X} error: ", MAGENTA, $mib;
 
       my $oldfile = $files{ $mib_file{$mib} };
       my $diff = qx(diff -q -b -B -w '$oldfile' '$filepath' 2>/dev/null);
       if ($diff =~ m/^\s*$/) {
-        print 'redefined identically in ', RESET "$fileref\n";
+        print CYAN, ' from ', RESET, $mib_file{$mib},
+              CYAN, ' is redefined identically in ', RESET "$filepath\n";
       }
       else {
-        print 'defined ', RED, 'differently', CYAN, ' in ', RESET "$fileref\n";
+        print CYAN, ' defined differently:', CLEAR, FAINT;
+        print "\n\tdiff -b -B -w --strip-trailing-cr '$oldfile' '$filepath' | less\n", RESET;
       }
 
       ++$errors;
