@@ -42,7 +42,8 @@ sub build_index {
   my %files = (-f $target ? ($target => $target)
     : ( map {catfile( (splitdir($_))[-2,-1] ) => $_} grep {-f} glob(catdir(realpath($target), '*')) ));
 
-  while (my ($fileref, $filepath) = each %files) {
+  foreach my $fileref (sort keys %files) {
+    my $filepath = $files{$fileref};
     my $content = try { read_text($filepath, 'latin1') } or next;
     $content =~ s/ ^ \s* -- .* $ //mxg;
 
