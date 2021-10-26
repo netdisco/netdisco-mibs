@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# mkoidmap [vendor] - run snmptranslate per MIB and save output
+# mkoidmap [vendor|MIB] - run snmptranslate per MIB and save output
 # no param will parse every MIB in every vendor (slooooooow.....)
 
 use strict;
@@ -29,14 +29,23 @@ $ENV{MIBDIRS} = join ':', @mibdirs;
 print "\N{EYES} Building MIBs index\n";
 my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
 
-my $vendor = shift;
-if ($vendor and !exists $vendor_mibs->{$vendor}) {
-  print "error: vendor arg must exist in MIBHOME\n";
+my $arg = shift;
+if ($arg and (!exists $vendor_mibs->{$arg} and !exists $mib_files->{$arg})) {
+  print "error: arg must be vendor or MIB\n";
   exit(1);
 }
 
-my @mibs = ($vendor ? sort @{$vendor_mibs->{$vendor}}
-                    : map {(@{$vendor_mibs->{$_}})} (qw(rfc net-snmp cisco), sort keys %{$vendor_mibs}));
+my @mibs = qw(SNMPv2-MIB SNMPv2-TC SNMPv2-SMI);
+
+if (exists $vendor_mibs->{$arg}) {
+  push @mibs, sort @{$vendor_mibs->{$arg}};
+}
+elsif (exists $mib_files->{$arg}) {
+  @mibs = ($arg);
+}
+else {
+  push @mibs, map {(@{$vendor_mibs->{$_}})} (qw(rfc net-snmp cisco), sort keys %{$vendor_mibs});
+}
 
 print "\N{EYES} Translating MIBs\n";
 my %oidmap = ();
@@ -48,7 +57,7 @@ MIB: foreach my $m (@mibs) {
 
   defined(my $pid = fork) or die "Couldn't fork: $!";
   if (!$pid) { # Child
-    exec(qq{snmptranslate -Tt -Le -m '$m' 2>'$err' | perl -p -e 's/ tc=[0-9]+//g; s/anonymous#[0-9]*/anonymous/' 1>'$out'})
+    exec(qq{snmptranslate -Tp -Le -m '$m' 2>'$err' 1>'$out'})
       or die "Couldn't exec: $!";
   } else { # Parent
     my $slept = 0.5;
@@ -74,27 +83,40 @@ MIB: foreach my $m (@mibs) {
   my @report = read_lines($out, 'latin-1');
 
   foreach my $line (@report) {
-    my ($spaces, $leaf, $idx) = ($line =~ m/^(\s*)([-#\w]+)\((\d+)\)/);
-    next unless defined $spaces and defined $leaf and defined $idx;
+    my ($spaces, $mode, $type, $leaf, $idx, $indexes) = ('','','','','','');
+
+    if ($line =~ m/^  (.+\+)--  ([-#\w]+)  \(  (\d+)  \)  $/x) {
+        ($spaces, $leaf, $idx) = ($1, $2, $3);
+    }
+    elsif ($line =~ m/^  (.+\+)--  \s(....)  \s([A-Za-z]+)  \s+([-#\w]+)  \(  (\d+)  \)  $/x) {
+        ($spaces, $mode, $type, $leaf, $idx) = ($1, $2, $3, $4, $5);
+    }
+    elsif ($line =~ m/ Index:\s (.+) $/x) {
+        $indexes = join ':', (split m/, /, $1);
+        $oidmap{$oid} .= $indexes;
+        next;
+    }
+    else { next }
+
     my $this_indent = length($spaces);
 
     # update current OID
     if ($this_indent <= $last_indent) {
-      my $step_back = (($last_indent - $this_indent) / 2);
+      my $step_back = (($last_indent - $this_indent) / 3);
       foreach (0 .. $step_back) { $oid =~ s/\.\d+$// }
     }
     $oid .= ".$idx";
 
     # store what we have just seen
-    $oidmap{$oid} ||= "${m}::${leaf}";
+    $oidmap{$oid} ||= "${m}::${leaf},$type,$mode,";
 
     # and remember the indent
     $last_indent = $this_indent;
   }
 }
 
-my $report = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', 'all_oids');
-write_text($report, join "\n", map {"$_ $oidmap{$_}"}
+my $report = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', ($arg ? "${arg}_oids" : 'all_oids'));
+write_text($report, join "\n", map {"$_,$oidmap{$_}"}
                                sort {lxoid($a) cmp lxoid($b)} keys %oidmap);
 
 blank();
