@@ -1,0 +1,256 @@
+ARISTA-TAPAGG-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE,
+    Integer32, Counter64              FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP   FROM SNMPv2-CONF
+    DisplayString                     FROM SNMPv2-TC
+    AristaQosShortId                  FROM ARISTA-QOS-MIB
+    aristaMibs                        FROM ARISTA-SMI-MIB;
+
+aristaTapaggMIB MODULE-IDENTITY
+    LAST-UPDATED "202104230000Z"
+    ORGANIZATION "Arista Networks, Inc."
+    CONTACT-INFO
+        "Arista Networks, Inc.
+
+         Postal: 5453 Great America Parkway
+                 Santa Clara, CA 95054
+
+         Tel: +1 408 547-5500
+
+         E-mail: snmp@arista.com"
+    DESCRIPTION
+           "This MIB contains information related to the tapagg feature
+           that is implemented on specific Arista switches running EOS.
+
+           On specific Arista devices, EOS offers a powerful solution for
+           network performance monitoring. These devices have significant
+           bandwidth capacity and different port or interface speed options
+           for a non-blocking monitoring solution. This specific EOS
+           feature is called 'TAP aggregation' or 'tapagg'. These devices are
+           typically capable of performing packet classification in
+           hardware as well, and that can be used to steer the monitored
+           traffic as desired, directly to the right set of external tools.
+
+           With the tapagg feature, the Arista switching device is first
+           put into an exclusive mode to do the desired packet replication.
+           In this mode, normal switching functions like bridging, routing
+           etc. are disabled.
+           
+           Interfaces are categorized into 'tap' (they receive the traffic
+           that is required to be replicated) and 'tool' (they transmit the
+           replicated packet out and are in the path towards the monitoring
+           tool).
+
+           Furthermore, the tapagg feature allows users to configure
+           classification rules via the policy-map construct so that the
+           mirrored traffic can be steered appropriately.
+
+           Another layer of indirection that is provided is called
+           aggregation-groups. Tap and tool interfaces can be part of a
+           specific aggregation group, and that allows for a powerful way
+           to express replication or mirroring rules. Policies can change
+           the aggregation group for specific set of packets, and that can
+           be used to steer traffic out of desired tool interfaces as
+           appropriate.
+
+           This MIB provides information related to the tapagg feature."
+
+    REVISION     "202104230000Z"
+    DESCRIPTION
+           "Initial revision of the MIB module."
+    ::= { aristaMibs 31 }
+
+
+aristaTapaggMibObjects     OBJECT IDENTIFIER
+    ::= { aristaTapaggMIB 1 }
+
+aristaTapaggMibConformance OBJECT IDENTIFIER
+    ::= { aristaTapaggMIB 2 }
+
+
+aristaTapaggPolicyTable        OBJECT-TYPE
+    SYNTAX                     SEQUENCE OF AristaTapaggPolicyEntry
+    MAX-ACCESS                 not-accessible
+    STATUS                     current
+    DESCRIPTION
+        "This table contains information about the tapagg policies
+        configured in the system.
+
+        The configuration construct 'policy-map type tapagg' is used
+        to create and maintain these policies. Once a policy is defined it
+        can be applied against the appropriate interfaces. The basic idea
+        behind these policies is to classify packets (IP or IPv6 packet
+        information or L2 packet information etc.) and on relevant matches
+        take specific actions. One example of an action is to set
+        the aggregation-group for the matched traffic.
+
+        This table provides a simple list of tapagg policies, and a
+        subsequent table provides additional details for each policy."
+
+    ::= { aristaTapaggMibObjects 1 }
+
+aristaTapaggPolicyEntry       OBJECT-TYPE
+    SYNTAX                    AristaTapaggPolicyEntry
+    MAX-ACCESS                not-accessible
+    STATUS                    current
+    DESCRIPTION
+        "A single conceptual row containing information about a tapagg
+        policy.
+
+        A conceptual row is identified by a bounded-length identifier that
+        corresponds to the name of the policy."
+    INDEX                     { aristaTapaggPolicyId }
+    ::= { aristaTapaggPolicyTable 1 }
+
+AristaTapaggPolicyEntry ::=    SEQUENCE {
+    aristaTapaggPolicyId            AristaQosShortId,
+    aristaTapaggPolicyName          DisplayString
+}
+
+aristaTapaggPolicyId              OBJECT-TYPE
+    SYNTAX                        AristaQosShortId
+    MAX-ACCESS                    not-accessible
+    STATUS                        current
+    DESCRIPTION
+        "A bounded-length identifier that is mapped from the
+        tapagg policy name."
+    ::= { aristaTapaggPolicyEntry 1 }
+
+aristaTapaggPolicyName            OBJECT-TYPE
+    SYNTAX                        DisplayString (SIZE (0..255))
+    MAX-ACCESS                    read-only
+    STATUS                        current
+    DESCRIPTION
+        "The full name of the tapagg policy-map."
+    ::= { aristaTapaggPolicyEntry 2 }
+
+
+aristaTapaggPolicyClassTable      OBJECT-TYPE
+    SYNTAX                        SEQUENCE OF AristaTapaggPolicyClassEntry
+    MAX-ACCESS                    not-accessible
+    STATUS                        current
+    DESCRIPTION
+        "This table contains additional details about the tapagg policies
+        configured in the system.
+
+        Within a policy the packet match criteria and set action are
+        provided using 'class-maps'. Internally the device maintains
+        useful state, including counters, for each class-map.
+
+        However, a simple match criteria along with a set
+        action can be provided without the class-map construct as well. In
+        this case, the device will automatically construct an internal/unique
+        class-map for this specific match/set configuration.
+
+        As mentioned above, counters are maintained for matched packets.
+        However, this requires explicit configuration so that the counter
+        resources in the hardware can be enabled.
+
+        There will be a conceptual row in this table for every class-map
+        configured inside a policy."
+        ::= { aristaTapaggMibObjects 2 }
+
+aristaTapaggPolicyClassEntry       OBJECT-TYPE
+    SYNTAX                         AristaTapaggPolicyClassEntry
+    MAX-ACCESS                     not-accessible
+    STATUS                         current
+    DESCRIPTION
+        "A single conceptual row containing information about a
+        specific class-map within a policy.
+
+        A conceptual row is identified by the following components:
+            1. A bounded-length identifier that corresponds to the name of
+            the policy.
+            2. An index that identifies the sequence in which match
+            criteria are evaluated at run time. The index values may not be
+            consecutive."
+    INDEX                     { aristaTapaggPolicyId,
+                                aristaTapaggPolicyClassIndex 
+                              }
+    ::= { aristaTapaggPolicyClassTable 1 }
+
+AristaTapaggPolicyClassEntry       ::= SEQUENCE {
+    aristaTapaggPolicyClassIndex    Integer32,
+    aristaTapaggPolicyClassName     DisplayString,
+    aristaTapaggPolicyPktsMatched   Counter64,
+    aristaTapaggPolicyBytesMatched  Counter64
+}
+
+aristaTapaggPolicyClassIndex      OBJECT-TYPE
+    SYNTAX                        Integer32 (1..2147483647)
+    MAX-ACCESS                    not-accessible
+    STATUS                        current
+    DESCRIPTION
+        "An index that identifies the sequence in which match criteria are
+        evaluated in the device hardware. An index with a smaller value
+        will be evaluated first. The index values themselves may not be
+        consecutive."
+    ::= { aristaTapaggPolicyClassEntry 1 }
+
+aristaTapaggPolicyClassName       OBJECT-TYPE
+    SYNTAX                        DisplayString (SIZE (0..255))
+    MAX-ACCESS                    read-only
+    STATUS                        current
+    DESCRIPTION
+        "The name of the class-map within the policy that corresponds
+        to this conceptual row.
+
+        As described earlier, a simple match/set configuration is possible
+        without creating a class-map construct. In that the case, the
+        device manages relevant state by maintaining an internal/unique
+        class-map name."
+    ::= { aristaTapaggPolicyClassEntry 2 }
+
+aristaTapaggPolicyPktsMatched     OBJECT-TYPE
+    SYNTAX                        Counter64
+    MAX-ACCESS                    read-only
+    STATUS                        current
+    DESCRIPTION
+        "The number of packets that matched the specific packet
+        classification criteria that corresponds to this conceptual row."
+    ::= { aristaTapaggPolicyClassEntry 3 }
+
+aristaTapaggPolicyBytesMatched    OBJECT-TYPE
+    SYNTAX                        Counter64
+    MAX-ACCESS                    read-only
+    STATUS                        current
+    DESCRIPTION
+        "The number of bytes that matched the specific packet
+        classification criteria that corresponds to this conceptual row."
+    ::= { aristaTapaggPolicyClassEntry 4 }
+
+-- Compliance and conformance
+
+aristaTapaggMibCompliances OBJECT IDENTIFIER
+    ::= { aristaTapaggMibConformance 1 }
+
+aristaTapaggMibGroups OBJECT IDENTIFIER
+    ::= { aristaTapaggMibConformance 2 }
+
+aristaTapaggMibCompliance  MODULE-COMPLIANCE
+    STATUS        current
+    DESCRIPTION
+        "The compliance statement for Arista switches that implement
+        the ARISTA-TAPAGG-MIB."
+    MODULE        -- this module
+    MANDATORY-GROUPS {
+        aristaTapaggPolicyGroup
+    }
+    ::= { aristaTapaggMibCompliances 1 }
+
+aristaTapaggPolicyGroup  OBJECT-GROUP
+    OBJECTS {
+       aristaTapaggPolicyName,
+       aristaTapaggPolicyClassName,
+       aristaTapaggPolicyPktsMatched,
+       aristaTapaggPolicyBytesMatched
+    }
+    STATUS  current
+    DESCRIPTION
+        "The collection of objects that provide tapagg policy information
+        in the system."
+    ::= { aristaTapaggMibGroups 1 }
+
+END
