@@ -18,7 +18,9 @@ if (!defined $newmib or not -f $newmib) {
 }
 
 # make an index so we know what's in the file
-my $file_for = build_index($newmib);
+my ($file_for, $errors) = build_index($newmib);
+exit(1) if $errors;
+
 my $mib = (keys %$file_for)[0];
 #use DDP; p $file_for;
 
@@ -26,6 +28,8 @@ unless (scalar keys %$file_for) {
   print "error: unable to parse MIB DEFINITIONS in $newmib\n";
   exit(1);
 }
+
+print "\N{ALMOST EQUAL TO} diff netdisco-mibs \N{RIGHTWARDS WHITE ARROW FROM WALL} $mib\n";
 
 print "\N{EYES} Scanning for matching MIBs\n";
 my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
@@ -44,5 +48,11 @@ if (scalar @{ $mib_vendors->{$mib} } > 1) {
 
 # run a diff
 my $oldmib = catfile($ENV{MIBHOME}, $mib_files->{$mib}->[0]);
+my $diff = qx(diff -q -b -B -w '$oldmib' '$newmib' 2>/dev/null);
+if ($diff =~ m/^\s*$/) {
+  print "\N{BLACK FLAG} MIB files are the same.\n";
+  exit(0);
+}
+# else they are not
 exec(qq{diff -b -B -w --strip-trailing-cr '$oldmib' '$newmib' | less});
 

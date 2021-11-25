@@ -6,6 +6,9 @@
 use strict;
 use warnings;
 
+use charnames ':full';
+binmode STDOUT, ':utf8';
+
 use Cwd 'realpath';
 use File::Slurper qw(read_lines write_text);
 use File::Spec::Functions qw(splitpath catfile);
@@ -38,7 +41,8 @@ foreach my $line (@content) {
         push @{ $mibs{$mib} }, @temp, $line;
         @temp = ();
     }
-    elsif ($line =~ m{ \s* END \s* }x) {
+    elsif ($line =~ m{ (?:^\s*|\s+) END (?:\s+|\s*$) }x) {
+        next unless $mib; # sometimes END without BEGIN!
         push @{ $mibs{$mib} }, $line;
         undef $mib;
     }
@@ -52,13 +56,15 @@ foreach my $line (@content) {
     }
 }
 
-foreach my $mib (keys %mibs) {
+foreach my $mib (sort keys %mibs) {
   my $newfile = catfile($path, "${mib}.mib");
+  unlink $newfile;
   write_text($newfile, (join "\n", @{ $mibs{$mib} }, ''), 'latin1');
   print "\N{HEAVY CHECK MARK} Wrote $mib\n";
 }
 
-unless ($safe) {
+(my $oldfilemib = ( (splitpath($oldfile))[-1] || '' )) =~ s/\.mib$//;
+if (not $safe and not exists $mibs{ $oldfilemib }) {
   unlink $oldfile or die $?;
   print "\N{BLACK FLAG} Removed ${oldfile}.\n";
 }

@@ -1,0 +1,135 @@
+#!/usr/bin/env perl
+# mkoidmap [vendor|MIB] - run snmptranslate per MIB and save output
+# no param will parse every MIB in every vendor (slooooooow.....)
+
+use strict;
+use warnings;
+
+use charnames ':full';
+binmode STDOUT, ':utf8';
+$|++;
+
+use Time::HiRes 'sleep';
+use File::Temp;
+use File::Slurper qw(read_lines write_text);
+use File::Spec::Functions qw(splitdir catfile catdir);
+use Term::ANSIColor qw(:constants);
+use POSIX qw(:sys_wait_h);
+
+use FindBin;
+use lib catfile($FindBin::Bin, 'lib');
+use Helpers;
+
+# TODO: arguably rfc:net-snmp should be enough!
+# but it seems cisco, nortel, etc are required. maybe in the future, fix this.
+my @mibdirs = grep { -d and $_ !~ m#/EXTRAS$# } glob( catdir($ENV{MIBHOME},'*') );
+$ENV{MIBDIRS} = join ':', @mibdirs;
+
+# index the MIBs in MIBHOME
+print "\N{EYES} Building MIBs index\n";
+my ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors) = mkindex();
+
+my $arg = shift;
+if ($arg and (!exists $vendor_mibs->{$arg} and !exists $mib_files->{$arg})) {
+  print "error: arg must be vendor or MIB\n";
+  exit(1);
+}
+
+my @mibs = (qw(SNMPv2-MIB SNMPv2-TC SNMPv2-SMI),
+           (reverse sort grep {m/^RFC/} @{ $vendor_mibs->{rfc} }));
+
+if (exists $vendor_mibs->{$arg}) {
+  push @mibs, sort @{$vendor_mibs->{$arg}};
+}
+elsif (exists $mib_files->{$arg}) {
+  @mibs = ($arg);
+}
+else {
+  push @mibs, map {(@{$vendor_mibs->{$_}})} (qw(rfc net-snmp cisco), sort keys %{$vendor_mibs});
+}
+
+print "\N{EYES} Translating MIBs\n";
+my %oidmap = ();
+
+MIB: foreach my $m (@mibs) {
+  my $out = File::Temp->new();
+  my $err = File::Temp->new();
+  status("Parsing $m");
+
+  defined(my $pid = fork) or die "Couldn't fork: $!";
+  if (!$pid) { # Child
+    exec(qq{snmptranslate -Tp -Le -m '$m' 2>'$err' 1>'$out'})
+      or die "Couldn't exec: $!";
+  } else { # Parent
+    my $slept = 0.5;
+    while (! waitpid($pid, WNOHANG)) {
+      status("Parsing $m");
+      sleep 0.05;
+      $slept -= 0.05;
+    }
+    sleep $slept if $slept > 0;
+  }
+
+  if (-s $err) {
+    blank();
+    print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ',
+      MAGENTA, $m, CYAN, " MIBs\n", RESET;
+    while (<$err>) { print }
+    print "\n";
+    next MIB;
+  }
+
+  my $oid = '.1';
+  my $last_indent = 0;
+  my @report = read_lines($out, 'latin-1');
+
+  foreach my $line (@report) {
+    my ($spaces, $mode, $type, $leaf, $idx, $indexes) = ('','','','','','');
+
+    if ($line =~ m/^  (.+\+)--  ([-#\w]+)  \(  (\d+)  \)  $/x) {
+        ($spaces, $leaf, $idx) = ($1, $2, $3);
+    }
+    elsif ($line =~ m/^  (.+\+)--  \s(....)  \s([A-Za-z]+)  \s+([-#\w]+)  \(  (\d+)  \)  $/x) {
+        ($spaces, $mode, $type, $leaf, $idx) = ($1, $2, $3, $4, $5);
+    }
+    elsif ($line =~ m/ Index:\s (.+) $/x) {
+        $indexes = join ':', (split m/, /, $1);
+        $oidmap{$oid} .= $indexes if $oidmap{$oid} =~ m/,$/;
+        next;
+    }
+    else { next }
+
+    my $this_indent = length($spaces);
+
+    # update current OID
+    if ($this_indent <= $last_indent) {
+      my $step_back = (($last_indent - $this_indent) / 3);
+      foreach (0 .. $step_back) { $oid =~ s/\.\d+$// }
+    }
+    $oid .= ".$idx";
+
+    # store what we have just seen
+    $oidmap{$oid} ||= "${m}::${leaf},$type,$mode,";
+
+    # and remember the indent
+    $last_indent = $this_indent;
+  }
+}
+
+my $report = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', ($arg ? "${arg}_oids" : 'all_oids'));
+write_text($report, join "\n", map {"$_,$oidmap{$_}"}
+                               sort {lxoid($a) cmp lxoid($b)} keys %oidmap);
+
+blank();
+print sprintf "\N{BLACK FLAG} %d mibs translated into %d objects.\n", scalar @mibs, scalar keys %oidmap;
+exit(0);
+
+# take oid and make comparable
+sub lxoid {
+  my ($oid, $seglen) = @_;
+  $seglen ||= 6;
+  return $oid if $oid !~ m/^[0-9.]+$/;
+  $oid =~ s/^(\.)//; my $leading = $1;
+  $oid = join '.', map { sprintf("\%0${seglen}d", $_) } (split m/\./, $oid);
+  return (($leading || '') . $oid);
+}
