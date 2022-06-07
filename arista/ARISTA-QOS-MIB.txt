@@ -15,7 +15,7 @@ IMPORTS
     QueueIndex                           FROM ARISTA-QUEUE-MIB;
     
 aristaQosMib MODULE-IDENTITY
-    LAST-UPDATED "201805040000Z"
+    LAST-UPDATED "202005260000Z"
     ORGANIZATION "Arista Networks, Inc."
     CONTACT-INFO
         "Arista Networks, Inc.
@@ -55,6 +55,9 @@ aristaQosMib MODULE-IDENTITY
 	 classified as belonging to a particular class. Actions may include
 	 modifying CoS or DSCP fields, assigning to traffic-class queues,
 	 shaping, or filtering."
+
+    REVISION      "202005260000Z"
+    DESCRIPTION   "Added additional objects for aristaQosStatsTable."
 
     REVISION      "201805040000Z"
     DESCRIPTION   "Added aristaEcnQueueCounterTable"
@@ -501,8 +504,14 @@ aristaQosStatsTable  OBJECT-TYPE
     STATUS          current
     DESCRIPTION     
 	"An entry in this table contains dropped, sent and matched packet
-         counters for a given class of a policy map applied in a given direction.
-	 Counts are aggregated for all interfaces."
+         and byte counters for a given class of a policy map applied in a given
+         direction. Counts are aggregated for all interfaces.
+
+         Byte counters are not supported for all types of policy-maps. On some 
+         of the Arista hardware platforms, byte counters are entirely unsupported.
+
+         When byte counters are unavailable, the value of the corresponding 
+         MIB objects will be zero."
     ::= { aristaQosMibObjects 7 }
 
 aristaQosStatsEntry  OBJECT-TYPE
@@ -518,7 +527,10 @@ aristaQosStatsEntry  OBJECT-TYPE
 AristaQosStatsEntry ::= SEQUENCE {
     aristaQosPktsDropped            Counter64,
     aristaQosPktsSent               Counter64,
-    aristaQosPktsMatched            Counter64
+    aristaQosPktsMatched            Counter64,
+    aristaQosBytesDropped           Counter64,
+    aristaQosBytesSent              Counter64,
+    aristaQosBytesMatched           Counter64
 }
 
 aristaQosPktsDropped  OBJECT-TYPE
@@ -527,7 +539,9 @@ aristaQosPktsDropped  OBJECT-TYPE
     STATUS          current
     DESCRIPTION
         "The number of packets dropped by a service policy.
-         This number is zero for classes of type dataPlane."
+         This number is zero for classes of type dataPlane, 
+         with the exception of those that are associated with
+         a policer."
     ::= { aristaQosStatsEntry 1 }
 
 aristaQosPktsSent  OBJECT-TYPE
@@ -547,6 +561,33 @@ aristaQosPktsMatched  OBJECT-TYPE
         "The number of packets classified by a service policy.
          Equal to the sum of aristaQosPktsDropped and aristaQosPktsSent."
     ::= { aristaQosStatsEntry 3 }
+
+aristaQosBytesDropped  OBJECT-TYPE
+    SYNTAX             Counter64
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+        "The number of bytes dropped by a service policy."
+    ::= { aristaQosStatsEntry 4 }
+
+aristaQosBytesSent  OBJECT-TYPE
+    SYNTAX          Counter64
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The number of bytes classified by a service policy and
+        allowed through."
+    ::= { aristaQosStatsEntry 5 }
+
+aristaQosBytesMatched  OBJECT-TYPE
+    SYNTAX             Counter64
+    MAX-ACCESS         read-only
+    STATUS             current
+    DESCRIPTION
+        "The number of bytes classified by a service policy.
+         Equal to the sum of aristaQosBytesDropped and
+         aristaQosBytesSent."
+    ::= { aristaQosStatsEntry 6 }
 
 -- Start of aristaEcnCounterTable
 
@@ -708,7 +749,10 @@ aristaClassMapGroup  OBJECT-GROUP
                          aristaPolicyMapClassId,
 		         aristaQosPktsDropped,
 		         aristaQosPktsMatched,
-		         aristaQosPktsSent
+		         aristaQosPktsSent,
+		         aristaQosBytesDropped,
+		         aristaQosBytesMatched,
+		         aristaQosBytesSent
                     }
     STATUS       current
     DESCRIPTION

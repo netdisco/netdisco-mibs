@@ -2,14 +2,17 @@ ARISTA-BRIDGE-EXT-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
     MODULE-IDENTITY, OBJECT-TYPE,
+    NOTIFICATION-TYPE,
     Counter32, TimeTicks               FROM SNMPv2-SMI
-    MODULE-COMPLIANCE, OBJECT-GROUP    FROM SNMPv2-CONF
-    dot1qFdbId, dot1qTpFdbAddress      FROM Q-BRIDGE-MIB
+    MODULE-COMPLIANCE, OBJECT-GROUP,
+    NOTIFICATION-GROUP                 FROM SNMPv2-CONF
+    dot1qFdbId, dot1qTpFdbAddress,
+    dot1qTpFdbPort                     FROM Q-BRIDGE-MIB
     TimeFilter                         FROM RMON2-MIB
     aristaMibs                         FROM ARISTA-SMI-MIB;
 
 aristaBridgeExtMIB MODULE-IDENTITY
-    LAST-UPDATED "201408150000Z"
+    LAST-UPDATED "202009290000Z"
     ORGANIZATION "Arista Networks, Inc."
     CONTACT-INFO
         "Arista Networks, Inc.
@@ -22,16 +25,25 @@ aristaBridgeExtMIB MODULE-IDENTITY
          E-mail: snmp@arista.com"
     DESCRIPTION
            "This MIB contains extensions to the BRIDGE-MIB."
+    REVISION      "202009290000Z"
+    DESCRIPTION
+           "Added aristaMacStatsTable."
+    REVISION      "201909150000Z"
+    DESCRIPTION
+           "Added MAC learn, move, and age notifications, with corresponding
+            notification group and compliance statement."
     REVISION      "201408150000Z"
     DESCRIPTION
-           "Updated postal and e-mail addresses"
+           "Updated postal and e-mail addresses."
     REVISION      "201103311300Z"
     DESCRIPTION
-           "Updated postal address and telephone"
+           "Updated postal address and telephone."
     REVISION      "201005030000Z"
     DESCRIPTION
            "The initial revision of this MIB module."
     ::= { aristaMibs 2 }
+
+aristaBridgeExtNotifications OBJECT IDENTIFIER ::= { aristaBridgeExtMIB 0 }
 
 aristaDot1qTpFdbTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF AristaDot1qTpFdbEntry
@@ -63,11 +75,12 @@ aristaDot1qTpFdbTimeMark OBJECT-TYPE
     SYNTAX      TimeFilter
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "A TimeFilter that can be used to filter out entries
-       that have not moved recently.  If you don't want to filter, make
-       sure to pass '0' for the value of this index component, otherwise
-       pass the sysUpTime value representing the last time you queried
-       the table."
+    DESCRIPTION
+        "A TimeFilter that can be used to filter out entries
+        that have not moved recently.  If you don't want to filter, make
+        sure to pass '0' for the value of this index component, otherwise
+        pass the sysUpTime value representing the last time you queried
+        the table."
     ::= { aristaDot1qTpFdbEntry 1 }
 
 
@@ -75,19 +88,99 @@ aristaDot1qTpFdbNumMoves OBJECT-TYPE
     SYNTAX      Counter32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "The number of times a given MAC address has changed
-       ports without having been aged out, or the value 1 for a
-       MAC address that was not previously in the table before being
-       learned."
+    DESCRIPTION
+        "The number of times a given MAC address has changed
+        ports without having been aged out, or the value 1 for a
+        MAC address that was not previously in the table before being
+        learned."
     ::= { aristaDot1qTpFdbEntry 2 }
 
 aristaDot1qTpFdbLastMove OBJECT-TYPE
     SYNTAX      TimeTicks
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "The value of sysUpTime the last time the value of
+    DESCRIPTION
+        "The value of sysUpTime the last time the value of
         aristaDot1qTpFdbNumMoves was incremented."
     ::= { aristaDot1qTpFdbEntry 3 }
+
+aristaMacStatsTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF AristaMacStatsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A table that contains the number of known MAC entries of various
+        types in each bridging domain."
+    ::= { aristaBridgeExtMIB 3 }
+
+aristaMacStatsEntry OBJECT-TYPE
+    SYNTAX      AristaMacStatsEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The number of known MAC addresses of a specific entry type for a
+        given bridging domain."
+    INDEX   { dot1qFdbId, aristaMacStatsEntryType }
+    ::= { aristaMacStatsTable 1 }
+
+AristaMacStatsEntry ::=
+    SEQUENCE {
+        aristaMacStatsEntryType   INTEGER,
+        aristaMacStatsEntries     Counter32
+    }
+
+aristaMacStatsEntryType OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    local(1),
+                    remote(2)
+    }
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "The type of MAC entry for which this entry provides a count."
+    ::= { aristaMacStatsEntry 1 }
+
+aristaMacStatsEntries OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "The number of known MAC entries of the given entry type in the
+        given bridging domain."
+    ::= { aristaMacStatsEntry 2 }
+
+-- Notifications
+
+aristaMacMove NOTIFICATION-TYPE
+   OBJECTS { 
+      aristaDot1qTpFdbNumMoves,
+      dot1qTpFdbPort
+   }
+   STATUS      current
+   DESCRIPTION
+       "This notification is generated when a MAC address changes ports
+       without having been aged out."
+  ::= { aristaBridgeExtNotifications 1 }
+
+aristaMacLearn NOTIFICATION-TYPE
+   OBJECTS { 
+      dot1qTpFdbPort
+   }
+   STATUS      current
+   DESCRIPTION
+       "This notification is generated when a MAC address is learned. The port
+       is the interface the host was learned on."
+  ::= { aristaBridgeExtNotifications 2 }
+
+aristaMacAge NOTIFICATION-TYPE
+   OBJECTS { 
+      dot1qTpFdbPort
+   }
+   STATUS      current
+   DESCRIPTION
+       "This notification is generated when a MAC address is aged out. It
+       includes the last port it was on before being aged out."
+  ::= { aristaBridgeExtNotifications 3 }
 
 -- Conformance
 
@@ -102,12 +195,25 @@ aristaBridgeExtCompliances OBJECT IDENTIFIER ::= { aristaBridgeExtConformance 2 
 aristaBridgeExtBaseGroup OBJECT-GROUP
     OBJECTS {
         aristaDot1qTpFdbNumMoves,
-        aristaDot1qTpFdbLastMove
+        aristaDot1qTpFdbLastMove,
+        aristaMacStatsEntries
     }
     STATUS      current
     DESCRIPTION
-        "A collection of objects providing MAC move count and times."
+        "A collection of objects providing MAC move count and times, and
+        MAC counts per entry type."
     ::= { aristaBridgeExtGroups 1 }
+
+aristaBridgeExtNotificationGroup NOTIFICATION-GROUP
+    NOTIFICATIONS {
+        aristaMacMove,
+        aristaMacLearn,
+        aristaMacAge
+    }
+    STATUS      current
+    DESCRIPTION
+        "Notification group for Arista bridge extension."
+    ::= { aristaBridgeExtGroups 2 }
 
 -- comliance statements
 
@@ -122,5 +228,16 @@ aristaBridgeExtCompliance MODULE-COMPLIANCE
             aristaBridgeExtBaseGroup
         }
     ::= { aristaBridgeExtCompliances 1 }
+
+aristaBridgeExtNotificationCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "The compliance statement for device support of MAC learn,
+        move, and age notifications."
+    MODULE
+        MANDATORY-GROUPS {
+            aristaBridgeExtNotificationGroup
+        }
+    ::= { aristaBridgeExtCompliances 2 }
 
 END
