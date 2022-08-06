@@ -49,7 +49,7 @@ else {
 }
 
 print "\N{EYES} Translating MIBs\n";
-my %oidmap = ();
+my (%oidmap, %descrmap) = ((), ());
 
 MIB: foreach my $m (@mibs) {
   my $out = File::Temp->new();
@@ -113,11 +113,54 @@ MIB: foreach my $m (@mibs) {
 
     # and remember the indent
     $last_indent = $this_indent;
+
+    if (!exists $descrmap{$oid}) {
+        defined(my $pid = fork) or die "Couldn't fork: $!";
+        if (!$pid) { # Child
+          exec(qq{snmptranslate -m '$m' -Td $oid 2>'$err' 1>'$out'})
+            or die "Couldn't exec: $!";
+        } else { # Parent
+          my $slept = 0.5;
+          while (! waitpid($pid, WNOHANG)) {
+            status("Describing $leaf");
+            sleep 0.05;
+            $slept -= 0.05;
+          }
+          sleep $slept if $slept > 0;
+        }
+
+        if (-s $err) {
+          blank();
+          print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ',
+            MAGENTA, $m, CYAN, " MIBs\n", RESET;
+          while (<$err>) { print }
+          print "\n";
+          # next MIB;
+        }
+
+        my @translate = read_lines($out, 'latin-1');
+
+        my $syntax = join '',
+                     map {s/^.+{/{/; $_}
+                     map {s/\s+//g; $_}
+                     map {s/,/:/g; $_}
+                     grep {m/{/}
+                     grep {m/SYNTAX/} @translate;
+
+        my $descr = join '',
+                    map {s/\s+/ /g; $_}
+                    map {s/"//g; $_}
+                    map {s/^  DESCRIPTION\t//; $_}
+                    grep {m/^(?:  DESCR|    )/} @translate;
+
+        $descrmap{$oid} = ($syntax || '') .','. ($descr || '');
+    }
   }
 }
 
+$descrmap{$_} ||= ',' for keys %oidmap;
 my $report = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', ($arg ? "${arg}_oids" : 'all_oids'));
-write_text($report, join "\n", map {"$_,$oidmap{$_}"}
+write_text($report, join "\n", map {"$_,$oidmap{$_},$descrmap{$_}"}
                                sort {lxoid($a) cmp lxoid($b)} keys %oidmap);
 
 blank();
