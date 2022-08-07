@@ -58,7 +58,7 @@ MIB: foreach my $m (@mibs) {
 
   defined(my $pid = fork) or die "Couldn't fork: $!";
   if (!$pid) { # Child
-    exec(qq{snmptranslate -Tp -Le -m '$m' 2>'$err' 1>'$out'})
+    exec(qq{snmptranslate -m '$m' -On -Td -TB '.1*' 2>'$err' 1>'$out'})
       or die "Couldn't exec: $!";
   } else { # Parent
     my $slept = 0.5;
@@ -79,89 +79,73 @@ MIB: foreach my $m (@mibs) {
     next MIB;
   }
 
-  my $oid = '.1';
-  my $last_indent = 0;
   my @report = read_lines($out, 'latin-1');
+  my %details = ();
 
-  foreach my $line (@report) {
-    my ($spaces, $mode, $type, $leaf, $idx, $indexes) = ('','','','','','');
-
-    if ($line =~ m/^  (.+\+)--  ([-#\w]+)  \(  (\d+)  \)  $/x) {
-        ($spaces, $leaf, $idx) = ($1, $2, $3);
+  LINEOUT: foreach my $line (@report) {
+    if ($line =~ m/^::=/) { # end of details
+        $oidmap{$details{oid}} ||= join ',',
+          ($details{mib} .'::'. $details{leaf}),
+          map {$details{$_} || ''} (qw/type mode index status syntax descr/);
+        %details = ();
+        next LINEOUT;
     }
-    elsif ($line =~ m/^  (.+\+)--  \s(....)  \s([A-Za-z0-9]+)  \s+([-#\w]+)  \(  (\d+)  \)  $/x) {
-        ($spaces, $mode, $type, $leaf, $idx) = ($1, $2, $3, $4, $5);
+
+    if ($line =~ m/^\.\d/) { # oid
+        $details{oid} = $line;
+        next LINEOUT;
     }
-    elsif ($line =~ m/ Index:\s (.+) $/x) {
-        $indexes = join ':', (split m/, /, $1);
-        $oidmap{$oid} .= $indexes if $oidmap{$oid} =~ m/,$/;
-        next;
+
+    if ($line =~ m/^(\S+)\s/) { # leaf name
+        $details{leaf} = $1;
+        next LINEOUT;
     }
-    else { next }
 
-    my $this_indent = length($spaces);
-
-    # update current OID
-    if ($this_indent <= $last_indent) {
-      my $step_back = (($last_indent - $this_indent) / 3);
-      foreach (0 .. $step_back) { $oid =~ s/\.\d+$// }
+    if ($line =~ m/^\s+-- FROM\s+([-#\w]+)/) {
+        $details{mib} = $1;
+        next LINEOUT;
     }
-    $oid .= ".$idx";
 
-    # store what we have just seen
-    $oidmap{$oid} ||= "${m}::${leaf},$type,$mode,";
+    if ($line =~ m/^\s+MAX-ACCESS\s+([-\w]+)/) {
+        $details{mode} = $1;
+        next LINEOUT;
+    }
 
-    # and remember the indent
-    $last_indent = $this_indent;
+    if ($line =~ m/^\s+INDEX\s+{([^}]+)}/) {
+        $details{index} = join ':',
+                                 map {s/\s+//g; $_}
+                                 split m/,/, $1;
+        next LINEOUT;
+    }
 
-    if (!exists $descrmap{$oid}) {
-        defined(my $pid = fork) or die "Couldn't fork: $!";
-        if (!$pid) { # Child
-          exec(qq{snmptranslate -m '$m' -Td $oid 2>'$err' 1>'$out'})
-            or die "Couldn't exec: $!";
-        } else { # Parent
-          my $slept = 0.5;
-          while (! waitpid($pid, WNOHANG)) {
-            status("Describing $leaf");
-            sleep 0.05;
-            $slept -= 0.05;
-          }
-          sleep $slept if $slept > 0;
-        }
+    if ($line =~ m/^\s+STATUS\s+([-\w]+)/) {
+        $details{status} = $1;
+        next LINEOUT;
+    }
 
-        if (-s $err) {
-          blank();
-          print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ',
-            MAGENTA, $m, CYAN, " MIBs\n", RESET;
-          while (<$err>) { print }
-          print "\n";
-          # next MIB;
-        }
+    if ($line =~ m/^\s+SYNTAX\s+([-\w]+)\s+{([^}]+)}/) {
+        $details{type} = $1;
+        $details{syntax} = join ':',
+                                  map {s/\s+//g; $_}
+                                  split m/,/, $2;
+        next LINEOUT;
+    }
 
-        my @translate = read_lines($out, 'latin-1');
-
-        my $syntax = join '',
-                     map {s/^.+{/{/; $_}
-                     map {s/\s+//g; $_}
-                     map {s/,/:/g; $_}
-                     grep {m/{/}
-                     grep {m/SYNTAX/} @translate;
-
-        my $descr = join '',
-                    map {s/\s+/ /g; $_}
-                    map {s/"//g; $_}
-                    map {s/^  DESCRIPTION\t//; $_}
-                    grep {m/^(?:  DESCR|    )/} @translate;
-
-        $descrmap{$oid} = ($syntax || '') .','. ($descr || '');
+    if ($line =~ m/^(?:  DESCR|    )/) {
+        $details{descr} .= join '',
+                                map {s/\s+/ /g; $_}
+                                map {s/"//g; $_}
+                                map {s/^\s+DESCRIPTION\s+//; $_} ($line);
+        next LINEOUT;
     }
   }
 }
 
-$descrmap{$_} ||= ',' for keys %oidmap;
+delete $oidmap{'.1'};
 my $report = catfile($ENV{MIBHOME}, 'EXTRAS', 'reports', ($arg ? "${arg}_oids" : 'all_oids'));
-write_text($report, join "\n", map {"$_,$oidmap{$_},$descrmap{$_}"}
-                               sort {lxoid($a) cmp lxoid($b)} keys %oidmap);
+write_text($report, join '', map {"$_,$oidmap{$_}\n"}
+                             sort {lxoid($a) cmp lxoid($b)}
+                             grep {m/^\.1/} keys %oidmap);
 
 blank();
 print sprintf "\N{BLACK FLAG} %d mibs translated into %d objects.\n", scalar @mibs, scalar keys %oidmap;
