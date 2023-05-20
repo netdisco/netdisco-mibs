@@ -1,8 +1,8 @@
 -- *******************************************************************
 -- CISCO-LWAPP-HA-MIB.my :
 -- Jan 2012, Gayathri
---   
--- Copyright (c) 2017-2018 by Cisco Systems Inc.
+-- Nov 2017, Selvaraj Mani (Added to IOS Sources) 
+-- Copyright (c) 2018-2020 by Cisco Systems, Inc.
 -- All rights reserved.
 -- *******************************************************************
 
@@ -23,6 +23,7 @@ IMPORTS
         FROM SNMPv2-SMI
     TruthValue,
     MacAddress,
+    DisplayString,
     RowStatus
         FROM SNMPv2-TC
     InetAddressType,
@@ -44,7 +45,7 @@ IMPORTS
 -- ********************************************************************
 
 ciscoLwappHaMIB MODULE-IDENTITY
-    LAST-UPDATED    "201802020000Z"
+    LAST-UPDATED    "202006070000Z"
     ORGANIZATION    "Cisco Systems Inc."
     CONTACT-INFO
             "Cisco Systems,
@@ -144,9 +145,17 @@ ciscoLwappHaMIB MODULE-IDENTITY
 
         [2] Draft-obara-capwap-lwapp-00.txt, IETF Light 
         Weight Access Point Protocol."
-    REVISION        "201802020000Z"
-    DESCRIPTION
-        "Initial version of this MIB module."
+    REVISION        "202006070000Z"
+    DESCRIPTION     "Added Gateway Failover Interval object in
+                     (ciscoLwappMcRmiConfig)"
+    REVISION        "201907080000Z"
+    DESCRIPTION     "Added Multi-Chassis RMI configuration objects in
+                     (ciscoLwappMcRmiConfig)"
+    REVISION        "201711080000Z"
+    DESCRIPTION     "Added Multi-Chassis HA configuration objects in
+                     (ciscoLwappMcHaConfig)"
+    REVISION        "201703140000Z"
+    DESCRIPTION     "Initial version of this MIB module."
     ::= { ciscoMgmt 843 }
 
 
@@ -173,6 +182,12 @@ ciscoLwappHaPeerStatisticsVariable  OBJECT IDENTIFIER
 
 ciscoLwappHaStatisticsVariable  OBJECT IDENTIFIER
     ::= { ciscoLwappHaMIBObjects 5 }
+
+ciscoLwappMcHaConfig  OBJECT IDENTIFIER
+    ::= { ciscoLwappHaMIBObjects 6 }
+
+ciscoLwappMcRmiConfig  OBJECT IDENTIFIER
+    ::= { ciscoLwappHaMIBObjects 7 }
 
 ciscoLwappHaSystemStatistics  OBJECT IDENTIFIER
     ::= { ciscoLwappHaPeerStatisticsVariable 1 }
@@ -315,13 +330,11 @@ cLHaLinkEncryption OBJECT-TYPE
     DESCRIPTION
         "This object specifies whether link encryption is
         enabled or disabled.
-        WLC should be rebooted for the changed value 
-        to take effect.
         A value of 'true' indicates that, link encryption
-        will be enabled on the controller, on next reboot. 
+        is enabled. 
         A value of 'false' indicates that, link encryption
-        will be disabled on the controller, on next reboot."
-    DEFVAL          { true } 
+        is disabled."
+    DEFVAL          { false } 
     ::= { ciscoLwappHaGlobalConfig 13 }
 
 cLHaNetworkFailOver OBJECT-TYPE
@@ -403,6 +416,214 @@ cLHaRFStatusUnitIpType OBJECT-TYPE
         when redundancy framwork(RF) state of active/peer unit 
         changes." 
     ::= { ciscoLwappHaGlobalConfig 20 }
+
+-- ********************************************************************
+-- ciscoLwappMcHaConfig
+-- ********************************************************************
+
+cLMcHaPortName OBJECT-TYPE
+        SYNTAX          DisplayString
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object allows user to specify and get the
+                         interface name designated as the HA Interface
+                         in Multi-Chassis HA environments. This will be
+                         applicable only on the virtual Chassis systems.
+                         This should be the complete namestring of 
+                         the chassis interface." 
+        ::= { ciscoLwappMcHaConfig 1 }
+
+cLMcHaPortLocIpAddrType OBJECT-TYPE
+        SYNTAX          InetAddressType
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object represents the IP version to be
+                         used for HA transport. This object will apply
+                         to both local IP and the cLMcHaPortMask" 
+        ::= { ciscoLwappMcHaConfig 2 }
+
+
+cLMcHaPortLocIp OBJECT-TYPE
+        SYNTAX          InetAddress
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object allows user to specify and get the
+                         Local chassis IPv4 Address to establish the HA
+                         communication. This IP Address will be assigned
+                         to the HA Port on the configuring chassis, and
+                         it will be take effect only after a reload." 
+        ::= { ciscoLwappMcHaConfig 3 }
+
+cLMcHaPortMask OBJECT-TYPE
+        SYNTAX          InetAddress
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object allows user to specify and get the
+                         network mask for the local chassis IPv4 Address
+                         to establish the HA communication. This netmask
+                         will be assigned to designated HA interface." 
+        ::= { ciscoLwappMcHaConfig 4 }
+
+cLMcHaPortRemoteIpAddrType OBJECT-TYPE
+        SYNTAX          InetAddressType
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object represents the IP version to be
+                         used for HA transport." 
+        ::= { ciscoLwappMcHaConfig 5 }
+
+cLMcHaPortRemIp OBJECT-TYPE
+        SYNTAX          InetAddress
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object allows user to specify and get the
+                         peer chassis IPv4 Address to establish the
+                         HA communication." 
+        ::= { ciscoLwappMcHaConfig 6 }
+
+cLMcHaKeepAliveTimeOut OBJECT-TYPE
+        SYNTAX          Unsigned32 (100..1000)
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object specifies keep alive timeout value
+                         in milli seconds between 100 and 1000.
+                         The value for this object configured in
+                         multiples of 100." 
+        DEFVAL          { 100 }
+        ::= { ciscoLwappMcHaConfig 7 }
+
+cLMcHaChassisPriority OBJECT-TYPE
+        SYNTAX          Unsigned32 (1..2)
+        MAX-ACCESS      read-write
+        STATUS          current
+        DESCRIPTION     "This object allows user to specify and get the
+                         current chassis priority. The higher the
+                         priority, higher the chance of local chassis
+                         becoming the Active." 
+        ::= { ciscoLwappMcHaConfig 8 }
+
+cLMcHaClearConfig OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object allows user to remove the multi-chassis
+                     HA configuration. When get, TRUE value indicating
+                     HA configuration is cleared, FALSE means not."
+    DEFVAL          { false } 
+     ::= { ciscoLwappMcHaConfig 9 }
+ 
+cLMcHaKeepAliveRetryCount OBJECT-TYPE
+    SYNTAX          Unsigned32 (3..10)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object specifies keep alive retry count and
+                     The value for this object configured between
+                     3 and 10."
+    DEFVAL          { 3 } 
+    ::= { ciscoLwappMcHaConfig 10 }
+
+-- ********************************************************************
+-- ciscoLwappMcRmiConfig
+-- ********************************************************************
+
+cLMcRmiConfigAction OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..2)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object allows user to remove the RMI
+                     configuration. When get, 1 value indicating RMI
+                     configuration is applied , 2 means clear config."
+    ::= { ciscoLwappMcRmiConfig 1 }
+ 
+
+cLMcRmiInterface OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object specifies Chassis/Switch number and
+                     The value for this object is between 1 and 15."
+    ::= { ciscoLwappMcRmiConfig 2 }
+
+cLMcRmiChassisANum OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..15)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object specifies Chassis/Switch number and
+                     The value for this object is between 1 and 15."
+    DEFVAL          { 1 } 
+    ::= { ciscoLwappMcRmiConfig 3 }
+
+cLMcRmiChassisAIpAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object represents IP version to be used
+                     for RMI transport"
+    ::= { ciscoLwappMcRmiConfig 4 }
+
+
+cLMcRmiChassisAIp OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object allows user to specify and get the
+                     chassis. IPv4 Address to establish the RMI
+                     communication. This IP Address will be assigned
+                     to the RMI Port on the configuring chassis, and it
+                     will be take effect only after a reload." 
+    ::= { ciscoLwappMcRmiConfig 5 }
+
+cLMcRmiChassisBNum OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..15)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object specifies Chassis/Switch number and
+                     The value for this object is between 1 and 15."
+    DEFVAL          { 1 } 
+    ::= { ciscoLwappMcRmiConfig 6 }
+
+cLMcRmiChassisBIpAddrType OBJECT-TYPE
+    SYNTAX          InetAddressType
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object represents IP version to be used
+                     for RMI transport"
+    ::= { ciscoLwappMcRmiConfig 7 }
+
+
+cLMcRmiChassisBIp OBJECT-TYPE
+    SYNTAX          InetAddress
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object allows user to specify and get the
+                     chassis. IPv4 Address to establish the RMI
+                     communication. This IP Address will be assigned
+                     to the RMI Port on the configuring chassis, and
+                     it will be take effect only after a reload." 
+    ::= { ciscoLwappMcRmiConfig 8 }
+
+
+cLMcRmiGatewayFailover OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object allows user to enable/disable
+                     RMI Gateway-Failover configuration. When get,
+                     TRUE value indicating RMI Gateway-Failover 
+                     configuration is enabled, FALSE means disabled."
+    DEFVAL          { true } 
+     ::= { ciscoLwappMcRmiConfig 9 }
+ 
+cLMcRmiGatewayFailoverInterval OBJECT-TYPE
+    SYNTAX          Unsigned32 (6..12)
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION     "This object specifies Gateway-Failover interval and
+                     The value for this object is between 6 and 12."
+    DEFVAL          { 8 }
+    ::= { ciscoLwappMcRmiConfig 10 }
+
+
 -- ********************************************************************
 -- cLHaNeworkRoutePeerTable
 -- ********************************************************************
@@ -529,8 +750,6 @@ cLHaNetworkRoutePeerRowStatus OBJECT-TYPE
         of rows in this table." 
     ::= { cLHaNetworkRoutePeerConfigEntry 8 }
  
-
-
 -- ********************************************************************
 -- *    Peer Statistics Variable
 -- ********************************************************************
@@ -887,6 +1106,23 @@ ciscoLwappHaMIBGroups  OBJECT IDENTIFIER
 
 
 ciscoLwappHaMIBCompliance MODULE-COMPLIANCE
+    STATUS          deprecated
+                         --superceded by ciscoLwappHaMIBComplianceRev1
+    DESCRIPTION
+        "This is a default module-compliance
+        containing default object groups."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ciscoLwappHaGlobalConfigGroup,
+                        ciscoLwappHaNetworkConfigGroup,
+                        ciscoLwappHaStatisticsGroup,
+                        ciscoLwappHaMIBNotificationVariableGroup,
+                        ciscoLwappHaMIBNotificationGroup,
+                        ciscoLwappMcHaConfigGroup
+                    }
+    ::= { ciscoLwappHaMIBCompliances 1 }
+
+ciscoLwappHaMIBComplianceRev1 MODULE-COMPLIANCE
     STATUS          current
     DESCRIPTION
         "This is a default module-compliance
@@ -897,9 +1133,11 @@ ciscoLwappHaMIBCompliance MODULE-COMPLIANCE
                         ciscoLwappHaNetworkConfigGroup,
                         ciscoLwappHaStatisticsGroup,
                         ciscoLwappHaMIBNotificationVariableGroup,
-                        ciscoLwappHaMIBNotificationGroup
+                        ciscoLwappHaMIBNotificationGroup,
+                        ciscoLwappMcHaConfigGroup,
+                        ciscoLwappMcRmiConfigGroup
                     }
-    ::= { ciscoLwappHaMIBCompliances 1 }
+    ::= { ciscoLwappHaMIBCompliances 2 }
 
 -- *******************************************************************
 -- Units of Conformance
@@ -1009,6 +1247,45 @@ ciscoLwappHaMIBNotificationGroup NOTIFICATION-GROUP
         HA related notifications sent by the agent to a network
         management station."
     ::= { ciscoLwappHaMIBGroups 5 }
+
+ciscoLwappMcHaConfigGroup OBJECT-GROUP
+    OBJECTS         {
+                        cLMcHaPortName,
+                        cLMcHaPortLocIpAddrType,
+                        cLMcHaPortLocIp,
+                        cLMcHaPortMask,
+                        cLMcHaPortRemoteIpAddrType,
+                        cLMcHaPortRemIp,
+                        cLMcHaKeepAliveTimeOut,
+                        cLMcHaChassisPriority,
+                        cLMcHaClearConfig,
+                        cLMcHaKeepAliveRetryCount
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This collection of objects represents the information
+         about network config of the multi chassis high availability
+         RMI objects on the controller."
+    ::= { ciscoLwappHaMIBGroups 6 }
+
+ciscoLwappMcRmiConfigGroup OBJECT-GROUP
+    OBJECTS         {
+                        cLMcRmiConfigAction,
+                        cLMcRmiInterface,
+                        cLMcRmiChassisANum,
+                        cLMcRmiChassisAIpAddrType,
+                        cLMcRmiChassisAIp,
+                        cLMcRmiChassisBNum,
+                        cLMcRmiChassisBIpAddrType,
+                        cLMcRmiChassisBIp,
+                        cLMcRmiGatewayFailover,
+                        cLMcRmiGatewayFailoverInterval
+                    }
+    STATUS          current
+    DESCRIPTION     "This collection of objects represents the
+                     information about network config of the multi 
+                     chassis RMI objects on the controller."
+    ::= { ciscoLwappHaMIBGroups 7 }
 
 END
 

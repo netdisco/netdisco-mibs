@@ -3,7 +3,7 @@
 --   
 -- August 2010, Vinay Shankarkumar
 --   
--- Copyright (c) 2010-2011 by cisco Systems Inc.
+-- Copyright (c) 2010-2011-2020 by cisco Systems Inc.
 -- All rights reserved.
 --   
 -- *****************************************************************
@@ -17,14 +17,17 @@ IMPORTS
     Gauge32,
     Unsigned32,
     Counter32,
-    Counter64
+    Counter64,
+    NOTIFICATION-TYPE
         FROM SNMPv2-SMI
     OBJECT-GROUP,
-    MODULE-COMPLIANCE
+    MODULE-COMPLIANCE,
+    NOTIFICATION-GROUP
         FROM SNMPv2-CONF
     TEXTUAL-CONVENTION,
     TruthValue,
-    DisplayString
+    DisplayString,
+    RowStatus
         FROM SNMPv2-TC
     InetAddressType,
     InetAddress
@@ -36,7 +39,7 @@ IMPORTS
 
 
 ciscoPtpMIB MODULE-IDENTITY
-    LAST-UPDATED    "201101280000Z"
+    LAST-UPDATED    "202003170000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -448,9 +451,41 @@ ciscoPtpMIB MODULE-IDENTITY
         The MIB refers to the sections of the IEEE 1588 standard for
         reference. Throughout the MIB various secions from the standard
         are referenced"
-    REVISION        "201101280000Z"
+    REVISION        "202003170000Z"
     DESCRIPTION
-        "Initial Version"
+        "Added a new MIB notification ciscoPtpMIBNotifyRogueMaster
+        for the new object cPtpClockRogueMasterDetect."
+    REVISION        "202003160000Z"
+    DESCRIPTION
+        "Added the following objects to cPtpClockPortTable.
+
+        cPtpClockPortBlockGMC                             TruthValue
+        cPtpClockRogueMasterDetect                        TruthValue
+
+        Also modified the MIB conform group, ciscoPtpMIBClockPortGroup
+        for the new objects.
+
+
+        Added the following objects to the MIB
+
+        cPtpClockSystemTimePropertiesDomainIndex        ClockDomainType
+        cPtpClockSystemTimePropertiesClockTypeIndex     ClockType
+        cPtpClockSystemTimePropertiesInstanceIndex     
+        ClockInstanceType
+        cPtpClockSystemTimePropertiesClockSyntonized    TruthValue
+        cPtpClockSystemTimePropertiesDomainSyntonized   TruthValue
+        cPtpClockSystemTimePropertiesFrequencyOffset    Integer32
+
+        to cPtpClockSystemTimePropertiesTable.
+
+        Added a new MIB conform group,
+        ciscoPtpMIBClockSystemTimePropertiesGroup for the new objects.
+
+        Also modified the ciscoPtpMIBCompliances2 to add the new group
+        ciscoPtpMIBClockSystemTimePropertiesGroup."
+    REVISION        "201908220000Z"
+    DESCRIPTION
+        "Version updating PTP notification objects."
     ::= { ciscoMgmt 760 }
 
 
@@ -919,6 +954,39 @@ ciscoPtpMIBSystemInfo  OBJECT IDENTIFIER
 ciscoPtpMIBCompliances  OBJECT IDENTIFIER
     ::= { ciscoPtpMIBConformance 1 }
 
+
+ciscoPtpGMClockChange NOTIFICATION-TYPE
+    OBJECTS         { cPtpClockParentDSGMClockIdentity }
+    STATUS          current
+    DESCRIPTION
+        "A ciscoPtpPGMClockChange notification is generated when the
+        value of cPtpClockParentDSGMClockIdentity is changed.
+        The Notification contains the PTP new grand master clock
+        identity."
+   ::= { ciscoPtpMIBNotifs 1 }
+
+ciscoPtpParentClockChange NOTIFICATION-TYPE
+    OBJECTS         { cPtpClockParentDSParentPortIdentity }
+    STATUS          current
+    DESCRIPTION
+        "A ciscoPtpParentlockChange notification is generated when the
+        value of cPtpClockParentPortIdentity is changed.
+        The Notification contains PTP new parent clock identity and the
+        port
+        on which this is learnt."
+   ::= { ciscoPtpMIBNotifs 2 }
+
+ciscoPtpRogueMaster NOTIFICATION-TYPE
+    OBJECTS         {
+                        cPtpClockRogueMasterDetect,
+                        cPtpClockPortName
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A ciscoPtpRogueMaster notification is generated when the
+        value of cPtpClockRogueMasterDetect is changed. This object
+        specifies the ptp rogue master detection on the port"
+   ::= { ciscoPtpMIBNotifs 3 }
 ciscoPtpMIBGroups  OBJECT IDENTIFIER
     ::= { ciscoPtpMIBConformance 2 }
 
@@ -953,7 +1021,8 @@ ciscoPtpMIBCompliances2 MODULE-COMPLIANCE
                         ciscoPtpMIBClockParentDSGroup,
                         ciscoPtpMIBClockDefaultDSGroup,
                         ciscoPtpMIBClockRunningGroup,
-                        ciscoPtpMIBClockTimepropertiesGroup
+                        ciscoPtpMIBClockTimepropertiesGroup,
+                        ciscoPtpMIBClockSystemTimePropertiesGroup
                     }
     ::= { ciscoPtpMIBCompliances 2 }
 
@@ -992,6 +1061,20 @@ ciscoPtpMIBCompliances4 MODULE-COMPLIANCE
                         ciscoPtpMIBClockPortTransDSGroup
                     }
     ::= { ciscoPtpMIBCompliances 4 }
+
+ciscoPtpMIBCompliances5 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "Compliance statement for agents that provide read-only support
+        for CISCO-PTP-MIB. Such devices can only be monitored using this
+        MIB module.
+
+        The Module is implemented with support for read-only. In other
+        words, only monitoring is available by implementing this
+        MODULE-COMPLIANCE."
+    MODULE          -- this module
+    MANDATORY-GROUPS { ciscoPtpMIBNotificationGroup }
+    ::= { ciscoPtpMIBCompliances 5 }
 
 ciscoPtpMIBSystemInfoGroup OBJECT-GROUP
     OBJECTS         {
@@ -1114,7 +1197,9 @@ ciscoPtpMIBClockPortGroup OBJECT-GROUP
                         cPtpClockPortCurrentPeerAddress,
                         cPtpClockPortNumOfAssociatedPorts,
                         cPtpClockPortCurrentPeerAddressType,
-                        cPtpClockPortRole
+                        cPtpClockPortRole,
+                        cPtpClockPortBlockGMC,
+                        cPtpClockRogueMasterDetect
                     }
     STATUS          current
     DESCRIPTION
@@ -1189,6 +1274,30 @@ ciscoPtpMIBClockPortAssociateGroup OBJECT-GROUP
         "Group which aggregates objects describing information on peer
         PTP ports for a given PTP clock-port."
     ::= { ciscoPtpMIBGroups 12 }
+
+ciscoPtpMIBNotificationGroup NOTIFICATION-GROUP
+   NOTIFICATIONS    {
+                        ciscoPtpParentClockChange,
+                        ciscoPtpGMClockChange
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Group which aggregates objects describing information of PTP
+        notifications for changes 
+        in PTP parent clock and grand master clock."
+    ::= { ciscoPtpMIBGroups 13 }
+
+ciscoPtpMIBClockSystemTimePropertiesGroup OBJECT-GROUP
+    OBJECTS         {
+                        cPtpClockSystemTimePropertiesClockSyntonized,
+                        cPtpClockSystemTimePropertiesDomainSyntonized,
+                        cPtpClockSystemTimePropertiesFrequencyOffset
+                    }
+    STATUS          current
+    DESCRIPTION
+        "Group which aggregates objects describing PTP Time Properties
+        information."
+    ::= { ciscoPtpMIBGroups 14 }
 ciscoPtpMIBClockInfo  OBJECT IDENTIFIER
     ::= { ciscoPtpMIBObjects 2 }
 
@@ -2320,7 +2429,9 @@ CPtpClockPortEntry ::= SEQUENCE {
         cPtpClockPortSyncOneStep            TruthValue,
         cPtpClockPortCurrentPeerAddressType InetAddressType,
         cPtpClockPortCurrentPeerAddress     InetAddress,
-        cPtpClockPortNumOfAssociatedPorts   Gauge32
+        cPtpClockPortNumOfAssociatedPorts   Gauge32,
+        cPtpClockPortBlockGMC               TruthValue,
+        cPtpClockRogueMasterDetect          TruthValue
 }
 
 cPtpClockPortDomainIndex OBJECT-TYPE
@@ -2436,6 +2547,24 @@ cPtpClockPortNumOfAssociatedPorts OBJECT-TYPE
         For a slave port - the number of masters available to this slave
         port (might or might not be peered)." 
     ::= { cPtpClockPortEntry 10 }
+
+cPtpClockPortBlockGMC OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies that the ptp port is configured with ptp
+        gmc-block or not." 
+    ::= { cPtpClockPortEntry 11 }
+
+cPtpClockRogueMasterDetect OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies that port receives the PTP packets from
+        other network, which the device is not interested to sync with." 
+    ::= { cPtpClockPortEntry 12 }
  
 
 
@@ -3076,406 +3205,94 @@ cPtpClockPortAssociateOutErrors OBJECT-TYPE
  
 
 
+cPtpClockSystemTimePropertiesTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CPtpClockSystemTimePropertiesEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "Table of information about the PTP clock System
+        Timeproperties."
+    ::= { ciscoPtpMIBClockInfo 12 }
+
+cPtpClockSystemTimePropertiesEntry OBJECT-TYPE
+    SYNTAX          CPtpClockSystemTimePropertiesEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry in the table, containing information about a single
+        PTP clock timeproperties for a domain."
+    INDEX           {
+                        cPtpClockSystemTimePropertiesDomainIndex,
+                        cPtpClockSystemTimePropertiesInstanceIndex,
+                        cPtpClockSystemTimePropertiesClockTypeIndex
+                    } 
+    ::= { cPtpClockSystemTimePropertiesTable 1 }
+
+CPtpClockSystemTimePropertiesEntry ::= SEQUENCE {
+        cPtpClockSystemTimePropertiesDomainIndex      ClockDomainType,
+        cPtpClockSystemTimePropertiesClockTypeIndex   ClockType,
+        cPtpClockSystemTimePropertiesInstanceIndex    ClockInstanceType,
+        cPtpClockSystemTimePropertiesClockSyntonized  TruthValue,
+        cPtpClockSystemTimePropertiesDomainSyntonized TruthValue,
+        cPtpClockSystemTimePropertiesFrequencyOffset  Integer32
+}
+
+cPtpClockSystemTimePropertiesDomainIndex OBJECT-TYPE
+    SYNTAX          ClockDomainType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the domain number used to create logical
+        group of PTP devices." 
+    ::= { cPtpClockSystemTimePropertiesEntry 1 }
+
+cPtpClockSystemTimePropertiesClockTypeIndex OBJECT-TYPE
+    SYNTAX          ClockType
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the clock type as defined in the textual
+        convention description." 
+    ::= { cPtpClockSystemTimePropertiesEntry 2 }
+
+cPtpClockSystemTimePropertiesInstanceIndex OBJECT-TYPE
+    SYNTAX          ClockInstanceType (0..255)
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the instance of the clock for this clock
+        type in the given domain." 
+    ::= { cPtpClockSystemTimePropertiesEntry 3 }
+
+cPtpClockSystemTimePropertiesClockSyntonized OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if slave device's ptp clock is in sync
+        with GM clock or not." 
+    ::= { cPtpClockSystemTimePropertiesEntry 4 }
+
+cPtpClockSystemTimePropertiesDomainSyntonized OBJECT-TYPE
+    SYNTAX          TruthValue
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies if slave device's ptp clock domain value
+        is in sync with GM clock or not." 
+    ::= { cPtpClockSystemTimePropertiesEntry 5 }
+
+cPtpClockSystemTimePropertiesFrequencyOffset OBJECT-TYPE
+    SYNTAX          Integer32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the timeproperties value of frequency
+        offset." 
+    ::= { cPtpClockSystemTimePropertiesEntry 6 }
+ 
+
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

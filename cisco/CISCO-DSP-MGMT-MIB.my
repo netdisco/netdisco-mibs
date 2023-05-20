@@ -3,7 +3,7 @@
 --   
 -- July 1997  Hongchi Shih
 --   
--- Copyright (c) 1997-2000, 2003-2007, 2009, 2011 by cisco Systems Inc.
+-- Copyright (c) 1997-2015 by Cisco Systems Inc.
 -- All rights reserved.
 -- *********************************************************************
 
@@ -25,11 +25,14 @@ IMPORTS
     TimeStamp,
     TruthValue,
     DisplayString,
-    RowStatus
+    RowStatus,
+    StorageType
         FROM SNMPv2-TC
     entPhysicalIndex,
     entPhysicalName
         FROM ENTITY-MIB
+    SnmpAdminString
+        FROM SNMP-FRAMEWORK-MIB
     Percent
         FROM CISCO-QOS-PIB-MIB
     ciscoMgmt
@@ -37,7 +40,7 @@ IMPORTS
 
 
 ciscoDspMgmtMIB MODULE-IDENTITY
-    LAST-UPDATED    "201102170000Z"
+    LAST-UPDATED    "201505120000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -82,6 +85,14 @@ ciscoDspMgmtMIB MODULE-IDENTITY
         RTP  - Real-time Transport protocol.
         Video Pool - A group of DSP resources dedicated to providing 
                video services."
+    REVISION        "201503160000Z"
+    DESCRIPTION
+        "Added following OBJECT-GROUP:
+        - cdspTranscodeProfileGroup 
+        - cdspMtpProfileGroup 
+        - cdspConferenceProfileGroup 
+        Added new compliance 
+        - cdspMgmtComplianceRev12."
     REVISION        "201102170000Z"
     DESCRIPTION
         "1. Added cdspCardVideoPoolUtilization and
@@ -1335,11 +1346,29 @@ cdspTranscodeProfileEntry OBJECT-TYPE
     ::= { cdspTranscodeProfileTable 1 }
 
 CdspTranscodeProfileEntry ::= SEQUENCE {
+        cdspTranscodeProfileMaxCodec     Unsigned32,
         cdspTranscodeProfileId           Unsigned32,
         cdspTranscodeProfileMaxConfSess  Unsigned32,
         cdspTranscodeProfileMaxAvailSess Unsigned32,
-        cdspTranscodeProfileRowStatus    RowStatus
+        cdspTranscodeProfileRowStatus    RowStatus,
+        cdspTranscodeResourceId          Unsigned32,
+        cdspTranscodeDescription         SnmpAdminString,
+        cdspTranscodeService             INTEGER,
+        cdspTranscodeAdminState          INTEGER,
+        cdspTranscodeApplication         INTEGER,
+        cdspTranscodeApplicationStatus   INTEGER
 }
+
+cdspTranscodeProfileMaxCodec OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..4294967295)
+    UNITS           "codecs"
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the maximum number of codecs
+        to be configured in the DSPFarm transcode profile."
+    DEFVAL          { 1 } 
+    ::= { cdspTranscodeProfileEntry 1 }
 
 cdspTranscodeProfileId OBJECT-TYPE
     SYNTAX          Unsigned32 (1..4294967295)
@@ -1348,17 +1377,18 @@ cdspTranscodeProfileId OBJECT-TYPE
     DESCRIPTION
         "This object indicates the profile number
         of the DSPFarm transcode profile." 
-    ::= { cdspTranscodeProfileEntry 1 }
+    ::= { cdspTranscodeProfileEntry 2 }
 
 cdspTranscodeProfileMaxConfSess OBJECT-TYPE
-    SYNTAX          Unsigned32 (0..4294967295)
+    SYNTAX          Unsigned32
+    UNITS           "sessions"
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
         "This object indicates the maximum transcode sessions
         configured on the DSPFarm transcode profile for the
         voice gateway." 
-    ::= { cdspTranscodeProfileEntry 2 }
+    ::= { cdspTranscodeProfileEntry 3 }
 
 cdspTranscodeProfileMaxAvailSess OBJECT-TYPE
     SYNTAX          Unsigned32 (0..4294967295)
@@ -1369,7 +1399,7 @@ cdspTranscodeProfileMaxAvailSess OBJECT-TYPE
         transcode sessions per transcode profile from the 
         configured maximum transcode sessions per transcode 
         profile for the voice gateway." 
-    ::= { cdspTranscodeProfileEntry 3 }
+    ::= { cdspTranscodeProfileEntry 4 }
 
 cdspTranscodeProfileRowStatus OBJECT-TYPE
     SYNTAX          RowStatus
@@ -1382,7 +1412,84 @@ cdspTranscodeProfileRowStatus OBJECT-TYPE
         The storage type for all the entries created would 
         be volatile. To retain the configured entries. One must
         write the configuration to memory in the voice gateway." 
-    ::= { cdspTranscodeProfileEntry 4 }
+    ::= { cdspTranscodeProfileEntry 5 }
+
+cdspTranscodeResourceId OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates resource ID in the DSPFarm
+        transcode profile" 
+    ::= { cdspTranscodeProfileEntry 6 }
+
+cdspTranscodeDescription OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates description of
+        DSPFarm transcode profile." 
+    ::= { cdspTranscodeProfileEntry 7 }
+
+-- As discussed in the email the TC options willbe different for
+-- Transcode/MTP/Conference.
+
+cdspTranscodeService OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        nonSecure(1),
+                        secure(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the profile service type
+        of the DSPFarm transcode profile." 
+    ::= { cdspTranscodeProfileEntry 8 }
+
+cdspTranscodeAdminState OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        down(1),
+                        up(2)
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the admin state
+        of the DSPFarm transcode profile"
+    DEFVAL          { down } 
+    ::= { cdspTranscodeProfileEntry 9 }
+
+cdspTranscodeApplication OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        sccp(2),
+                        sbc(3),
+                        cube(4),
+                        other(5)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the application used
+        by the DSPFarm transcode profile" 
+    ::= { cdspTranscodeProfileEntry 10 }
+
+cdspTranscodeApplicationStatus OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        done(2),
+                        activeInProgress(3),
+                        activeInDown(4),
+                        notDone(5),
+                        invalid(6)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates application Status of
+        DSPFarm transcode profile." 
+    ::= { cdspTranscodeProfileEntry 11 }
  
 
 -- MTP Profile
@@ -1420,7 +1527,15 @@ CdspMtpProfileEntry ::= SEQUENCE {
         cdspMtpProfileMaxConfSoftSess  Unsigned32,
         cdspMtpProfileMaxConfHardSess  Unsigned32,
         cdspMtpProfileMaxAvailHardSess Unsigned32,
-        cdspMtpProfileRowStatus        RowStatus
+        cdspMtpProfileRowStatus        RowStatus,
+        cdspMtpResourceId              Unsigned32,
+        cdspMtpDescription             SnmpAdminString,
+        cdspMtpService                 INTEGER,
+        cdspMtpAdminState              INTEGER,
+        cdspMtpApplication             INTEGER,
+        cdspMtpApplicationStatus       INTEGER,
+        cdspMtpProfileMaxCodec         Unsigned32,
+        cdspMtpProfileMaxAvailSoftSess Unsigned32
 }
 
 cdspMtpProfileId OBJECT-TYPE
@@ -1434,6 +1549,7 @@ cdspMtpProfileId OBJECT-TYPE
 
 cdspMtpProfileMaxConfSoftSess OBJECT-TYPE
     SYNTAX          Unsigned32 (0..4294967295)
+    UNITS           "sessions"
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1444,6 +1560,7 @@ cdspMtpProfileMaxConfSoftSess OBJECT-TYPE
 
 cdspMtpProfileMaxConfHardSess OBJECT-TYPE
     SYNTAX          Unsigned32 (0..4294967295)
+    UNITS           "sessions"
     MAX-ACCESS      read-create
     STATUS          current
     DESCRIPTION
@@ -1454,11 +1571,12 @@ cdspMtpProfileMaxConfHardSess OBJECT-TYPE
 
 cdspMtpProfileMaxAvailHardSess OBJECT-TYPE
     SYNTAX          Unsigned32 (0..4294967295)
+    UNITS           "sessions"
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
         "This object indicates the total number of available
-        MTP sessions per MTP profile from the configured
+        MTP Hardware sessions per MTP profile from the configured
         maximum MTP sessions per MTP profile for the voice
         gateway." 
     ::= { cdspMtpProfileEntry 4 }
@@ -1475,6 +1593,293 @@ cdspMtpProfileRowStatus OBJECT-TYPE
         be volatile. To retain the configured entries. One must
         write the configuration to memory in the voice gateway." 
     ::= { cdspMtpProfileEntry 5 }
+
+cdspMtpResourceId OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates resource ID in the DSPFarm
+        MTP profile" 
+    ::= { cdspMtpProfileEntry 6 }
+
+cdspMtpDescription OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates description of
+        DSPFarm MTP profile." 
+    ::= { cdspMtpProfileEntry 7 }
+
+cdspMtpService OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        nonSecure(1),
+                        secure(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the profile service type
+        of the DSPFarm Mtp profile." 
+    ::= { cdspMtpProfileEntry 8 }
+
+cdspMtpAdminState OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        down(1),
+                        up(2)
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the admin state
+        of the DSPFarm MTP profile"
+    DEFVAL          { down } 
+    ::= { cdspMtpProfileEntry 9 }
+
+cdspMtpApplication OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        sccp(2),
+                        sbc(3),
+                        cube(4),
+                        other(5)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the Application used
+        by the DSPFarm MTP profile" 
+    ::= { cdspMtpProfileEntry 10 }
+
+cdspMtpApplicationStatus OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        done(2),
+                        activeInProgress(3),
+                        activeInDown(4),
+                        notDone(5),
+                        invalid(6)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates application Status of
+        DSPFarm MTP profile." 
+    ::= { cdspMtpProfileEntry 11 }
+
+-- No this object needs to be read only.
+
+cdspMtpProfileMaxCodec OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "codecs"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies maximum number of codecs
+        to be configured in the DSPFarm MTP profile." 
+    ::= { cdspMtpProfileEntry 12 }
+
+-- Max is needed as Maximum and available soft sessions are different
+-- values
+
+cdspMtpProfileMaxAvailSoftSess OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "sessions"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the total number of available
+        MTP Software sessions per MTP profile from the configured
+        maximum MTP sessions per MTP profile for the voice
+        gateway." 
+    ::= { cdspMtpProfileEntry 13 }
+ 
+
+-- Conference Profile
+
+cdspConferenceProfileTable OBJECT-TYPE
+    SYNTAX          SEQUENCE OF CdspConferenceProfileEntry 
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This table contains information about each conference
+        DSPFarm profile. It gives the maximum number of conference
+        sessions configured and the number of available
+        sessions per profile."
+    ::= { cdspDspfarmObjects 5 }
+
+cdspConferenceProfileEntry OBJECT-TYPE
+    SYNTAX          CdspConferenceProfileEntry
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "An entry in cdspConferenceProfileTable indicates the conference
+        DSPFarm profile maximum configured sessions and available
+        sessions. Each DSPFarm conference profile configured in the 
+        voice gateway forms a new entry to this table. The entry is
+        deleted when the conference DSPFarm profile is deleted.
+
+        A new entry to this table can be created and an existing
+        entry can be deleted using object cdspConferenceProfileRowStatus
+        indexed with a profile number."
+    INDEX           { cdspConferenceProfileId } 
+    ::= { cdspConferenceProfileTable 1 }
+
+CdspConferenceProfileEntry ::= SEQUENCE {
+        cdspConferenceProfileId           Unsigned32,
+        cdspConferenceResourceId          Unsigned32,
+        cdspConferenceDescription         SnmpAdminString,
+        cdspConferenceService             INTEGER,
+        cdspConferenceAdminState          INTEGER,
+        cdspConferenceApplication         INTEGER,
+        cdspConferenceApplicationStatus   INTEGER,
+        cdspConferenceProfileMaxCodec     Unsigned32,
+        cdspConferenceProfileMaxConfSess  Unsigned32,
+        cdspConferenceProfileMaxAvailSess Unsigned32,
+        cdspConferenceProfileStorageType  StorageType,
+        cdspConferenceProfileRowStatus    RowStatus
+}
+
+cdspConferenceProfileId OBJECT-TYPE
+    SYNTAX          Unsigned32 (1..4294967295)
+    MAX-ACCESS      not-accessible
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the profile number
+        of the DSPFarm conference profile." 
+    ::= { cdspConferenceProfileEntry 1 }
+
+cdspConferenceResourceId OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates resource ID in the DSPFarm
+        conference profile." 
+    ::= { cdspConferenceProfileEntry 2 }
+
+cdspConferenceDescription OBJECT-TYPE
+    SYNTAX          SnmpAdminString
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates description of
+        DSPFarm conference profile." 
+    ::= { cdspConferenceProfileEntry 3 }
+
+cdspConferenceService OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        nonSecure(1),
+                        secure(2)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the profile service type
+        of the DSPFarm conference profile." 
+    ::= { cdspConferenceProfileEntry 4 }
+
+cdspConferenceAdminState OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        down(1),
+                        up(2)
+                    }
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the admin state
+        of the DSPFarm conference profile."
+    DEFVAL          { down } 
+    ::= { cdspConferenceProfileEntry 5 }
+
+cdspConferenceApplication OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        sccp(2),
+                        sbc(3),
+                        cube(4),
+                        other(5)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the application used
+        by the DSPFarm conference profile." 
+    ::= { cdspConferenceProfileEntry 6 }
+
+cdspConferenceApplicationStatus OBJECT-TYPE
+    SYNTAX          INTEGER  {
+                        none(1),
+                        done(2),
+                        activeInProgress(3),
+                        activeInDown(4),
+                        notDone(5),
+                        invalid(6)
+                    }
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The object indicates application Status of
+        DSPFarm conference profile." 
+    ::= { cdspConferenceProfileEntry 7 }
+
+cdspConferenceProfileMaxCodec OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "codecs"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object specifies maximum number of codecs
+        to be configured in the DSPFarm conference profile."
+    DEFVAL          { 0 } 
+    ::= { cdspConferenceProfileEntry 8 }
+
+cdspConferenceProfileMaxConfSess OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object specifies the maximum conference sessions
+        configured on the DSPFarm conference profile for the
+        voice gateway."
+    DEFVAL          { 0 } 
+    ::= { cdspConferenceProfileEntry 9 }
+
+cdspConferenceProfileMaxAvailSess OBJECT-TYPE
+    SYNTAX          Unsigned32
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the total number of available
+        conference sessions per conference profile from the 
+        configured maximum conference sessions per conference 
+        profile for the voice gateway." 
+    ::= { cdspConferenceProfileEntry 10 }
+
+cdspConferenceProfileStorageType OBJECT-TYPE
+    SYNTAX          StorageType
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "The storage type for this conceptual row. Conceptual rows having
+        the value 'permanent' need not allow write-access to any
+        columnar objects in the row."
+    DEFVAL          { nonVolatile } 
+    ::= { cdspConferenceProfileEntry 11 }
+
+cdspConferenceProfileRowStatus OBJECT-TYPE
+    SYNTAX          RowStatus
+    MAX-ACCESS      read-create
+    STATUS          current
+    DESCRIPTION
+        "This object is used to create a new entry or delete
+        an existing entry in cdspConferenceProfileTable.
+
+        The storage type for all the entries created would 
+        be volatile. To retain the configured entries. One must
+        write the configuration to memory in the voice gateway." 
+    ::= { cdspConferenceProfileEntry 12 }
  
 
 
@@ -2039,7 +2444,7 @@ cdspMgmtComplianceRev10 MODULE-COMPLIANCE
     ::= { cdspMgmtCompliances 11 }
 
 cdspMgmtComplianceRev11 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for systems that contain a
         Cisco DSP card and its associated DSPs."
@@ -2114,6 +2519,100 @@ cdspMgmtComplianceRev11 MODULE-COMPLIANCE
     DESCRIPTION
         "Write access is not required."
     ::= { cdspMgmtCompliances 12 }
+
+-- The Changes are Not applicable for VQM Group
+
+cdspMgmtComplianceRev12 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for systems that contain a
+        Cisco DSP card and its associated DSPs."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        cdspMgmtGeneralInfoGroupRev1,
+                        cdspMgmtNotificationsGroupRev1
+                    }
+
+    GROUP           cdspMgmtExtGeneralInfoGroupRev1
+    DESCRIPTION
+        "This group is optional and it provides additional
+        general DSP information."
+
+    GROUP           cdspChannelGroup
+    DESCRIPTION
+        "This group is mandatory only if the DSP software offers
+        multiple channels per DSP."
+
+    GROUP           cdspChannelExtGroup
+    DESCRIPTION
+        "This group is mandatory only if
+        VQM (Voice Quality Monitor) is supported."
+
+    GROUP           cdspVQMGroup
+    DESCRIPTION
+        "This group is mandatory only if
+        VQM (Voice Quality Monitor) is supported."
+
+    GROUP           cdspVoiceInfoGroupRev2
+    DESCRIPTION
+        "This group is optional and it is for voice applications
+        only."
+
+    GROUP           cdspTransCodingGroup1
+    DESCRIPTION
+        "This group is optional and it provides
+        DSP transcoding related parameters."
+
+    GROUP           cdspUtilInfoGroup
+    DESCRIPTION
+        "This group is optional and it provides
+        DSP codec capacity related parameters."
+
+    GROUP           cdspDspfarmInfoGroup
+    DESCRIPTION
+        "This group is optional and it provides
+        DSPFarm session related parameters."
+
+    GROUP           cdspMgmtVideoInfoGroup
+    DESCRIPTION
+        "This group is optional and it provides video session related
+        parameters."
+
+    GROUP           cdspMgmtVideoNotificationsGroup
+    DESCRIPTION
+        "This group is optional and it provides video session related
+        notifications."
+
+    GROUP           cdspMtpProfileGroup
+    DESCRIPTION
+        "This group is optional and it provides
+        DSPFarm Mtp session related parameters."
+
+    GROUP           cdspConferenceProfileGroup
+    DESCRIPTION
+        "This group is optional and it provides
+        DSPFarm conference session related parameters."
+
+    GROUP           cdspTranscodeProfileGroup
+    DESCRIPTION
+        "This group is optional and it provides
+        DSPFarm Transcode session related parameters."
+
+    OBJECT          cdspVideoUsageNotificationEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdspVideoOutOfResourceNotificationEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          cdspCardVideoPoolUtilizationThreshold
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { cdspMgmtCompliances 13 }
 
 -- units of conformance
 
@@ -2376,50 +2875,58 @@ cdspMgmtVideoInfoGroup OBJECT-GROUP
         "A collection of objects related to DSP video resource."
     ::= { cdspMgmtGroups 18 }
 
+cdspTranscodeProfileGroup OBJECT-GROUP
+    OBJECTS         {
+                        cdspTranscodeResourceId,
+                        cdspTranscodeDescription,
+                        cdspTranscodeService,
+                        cdspTranscodeAdminState,
+                        cdspTranscodeApplication,
+                        cdspTranscodeProfileMaxCodec,
+                        cdspTranscodeProfileMaxCodec
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group provides DSPFarm Transcode session related
+        parameters."
+    ::= { cdspMgmtGroups 19 }
+
+cdspMtpProfileGroup OBJECT-GROUP
+    OBJECTS         {
+                        cdspMtpResourceId,
+                        cdspMtpDescription,
+                        cdspMtpService,
+                        cdspMtpAdminState,
+                        cdspMtpApplication,
+                        cdspMtpApplicationStatus,
+                        cdspMtpProfileMaxCodec,
+                        cdspMtpProfileMaxAvailSoftSess
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group provides DSPFarm MTP session related parameters."
+    ::= { cdspMgmtGroups 20 }
+
+cdspConferenceProfileGroup OBJECT-GROUP
+    OBJECTS         {
+                        cdspConferenceResourceId,
+                        cdspConferenceDescription,
+                        cdspConferenceService,
+                        cdspConferenceAdminState,
+                        cdspConferenceApplication,
+                        cdspConferenceApplicationStatus,
+                        cdspConferenceProfileMaxCodec,
+                        cdspConferenceProfileMaxConfSess,
+                        cdspConferenceProfileMaxAvailSess,
+                        cdspConferenceProfileStorageType,
+                        cdspConferenceProfileRowStatus
+                    }
+    STATUS          current
+    DESCRIPTION
+        "This group provides DSPFarm conference session related
+        parameters."
+    ::= { cdspMgmtGroups 21 }
+
 END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
