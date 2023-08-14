@@ -101,6 +101,7 @@ sub parse_mibs {
 
     my @report = read_lines($out, 'latin-1');
     my %details = ();
+    my $descr_on = 0;
 
     LINEOUT: foreach my $line (@report) {
       if ($line =~ m/^::=/) { # end of details
@@ -108,26 +109,30 @@ sub parse_mibs {
             ($details{mib} .'::'. $details{leaf}),
             map {$details{$_} || ''} (qw/type mode index status syntax descr/);
           %details = ();
+          $descr_on = 0;
           next LINEOUT;
       }
 
       if ($line =~ m/^\.\d/) { # oid
           $details{oid} = $line;
+          $descr_on = 0;
           next LINEOUT;
       }
 
-      if ($line =~ m/^(\S+)\s/) { # leaf name
+      if ($line =~ m/^(\S+)\s/ and not $descr_on) { # leaf name
           $details{leaf} = $1;
           next LINEOUT;
       }
 
       if ($line =~ m/^\s+-- FROM\s+([-#\w]+)/) {
           $details{mib} = $1;
+          $descr_on = 0;
           next LINEOUT;
       }
 
       if ($line =~ m/^\s+MAX-ACCESS\s+([-\w]+)/) {
           $details{mode} = $1;
+          $descr_on = 0;
           next LINEOUT;
       }
 
@@ -135,11 +140,13 @@ sub parse_mibs {
           $details{index} = join ':',
                                    map {s/\s+//g; $_}
                                    split m/,/, $1;
+          $descr_on = 0;
           next LINEOUT;
       }
 
       if ($line =~ m/^\s+STATUS\s+([-\w]+)/) {
           $details{status} = $1;
+          $descr_on = 0;
           next LINEOUT;
       }
 
@@ -151,14 +158,16 @@ sub parse_mibs {
                                     map {s/\s+//g; $_}
                                     map {s/[{}]//g; $_}
                                     split m/,/, $syntax;
+          $descr_on = 0;
           next LINEOUT;
       }
 
-      if ($line =~ m/^(?:  DESCR|    )/) {
+      if ($line =~ m/^\s+DESCRIPTION/ or $descr_on) {
           $details{descr} .= join '',
                                   map {s/\s+/ /g; $_}
                                   map {s/"//g; $_}
                                   map {s/^\s+DESCRIPTION\s+//; $_} ($line);
+          $descr_on = 1;
           next LINEOUT;
       }
     }
