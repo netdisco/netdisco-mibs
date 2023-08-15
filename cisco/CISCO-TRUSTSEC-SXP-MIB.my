@@ -3,7 +3,7 @@
 --   
 -- February 2010, Dipesh Gorashia
 --   
--- Copyright (c) 2010-2012 by Cisco Systems Inc.
+-- Copyright (c) 2010-2013 by Cisco Systems Inc.
 -- All rights reserved.
 -- *****************************************************************
 
@@ -34,7 +34,8 @@ IMPORTS
         FROM IF-MIB
     CtsSecurityGroupTag,
     CtsPasswordEncryptionType,
-    CtsPassword
+    CtsPassword,
+    CtsSxpConnectionStatus
         FROM CISCO-TRUSTSEC-TC-MIB
     CiscoVrfName
         FROM CISCO-TC
@@ -43,7 +44,7 @@ IMPORTS
 
 
 ciscoTrustSecSxpMIB MODULE-IDENTITY
-    LAST-UPDATED    "201204170000Z"
+    LAST-UPDATED    "201307290000Z"
     ORGANIZATION    "Cisco Systems, Inc."
     CONTACT-INFO
             "Cisco Systems
@@ -76,6 +77,14 @@ ciscoTrustSecSxpMIB MODULE-IDENTITY
         traffic on a hop by hop basis.  SXP allows the deployment
         of RBACL, a key component of the TrustSec architecture, in the
         absence of TrustSec capable hardware."
+    REVISION        "201307290000Z"
+    DESCRIPTION
+        "Added following OBJECT-GROUP
+        - ctsxBiDirectionalSxpGroup 
+        Added new compliance
+        - ciscoTrustSecSxpMIBCompliance4.
+        Added enumeration both(3) for the object
+        ctsxSxpConnMode."
     REVISION        "201204170000Z"
     DESCRIPTION
         "Added following OBJECT-GROUP
@@ -446,32 +455,34 @@ ctsxSxpConnectionEntry OBJECT-TYPE
     ::= { ctsxSxpConnectionTable 1 }
 
 CtsxSxpConnectionEntry ::= SEQUENCE {
-        ctsxSxpConnVrfName             CiscoVrfName,
-        ctsxSxpConnPeerAddrType        InetAddressType,
-        ctsxSxpConnPeerAddr            InetAddress,
-        ctsxSxpConnSourceAddrType      InetAddressType,
-        ctsxSxpConnSourceAddr          InetAddress,
-        ctsxSxpConnOperSourceAddrType  InetAddressType,
-        ctsxSxpConnOperSourceAddr      InetAddress,
-        ctsxSxpConnPasswordUsed        INTEGER,
-        ctsxSxpConnConfigPasswordType  CtsPasswordEncryptionType,
-        ctsxSxpConnConfigPassword      CtsPassword,
-        ctsxSxpConnViewPasswordType    CtsPasswordEncryptionType,
-        ctsxSxpConnViewPassword        CtsPassword,
-        ctsxSxpConnModeLocation        INTEGER,
-        ctsxSxpConnMode                INTEGER,
-        ctsxSxpConnInstance            Unsigned32,
-        ctsxSxpConnStatusLastChange    Unsigned32,
-        ctsxSxpConnStatus              INTEGER,
-        ctsxSxpVrfId                   Unsigned32,
-        ctsxSxpConnStorageType         StorageType,
-        ctsxSxpConnRowStatus           RowStatus,
-        ctsxSxpConnVersion             INTEGER,
-        ctsxSxpConnSpeakerMinHoldTime  Unsigned32,
-        ctsxSxpConnListenerMinHoldTime Unsigned32,
-        ctsxSxpConnListenerMaxHoldTime Unsigned32,
-        ctsxSxpConnHoldTime            Unsigned32,
-        ctsxSxpConnCapability          BITS
+        ctsxSxpConnVrfName               CiscoVrfName,
+        ctsxSxpConnPeerAddrType          InetAddressType,
+        ctsxSxpConnPeerAddr              InetAddress,
+        ctsxSxpConnSourceAddrType        InetAddressType,
+        ctsxSxpConnSourceAddr            InetAddress,
+        ctsxSxpConnOperSourceAddrType    InetAddressType,
+        ctsxSxpConnOperSourceAddr        InetAddress,
+        ctsxSxpConnPasswordUsed          INTEGER,
+        ctsxSxpConnConfigPasswordType    CtsPasswordEncryptionType,
+        ctsxSxpConnConfigPassword        CtsPassword,
+        ctsxSxpConnViewPasswordType      CtsPasswordEncryptionType,
+        ctsxSxpConnViewPassword          CtsPassword,
+        ctsxSxpConnModeLocation          INTEGER,
+        ctsxSxpConnMode                  INTEGER,
+        ctsxSxpConnInstance              Unsigned32,
+        ctsxSxpConnStatusLastChange      Unsigned32,
+        ctsxSxpConnStatus                CtsSxpConnectionStatus,
+        ctsxSxpVrfId                     Unsigned32,
+        ctsxSxpConnStorageType           StorageType,
+        ctsxSxpConnRowStatus             RowStatus,
+        ctsxSxpConnVersion               INTEGER,
+        ctsxSxpConnSpeakerMinHoldTime    Unsigned32,
+        ctsxSxpConnListenerMinHoldTime   Unsigned32,
+        ctsxSxpConnListenerMaxHoldTime   Unsigned32,
+        ctsxSxpConnHoldTime              Unsigned32,
+        ctsxSxpConnCapability            BITS,
+        ctsxSxpConnBiDirListenerStatus   CtsSxpConnectionStatus,
+        ctsxSxpConnBiDirListenerHoldTime Unsigned32
 }
 
 ctsxSxpConnVrfName OBJECT-TYPE
@@ -665,7 +676,8 @@ ctsxSxpConnModeLocation OBJECT-TYPE
 ctsxSxpConnMode OBJECT-TYPE
     SYNTAX          INTEGER  {
                         speaker(1),
-                        listener(2)
+                        listener(2),
+                        both(3)
                     }
     MAX-ACCESS      read-create
     STATUS          current
@@ -676,7 +688,11 @@ ctsxSxpConnMode OBJECT-TYPE
         the speaker in this SXP connection.
 
         A value of 'listener' indicates that device will acts as
-        the listener in this SXP connection."
+        the listener in this SXP connection.
+
+        A value of 'both' indicates that device will acts as
+        both speaker and listener making it a Bi-directional SXP
+        connection."
     DEFVAL          { speaker } 
     ::= { ctsxSxpConnectionEntry 14 }
 
@@ -703,43 +719,16 @@ ctsxSxpConnStatusLastChange OBJECT-TYPE
     ::= { ctsxSxpConnectionEntry 16 }
 
 ctsxSxpConnStatus OBJECT-TYPE
-    SYNTAX          INTEGER  {
-                        other(1),
-                        off(2),
-                        on(3),
-                        pendingOn(4),
-                        deleteHoldDown(5)
-                    }
+    SYNTAX          CtsSxpConnectionStatus
     MAX-ACCESS      read-only
     STATUS          current
     DESCRIPTION
         "This object indicates the status of this SXP connection.
 
-        'other'      - Any other state not covered by below
-                       enumerations.
-
-        'off'        - The SXP connection has been disconnected.
-                       SGT mappings are no longer learnt through SXP
-                       connection in this state. SGT mappings
-                       already learnt through this connection will be
-                       deleted.
-
-        'on'         - The SXP connection has been successfully
-                       established. SGT mappings are learnt
-                       through this SXP connection.
-
-        'pendingOn'  - A request to establish SXP connection has been
-                       sent to the peer and is pending.
-
-        'deleteHoldDown' - The SXP connection is not operational and
-                       delete hold-down timer has been started. If the
-                       SXP connection does not recover before the
-                       expiration of the hold-down timer, the SGT
-                       mappings learnt on this connection will be
-                       deleted. If the SXP connection recovers
-                       before the expiration of the hold-down timer,
-                       the SGT mappings learnt on this connection
-                       will not be deleted." 
+        When the corresponding instance value of ctsxSxpConnMode
+        is 'both', this object indicates the status of 'speaker'
+        and ctsxSxpConnBiDirListenerStatus indicates the status
+        of 'listener'." 
     ::= { ctsxSxpConnectionEntry 17 }
 
 ctsxSxpVrfId OBJECT-TYPE
@@ -815,9 +804,13 @@ ctsxSxpConnSpeakerMinHoldTime OBJECT-TYPE
 
         Value of this object should be ignored and can not be set
         if the corresponding instance values of ctsxSxpConnModeLocation
-        is 'local' and ctsSxpConnMode is 'listener' or
-        ctsxSxpConnModeLocation is 'peer' and ctsSxpConnMode is
-        'speaker'."
+        is 'local' and ctsxSxpConnMode is 'listener' or
+        ctsxSxpConnModeLocation is 'peer' and ctsxSxpConnMode is
+        'speaker'.
+
+        Value of this object should be ignored and can not be set
+        if the corresponding instance value of ctsxSxpConnMode
+        is 'both'."
     DEFVAL          { 0 } 
     ::= { ctsxSxpConnectionEntry 22 }
 
@@ -845,9 +838,12 @@ ctsxSxpConnListenerMinHoldTime OBJECT-TYPE
 
         Value of this object should be ignored and can not be set
         if the corresponding instance value of ctsxSxpConnModeLocation
-        is 'local' and ctsSxpConnMode is 'speaker' or
-        ctsxSxpConnModeLocation is 'peer' and ctsSxpConnMode is
-        'listener'."
+        is 'local' and ctsxSxpConnMode is 'speaker' or
+        ctsxSxpConnModeLocation is 'peer' and ctsxSxpConnMode is
+        'listener'.
+
+        Value of this object should be ignored and can not be set
+        if the value of ctsxSxpConnMode is 'both'."
     DEFVAL          { 0 } 
     ::= { ctsxSxpConnectionEntry 23 }
 
@@ -875,9 +871,12 @@ ctsxSxpConnListenerMaxHoldTime OBJECT-TYPE
 
         Value of this object should be ignored and can not be set
         if the corresponding instance value of ctsxSxpConnModeLocation
-        is 'local' and ctsSxpConnMode is 'speaker' or
-        ctsxSxpConnModeLocation is 'peer' and ctsSxpConnMode is
-        'listener'."
+        is 'local' and ctsxSxpConnMode is 'speaker' or
+        ctsxSxpConnModeLocation is 'peer' and ctsxSxpConnMode is
+        'listener'.
+
+        Value of this object should be ignored and can not be set
+        if the value of ctsxSxpConnMode is 'both'."
     DEFVAL          { 0 } 
     ::= { ctsxSxpConnectionEntry 24 }
 
@@ -891,7 +890,12 @@ ctsxSxpConnHoldTime OBJECT-TYPE
         SXP connection.
 
         A value of 0 indicates that hold-time functionality has been
-        disabled for this connection." 
+        disabled for this connection.
+
+        When the corresponding instance value of ctsxSxpConnMode
+        is 'both', this object indicates the hold-time in use by
+        the 'speaker' and ctsxSxpConnBiDirListenerHoldTime indicates
+        the hold-time in use by the 'listener'." 
     ::= { ctsxSxpConnectionEntry 25 }
 
 ctsxSxpConnCapability OBJECT-TYPE
@@ -905,6 +909,31 @@ ctsxSxpConnCapability OBJECT-TYPE
     DESCRIPTION
         "This object indicates the capability of SXP connection." 
     ::= { ctsxSxpConnectionEntry 26 }
+
+ctsxSxpConnBiDirListenerStatus OBJECT-TYPE
+    SYNTAX          CtsSxpConnectionStatus
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the status of 'listener'
+        for this Bi-directional SXP connection.
+
+        Value of this object should be ignored if the corresponding
+        instance value of ctsxSxpConnMode is not 'both'." 
+    ::= { ctsxSxpConnectionEntry 27 }
+
+ctsxSxpConnBiDirListenerHoldTime OBJECT-TYPE
+    SYNTAX          Unsigned32
+    UNITS           "seconds"
+    MAX-ACCESS      read-only
+    STATUS          current
+    DESCRIPTION
+        "This object indicates the hold-time in use by the listener
+        for this Bi-directional SXP connection.
+
+        Value of this object should be ignored if the corresponding
+        instance value of ctsxSxpConnMode is not 'both'." 
+    ::= { ctsxSxpConnectionEntry 28 }
  
 
 
@@ -1779,7 +1808,7 @@ ciscoTrustSecSxpMIBCompliance2 MODULE-COMPLIANCE
     ::= { ciscoTrustSecSxpMIBCompliances 2 }
 
 ciscoTrustSecSxpMIBCompliance3 MODULE-COMPLIANCE
-    STATUS          current
+    STATUS          deprecated
     DESCRIPTION
         "The compliance statement for the CISCO-TRUSTSEC-SXP-MIB."
     MODULE          -- this module
@@ -2023,6 +2052,256 @@ ciscoTrustSecSxpMIBCompliance3 MODULE-COMPLIANCE
         "Write access is not required."
     ::= { ciscoTrustSecSxpMIBCompliances 3 }
 
+ciscoTrustSecSxpMIBCompliance4 MODULE-COMPLIANCE
+    STATUS          current
+    DESCRIPTION
+        "The compliance statement for the CISCO-TRUSTSEC-SXP-MIB."
+    MODULE          -- this module
+    MANDATORY-GROUPS {
+                        ctsxSxpGlobalGroup,
+                        ctsxSxpConnectionGroup
+                    }
+
+    GROUP           ctsxSxpVersionGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        displaying SXP protocol version."
+
+    GROUP           ctsxSxpBindingLogGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        controlling logging functionality for SXP bindings."
+
+    GROUP           ctsxSxpBindingNotifInfoGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        binding expansion functionality in SXP."
+
+    GROUP           ctsxSxpNodeIdInfoGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        loop detection functionality for SXP."
+
+    GROUP           ctsxIpSgtMappingGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        SGT mapping functionality but do not support
+        SGT mapping expansion functionality ."
+
+    GROUP           ctsxSxpSgtMapGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        SGT mapping and SGT mapping expansion functionality in SXP."
+
+    GROUP           ctsxNotifsControlGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        SXP notifications."
+
+    GROUP           ctsxNotifsGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        SXP notifications."
+
+    GROUP           ctsxSxpNotifErrMsgGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        ctsxNotifsGroup."
+
+    GROUP           ctsxSxpGlobalHoldTimeGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        global hold-time configuration for SXP connections."
+
+    GROUP           ctsxSxpConnHoldTimeGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which support
+        hold-time configuration for individual SXP connections."
+
+    GROUP           ctsxSxpConnCapbilityGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which provide
+        capability information for SXP connections."
+
+    GROUP           ctsxSxpVersionSupportGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which provide
+        version support information for SXP protocol."
+
+    GROUP           ctsxSgtMapPeerSeqGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which provide
+        Peer Sequence information for the SGT mapping."
+
+    GROUP           ctsxBiDirectionalSxpGroup
+    DESCRIPTION
+        "This group is mandatory for platforms which provide
+        Bi-directional SXP."
+
+    OBJECT          ctsxSxpEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConfigDefaultPasswordType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConfigDefaultPassword
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpDefaultSourceAddrType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpDefaultSourceAddr
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpRetryPeriod
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpReconPeriod
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnSourceAddrType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnSourceAddr
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnPasswordUsed
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnConfigPasswordType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnConfigPassword
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnModeLocation
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnMode
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnStorageType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnRowStatus
+    SYNTAX          INTEGER  {
+                        active(1)
+                    }
+    WRITE-SYNTAX    INTEGER  {
+                        createAndGo(4),
+                        destroy(6)
+                    }
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required.
+        Support for createAndWait and notInService is not required."
+
+    OBJECT          ctsxSxpBindingChangesLogEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSgtMapExpansionLimit
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpAdminNodeId
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpNodeIdInterface
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpNodeIdIpAddrType
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpNodeIdIpAddr
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnSourceAddrErrNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpMsgParseErrNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnConfigErrNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpBindingErrNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnUpNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpConnDownNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpExpansionFailNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpOperNodeIdChangeNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+
+    OBJECT          ctsxSxpBindingConflictNotifEnable
+    MIN-ACCESS      read-only
+    DESCRIPTION
+        "Write access is not required."
+    ::= { ciscoTrustSecSxpMIBCompliances 4 }
+
 -- Units of Conformance
 
 ctsxSxpGlobalGroup OBJECT-GROUP
@@ -2238,7 +2517,17 @@ ctsxSgtMapPeerSeqGroup OBJECT-GROUP
         information."
     ::= { ciscoTrustSecSxpMIBGroups 16 }
 
-END
+ctsxBiDirectionalSxpGroup OBJECT-GROUP
+    OBJECTS         {
+                        ctsxSxpConnBiDirListenerStatus,
+                        ctsxSxpConnBiDirListenerHoldTime
+                    }
+    STATUS          current
+    DESCRIPTION
+        "A collection of object(s) providing Bi-directional
+        SXP information."
+    ::= { ciscoTrustSecSxpMIBGroups 17 }
 
+END
 
 
