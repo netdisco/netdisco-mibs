@@ -1,9 +1,9 @@
 -- =================================================================
--- Copyright (C) 2013 by  HUAWEI TECHNOLOGIES. All rights reserved.
+-- Copyright (C) 2021 by  HUAWEI TECHNOLOGIES. All rights reserved.
 --
 -- Description:HUAWEI-ESAP-MDNS-GATEWAY
 -- Reference:
--- Version: V1.02
+-- Version: V1.04
 -- History:
 --
 -- =================================================================
@@ -26,7 +26,7 @@
                 FROM SNMPv2-TC;
 
         hwEsapMdnsGatewayMIB MODULE-IDENTITY
-            LAST-UPDATED "201311131955Z"
+            LAST-UPDATED "202107071430Z"
             ORGANIZATION
                 "Huawei Technologies Co.,Ltd."
             CONTACT-INFO
@@ -38,24 +38,40 @@
                    Email: support@huawei.com"
                    
             DESCRIPTION
+                "Add mdns service-vlan blacklist and traps."
+
+            REVISION    "202107071430Z"
+                   
+            DESCRIPTION
                 "This MIB describes mDNS objects used for mDNS gateway, including
                 configuring gateway, obtain gateway mDNS configuration and gateway 
                 mDNS service detail infomation."
-                       
+
+            REVISION    "201811221420Z"
+            
+            DESCRIPTION
+                "The MIB add mdns policy and unicast"          
+
+            REVISION    "201408251031Z"
+            
+            DESCRIPTION
+                "The MIB contains objects of huawei-esap-mDNS."
+
+            REVISION    "201312051820Z"
+            
+            DESCRIPTION
+                "This MIB describes add mDNS group."
+
             REVISION    "201311131955Z"
             
             DESCRIPTION
                 "This MIB describes modify mDNS objects."
                        
-            REVISION    "201312051820Z"
             
-            DESCRIPTION
-                "This MIB describes add mDNS group."
                        
-            REVISION    "201408251031Z"
             
-            DESCRIPTION
-                "The MIB contains objects of huawei-esap-mDNS."
+            
+            
             ::= { hwDatacomm 325 }
 
 -- node definitions
@@ -92,7 +108,13 @@
                     hwEsapMdnsGatewayEnable
                         TruthValue,
                     hwEsapMdnsSourceIP
-                        IpAddress
+                        IpAddress,
+                    hwEsapMdnsPolicyEnable  
+                        Integer32,  
+                    hwEsapMdnsPolicyNoMatchAction  
+                        Integer32,  
+                    hwEsapMdnsUnicastEnable  
+                        Integer32
                    }
 
 -- mDNS gateway global table index
@@ -129,6 +151,43 @@
                     Users can also set source ip through this item.
                     "
                     ::= { hwEsapMdnsGatewayGlobalEntry 3 }
+
+-- mDNS policy enable
+                hwEsapMdnsPolicyEnable OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                    "
+                    This item shows the policy enable status of mDNS gateway.
+                    Users can also set policy enable status through this item.
+                    "
+                    ::= { hwEsapMdnsGatewayGlobalEntry 4 }
+
+-- mDNS policy enable no-match
+                hwEsapMdnsPolicyNoMatchAction OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                    "
+                    This item shows the policy no-match action of mDNS gateway.
+                    Users can also set no-match action through this item.
+                    "
+                    ::= { hwEsapMdnsGatewayGlobalEntry 5 }
+
+-- mDNS unicast-reply enable
+                hwEsapMdnsUnicastEnable OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                    "
+                    This item shows the unicast-reply enable status of mDNS gateway.
+                    Users can also set unicast-reply enable status this item.
+                    "
+                    ::= { hwEsapMdnsGatewayGlobalEntry 6 }
+
 
 -- mDNS gateway service probe table
         hwEsapMdnsGatewayServiceProbeTable OBJECT-TYPE
@@ -247,6 +306,10 @@
                     hwEsapMdnsGatewayServiceHostAddr
                         IpAddress,
                     hwEsapMdnsGatewayServiceVlanIdInfo
+                        Integer32,
+                    hwEsapMdnsGatewayServiceSrcMac
+                        Integer32,
+                    hwEsapMdnsGatewayServiceApID
                         Integer32
                  }
 
@@ -383,8 +446,27 @@
                         This item shows mDNS service vlan id info.
                         "
                     ::= { hwEsapMdnsGatewayServiceEntry 12 }
-
-
+-- mDNS service src mac info
+                hwEsapMdnsGatewayServiceSrcMac OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-only
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item shows mDNS service src mac info.
+                        "
+                    ::= { hwEsapMdnsGatewayServiceEntry 13 }
+                    
+-- mDNS service ap id info
+                hwEsapMdnsGatewayServiceApID OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-only
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item shows mDNS service ap id info.
+                        "
+                    ::= { hwEsapMdnsGatewayServiceEntry 14 }
                    
 -- mDNS gateway group table
         hwEsapMdnsGatewayGroupTable OBJECT-TYPE
@@ -411,7 +493,7 @@
 
             HwEsapMdnsGatewayGroupEntry ::=
                 SEQUENCE {
-                		hwEsapMdnsGatewayGroupName
+                	hwEsapMdnsGatewayGroupName
                         OCTET STRING,
                     hwEsapMdnsGatewayDeleteGroup
                         OCTET STRING,
@@ -482,7 +564,206 @@
                         "
                     ::= { hwEsapMdnsGatewayGroupEntry 5 }  
                     
+
+-- mdns policy 
+            hwEsapMdnsGatewayPolicyTable OBJECT-TYPE
+                    SYNTAX SEQUENCE OF HwEsapMdnsGatewayPolicyEntry
+                    MAX-ACCESS not-accessible
+                    STATUS current
+                    DESCRIPTION
+                    "
+                    The mDNS gateway Policy Service Type table.
+                    This shows all the service type policy currently avalible on mDNS gateway. 
+                    "
+                ::= { hwEsapMdnsGatewayObject 5 }
+
+            hwEsapMdnsGatewayPolicyEntry OBJECT-TYPE
+                    SYNTAX HwEsapMdnsGatewayPolicyEntry
+                    MAX-ACCESS not-accessible
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        The mDNS gateway PolicyServiceType table struct.
+                        "
+                    INDEX { hwEsapMdnsGatewayPolicyName }
+                    ::= { hwEsapMdnsGatewayPolicyTable 1 }
+
+            HwEsapMdnsGatewayPolicyEntry ::=
+                SEQUENCE {
+                	hwEsapMdnsGatewayPolicyName
+                        Integer32,
+                    hwEsapMdnsGatewayPolicyDeviceName
+                        OCTET STRING,
+                    hwEsapMdnsGatewayPolicyDeviceMac
+                        OCTET STRING(SIZE(6)) ,
+                    hwEsapMdnsGatewayPolicyServiceType
+                        OCTET STRING,
+                    hwEsapMdnsGatewayPolicyLocationType
+                        Integer32,
+                    hwEsapMdnsGatewayPolicyLocationName
+                        OCTET STRING,
+                    hwEsapMdnsGatewayPolicyMatchType
+                        Integer32,
+                    hwEsapMdnsGatewayPolicyDel
+                        Integer32
+                   }
+-- mDNS gateway policy type name
+                hwEsapMdnsGatewayPolicyName OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy type name.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 1 }
+
+-- mDNS gateway policy device Name
+                hwEsapMdnsGatewayPolicyDeviceName OBJECT-TYPE
+                    SYNTAX OCTET STRING
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy device Name.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 2 }
+
+-- mDNS gateway policy device mac address
+                hwEsapMdnsGatewayPolicyDeviceMac OBJECT-TYPE
+                    -- TEXTUAL CONVENTION MacAddress
+                    SYNTAX OCTET STRING(SIZE(6))   
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy device mac address.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 3 }
+
+-- mDNS gateway policy service type 
+                hwEsapMdnsGatewayPolicyServiceType OBJECT-TYPE
+                    SYNTAX OCTET STRING
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy service type.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 4 }
+
+-- mDNS gateway policy location type
+                hwEsapMdnsGatewayPolicyLocationType OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy location type.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 5 }
+
+-- mDNS gateway policy location name
+                hwEsapMdnsGatewayPolicyLocationName OBJECT-TYPE
+                    SYNTAX OCTET STRING
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy location name.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 6 }
+
+-- mDNS gateway policy match type
+                hwEsapMdnsGatewayPolicyMatchType OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy match type.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 7 }
+
+-- mDNS gateway policy delete
+                hwEsapMdnsGatewayPolicyDel OBJECT-TYPE
+                    SYNTAX Integer32
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        This item is mDNS gateway policy delete.
+                        "
+                    ::= { hwEsapMdnsGatewayPolicyEntry 8 }
                     
+-- mdns service-vlan blacklist
+            hwEsapMdnsGatewayMibBlacklistTable OBJECT-TYPE
+                    SYNTAX SEQUENCE OF HwEsapMdnsGatewayMibBlacklistEntry
+                    MAX-ACCESS not-accessible
+                    STATUS current
+                    DESCRIPTION
+                    "
+                    The mDNS gateway service-vlan blacklist table.
+                    "
+                ::= { hwEsapMdnsGatewayObject 6 }
+
+            hwEsapMdnsGatewayMibBlacklistEntry OBJECT-TYPE
+                    SYNTAX HwEsapMdnsGatewayMibBlacklistEntry
+                    MAX-ACCESS not-accessible
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        The mDNS gateway service-vlan blacklist table struct.
+                        "
+                    INDEX { hwEsapMdnsGatewayBlacklistStartVlan }
+                    ::= { hwEsapMdnsGatewayMibBlacklistTable 1 }
+
+            HwEsapMdnsGatewayMibBlacklistEntry ::=
+                SEQUENCE {
+                	hwEsapMdnsGatewayBlacklistStartVlan
+                        Integer32,
+                    hwEsapMdnsGatewayBlacklistEndVlan
+                        Integer32,
+                    hwEsapMdnsGatewayBlacklistEnable
+                        INTEGER
+                    }
+
+-- mdns service-vlan blacklist start-vlan
+                hwEsapMdnsGatewayBlacklistStartVlan OBJECT-TYPE
+                    SYNTAX Integer32 (1..4094)
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        The mDNS gateway service-vlan blacklist start vlan.
+                        "
+                    ::= { hwEsapMdnsGatewayMibBlacklistEntry 1 }
+
+-- mdns service-vlan blacklist end-vlan
+                hwEsapMdnsGatewayBlacklistEndVlan OBJECT-TYPE
+                    SYNTAX Integer32 (1..4094)
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        The mDNS gateway service-vlan blacklist end vlan.
+                        "
+                    ::= { hwEsapMdnsGatewayMibBlacklistEntry 2 }
+
+-- mdns service-vlan blacklist enable
+                hwEsapMdnsGatewayBlacklistEnable OBJECT-TYPE
+                    SYNTAX INTEGER
+                    {
+                        true(1),
+                        false(2)
+                    }   
+                    MAX-ACCESS read-write
+                    STATUS current
+                    DESCRIPTION
+                        "
+                        The mDNS gateway service-vlan blacklist switch.
+                        "
+                    ::= { hwEsapMdnsGatewayMibBlacklistEntry 3 }
 
 -- mDNS mib conformance
        hwEsapMdnsGatewayMibConformance OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMIB 2 }
@@ -490,21 +771,21 @@
        hwEsapMdnsGatewayMibGroups OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMibConformance 1 }
 
        hwEsapMdnsGatewayMibGlobalStatusGroup OBJECT-GROUP
-       OBJECTS { hwEsapMdnsGatewayGlobalIndex, hwEsapMdnsGatewayEnable, hwEsapMdnsSourceIP }
+       OBJECTS {hwEsapMdnsGatewayEnable, hwEsapMdnsSourceIP,hwEsapMdnsPolicyEnable,hwEsapMdnsPolicyNoMatchAction,hwEsapMdnsUnicastEnable}
             STATUS current
             DESCRIPTION
                 "This is the mDNS gateway global status group."
             ::= { hwEsapMdnsGatewayMibGroups 1 }
        
        hwEsapMdnsGatewayMibServiceProbeGroup OBJECT-GROUP
-       OBJECTS { hwEsapMdnsGatewayServiceProbeIndex, hwEsapMdnsGatewayServiceProbeVlanId, hwEsapMdnsGatewayServiceProbeInterval }
+       OBJECTS {hwEsapMdnsGatewayServiceProbeVlanId, hwEsapMdnsGatewayServiceProbeInterval }
             STATUS current
             DESCRIPTION
                 "This is the mDNS gateway service probe group."
             ::= { hwEsapMdnsGatewayMibGroups 2 }
        
        hwEsapMdnsGatewayMibServiceGroup OBJECT-GROUP
-       OBJECTS { hwEsapMdnsGatewayServiceIndex,
+       OBJECTS {
                  hwEsapMdnsGatewayServiceName,
                  hwEsapMdnsGatewayServiceTTL,
                  hwEsapMdnsGatewayServiceAgeTime,
@@ -515,28 +796,109 @@
                  hwEsapMdnsGatewayServiceHostTTL,
                  hwEsapMdnsGatewayServiceHostAgeTime,
                  hwEsapMdnsGatewayServiceHostAddr,
-                 hwEsapMdnsGatewayServiceVlanIdInfo }
+                 hwEsapMdnsGatewayServiceVlanIdInfo,
+                 hwEsapMdnsGatewayServiceSrcMac,
+                 hwEsapMdnsGatewayServiceApID}
             STATUS current
             DESCRIPTION
                 "This is the mDNS service group."
             ::= { hwEsapMdnsGatewayMibGroups 3 }
 
 
-       hwEsapMdnsGatewayMibGroupInfoGroup OBJECT-GROUP
-       OBJECTS { hwEsapMdnsGatewayGroupName, hwEsapMdnsGatewayDeleteGroup, hwEsapMdnsGatewayDeleteVlanIdOpt, hwEsapMdnsGatewayUserVlanId, hwEsapMdnsGatewayServiceVlanId }
+        hwEsapMdnsGatewayMibGroupInfoGroup OBJECT-GROUP
+        OBJECTS { hwEsapMdnsGatewayGroupName, hwEsapMdnsGatewayDeleteGroup, hwEsapMdnsGatewayDeleteVlanIdOpt, hwEsapMdnsGatewayUserVlanId, hwEsapMdnsGatewayServiceVlanId }
             STATUS current
             DESCRIPTION
                 "This is the mDNS gateway group info group."
             ::= { hwEsapMdnsGatewayMibGroups 4 }
 
-       hwEsapMdnsGatewayMIBCompliances OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMibConformance 2 }
+        hwEsapMdnsGatewayMibPolicyGroup OBJECT-GROUP
+        OBJECTS { hwEsapMdnsGatewayPolicyName, hwEsapMdnsGatewayPolicyDeviceName, hwEsapMdnsGatewayPolicyDeviceMac,hwEsapMdnsGatewayPolicyServiceType,hwEsapMdnsGatewayPolicyLocationType,hwEsapMdnsGatewayPolicyLocationName,hwEsapMdnsGatewayPolicyMatchType,hwEsapMdnsGatewayPolicyDel}
+            STATUS current
+            DESCRIPTION
+                "This is the mDNS gateway policy group."
+            ::= { hwEsapMdnsGatewayMibGroups 5 }
+            
+        hwEsapMdnsGatewayMibBlacklistGroup OBJECT-GROUP
+        OBJECTS { hwEsapMdnsGatewayBlacklistStartVlan, hwEsapMdnsGatewayBlacklistEndVlan, hwEsapMdnsGatewayBlacklistEnable }
+            STATUS current
+            DESCRIPTION
+                "This is the mDNS gateway blacklist VLAN group."
+            ::= { hwEsapMdnsGatewayMibGroups 6 }
+            
+        hwEsapMdnsGatewayMibTrapElemGroup OBJECT-GROUP
+        OBJECTS { hwEsapMdnsGatewayRecType, hwEsapMdnsGatewayRecNumThreshold, hwEsapMdnsGatewayRecNumCurrent, hwEsapMdnsGatewayRecNumSpec }
+            STATUS current
+            DESCRIPTION
+                "This is the mDNS gateway trap elements group."
+            ::= { hwEsapMdnsGatewayMibGroups 7 }
+            
+        hwEsapMdnsGatewayMibTrapsGroup NOTIFICATION-GROUP
+        NOTIFICATIONS { hwEsapMdnsGatewayRecNumExceedThreshold, hwEsapMdnsGatewayRecNumBelowThreshold }
+            STATUS current
+            DESCRIPTION
+                "This is the mDNS gateway traps group."
+            ::= { hwEsapMdnsGatewayMibGroups 8 }
 
-       hwEsapMdnsGatewayMIBCompliance MODULE-COMPLIANCE
+        hwEsapMdnsGatewayMIBCompliances OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMibConformance 2 }
+
+        hwEsapMdnsGatewayMIBCompliance MODULE-COMPLIANCE
             STATUS current
             DESCRIPTION
                 "The compliance statement for entities which implement the hwEsapMdnsGatewayMIB."
             MODULE
-                MANDATORY-GROUPS {hwEsapMdnsGatewayMibGlobalStatusGroup, hwEsapMdnsGatewayMibServiceProbeGroup, hwEsapMdnsGatewayMibServiceGroup, hwEsapMdnsGatewayMibGroupInfoGroup}
+                MANDATORY-GROUPS { hwEsapMdnsGatewayMibGlobalStatusGroup, hwEsapMdnsGatewayMibServiceProbeGroup, hwEsapMdnsGatewayMibServiceGroup, hwEsapMdnsGatewayMibGroupInfoGroup }
             ::= { hwEsapMdnsGatewayMIBCompliances 1 }
-
+            
+        hwEsapMdnsGatewayMibTrap OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMIB 3 }
+        hwEsapMdnsGatewayTrapElem OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMibTrap 1 }
+        
+            hwEsapMdnsGatewayRecType OBJECT-TYPE
+                SYNTAX OCTET STRING (SIZE (1..31))
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "mDNS record type. Currently supported: A, PTR, TXT, SRV."
+                ::= { hwEsapMdnsGatewayTrapElem 1 }
+            
+            hwEsapMdnsGatewayRecNumThreshold OBJECT-TYPE
+                SYNTAX Integer32 (1..99)
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "mDNS record number alarm threshold."
+                ::= { hwEsapMdnsGatewayTrapElem 2 }
+                
+            hwEsapMdnsGatewayRecNumCurrent OBJECT-TYPE
+                SYNTAX Integer32 (0..65535)
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "Current number of mDNS record."
+                ::= { hwEsapMdnsGatewayTrapElem 3 }
+            
+            hwEsapMdnsGatewayRecNumSpec OBJECT-TYPE
+                SYNTAX Integer32 (0..65535)
+                MAX-ACCESS accessible-for-notify
+                STATUS current
+                DESCRIPTION
+                    "Maximum number of mDNS record."
+                ::= { hwEsapMdnsGatewayTrapElem 4 }
+                
+        hwEsapMdnsGatewayTrapDef OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayMibTrap 2 }
+        hwEsapMdnsGatewayTraps OBJECT IDENTIFIER ::= { hwEsapMdnsGatewayTrapDef 1 }
+        
+            hwEsapMdnsGatewayRecNumExceedThreshold NOTIFICATION-TYPE
+                OBJECTS { hwEsapMdnsGatewayRecType, hwEsapMdnsGatewayRecNumThreshold, hwEsapMdnsGatewayRecNumCurrent, hwEsapMdnsGatewayRecNumSpec }
+                STATUS current
+                DESCRIPTION
+                    "This object indicates that the number of specific mDNS record exceeds the threshold."
+                ::= { hwEsapMdnsGatewayTraps 1 }
+        
+            hwEsapMdnsGatewayRecNumBelowThreshold NOTIFICATION-TYPE 
+                OBJECTS { hwEsapMdnsGatewayRecType, hwEsapMdnsGatewayRecNumThreshold, hwEsapMdnsGatewayRecNumCurrent, hwEsapMdnsGatewayRecNumSpec }
+                STATUS current
+                DESCRIPTION
+                    "This object indicates that the nubmer of specific mDNS record falls below the threshold."
+                ::= { hwEsapMdnsGatewayTraps 2 } 
 END
