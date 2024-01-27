@@ -1,0 +1,1646 @@
+RUCKUS-ACL-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY,
+	OBJECT-TYPE,
+	Unsigned32,
+	Counter64,
+	Integer32,
+	NOTIFICATION-TYPE
+		FROM SNMPv2-SMI	   	-- [RFC2578]
+	TEXTUAL-CONVENTION,
+	RowStatus,
+	DisplayString,
+	TruthValue,
+	MacAddress
+		FROM SNMPv2-TC		-- [RFC2579]
+	InetAddressIPv4,
+	InetAddressIPv6
+        	FROM INET-ADDRESS-MIB   -- [RFC4001]
+	InterfaceIndex,
+	ifIndex
+		FROM IF-MIB
+ 	snSwitch
+                FROM FOUNDRY-SN-SWITCH-GROUP-MIB;
+
+ruckusAclMIB MODULE-IDENTITY
+	LAST-UPDATED "201908070000Z"  -- 17 Aug 2019
+	ORGANIZATION "Ruckus Wireless, Inc.."
+	CONTACT-INFO
+		"Technical Support Center, Ruckus Wireless, Inc,
+		 350 West Java Drive,
+		 Sunnyvale, CA 94089, USA
+		 Support URL: https://support.ruckuswireless.com
+		 Phone: +1-855-782-5871
+                 ROW TF Numbers: https://support.ruckuswireless.com/contact-us
+		"
+	DESCRIPTION
+		"Management Information for describing the MAC, IPv4, IPv6 ACLs, their
+		 bindings on ports, VLANs and VLAN+Port combinations. 
+
+		 The Ruckus Wireless, Inc proprietary MIB module for Access Control List. 
+		 It has new tables for Ipv4, Ipv6 and MAC Access Control Lists.
+		 
+		 Copyright (C) Ruckus Wireless, Inc., (2017)
+		 This document and the information contained herein are provided on an
+		 AS IS basis and Ruckus Wireless, Inc DISCLAIM ALL WARRANTIES, EXPRESS
+		 OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF
+		 THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED
+		 WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+		"
+	REVISION
+		 "201908070000Z"  -- 17 Aug 2019
+	DESCRIPTION
+		"Initial version"
+	::= { snSwitch 45 }
+
+ruckusAclNotify         OBJECT IDENTIFIER  ::=  { ruckusAclMIB 0 }
+ruckusAclObjects        OBJECT IDENTIFIER  ::=  { ruckusAclMIB 1 }
+ruckusAclConformance    OBJECT IDENTIFIER  ::=  { ruckusAclMIB 2 }
+
+ruckusAcls              OBJECT IDENTIFIER  ::=  { ruckusAclObjects 1 }
+ruckusAclFilters        OBJECT IDENTIFIER  ::=  { ruckusAclObjects 2 }
+ruckusAclBindings       OBJECT IDENTIFIER  ::=  { ruckusAclObjects 3 }
+ruckusIpv4Filters       OBJECT IDENTIFIER  ::=  { ruckusAclFilters 1 }
+ruckusIpv6Filters       OBJECT IDENTIFIER  ::=  { ruckusAclFilters 2 }
+ruckusMacFilters        OBJECT IDENTIFIER  ::=  { ruckusAclFilters 3 }
+
+-- --------------------------------------------------------------------------------
+-- Textual Conventions
+-- --------------------------------------------------------------------------------
+VlanId ::= TEXTUAL-CONVENTION
+        STATUS  current
+        DESCRIPTION
+                "An ID used to represent VLAN identifier in the
+                 system for both untagged and tagged VLANs packets)."
+        SYNTAX  INTEGER (1..4094)
+
+AclName ::= TEXTUAL-CONVENTION 
+	STATUS  current 
+	DESCRIPTION 
+		"A name uniquely identifies an access-list in a given
+		 name space like IPv4, IPv6 or MAC ACLs."
+	SYNTAX  DisplayString (SIZE (1..255))
+
+AclPolicyName ::= TEXTUAL-CONVENTION 
+	STATUS  current 
+	DESCRIPTION 
+		"A name uniquely identifies a traffic policy which can
+		 applied with IPv4, IPv6 ACL filters."
+	SYNTAX  DisplayString (SIZE (1..32))
+
+AclType ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes the type of ACL."
+	SYNTAX	INTEGER { 
+		    mac(1),
+		    ipv4(2),
+		    ipv6(3)
+		}
+
+AclAction ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Specifies an action such for ACL filter."
+	SYNTAX	INTEGER { 
+		    deny(1), 
+		    permit(2) 
+		}
+
+AclDirection ::= TEXTUAL-CONVENTION 
+	STATUS  current 
+	DESCRIPTION 
+		"The packet flow direction on interface, where the ACL 
+		 should be applied. It can be either or both."
+	SYNTAX  INTEGER {
+		    ingress(1),
+		    egress(2)
+		}
+
+AclOperator ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Represents a operator value, such as equal, not-equal,
+		 lesser than, greater than, range and none."
+	SYNTAX	INTEGER { 
+		    eq(1), 
+		    neq(2), 
+		    lt(3), 
+		    gt(4), 
+		    range(5), 
+		    none(6) 
+		}
+
+IpPrecedence ::= TEXTUAL-CONVENTION 
+	STATUS  current 
+	DESCRIPTION 
+		"The IP precedence value which can be used with L3 ACL filter."
+	SYNTAX  INTEGER {
+		    routine(1),
+		    priority(2),
+		    immediate(3), 
+		    flash(4),
+		    flashOverride(5),
+		    critical(6),
+		    internet(7),
+		    network(8),
+		    other(9)
+		}
+
+IpTos ::= TEXTUAL-CONVENTION 
+	STATUS  current 
+	DESCRIPTION 
+		"The IP TOS value which can be used with L3 ACL filter."
+	SYNTAX  INTEGER {
+		    normal(1),
+		    lowCost(2),
+		    maxReliability(3),
+		    maxThroughput(4),
+		    minDelay(5)
+		}
+
+EtherType ::= TEXTUAL-CONVENTION
+        DISPLAY-HINT    "x"
+        STATUS          current
+        DESCRIPTION
+                "EtherType value from the ethernet packet shown in Hex format."
+        SYNTAX          Unsigned32
+
+-- --------------------------------------------------------------------------------
+-- Access Control List Table
+-- --------------------------------------------------------------------------------
+ruckusAclTable     	OBJECT-TYPE
+	SYNTAX  	SEQUENCE OF RuckusAclEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Table of Ruckus Ipv4/Ipv6/MAC Access Control Lists (ACLs)"
+	::= { ruckusAcls 1 }
+
+ruckusAclEntry          OBJECT-TYPE
+	SYNTAX  	RuckusAclEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"An entry in the Ruckus Ipv4/Ipv6/MAC Access Control List table."
+	INDEX   	{ ruckusAclType, ruckusAclName }
+	::= { ruckusAclTable 1 }
+
+RuckusAclEntry ::= SEQUENCE {
+	ruckusAclType
+		AclType,
+	ruckusAclName
+		AclName,
+	ruckusAclAcctEnable
+		TruthValue,
+	ruckusAclStandard
+		TruthValue,
+	ruckusAclRowStatus
+		RowStatus
+	}
+
+ruckusAclType   OBJECT-TYPE
+	SYNTAX		AclType
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Type of the ACL, this entry specifies."
+	::= { ruckusAclEntry 1 }
+
+ruckusAclName		OBJECT-TYPE
+	SYNTAX  	AclName
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Unique Access Control List name for an entry."
+	::= { ruckusAclEntry 2 }
+
+ruckusAclAcctEnable OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies if accounting is enabled for the filters in this ACL."
+	::= { ruckusAclEntry 3 }
+
+ruckusAclStandard OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS  	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the type IPv4 ACL - standard or extended, if ACL is of IPv4 ACL."
+	::= { ruckusAclEntry 4 }
+
+ruckusAclRowStatus  OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the creation of IPv4/IPv6/MAC ACL.
+		 Setting this object to destroy(6) removes this IPv4/IPv6/MAC ACL.
+		 Other values are ignored."
+	::= { ruckusAclEntry 5 }
+
+
+-- --------------------------------------------------------------------------------
+-- Ipv4 ACL Filter Table
+-- --------------------------------------------------------------------------------
+ruckusIpv4AclFilterTable     	OBJECT-TYPE
+	SYNTAX  	SEQUENCE OF RuckusIpv4AclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Table of Ruckus Ipv4 Access Control List filters"
+	::= { ruckusIpv4Filters 1 }
+
+ruckusIpv4AclFilterEntry      OBJECT-TYPE
+	SYNTAX  	RuckusIpv4AclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"An entry in the Ruckus Ipv4 Access Control List Filter table."
+	INDEX   	{ ruckusAclName, ruckusIpv4AclFilterSeqNum }
+	::= { ruckusIpv4AclFilterTable 1 }
+
+RuckusIpv4AclFilterEntry ::= SEQUENCE {
+	ruckusIpv4AclFilterSeqNum
+		Unsigned32,
+	ruckusIpv4AclFilterAction              
+		AclAction,
+	ruckusIpv4AclFilterStdProtocol            
+		INTEGER,
+	ruckusIpv4AclFilterExtProtocol
+		INTEGER,
+	ruckusIpv4AclFilterSrcAddr
+		InetAddressIPv4,
+	ruckusIpv4AclFilterSrcMask
+		InetAddressIPv4,
+	ruckusIpv4AclFilterSrcOperator
+		AclOperator,
+	ruckusIpv4AclFilterSrcPortLow
+		Unsigned32,
+	ruckusIpv4AclFilterSrcPortHigh
+		Unsigned32,
+	ruckusIpv4AclFilterDestAddr
+		InetAddressIPv4,
+	ruckusIpv4AclFilterDestMask
+		InetAddressIPv4,
+	ruckusIpv4AclFilterDestOperator
+		AclOperator,
+	ruckusIpv4AclFilterDestPortLow
+		Unsigned32,
+	ruckusIpv4AclFilterDestPortHigh
+		Unsigned32,
+	ruckusIpv4AclFilterEstablished
+		TruthValue,
+	ruckusIpv4AclFilterPrecedence
+		IpPrecedence,
+	ruckusIpv4AclFilterTos
+		IpTos,
+	ruckusIpv4AclFilterIcmpType
+		INTEGER,
+	ruckusIpv4AclFilterIcmpCode
+		INTEGER,
+	ruckusIpv4AclFilterExtIcmpType
+		INTEGER,
+	ruckusIpv4AclFilterPolicyName
+		AclPolicyName,
+	ruckusIpv4AclFilterDscpMatch
+		INTEGER,
+	ruckusIpv4AclFilterDscpForce
+		INTEGER,
+	ruckusIpv4AclFilterPriorityMatch
+		INTEGER,
+	ruckusIpv4AclFilterPriorityForce
+		INTEGER,
+	ruckusIpv4AclFilterInternalPriority
+		INTEGER,
+	ruckusIpv4AclFilterMirrorPkts
+		TruthValue,
+	ruckusIpv4AclFilterLogEnable
+		TruthValue,
+	ruckusIpv4AclFilterComments
+		DisplayString,
+	ruckusIpv4AclFilterRowStatus
+		RowStatus
+	}
+
+ruckusIpv4AclFilterSeqNum     OBJECT-TYPE
+	SYNTAX  	Unsigned32 
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the sequence number for this ACL filter."
+	::= { ruckusIpv4AclFilterEntry 1 }
+
+ruckusIpv4AclFilterAction     OBJECT-TYPE
+	SYNTAX  	AclAction 
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Action to take if the IP packet matches with this ACL filter."
+	::= { ruckusIpv4AclFilterEntry 2 }
+
+ruckusIpv4AclFilterStdProtocol   OBJECT-TYPE
+	SYNTAX  	INTEGER {
+				ip(0),
+				icmp(1),
+				igmp(2),
+				tcp(6),
+				udp(17),
+				ip6(41),
+				rsvp(46),
+				gre(47),
+				esp(50),
+				ospf(89),
+				pim(103),
+				extended(255)
+			}
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Standard transport protocols allowed. The extended option 
+		 enables to define other protocol using the OID
+		 ruckusIpv4AclFilterExtProtocol which takes any value."
+	::= { ruckusIpv4AclFilterEntry 3 }
+
+ruckusIpv4AclFilterExtProtocol   OBJECT-TYPE
+	SYNTAX  	INTEGER (0..255)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Any transport protocol other than standard protocols mentioned
+		 with ruckusIpv4AclFilterStdProtocol OID. 0 means any protocol."
+	::= { ruckusIpv4AclFilterEntry 4 }
+
+ruckusIpv4AclFilterSrcAddr    OBJECT-TYPE
+	SYNTAX  	InetAddressIPv4
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source Ipv4 address to match in packets."
+	::= { ruckusIpv4AclFilterEntry 5 }
+
+ruckusIpv4AclFilterSrcMask    OBJECT-TYPE
+	SYNTAX  	InetAddressIPv4
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source Ipv4 address mask used in combination with source
+		 IPv4 address to derive effective address for matching."
+ 	::= { ruckusIpv4AclFilterEntry 6 }
+
+ruckusIpv4AclFilterSrcOperator    OBJECT-TYPE
+	SYNTAX  	AclOperator
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Type of comparison to perform. For now, this only
+		 applies to TCP/UDP for comparing the port number."
+	::= { ruckusIpv4AclFilterEntry 7 }
+
+ruckusIpv4AclFilterSrcPortLow   OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the TCP/UDP port number to match in packets.
+		 If the operator is 'range', it specfies the start of range."
+	::= { ruckusIpv4AclFilterEntry 8 }
+
+ruckusIpv4AclFilterSrcPortHigh   OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Used only if the operator is defined as 'range', where it
+		 specifies the end of range"
+	::= { ruckusIpv4AclFilterEntry 9 }
+
+ruckusIpv4AclFilterDestAddr	OBJECT-TYPE
+	SYNTAX  	InetAddressIPv4
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination Ipv4 address to match in packets."
+	::= { ruckusIpv4AclFilterEntry 10 }
+
+ruckusIpv4AclFilterDestMask   OBJECT-TYPE
+	SYNTAX  	InetAddressIPv4
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination Ipv4 address mask used in combination with source
+		 IPv4 address to derive effective address for matching."
+ 	::= { ruckusIpv4AclFilterEntry 11 }
+
+ruckusIpv4AclFilterDestOperator    OBJECT-TYPE
+	SYNTAX  	AclOperator
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Type of comparison to perform. For now, this only
+		 applies to TCP/UDP for comparing the port number."
+	::= { ruckusIpv4AclFilterEntry 12 }
+
+ruckusIpv4AclFilterDestPortLow  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the TCP/UDP port number to match in packets.
+		 If the operator is 'range', it specfies the start of range."
+	::= { ruckusIpv4AclFilterEntry 13 }
+
+ruckusIpv4AclFilterDestPortHigh  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Used only if the operator is defined as 'range', where it
+		 specifies the end of range"
+	::= { ruckusIpv4AclFilterEntry 14 }
+
+ruckusIpv4AclFilterEstablished OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Enable/Disable the filtering of established TCP
+		packets of which the ACK or RESET flag is on. This
+		filter only applies to TCP transport protocol."
+	::= { ruckusIpv4AclFilterEntry 15 }
+
+ruckusIpv4AclFilterPrecedence	OBJECT-TYPE
+	SYNTAX		IpPrecedence
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the IP precedence value to match in packets."
+	::= { ruckusIpv4AclFilterEntry 16 }
+
+ruckusIpv4AclFilterTos	OBJECT-TYPE
+	SYNTAX		IpTos
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"This refers to the IP TOS value in range <0-15>, which is
+		 the sum of numeric vlaues of the following options
+		 0x0 - normal TOS
+		 0x1 - minimum monetary cost TOS
+		 0x2 - maximum reliability TOS
+		 0x4 - maximum throughput TOS
+		 0x8 - minimum delay"
+	::= { ruckusIpv4AclFilterEntry 17 }
+
+ruckusIpv4AclFilterIcmpType	OBJECT-TYPE
+	SYNTAX		INTEGER {
+			    echoReply(0),
+			    destUnreachable(3),
+			    srcQuench(4),
+			    redirect(5),
+			    echoReq(8),
+			    routerAdv(9),
+			    routerSolicit(10),
+			    timeExceed(11),
+			    paramProblem(12),
+			    timestampReq(13),
+			    timestampReply(14),
+			    infoReq(15),
+			    infoReply(16),
+			    addrMaskReq(17),
+			    addrMaskReply(18),
+			    extended(255)
+			}
+	MAX-ACCESS 	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the ICMP type for matching if the Protocol is ICMP.
+		 0 means ignore the field."
+	::= { ruckusIpv4AclFilterEntry 18 }
+
+ruckusIpv4AclFilterIcmpCode   OBJECT-TYPE
+	SYNTAX		INTEGER(0..255)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"ICMP Message Code value. Used in combination with ICMP Message
+		 Type to setup an ICMP filter. This object is not used with any
+		 other protocol. 0 means ignored. The supported values are
+
+		 Type: Echo reply
+			1 = Echo reply
+		 Type: Destination unreachable
+			1  = Network unreachable
+			2  = Host unreachable
+			3  = Protocol unreachable
+			4  = Port unreachable
+			5  = Fragmentation needed by don't fragment bit set
+			6  = Source route failed
+			7  = Destination network unknown
+			8  = Destination host unknown
+			9  = Source host isolated
+			10 = Destination network administratively prohibited
+			11 = Destination host administratively prohibited
+			12 = Network unreachable for TOS
+			13 = Host unreachable for TOS
+			14 = Communication administratively prohibited by filter
+			15 = Host precedence violation
+			16 = Precedence cutoff in effect
+		 Type: Source quench
+			1 = Source quench
+		 Type: Redirect
+			1 = Redirect for network
+			2 = Redirect for host
+			3 = Redirect for TOS and network
+			4 = Redirect for TOS and host
+		 Type: Echo request
+			1 = Echo request
+		 Type: Router advertisement
+			1 = Router advertisement
+		 Type: Router solicitation
+			1 = Router solicitation
+		 Type: Time exceeded
+			1 = Time to live equals 0 during transmit
+			2 = Time to live equals 0 during reassembly
+		 Type: Parameter problem
+			1 = IP header bad (catchall error)
+			2 = Required option missing
+		 Type: Timestamp request
+			1 = Timestamp request
+		 Type: Timestamp reply
+			1 = Timestamp reply
+		 Type: Information request
+			1 = Information request
+		 Type: Information reply
+			1 = Information reply
+		 Type: Address mask request
+			1 = Address mask request
+		 Type: Address mask reply
+			1 = Address mask reply
+		"
+	::= { ruckusIpv4AclFilterEntry 19 }
+
+ruckusIpv4AclFilterExtIcmpType	OBJECT-TYPE
+	SYNTAX		INTEGER(0..255)
+	MAX-ACCESS 	read-create
+	STATUS		current
+	DESCRIPTION
+		"Any type that can't be specified using the standard types
+		 can be specified using this object."
+	::= { ruckusIpv4AclFilterEntry 20 }
+
+ruckusIpv4AclFilterPolicyName   OBJECT-TYPE
+	SYNTAX		AclPolicyName
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value to use in matching or marking."
+	::= { ruckusIpv4AclFilterEntry 21 }
+
+ruckusIpv4AclFilterDscpMatch   OBJECT-TYPE
+	SYNTAX		INTEGER(0..63)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value for matching with this filter."
+	::= { ruckusIpv4AclFilterEntry 22 }
+
+ruckusIpv4AclFilterDscpForce   OBJECT-TYPE
+	SYNTAX		INTEGER(0..63)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value to be used for marking in outgoing
+		 packets matching this filter."
+	::= { ruckusIpv4AclFilterEntry 23 }
+
+ruckusIpv4AclFilterPriorityMatch   OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the 802.1P priority for matching with this filter."
+	::= { ruckusIpv4AclFilterEntry 24 }
+
+ruckusIpv4AclFilterPriorityForce   OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the 802.1P priority to be used for marking in outgoing
+		 packets matching this filter."
+	::= { ruckusIpv4AclFilterEntry 25 }
+
+ruckusIpv4AclFilterInternalPriority  OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS 	read-create
+	STATUS		current
+	DESCRIPTION
+		"QoS priority option for this filter."
+	::= { ruckusIpv4AclFilterEntry 26 }
+
+ruckusIpv4AclFilterMirrorPkts OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Mirror packets matching ACL permit clause."
+	DEFVAL  { false }
+	::= { ruckusIpv4AclFilterEntry 27 }
+
+ruckusIpv4AclFilterLogEnable  OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies if logging is enabled for the filter."
+	::= { ruckusIpv4AclFilterEntry 28 }
+
+ruckusIpv4AclFilterComments   OBJECT-TYPE
+	SYNTAX  	DisplayString (SIZE (0..255))
+	MAX-ACCESS  	read-only
+	STATUS  	current
+	DESCRIPTION
+		"Remark description of individual Access Control List entry."
+	::= { ruckusIpv4AclFilterEntry 29 }
+
+ruckusIpv4AclFilterRowStatus   OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the creation of IPv4 ACL filter.
+		 Setting this object to destroy(6) removes this IPv4 ACL filter.
+		 Other values are ignored."
+	::= { ruckusIpv4AclFilterEntry 30 }
+
+
+-- --------------------------------------------------------------------------------
+-- Ipv6 ACL Filter Table
+-- --------------------------------------------------------------------------------
+ruckusIpv6AclFilterTable   OBJECT-TYPE
+	SYNTAX  	SEQUENCE OF RuckusIpv6AclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Table of Ruckus Ipv6 Access Control List Filters"
+	::= { ruckusIpv6Filters 1 }
+
+ruckusIpv6AclFilterEntry  OBJECT-TYPE
+	SYNTAX  	RuckusIpv6AclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"An entry in the Ruckus Ipv6 Access Control List Filter table."
+	INDEX   	{ ruckusAclName, ruckusIpv6AclFilterSeqNum }
+	::= { ruckusIpv6AclFilterTable 1 }
+
+RuckusIpv6AclFilterEntry ::= SEQUENCE {
+	ruckusIpv6AclFilterSeqNum
+		Unsigned32,
+	ruckusIpv6AclFilterAction              
+		AclAction,
+	ruckusIpv6AclFilterStdProtocol            
+		INTEGER,
+	ruckusIpv6AclFilterExtProtocol            
+		INTEGER,
+	ruckusIpv6AclFilterSrcAddr
+		InetAddressIPv6,
+	ruckusIpv6AclFilterSrcPrefixLen
+		Unsigned32,
+	ruckusIpv6AclFilterSrcOperator
+		AclOperator,
+	ruckusIpv6AclFilterSrcPortLow
+		Unsigned32,
+	ruckusIpv6AclFilterSrcPortHigh
+		Unsigned32,
+	ruckusIpv6AclFilterDestAddr
+		InetAddressIPv6,
+	ruckusIpv6AclFilterDestPrefixLen
+		Unsigned32,
+	ruckusIpv6AclFilterDestOperator
+		AclOperator,
+	ruckusIpv6AclFilterDestPortLow
+		Unsigned32,
+	ruckusIpv6AclFilterDestPortHigh
+		Unsigned32,
+	ruckusIpv6AclFilterEstablished
+		TruthValue,
+	ruckusIpv6AclFilterIcmpType
+		INTEGER,
+	ruckusIpv6AclFilterIcmpCode
+		INTEGER,
+	ruckusIpv6AclFilterExtIcmpType
+		INTEGER,
+	ruckusIpv6AclFilterPolicyName
+		AclPolicyName,
+	ruckusIpv6AclFilterDscpMatch
+		INTEGER,
+	ruckusIpv6AclFilterDscpForce
+		INTEGER,
+	ruckusIpv6AclFilterPriorityMatch
+		INTEGER,
+	ruckusIpv6AclFilterPriorityForce
+		INTEGER,
+	ruckusIpv6AclFilterInternalPriority
+		INTEGER,
+	ruckusIpv6AclFilterFragments
+		TruthValue,
+	ruckusIpv6AclFilterSourceRoute
+		TruthValue,
+	ruckusIpv6AclFilterMirrorPkts
+		TruthValue,
+	ruckusIpv6AclFilterLogEnable
+		TruthValue,
+	ruckusIpv6AclFilterComments
+		DisplayString,
+	ruckusIpv6AclFilterRowStatus
+		RowStatus
+	}
+
+ruckusIpv6AclFilterSeqNum     OBJECT-TYPE
+	SYNTAX  	Unsigned32 
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the sequence number for this ACL filter."
+	::= { ruckusIpv6AclFilterEntry 1 }
+
+ruckusIpv6AclFilterAction  OBJECT-TYPE
+	SYNTAX  	AclAction 
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Action to take if the IPv6 packet matches with this
+		 access control list filter."
+	::= { ruckusIpv6AclFilterEntry 2 }
+
+ruckusIpv6AclFilterStdProtocol   OBJECT-TYPE
+	SYNTAX  	INTEGER {
+				tcp(6),
+				udp(17),
+				ip6(41),
+				esp(50),
+				ahp(51),
+				icmp(58),
+				sctp(132),
+				extended(255)
+			}
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Standard transport protocols allowed. The extended option 
+		 enables to define other protocol using the OID
+		 ruckusIpv6AclFilterExtProtocol which takes any value."
+	::= { ruckusIpv6AclFilterEntry 3 }
+
+ruckusIpv6AclFilterExtProtocol   OBJECT-TYPE
+	SYNTAX  	INTEGER (0..255)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Any transport protocol other than standard protocols mentioned
+		 with ruckusIpv6AclFilterStdProtocol OID. 0 means any protocol."
+	::= { ruckusIpv6AclFilterEntry 4 }
+
+ruckusIpv6AclFilterSrcAddr OBJECT-TYPE
+	SYNTAX  	InetAddressIPv6
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source Ipv6 address to match in packets."
+	::= { ruckusIpv6AclFilterEntry 5 }
+
+ruckusIpv6AclFilterSrcPrefixLen  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..64)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source Ipv6 address prefix length."
+	DEFVAL  {64}
+ 	::= { ruckusIpv6AclFilterEntry 6 }
+
+ruckusIpv6AclFilterSrcOperator  OBJECT-TYPE
+	SYNTAX  	AclOperator
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Type of comparison to perform. For now, this only
+		 applies to TCP/UDP for comparing the port number."
+	::= { ruckusIpv6AclFilterEntry 7 }
+
+ruckusIpv6AclFilterSrcPortLow   OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the TCP/UDP port number to match in packets.
+		 If the operator is 'range', it specfies the start of range."
+	::= { ruckusIpv6AclFilterEntry 8 }
+
+ruckusIpv6AclFilterSrcPortHigh   OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Used only if the operator is defined as 'range', where it
+		 specifies the end of range"
+	::= { ruckusIpv6AclFilterEntry 9 }
+
+ruckusIpv6AclFilterDestAddr  OBJECT-TYPE
+	SYNTAX  	InetAddressIPv6
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination Ipv6 address to match in packets."
+	::= { ruckusIpv6AclFilterEntry 10 }
+
+ruckusIpv6AclFilterDestPrefixLen  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..64)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination Ipv6 address prefix length."
+	DEFVAL  {64}
+ 	::= { ruckusIpv6AclFilterEntry 11 }
+
+ruckusIpv6AclFilterDestOperator  OBJECT-TYPE
+	SYNTAX  	AclOperator
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Type of comparison to perform. For now, this only
+		 applies to TCP/UDP for comparing the port number."
+	::= { ruckusIpv6AclFilterEntry 12 }
+
+ruckusIpv6AclFilterDestPortLow  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the TCP/UDP port number to match in packets.
+		 If the operator is 'range', it specfies the start of range."
+	::= { ruckusIpv6AclFilterEntry 13 }
+
+ruckusIpv6AclFilterDestPortHigh  OBJECT-TYPE
+	SYNTAX  	Unsigned32(0..65535)
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Used only if the operator is defined as 'range', where it
+		 specifies the end of range"
+	::= { ruckusIpv6AclFilterEntry 14 }
+
+ruckusIpv6AclFilterEstablished  OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Enable/Disable the filtering of established TCP packets
+		 of which the ACK or RESET flag is on. This filter only
+		 applies to TCP transport protocol."
+	::= { ruckusIpv6AclFilterEntry 15 }
+
+ruckusIpv6AclFilterIcmpType  OBJECT-TYPE
+	SYNTAX		INTEGER {
+			    destUnreachable(1),
+			    largePackets(2),
+			    timeExceed(3),
+			    paramProblem(4),
+			    echoReq(128),
+			    echoReply(129),
+			    mldQueries(130),
+			    mldReport(131),
+			    mldReduction(132),
+			    routerSolicit(133),
+			    routerAdv(134),
+			    neighborSolicit(135),
+			    neighborAdv(136),
+			    routerRenumbering(138),
+			    extended(255)
+			}
+	MAX-ACCESS 	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the ICMP6 type for matching if the Protocol is ICMP6.
+		 0 means ignore the field."
+	::= { ruckusIpv6AclFilterEntry 16 }
+
+ruckusIpv6AclFilterIcmpCode   OBJECT-TYPE
+	SYNTAX		INTEGER(0..255)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"ICMP Message Code value. Used in combination with ICMP Message
+		 Type to setup an ICMP filter. This object is not used with any
+		 other protocol. 0 means ignored. The supported values are
+
+		 Type: Echo reply
+			1 = Echo reply
+		 Type: Destination unreachable
+			1  = Network unreachable
+			2  = Host unreachable
+			3  = Protocol unreachable
+			4  = Port unreachable
+			5  = Fragmentation needed by don't fragment bit set
+			6  = Source route failed
+			7  = Destination network unknown
+			8  = Destination host unknown
+			9  = Source host isolated
+			10 = Destination network administratively prohibited
+			11 = Destination host administratively prohibited
+			12 = Network unreachable for TOS
+			13 = Host unreachable for TOS
+			14 = Communication administratively prohibited by filter
+			15 = Host precedence violation
+			16 = Precedence cutoff in effect
+		 Type: Echo request
+			1 = Echo request
+		 Type: Router advertisement
+			1 = Router advertisement
+		 Type: Router solicitation
+			1 = Router solicitation
+		 Type: Time exceeded
+			1 = Time to live equals 0 during transmit
+			2 = Time to live equals 0 during reassembly
+		 Type: Parameter problem
+			1 = IP header bad (catchall error)
+			2 = Required option missing
+		 Type: Timestamp request
+			1 = Timestamp request
+		"
+	::= { ruckusIpv6AclFilterEntry 17 }
+
+ruckusIpv6AclFilterExtIcmpType	OBJECT-TYPE
+	SYNTAX		INTEGER(0..255)
+	MAX-ACCESS 	read-create
+	STATUS		current
+	DESCRIPTION
+		"Any type that can't be specified using the standard types
+		 can be specified using this object."
+	::= { ruckusIpv6AclFilterEntry 18 }
+
+ruckusIpv6AclFilterPolicyName   OBJECT-TYPE
+	SYNTAX		AclPolicyName
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value to use in matching or marking."
+	::= { ruckusIpv6AclFilterEntry 19 }
+
+ruckusIpv6AclFilterDscpMatch   OBJECT-TYPE
+	SYNTAX		INTEGER(0..63)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value for matching with this filter."
+	::= { ruckusIpv6AclFilterEntry 20 }
+
+ruckusIpv6AclFilterDscpForce   OBJECT-TYPE
+	SYNTAX		INTEGER(0..63)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the DSCP value to be used for marking in outgoing
+		 packets matching this filter."
+	::= { ruckusIpv6AclFilterEntry 21 }
+
+ruckusIpv6AclFilterPriorityMatch   OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the 802.1P priority for matching with this filter."
+	::= { ruckusIpv6AclFilterEntry 22 }
+
+ruckusIpv6AclFilterPriorityForce   OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Specifies the 802.1P priority to be used for marking in outgoing
+		 packets matching this filter."
+	::= { ruckusIpv6AclFilterEntry 23 }
+
+ruckusIpv6AclFilterInternalPriority  OBJECT-TYPE
+	SYNTAX		INTEGER(0..7)
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"QoS priority option for this filter."
+	::= { ruckusIpv6AclFilterEntry 24 }
+
+ruckusIpv6AclFilterFragments OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Match IPv6 fragments with non-zero fragment offset in V6 packets
+		 matching this ACL permit clause."
+	DEFVAL  { false }
+	::= { ruckusIpv6AclFilterEntry 25 }
+
+ruckusIpv6AclFilterSourceRoute OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Match only rource routed packets matching this ACL permit clause."
+	DEFVAL  { false }
+	::= { ruckusIpv6AclFilterEntry 26 }
+
+ruckusIpv6AclFilterMirrorPkts OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Mirror packets matching ACL permit clause."
+	DEFVAL  { false }
+	::= { ruckusIpv6AclFilterEntry 27 }
+
+ruckusIpv6AclFilterLogEnable  OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies if logging is enabled for the filter."
+	::= { ruckusIpv6AclFilterEntry 28 }
+
+ruckusIpv6AclFilterComments  OBJECT-TYPE
+	SYNTAX  	DisplayString (SIZE (0..255))
+	MAX-ACCESS  	read-only
+	STATUS  	current
+	DESCRIPTION
+		"Remark description of individual Access Control List entry."
+	::= { ruckusIpv6AclFilterEntry 29 }
+
+ruckusIpv6AclFilterRowStatus  OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the creation of IPv6 ACL filter.
+		 Setting this object to destroy(6) removes this IPv6 ACL filter.
+		 Other values are ignored."
+	::= { ruckusIpv6AclFilterEntry 30 }
+
+-- --------------------------------------------------------------------------------
+-- MAC ACL Filter Table
+-- --------------------------------------------------------------------------------
+ruckusMacAclFilterTable     	OBJECT-TYPE
+	SYNTAX  	SEQUENCE OF RuckusMacAclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Table of Ruckus Mac Access Control List Filters. MAC ACLs filter 
+		 traffic based on any of the following fields:
+		 - Source MAC address and source MAC mask
+		 - Destination MAC address and destination MAC mask
+		 - VLAN ID
+		 - Ethernet type"
+	::= { ruckusMacFilters 1 }
+
+ruckusMacAclFilterEntry      OBJECT-TYPE
+	SYNTAX  	RuckusMacAclFilterEntry
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"An entry in the Ruckus MAC Access Control List Filter table."
+	INDEX   	{ ruckusAclName, ruckusMacAclFilterSeqNum }
+	::= { ruckusMacAclFilterTable 1 }
+
+RuckusMacAclFilterEntry ::= SEQUENCE {
+	ruckusMacAclFilterSeqNum
+		Unsigned32,
+	ruckusMacAclFilterAction              
+		AclAction,
+	ruckusMacAclFilterSrcAddr
+		MacAddress,
+	ruckusMacAclFilterSrcMask
+		MacAddress,
+	ruckusMacAclFilterDestAddr
+		MacAddress,
+	ruckusMacAclFilterDestMask
+		MacAddress,
+	ruckusMacAclFilterEtherType
+		INTEGER,
+	ruckusMacAclFilterExtEtherType
+		EtherType,
+	ruckusMacAclFilterMirrorPkts
+		TruthValue,
+	ruckusMacAclFilterLogEnable
+		TruthValue,
+	ruckusMacAclFilterRowStatus
+		RowStatus
+	}
+
+ruckusMacAclFilterSeqNum  OBJECT-TYPE
+	SYNTAX  	Unsigned32 
+	MAX-ACCESS  	not-accessible
+	STATUS  	current
+	DESCRIPTION
+		"Specifies the sequence number for this ACL filter."
+	::= { ruckusMacAclFilterEntry 1 }
+
+ruckusMacAclFilterAction  OBJECT-TYPE
+	SYNTAX  	AclAction 
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Action to take if the L2 packet matches with this filter."
+	::= { ruckusMacAclFilterEntry 2 }
+
+ruckusMacAclFilterSrcAddr  OBJECT-TYPE
+	SYNTAX  	MacAddress
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source MAC address to match in the incoming L2 packet."
+	DEFVAL  { '000000000000'H }
+	::= { ruckusMacAclFilterEntry 3 }
+
+ruckusMacAclFilterSrcMask  OBJECT-TYPE
+	SYNTAX  	MacAddress
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Source MAC address mask to apply with source address to
+		 derive the MAC address for filter action. For example, 
+		 to match on the first two bytes of MAC aabb.ccdd.eeff, 
+		 the mask should be ffff.0000.0000. In this case, the
+		 filter matches all source MACs that contain 'aabb' as
+		 the first two bytes and any values in remaining address."
+	DEFVAL  { '000000000000'H }
+ 	::= { ruckusMacAclFilterEntry 4 }
+
+ruckusMacAclFilterDestAddr  OBJECT-TYPE
+	SYNTAX  	MacAddress
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination MAC address to match in the incoming L2 packet."
+	DEFVAL  { '000000000000'H }
+	::= { ruckusMacAclFilterEntry 5 }
+
+ruckusMacAclFilterDestMask    OBJECT-TYPE
+	SYNTAX  	MacAddress
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Destination MAC address mask to apply with destination address
+		 to derive the MAC address for filter action. For example, to
+		 match on the first two bytes of MAC aabb.ccdd.eeff, the mask
+		 should be ffff.0000.0000. In this case, the filter matches
+		 all source MACs that contain 'aabb' as the first two bytes
+		 and any values in remaining address."
+	DEFVAL  { '000000000000'H }
+ 	::= { ruckusMacAclFilterEntry 6 }
+
+ruckusMacAclFilterEtherType  OBJECT-TYPE
+	SYNTAX	INTEGER {
+			arp(1),
+			ipv4(2),
+			ipv6(3),
+			extended(4)
+		}
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"Ethernet Type to match in the incoming packet, if specified.
+		 The extended option enables to define other types sing the
+		 OID ruckusMacAclFilterExtEtherType which takes any value."
+	DEFVAL  { arp }
+	::= { ruckusMacAclFilterEntry 7 }
+
+ruckusMacAclFilterExtEtherType   OBJECT-TYPE
+	SYNTAX  	EtherType
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Any EtherType other than standard protocols mentioned
+		 with ruckusMacAclFilterEtherType OID. 0 means any protocol."
+	::= { ruckusMacAclFilterEntry 8 }
+
+ruckusMacAclFilterMirrorPkts OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Mirror packets matching ACL permit clause."
+	DEFVAL  { false }
+	::= { ruckusMacAclFilterEntry 9 }
+
+ruckusMacAclFilterLogEnable  OBJECT-TYPE
+	SYNTAX  	TruthValue
+	MAX-ACCESS  	read-create
+	STATUS  	current
+	DESCRIPTION
+		"Specifies if logging is enabled for this filter."
+	::= { ruckusMacAclFilterEntry 10 }
+
+ruckusMacAclFilterRowStatus   OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the creation of MAC ACL filter.
+		 Setting this object to destroy(6) removed this MAC ACL filter.
+		 Other values are ignored."
+	::= { ruckusMacAclFilterEntry 11 }
+
+
+-- --------------------------------------------------------------------------------
+-- ACL Port Bind Table
+-- --------------------------------------------------------------------------------
+ruckusAclIfBindTable   OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAclIfBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table of IPv4/IPv6/MAC ACL bindings to a port."
+	::= { ruckusAclBindings 1 }
+
+ruckusAclIfBindEntry   OBJECT-TYPE
+	SYNTAX		RuckusAclIfBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in the IPv4/IPv6/MAC ACL bindings for a gievn port."
+	INDEX   { ruckusAclIfBindPort, ruckusAclIfBindType, ruckusAclIfBindDirection }
+	::= { ruckusAclIfBindTable 1 }
+
+RuckusAclIfBindEntry ::= SEQUENCE {
+	ruckusAclIfBindPort
+		InterfaceIndex,
+	ruckusAclIfBindType
+		AclType,
+	ruckusAclIfBindDirection
+		AclDirection,
+	ruckusAclIfBindName
+		AclName,
+	ruckusAclIfBindLog
+		TruthValue,
+	ruckusAclIfBindRowStatus
+		RowStatus
+	}
+
+ruckusAclIfBindPort  OBJECT-TYPE
+	SYNTAX		InterfaceIndex
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"The port on where this ACL binding is applied on."
+	::= { ruckusAclIfBindEntry 1 }
+
+ruckusAclIfBindType   	OBJECT-TYPE
+	SYNTAX		AclType
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Type of the ACL, this binding describes on the port."
+	::= { ruckusAclIfBindEntry 2 }
+
+ruckusAclIfBindDirection	OBJECT-TYPE
+	SYNTAX		AclDirection
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Direction in which this ACL is applied on the port."
+	::= { ruckusAclIfBindEntry 3 }
+
+ruckusAclIfBindName	OBJECT-TYPE
+	SYNTAX		AclName
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Defined ACL name to bind on port in the given direction."
+	::= { ruckusAclIfBindEntry 4 }
+
+ruckusAclIfBindLog	OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Enable or disable logging on the port for this ACL."
+	DEFVAL  { false }
+	::= { ruckusAclIfBindEntry 5 }
+
+ruckusAclIfBindRowStatus	OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the binding of IPv4 or IPv6 or
+		 MAC ACL with a given port. Setting this object to destroy(6)
+		 unbinds this IPv4 or IPv6 or MAC ACL from the port.
+		 Other values are ignored."
+	::= { ruckusAclIfBindEntry 6 }
+
+-- --------------------------------------------------------------------------------
+-- ACL VLAN Bind Table
+-- --------------------------------------------------------------------------------
+ruckusAclVlanBindTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAclVlanBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table of IPv4/IPv6/MAC ACL bindings to a VLAN"
+	::= { ruckusAclBindings 2 }
+
+ruckusAclVlanBindEntry	OBJECT-TYPE
+	SYNTAX		RuckusAclVlanBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in the IPv4/IPv6/MAC ACL bindings for a gievn VLAN."
+	INDEX   { ruckusAclVlanBindId, ruckusAclVlanBindType, ruckusAclVlanBindDirection }
+	::= { ruckusAclVlanBindTable 1 }
+
+RuckusAclVlanBindEntry ::= SEQUENCE {
+	ruckusAclVlanBindId
+		VlanId,
+	ruckusAclVlanBindType
+		AclType,
+	ruckusAclVlanBindDirection
+		AclDirection,
+	ruckusAclVlanBindName
+		AclName,
+	ruckusAclVlanBindLog
+		TruthValue,
+	ruckusAclVlanBindRowStatus
+		RowStatus
+	}
+
+ruckusAclVlanBindId	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"The VLAN where this ACL binding is applied."
+	::= { ruckusAclVlanBindEntry 1 }
+
+ruckusAclVlanBindType   OBJECT-TYPE
+	SYNTAX		AclType
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Type of the ACL, this binding describes on the VLAN."
+	::= { ruckusAclVlanBindEntry 2 }
+
+ruckusAclVlanBindDirection   OBJECT-TYPE
+	SYNTAX		AclDirection
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Direction in which this ACL is applied on the VLAN."
+	::= { ruckusAclVlanBindEntry 3 }
+
+ruckusAclVlanBindName	OBJECT-TYPE
+	SYNTAX		AclName
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Defined ACL name to bind on VLAN in the given direction."
+	::= { ruckusAclVlanBindEntry 4 }
+
+ruckusAclVlanBindLog    OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Enable or disable logging on the VLAN for this ACL."
+	DEFVAL  { false }
+	::= { ruckusAclVlanBindEntry 5 }
+
+ruckusAclVlanBindRowStatus   OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the binding of IPv4 or IPv6 or
+		 MAC ACL with a given VLAN. Setting this object to destroy(6)
+		 unbinds this IPv4 or IPv6 or MAC ACL from the VLAN.
+		 Other values are ignored."
+	::= { ruckusAclVlanBindEntry 6 }
+
+-- --------------------------------------------------------------------------------
+-- ACL VLAN PORT (Vport) Bind Table
+-- --------------------------------------------------------------------------------
+ruckusAclVPortBindTable   OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAclVPortBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Table of IPv4/IPv6/MAC ACL bindings to a port on VLAN"
+	::= { ruckusAclBindings 3 }
+
+ruckusAclVPortBindEntry   OBJECT-TYPE
+	SYNTAX		RuckusAclVPortBindEntry
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in the IPv4/IPv6/MAC ACL bindings for a port in a VLAN."
+	INDEX   { ruckusAclVPortBindId, ruckusAclVPortBindPort, ruckusAclVPortBindType, ruckusAclVPortBindDirection }
+	::= { ruckusAclVPortBindTable 1 }
+
+RuckusAclVPortBindEntry ::= SEQUENCE {
+	ruckusAclVPortBindId
+		VlanId,
+	ruckusAclVPortBindPort
+		InterfaceIndex,
+	ruckusAclVPortBindType
+		AclType,
+	ruckusAclVPortBindDirection
+		AclDirection,
+	ruckusAclVPortBindName
+		AclName,
+	ruckusAclVPortBindLog
+		TruthValue,
+	ruckusAclVPortBindRowStatus
+		RowStatus
+	}
+
+ruckusAclVPortBindId    OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"The VLAN where this ACL binding is applied on."
+	::= { ruckusAclVPortBindEntry 1 }
+
+ruckusAclVPortBindPort  OBJECT-TYPE
+	SYNTAX		InterfaceIndex
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"The port in the VLAN where this ACL binding is applied on."
+	::= { ruckusAclVPortBindEntry 2 }
+
+ruckusAclVPortBindType  OBJECT-TYPE
+	SYNTAX		AclType
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Type of the ACL, this binding describes on the port in a VLAN."
+	::= { ruckusAclVPortBindEntry 3 }
+
+ruckusAclVPortBindDirection   OBJECT-TYPE
+	SYNTAX		AclDirection
+	MAX-ACCESS  	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Direction in which this ACL is applied on the port in a VLAN."
+	::= { ruckusAclVPortBindEntry 4 }
+
+ruckusAclVPortBindName	OBJECT-TYPE
+	SYNTAX		AclName
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Defined ACL name to bind on port in a VLAN in the given direction."
+	::= { ruckusAclVPortBindEntry 5 }
+
+ruckusAclVPortBindLog    OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"Enable or disable logging on the port in a VLAN for this ACL."
+	DEFVAL  { false }
+	::= { ruckusAclVPortBindEntry 6 }
+
+ruckusAclVPortBindRowStatus   OBJECT-TYPE
+	SYNTAX		RowStatus
+	MAX-ACCESS  	read-create
+	STATUS		current
+	DESCRIPTION
+		"The row status variable, used according to installation and
+		 removal conventions for conceptual rows. Setting this object
+		 to createAndGo(4) results in the binding of IPv4 or IPv6 or
+		 MAC ACL on a port in a given VLAN. Setting this object to
+		 destroy(6) unbinds this IPv4 or IPv6 or MAC ACL from the port
+		 in the given VLAN. Other values are ignored."
+	::= { ruckusAclVPortBindEntry 7 }
+
+-- --------------------------------------------------------------------------------
+-- ACL MIB Conformance
+-- --------------------------------------------------------------------------------
+ruckusAclCompliances OBJECT IDENTIFIER       ::= { ruckusAclConformance 1 }
+ruckusAclGroups      OBJECT IDENTIFIER       ::= { ruckusAclConformance 2 }
+
+ruckusAclCompliance	MODULE-COMPLIANCE
+        STATUS          current
+        DESCRIPTION     "The compliance statement for entities which
+                         implement RUCKUS-ACL-MIB."
+        MODULE          -- this module
+        MANDATORY-GROUPS { ruckusAclGroup }
+        ::= { ruckusAclCompliances 1 }
+
+-- ----------------------
+-- Units of Conformance
+-- ----------------------
+ruckusAclGroup OBJECT-GROUP
+        OBJECTS {
+		ruckusAclAcctEnable,
+		ruckusAclRowStatus,
+
+		ruckusIpv4AclFilterAction,
+		ruckusIpv4AclFilterStdProtocol,
+		ruckusIpv4AclFilterExtProtocol,
+		ruckusIpv4AclFilterSrcAddr,
+		ruckusIpv4AclFilterSrcMask,
+		ruckusIpv4AclFilterSrcOperator,
+		ruckusIpv4AclFilterSrcPortLow,
+		ruckusIpv4AclFilterSrcPortHigh,
+		ruckusIpv4AclFilterDestAddr,
+		ruckusIpv4AclFilterDestMask,
+		ruckusIpv4AclFilterDestOperator,
+		ruckusIpv4AclFilterDestPortLow,
+		ruckusIpv4AclFilterDestPortHigh,
+		ruckusIpv4AclFilterEstablished,
+		ruckusIpv4AclFilterPrecedence,
+		ruckusIpv4AclFilterTos,
+		ruckusIpv4AclFilterIcmpType,
+		ruckusIpv4AclFilterIcmpCode,
+		ruckusIpv4AclFilterPolicyName,
+		ruckusIpv4AclFilterDscpMatch,
+		ruckusIpv4AclFilterDscpForce,
+		ruckusIpv4AclFilterPriorityMatch,
+		ruckusIpv4AclFilterPriorityForce,
+		ruckusIpv4AclFilterInternalPriority,
+		ruckusIpv4AclFilterMirrorPkts,
+		ruckusIpv4AclFilterLogEnable,
+		ruckusIpv4AclFilterComments,
+		ruckusIpv4AclFilterRowStatus,
+
+		ruckusIpv6AclFilterAction,
+		ruckusIpv6AclFilterStdProtocol,
+		ruckusIpv6AclFilterExtProtocol,
+		ruckusIpv6AclFilterSrcAddr,
+		ruckusIpv6AclFilterSrcPrefixLen,
+		ruckusIpv6AclFilterSrcOperator,
+		ruckusIpv6AclFilterSrcPortLow,
+		ruckusIpv6AclFilterSrcPortHigh,
+		ruckusIpv6AclFilterDestAddr,
+		ruckusIpv6AclFilterDestPrefixLen,
+		ruckusIpv6AclFilterDestOperator,
+		ruckusIpv6AclFilterDestPortLow,
+		ruckusIpv6AclFilterDestPortHigh,
+		ruckusIpv6AclFilterEstablished,
+		ruckusIpv6AclFilterIcmpType,
+		ruckusIpv6AclFilterIcmpCode,
+		ruckusIpv6AclFilterPolicyName,
+		ruckusIpv6AclFilterDscpMatch,
+		ruckusIpv6AclFilterDscpForce,
+		ruckusIpv6AclFilterPriorityMatch,
+		ruckusIpv6AclFilterPriorityForce,
+		ruckusIpv6AclFilterInternalPriority,
+		ruckusIpv6AclFilterFragments,
+		ruckusIpv6AclFilterSourceRoute,
+		ruckusIpv6AclFilterMirrorPkts,
+		ruckusIpv6AclFilterLogEnable,
+		ruckusIpv6AclFilterComments,
+		ruckusIpv6AclFilterRowStatus,
+
+		ruckusMacAclFilterAction,
+		ruckusMacAclFilterSrcAddr,
+		ruckusMacAclFilterSrcMask,
+		ruckusMacAclFilterDestAddr,
+		ruckusMacAclFilterDestMask,
+		ruckusMacAclFilterEtherType,
+		ruckusMacAclFilterExtEtherType,
+		ruckusMacAclFilterMirrorPkts,
+		ruckusMacAclFilterLogEnable,
+		ruckusMacAclFilterRowStatus,
+
+		ruckusAclIfBindName,
+		ruckusAclIfBindLog,
+		ruckusAclIfBindRowStatus,
+
+		ruckusAclVlanBindName,
+		ruckusAclVlanBindLog,
+		ruckusAclVlanBindRowStatus,
+
+		ruckusAclVPortBindName,
+		ruckusAclVPortBindLog,
+		ruckusAclVPortBindRowStatus
+        }
+        STATUS          current
+        DESCRIPTION
+		"A collection of objects that provide ACL information on a given unit."
+        ::= { ruckusAclGroups 1 }
+END

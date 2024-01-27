@@ -1,0 +1,428 @@
+RUCKUS-WIRED-CLIENT-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY,
+	OBJECT-TYPE,
+	Integer32,
+	Counter64,
+	TimeTicks,
+    IpAddress,
+	NOTIFICATION-TYPE
+		FROM SNMPv2-SMI			-- [RFC2578]
+	ifIndex
+	   	FROM IF-MIB			-- [RFC2863]
+    VlanIndex
+       FROM Q-BRIDGE-MIB
+	MacAddress,
+	TruthValue,
+	TEXTUAL-CONVENTION
+	   	FROM SNMPv2-TC			-- [RFC2579]
+	InetAddressIPv4,InetAddress,
+	InetAddressIPv6
+		FROM INET-ADDRESS-MIB		-- [RFC4001]
+	EnabledStatus
+		FROM P-BRIDGE-MIB
+	SnmpAdminString
+		FROM SNMP-FRAMEWORK-MIB 	-- [RFC3411]
+    DisplayString
+       FROM FOUNDRY-SN-AGENT-MIB
+	MODULE-COMPLIANCE,
+	OBJECT-GROUP,
+	NOTIFICATION-GROUP
+		FROM SNMPv2-CONF
+	snSwitch
+		FROM FOUNDRY-SN-SWITCH-GROUP-MIB;
+    
+ruckusWiredClientMIB MODULE-IDENTITY
+	LAST-UPDATED "202305240000Z" -- May 24, 2023 
+	ORGANIZATION "Ruckus Wireless, Inc."
+	CONTACT-INFO
+		"Technical Support Center
+		350 West Java Drive,
+		Sunnyvale, CA 94089, USA
+		Support URL: https://support.ruckuswireless.com
+		Phone: +1-855-782-5871
+		ROW TF Numbers:
+		https://support.ruckuswireless.com/contact-us"
+	DESCRIPTION
+		"Management Information for discovering/querying
+		 the directly connected clients of Ruckus ICX
+		 Switches/Routers. The information consists of:
+			1. Device MAC/IPv4/IPv6 addresses
+			2. Port/VLAN information
+			3. User, if client is authenticated
+			4. Client usage statistics
+
+		Copyright 1996-2019 Ruckus Wireless, Inc.  
+  		All rights reserved.
+
+  		This Ruckus Wireless, Inc SNMP MIB Specification
+ 		embodies Ruckus Wireless, Inc confidential and 
+		proprietary intellectual property. Ruckus Wireless, 
+   		Inc retains all title and ownership in the 
+		Specification, including any revisions.
+                                                
+ 		This Specification is supplied AS IS, and Ruckus 
+		Wireless, Inc makes no warranty, either express or
+		implied, as to the use, operation, condition, or
+		performance of the specification, and any unintended 
+ 		consequence it may on the user environment."
+	REVISION
+		"201902280000Z" -- Feb 28, 2019
+	DESCRIPTION
+		"Initial Version"
+    REVISION
+        "202305240000Z" -- May 24, 2023
+    DESCRIPTION
+        "Added new mib objects to fetch the hostname,device type,
+        OS type and model name of the client connected."
+	::= { snSwitch 43 }
+
+ruckusWiredClientNotify		OBJECT IDENTIFIER  ::=  { ruckusWiredClientMIB 0 }
+ruckusWiredClientObjects	OBJECT IDENTIFIER  ::=  { ruckusWiredClientMIB 1 }
+ruckusWiredClientConformance	OBJECT IDENTIFIER  ::=  { ruckusWiredClientMIB 2 }
+ruckusWiredClients		OBJECT IDENTIFIER  ::=  { ruckusWiredClientObjects 1 }
+
+-- -------------------------------------------------------------
+-- Textual Conventions
+-- -------------------------------------------------------------
+VlanId ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"An ID used to represent VLAN identifier in the
+		 system for both untagged and tagged VLANs packets)."
+	SYNTAX	INTEGER (1..4094)
+
+
+-- ------------------------------------------------------------
+-- Client Devices
+-- List of devices directly connected Ruckus Device (Switch/Router)
+-- ------------------------------------------------------------
+
+ruckusWiredClientsTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWiredClientEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table providing information about the clients 
+		 directly connected on all the ports in the Ruckus
+		 devices.
+
+		 When FlexAuth is enabled, this table contains entries
+		 for all the authenticated clients (success/failure).
+		 Entries get created when clients are authenticated
+		 and cleared when they logoff or timeout.
+
+		 When FlexAuth is not enabled, this table populates the
+		 entries with devices learned through LLDP/CDP, if
+		 LLDP/CDP is enabled."
+	::= { ruckusWiredClients 1}
+
+ruckusWiredClientEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWiredClientEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry containing information about a specific client
+		 on a given port"
+	INDEX		{ ifIndex, ruckusWiredClientMac }
+	::= { ruckusWiredClientsTable 1 }
+
+RuckusWiredClientEntry ::=	SEQUENCE {
+	ruckusWiredClientMac		MacAddress,
+	ruckusWiredClientVlan		VlanId,
+	ruckusWiredClientType		INTEGER,
+	ruckusWiredClientAuthType	INTEGER,
+	ruckusWiredClientStatus		INTEGER,
+	ruckusWiredClientDescr		SnmpAdminString,
+	ruckusWiredClientUserName	SnmpAdminString,
+	ruckusWiredClientV4Addr		InetAddressIPv4,
+	ruckusWiredClientV6Addr		InetAddressIPv6,
+	ruckusWiredClientUpTime		TimeTicks,
+	ruckusWiredClientTxPkts		Counter64,
+	ruckusWiredClientRxPkts		Counter64,
+	ruckusWiredClientTxOctets	Counter64,
+	ruckusWiredClientRxOctets	Counter64,
+    ruckusDhcpClientHostName       SnmpAdminString,
+    ruckusDhcpClientDeviceTypeName SnmpAdminString,
+    ruckusDhcpClientOsVendorName   SnmpAdminString,
+    ruckusDhcpClientModelName      SnmpAdminString
+
+}
+
+ruckusWiredClientMac	OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the MAC Address of the client
+		 (device/host) represented by this client entry"
+	::= { ruckusWiredClientEntry 1 }
+
+ruckusWiredClientVlan	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the VLAN, the client (device/host) belongs
+		 to, represented by this client entry.
+
+		 In case of voice-phones, this VLAN is the voice-VLAN
+		 (tagged) and in all other cases, likely it would be 
+		 an untagged VLAN, unless it's a tagged VM client"
+	::= { ruckusWiredClientEntry 2 }
+
+ruckusWiredClientType	 OBJECT-TYPE
+	SYNTAX		INTEGER {
+				other(1),
+				phone(2),
+				wlanAP(3),
+				router(4),
+				bridge(5),
+				cableDevice(6)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Decribes the type of the client connnected on this port"
+	::= { ruckusWiredClientEntry 3 }
+
+ruckusWiredClientAuthType	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				none(1),
+				dot1x(2),
+				macAuth(3),
+				webAuth(4)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the authentication method that is used for
+		 authenticating the client on this port represented
+		 by this client (when FlexAuth is enabled). Otherwise,
+		 it's none."
+	::= { ruckusWiredClientEntry 4 }
+
+ruckusWiredClientStatus	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				noAuth(1),
+				allowed(2),
+				blocked(3),
+				restricted(4),
+				critical(5),
+				guest(6)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The authentication state of the client which can
+		 take the following values.
+
+		 noAuth		- not authenticated
+		 allowed	- client authentication is successful, so
+				  the complete access is granted
+		 blocked	- client failed authentication, so access
+				  is denied
+		 restrict	- client failed authentication, but
+				  allowed restricted access
+		 critical	- client authentication timedout, so
+				  access is limited to critical operations
+		 guest		- client is not Dot1x capable, so allowed
+				  guest role access"
+	::= { ruckusWiredClientEntry 5 }
+
+ruckusWiredClientDescr	OBJECT-TYPE
+	SYNTAX		SnmpAdminString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Desribes the client as derived from LLDP/CDP device
+		 description for LLDP/CDP learned devices. Otherwise
+		 it's an empty string for now."
+	::= { ruckusWiredClientEntry 6 }
+
+ruckusWiredClientUserName	OBJECT-TYPE
+	SYNTAX		SnmpAdminString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specified the User name associated with the client, 
+		 represented by this entry. It coule be username or
+		 MAC address, where user-name is not present and 
+		 not applicable."
+	::= { ruckusWiredClientEntry 7 }
+
+ruckusWiredClientV4Addr        OBJECT-TYPE
+       SYNTAX          InetAddressIPv4
+       MAX-ACCESS      read-only
+       STATUS          current
+       DESCRIPTION
+               "The IPv4 address of the client represented by this
+                entry. A client can have both IPv4 and IPv6
+                addresses bound on dual-stack hosts."
+       ::= { ruckusWiredClientEntry 8 }
+
+ruckusWiredClientV6Addr	OBJECT-TYPE
+	SYNTAX		InetAddressIPv6
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The IPv6 address of the client represented by this
+		 entry. A client can have both IPv4 and IPv6
+		 addresses bound on dual-stack hosts."
+	::= { ruckusWiredClientEntry 9 }
+
+ruckusWiredClientUpTime	OBJECT-TYPE
+	SYNTAX		TimeTicks
+	UNITS       	"centi-seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time the client had been up from the 
+		 time the client entry is created in the Ruckus device."
+	::= { ruckusWiredClientEntry 10 }
+
+ruckusWiredClientTxPkts	OBJECT-TYPE
+	SYNTAX		Counter64	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of packets transmitted on this port
+		 for this client."
+	::= { ruckusWiredClientEntry 11 }
+
+ruckusWiredClientRxPkts	OBJECT-TYPE
+	SYNTAX		Counter64	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of packets received on this port for
+		 this client."
+	::= { ruckusWiredClientEntry 12 }
+
+ruckusWiredClientTxOctets OBJECT-TYPE
+	SYNTAX		Counter64	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of octets transmitted on this port
+		 for this client."
+	::= { ruckusWiredClientEntry 13 }
+
+ruckusWiredClientRxOctets OBJECT-TYPE
+	SYNTAX		Counter64	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of octets receivedon this port for 
+		 this client."
+	::= { ruckusWiredClientEntry 14 }
+
+ruckusDhcpClientHostName   OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Specified the Host name associated with the client,
+         represented by this entry."
+    ::= { ruckusWiredClientEntry 15 }
+
+ruckusDhcpClientDeviceTypeName   OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Specified the Device type name (mobile,laptop) associated with the
+client,
+         represented by this entry."
+    ::= { ruckusWiredClientEntry 16 }
+
+ruckusDhcpClientOsVendorName   OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Specified the OS vendor name associated with the client,
+         represented by this entry."
+    ::= { ruckusWiredClientEntry 17 }
+
+ruckusDhcpClientModelName   OBJECT-TYPE
+    SYNTAX      SnmpAdminString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Specified the Device mode name associated with the client,
+         represented by this entry."
+    ::= { ruckusWiredClientEntry 18  }
+
+
+-- ------------------------------------------------------------
+-- Client MIB Notifications
+-- ------------------------------------------------------------
+ruckusWiredClientConnectedNotify NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusWiredClientMac
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a client is detected
+		and/or authenticated."
+	::= { ruckusWiredClientNotify 1 }
+
+ruckusWiredClientDisconnectedNotify NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusWiredClientMac
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if client is deleted
+		 for reasons such as log-off or inactivity."
+	::= { ruckusWiredClientNotify 2 }
+
+
+-- ------------------------------------------------------------
+-- Client MIB Conformance
+-- ------------------------------------------------------------
+ruckusWiredClientMIBCompliances	OBJECT IDENTIFIER	::= { ruckusWiredClientConformance 1 }
+ruckusWiredClientMIBGroups	OBJECT IDENTIFIER	::= { ruckusWiredClientConformance 2 }
+
+ruckusWiredClientCompliance MODULE-COMPLIANCE
+	STATUS          current
+	DESCRIPTION	"The compliance statement for entities which
+		 	 implement RUCKUS-CLIENT-MIB."
+	MODULE          -- this module
+	MANDATORY-GROUPS { ruckusWiredClientGroup }
+	::= { ruckusWiredClientMIBCompliances 1 }
+
+------------------------
+-- Units of Conformance
+------------------------
+
+ruckusWiredClientGroup OBJECT-GROUP
+	OBJECTS	{
+		ruckusWiredClientMac,
+		ruckusWiredClientVlan,
+		ruckusWiredClientType,
+		ruckusWiredClientAuthType,
+		ruckusWiredClientStatus,
+		ruckusWiredClientDescr,
+		ruckusWiredClientUserName,
+		ruckusWiredClientV4Addr,
+		ruckusWiredClientV6Addr,
+		ruckusWiredClientUpTime,
+		ruckusWiredClientTxPkts,
+		ruckusWiredClientRxPkts,
+        ruckusWiredClientTxOctets,
+        ruckusWiredClientRxOctets,
+        ruckusDhcpClientHostName,
+        ruckusDhcpClientDeviceTypeName,
+        ruckusDhcpClientOsVendorName,
+        ruckusDhcpClientModelName
+
+	}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide client
+		information for a specific client."
+	::= { ruckusWiredClientMIBGroups 1 }
+
+END
