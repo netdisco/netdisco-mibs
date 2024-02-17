@@ -1,0 +1,2748 @@
+RUCKUS-AUTH-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE,
+	Integer32, Counter32, Unsigned32, Counter64,
+	NOTIFICATION-TYPE
+		FROM SNMPv2-SMI			-- [RFC2578]
+	ifIndex, InterfaceIndex,
+	InterfaceIndexOrZero
+	   	FROM IF-MIB			-- [RFC2863]
+	DisplayString,
+	MacAddress,
+	TruthValue,
+	RowStatus,
+	TEXTUAL-CONVENTION
+	   	FROM SNMPv2-TC			-- [RFC2579]
+	InetAddressType, InetAddress
+		FROM INET-ADDRESS-MIB		-- [RFC4001]
+	EnabledStatus
+		FROM P-BRIDGE-MIB
+	MODULE-COMPLIANCE,
+	OBJECT-GROUP,
+	NOTIFICATION-GROUP
+		FROM SNMPv2-CONF
+ 	snSwitch
+                FROM FOUNDRY-SN-SWITCH-GROUP-MIB;
+    
+ruckusAuthMIB MODULE-IDENTITY
+	LAST-UPDATED "202004170000Z" -- Apr 17, 2020 
+	ORGANIZATION "Ruckus Wireless, Inc."
+	CONTACT-INFO
+		"Technical Support Center
+		350 West Java Drive,
+		Sunnyvale, CA 94089, USA
+		Support URL: https://support.ruckuswireless.com
+		Phone: +1-855-782-5871
+		ROW TF Numbers:
+		https://support.ruckuswireless.com/contact-us"
+	DESCRIPTION
+		"Management Information for configuration/querying
+		 of Flexible authentication which consists of 802.1X,
+		 MAC-Auth and Web-Auth.
+			It is grouped into five MIBs - 
+			1. Global level Auth configuration
+			2. Global level Dot1x configuration
+			3. Global level MacAuth configuration
+			4. Global level WebAuth configuration
+			5. Port level Auth configuration
+			6. Auth Session information
+			7. Auth Session Stats information
+			8. Dot1x Auth Session Stats information 
+
+		Copyright 1996-2019 Ruckus Wireless, Inc.  
+  		All rights reserved.
+  		This Ruckus Wireless, Inc SNMP MIB Specification
+ 		embodies Ruckus Wireless, Inc' confidential and 
+		proprietary intellectual property. Ruckus Wireless, 
+   		Inc retains all title and ownership in the 
+		Specification, including any revisions.
+                                                
+ 		This Specification is supplied AS IS, and Ruckus 
+		Wireless, Inc makes no warranty, either express or
+		implied, as to the use, operation, condition, or
+		performance of the specification, and any unintended 
+ 		consequence it may on the user environment."
+	REVISION     "202004170000Z" 
+	DESCRIPTION
+		"Initial Version"
+ ::= { snSwitch 44 }
+
+ruckusAuthNotification	OBJECT IDENTIFIER  ::=  { ruckusAuthMIB 0 }
+ruckusAuthObjects	OBJECT IDENTIFIER  ::=  { ruckusAuthMIB 1 }
+ruckusAuthConformance	OBJECT IDENTIFIER  ::=  { ruckusAuthMIB 2 }
+
+-- -------------------------------------------------------------
+-- Textual Conventions
+-- -------------------------------------------------------------
+VlanId ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"An ID used to represent VLAN identifier in the
+		 system for both untagged and tagged VLANs packets).
+		 When an object is not configured, this could be 0."
+	SYNTAX	INTEGER (0 | 1..4094)
+
+Dot1xAuthState ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"The authenticator(PAE) state machine values as
+		 described below.
+
+		 other(1):
+			Anything other than following states
+		 initialize(2):
+			PAE state machine is being initialized
+		 disconnected(3):
+			Explicit logoff request is received from the
+			supplicant, or the number of permissible reauth
+			attempts are exceeded
+		 connecting(4):
+			Attempting to establish communication with
+			Supplicant
+		 authenticating(5):
+			Supplicant is being authenticated
+		 authenticated(6):
+			The Authenticator has successfully authenticated
+			the Supplicant.
+		 aborting(7):
+			The authentication process is aborted for
+			reasons like receipt of reauth request, an
+			EAPOL-Start frame, an EAPOL-Logoff frame, or
+			authentication timeout
+		 held(8):
+			This state is entered from 'authenticating'
+			state following authentication failure. When 
+			quietWhile timer expires, the state machine 
+			moves 'connecting' state. In this state, all
+			EAPOL packets are ignored and discarded, so as 
+			to prevent brute force attacks.
+		 forceAuth(9):
+			Port is set to Authorized state, so an EAP 
+			Success packet is sent to the Supplicant
+		 forceUnauth(10):
+			 Port is set to Unauthorized state, and an EAP 
+			 Failure packet is sent to the Supplicant. When 
+			 EAP-Start messages are received from the 
+			 Supplicant, the state is re-entered and 
+			 subsequent EAP Failure mssages are sent."      
+	SYNTAX	INTEGER {
+				other(1),
+				initialize(2),
+				disconnected(3),
+				connecting(4),
+				authenticating(5),
+				authenticated(6),
+				aborting(7),
+				held(8),
+				forceAuth(9),
+				forceUnauth(10)
+			}
+
+RuckusAuthMode ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes the authentication modes supported with
+		 Ruckus FlexAuth implementation.
+            
+		 singleUntagged(1):
+			multiple clients are allowed, but all must belong
+			to one VLAN
+		 multipleUntagged(2):
+			multiple clients are allowed and each client can
+			belong to different VLAN
+		 singleHost(3):
+			only one host is allowed and phones are allowed
+			without authentication
+		 multipleHosts(4):
+			multiple hosts are allowed, but all the hosts are
+			authorized automatically after the first host is
+			authenticated
+
+		 This mode can be set globally level and also at port
+		 level if some some ports like to have different
+		 auth-mode than globally configured mode."
+	SYNTAX	INTEGER {
+			singleUntagged(1),
+			multipleUntagged(2),
+			singleHost(3),
+			multipleHosts(4)
+		}
+
+RuckusAuthOrder ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes which authentication methods to be
+		 attempted in series of methods. Subsequent methods
+		 are tried depending on the outcome of the previous
+		 method and several rules are defined which are not
+		 explined here.
+            
+		 dot1xMauth(1):
+			IEEE 802.1X protocol (typically used for PCs,
+			workstations) followed by MAC-Auth method
+		 mauthDot1x(2):
+			MAC-Auth which uses MAC address user-name
+			(typically used for phones, fax m/cs, APs,
+			switches) followed by DOt1x method
+
+		 This order of methods can be set globally and also
+		 at port level if some some ports like to have
+		 different auth-method order than globally
+		 configured."
+	SYNTAX	INTEGER {
+			dot1xMauth(1),
+			mauthDot1x(2)
+		}
+
+RuckusAuthFailAction ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes the action to be taken, when the clients
+		 fail the authentication. 
+
+		 blockTraffic(1):
+ 			Clients are blocked access to the network
+		 restrictVlan(2):
+			Clients are placed in the configured restrict
+			VLAN, so they have limited access."
+	SYNTAX	INTEGER { 
+			blockTraffic(1),
+			restrictVlan(2)
+		}
+
+RuckusAuthTimeoutAction ::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes the action to be taken, when the
+		 authenticator times out for various readons like
+		 server busy, network access, etc. 
+
+		 failure(1):
+			The action taken is specified by the
+			ruckusAuthFailAction object
+		 success(2):
+			Clients are allowed access to the network
+			in the default VLAN
+		 criticalVlan(3):
+			Clients are placed in the configured critical
+			VLAN, so they have limited access.
+		 other(4):
+			Authentication keeps happening in a loop."
+	SYNTAX	INTEGER { 
+			failure(1),
+			success(2),
+			criticalVlan(3),
+			other(4)
+		}
+
+RuckusAuthAging	::= TEXTUAL-CONVENTION
+	STATUS	current
+	DESCRIPTION
+		"Describes, if denied and permitted sessions are
+		 enabled or disabled for aging. A bit field of '1'
+		 indicates enabled, otherwise disabled."
+	SYNTAX	BITS {
+			deniedSessions(0),
+			permittedSessions(1)
+		}
+
+-- ------------------------------------------------------------
+-- Groups in the FlexAuth MIB
+-- ------------------------------------------------------------
+ruckusAuthConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 1 }
+ruckusDot1xAuthConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 2 }
+ruckusMacAuthConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 3 }
+ruckusWebAuthConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 4 }
+ruckusAuthPortConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 5 }
+ruckusAuthFilterConfig		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 6 }
+ruckusAuthSessions		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 7 }
+ruckusAuthStatistics		OBJECT IDENTIFIER  ::=  { ruckusAuthObjects 8 }
+
+-- ------------------------------------------------------------
+-- FlexAuth Global Configuration
+-- This applies to Dot1x and MAC authentication also
+-- ------------------------------------------------------------
+ruckusAuthDefaultVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This default VLAN is used to place all the FlexAuth 
+		 enabled ports, so this VLAN acts as a VLAN for the 
+		 clients to belong to, when authentication server 
+		 doesn't assign any VLANs.
+
+		 A value of zero for this object indicates no default
+		 Vlan configured for this Ruckus device." 
+	::= { ruckusAuthConfig 1 }
+
+ruckusAuthVoiceVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This voice VLAN is used to advertise through
+		 LLDP/CDP on the ports, when connected devices are
+		 detected as Phones and authentication server doesn't
+		 assign any Voice VLAN.
+
+		 A value of zero for this object indicates no Voice
+		 Vlan configured for this Ruckus device." 
+	::= { ruckusAuthConfig 2 }
+
+ruckusAuthCriticalVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This VLAN is used to place the clients, when the
+		 authentication server times out and the timeout
+		 action is configired as 'critical', so the clients
+		 have limited access.
+
+		 Refer to ruckusAuthTimeoutAction object for
+		 timeout-action choices.
+
+		 A value of zero for this object indicates no
+		 Critical Vlan configured for this Ruckus device." 
+	::= { ruckusAuthConfig 3 }
+
+ruckusAuthRestrictVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This VLAN is used to place the clients, when the
+		 clients fail the authentication and the failure
+		 action is configured as 'restrict', so the clients
+		 have limited access.
+
+		 Refer to ruckusAuthFailAction object for
+		 fail-action choices.
+
+		 A value of zero for this object indicates no
+		 Restrict Vlan configured for this Ruckus device." 
+	::= { ruckusAuthConfig 4 }
+
+ruckusAuthEnable	OBJECT-TYPE
+	SYNTAX	BITS {
+			dot1x(0),
+			macAuth(1)
+		}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies, which authentication methods are enabled
+		 globally. Unless the method is enabled globally, the
+		 same can't be enabled at port level. A bit field of
+		 '1' indicates enabled, otherwise disabled."
+	::= { ruckusAuthConfig 5 }
+
+ruckusAuthMode 		OBJECT-TYPE
+	SYNTAX          RuckusAuthMode
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the authentication mode for all the
+		 FlexAuth enabled ports."
+	DEFVAL		{ singleUntagged }
+	::= { ruckusAuthConfig 6 }
+
+ruckusAuthMethods 	OBJECT-TYPE
+	SYNTAX          RuckusAuthOrder
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies which authentication methods to be
+		 attempted in series of methods for all FlexAuth
+		 enabled ports."
+	DEFVAL		{ dot1xMauth }
+	::= { ruckusAuthConfig 7 }
+
+ruckusAuthMaxSessions	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..1024)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum number of authenticated
+		 clients allowed on a port. This doesn't include the
+		 clients allowed due to authentication failure and
+		 timeout policies."
+	DEFVAL		{ 2 }
+	::= { ruckusAuthConfig 8 }
+
+ruckusAuthFailAction	OBJECT-TYPE	
+	SYNTAX		RuckusAuthFailAction
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be taken, when the clients
+		 fail the authentication."
+	DEFVAL		{ blockTraffic }
+	::= { ruckusAuthConfig 9 }
+
+ruckusAuthTimeoutAction	OBJECT-TYPE	
+	SYNTAX		RuckusAuthTimeoutAction
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be taken, when the 
+		 authentication server times out."
+	DEFVAL		{ other }
+	::= { ruckusAuthConfig 10 }
+
+ruckusAuthReauthEnable	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The reauthentication control for all the FlexAuth
+		 enabled ports. Setting this object to 'enabled'
+		 causes every FlexAuth enabled port to reauthenticate
+		 the devices connecting to the port, after every
+		 period of time specified by the object
+		 ruckusAuthReauthPeriod. Setting this object to
+		 'disabled' disables the reauthentication." 
+	DEFVAL		{ disabled }
+	::= { ruckusAuthConfig 11 }
+
+ruckusAuthReauthPeriod	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..4294967295)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"How often to re-authenticates clients, when periodic
+		 re-authentication is enabled."
+	DEFVAL		{ 3600 }
+	::= { ruckusAuthConfig 12 }
+
+ruckusAuthReauthTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..4294967295)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"How often to re-authenticates clients, when the
+		 clients were allowed due to authentication server
+		 timeout. Value of 0 disables the re-authentication."
+	DEFVAL		{ 300 }
+	::= { ruckusAuthConfig 13 }
+
+ruckusAuthIdleTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..65535)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time to keep the sessions in the
+		 Ruckus device, after the inactivity detection time
+		 expired in the hardware. If the clients start the 
+		 traffic in this time, they need not authenticate
+		 again, otherwise they would have to authenticate, 
+		 once the session gets deleted.
+
+		 This can be set from authentication server for each
+		 client and value of 0 is allowed to disable the
+		 aging."
+	DEFVAL		{ 120 }
+	::= { ruckusAuthConfig 14 }
+
+ruckusAuthDeniedTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..65535)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time to keep the denied sessions in
+		 the Ruckus device for the clients which are blocked
+		 as they failed authentication. When the clients 
+		 start the traffic again, they will be authenticated."
+	DEFVAL		{ 70 }
+	::= { ruckusAuthConfig 15 }
+
+ruckusAuthAging		OBJECT-TYPE
+	SYNTAX		RuckusAuthAging
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies, if denied and permitted sessions are
+		 enabled or disabled for aging. Aging is enabled by
+		 default."
+	::= { ruckusAuthConfig 16 }
+
+ruckusAuthDefaultV4IngressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the default User Access List (ACL) applied in the
+		 Ingress direction for the IPv4 traffic for sessins when ACLs
+		 are not dynamically assigned through RADIUS."
+	::= { ruckusAuthConfig 17 }
+
+ruckusAuthDefaultV4EgressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the default User Access List (ACL) applied in the
+		 Egress direction for the IPv4 traffic for sessins when ACLs
+		 are not dynamically assigned through RADIUS."
+	::= { ruckusAuthConfig 18 }
+
+ruckusAuthDefaultV6IngressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the default User Access List (ACL) applied in the
+		 Ingress direction for the IPv6 traffic for sessins when ACLs
+		 are not dynamically assigned through RADIUS."
+	::= { ruckusAuthConfig 19 }
+
+ruckusAuthDefaultV6EgressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the default User Access List (ACL) applied in the
+		 Egress direction for the IPv6 traffic for sessins when ACLs
+		 are not dynamically assigned through RADIUS."
+	::= { ruckusAuthConfig 20 }
+
+	
+-- ------------------------------------------------------------
+-- FlexAuth Dot1X Configuration
+-- This applies only to Dot1X authentication 
+-- ------------------------------------------------------------
+ruckusDot1xQuietPeriod	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..4294967295)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"When the Ruckus device is unable to authenticate the
+		 Client, the amount of time the Ruckus device waits 
+		 before trying again."
+	DEFVAL		{ 60 }
+	::= { ruckusDot1xAuthConfig 1 }
+
+ruckusDot1xTxPeriod	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..4294967295)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"When a Client does not send back an EAP(Extensible
+		 Authentication Protocol)- response/identity frame,
+		 the amount of time the Ruckus device waits before
+		 retransmitting the EAP-request/identity frame to the
+		 Client."
+	DEFVAL		{ 30 }
+	::= { ruckusDot1xAuthConfig 2 }
+
+ruckusDot1xSuppTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..4294967295)
+	UNITS       	"seconds"	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"When a supplicant (Client) does not respond to an
+		 EAP-request frame, the amount of time before the
+		 Ruckus device retransmits the frame."
+	DEFVAL		{ 30 }
+	::= { ruckusDot1xAuthConfig 3 }
+
+ruckusDot1xMaxReq	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..10)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of times the Ruckus device retransmits an
+		 EAP-request/identity request frame if it does not 
+		 receive an EAP-response/identity response frame from
+		 the Client."
+	DEFVAL		{ 2 }
+	::= { ruckusDot1xAuthConfig 4 }
+
+ruckusDot1xMaxReauthReq	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..10)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of re-authentication attempts that are
+		 permitted before the port becomes Unauthorized."	
+	DEFVAL		{ 2 }
+	::= { ruckusDot1xAuthConfig 5 }
+
+ruckusDot1xGuestVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This VLAN is used to place the clients, when the
+		 supplicant/client times out as it's not capable of
+		 IEEE-802.1X authentication protocol.
+
+		 A value of zero for this object indicates no Guest
+		 Vlan configured for the interface." 
+	::= { ruckusDot1xAuthConfig 6 }
+
+ruckusDot1xMacAuthOverride OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if the MAC-Authentication should be tried 
+		 next when a client fails authentication with Dot1x
+		 authentication method.
+
+		 This may be required when devices are Dot1x capable,
+		 but authentication server is not configured with
+		 user profiles, instead it's configured with device
+		 profiles, so MAC-Authentication can succeed."
+	DEFVAL		{ disabled }
+	::= { ruckusDot1xAuthConfig 7 }
+
+-- ------------------------------------------------------------
+-- FlexAuth MAC-Auth Configuration
+-- This applies only to MAC authentication 
+-- ------------------------------------------------------------
+ruckusMacAuthPasswordFormat OBJECT-TYPE
+	SYNTAX          INTEGER  {
+ 				dashFormat(1),
+				colonFormat(2),
+ 				dotFormat(3),
+				normalFormat(4)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the format to be used for MAC address,
+		 which is used as credential in MAC-authentication.
+		 As MAC addresses are represented in different
+		 formats, all such formats are supported as given in
+		 options above.
+
+		 dashFormat(1):	 username/password gets formatted as
+					 xx-xx-xx-xx-xx-xx
+		 colonFormat(2): username/password gets formatted as
+					 xx:xx:xx:xx:xxxx
+		 dotFormat(3):	 username/password gets formatted as
+					 xxxx.xxxx.xxxx
+		 normalFormat(4):username/password gets formatted as
+					 xxxxxxxxxxxx"
+	DEFVAL		{ normalFormat }
+	::= { ruckusMacAuthConfig 1 }
+
+ruckusMacAuthPasswordOverride OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the password to be used for all MAC-
+		 authentication clients.
+
+		 This is normally of 0 length string, which means the
+		 client MAC address is used as the password."
+	::= { ruckusMacAuthConfig 2 }
+
+ruckusMacAuthDot1xOverride OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if the Dot1x should be tried next when a client
+		 fails authentication with MAC-Authentication method.
+
+		 This may be required when devices are Dot1x capable,
+		 authentication order is MAC-Auth followed by Dot1x,
+		 and authentication server is not configured with
+		 device profiles, instead it's configured with user
+		 profiles, so Dot1x can succeed."
+	DEFVAL		{ disabled }
+	::= { ruckusMacAuthConfig 3 }
+
+ruckusMacAuthDot1xEnable OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if the Dot1x should be tried next when a client
+		 succeeds authentication with MAC-Authentication method.
+
+		 This may be required when devices are not Dot1x capable,
+		 authentication order is MAC-Auth followed by Dot1x,
+		 and authentication server is not configured with
+		 user profiles, instead it's configured with device
+		 profiles, so MAC-Auth can succeed."
+	DEFVAL		{ enabled }
+	::= { ruckusMacAuthConfig 4 }
+
+-- ------------------------------------------------------------
+-- FlexAuth Web-Auth Configuration
+-- This applies only to Web Authentication 
+-- ------------------------------------------------------------
+ruckusWebAuthTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth for a
+		 specified VLAN. WebAuth is configured at the VLAN
+		 level unlike MAC-Auth and Dot1x at the port level.
+
+		 An entry exists in this table for each configured
+		 VLAN with WebAuth."
+	::= { ruckusWebAuthConfig 1 }
+
+ruckusWebAuthEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry of WebAuth configuration."
+	INDEX		{ ruckusWebAuthVlan }
+	::= { ruckusWebAuthTable 1 }
+
+RuckusWebAuthEntry ::= SEQUENCE {
+	ruckusWebAuthVlan		VlanId,
+	ruckusWebAuthEnable		EnabledStatus,
+	ruckusWebAuthMode		INTEGER,	
+	ruckusWebAuthMethod 		INTEGER,
+	ruckusWebAuthMaxHosts		Unsigned32,
+	ruckusWebAuthMaxAuthAttempts	Unsigned32,
+	ruckusWebAuthReauthTime 	Unsigned32,
+	ruckusWebAuthCycleTime		Unsigned32,
+	ruckusWebAuthBlockTime		Unsigned32,
+	ruckusWebAuthMacAgeTime		Unsigned32,
+	ruckusWebAuthPasscode		DisplayString,
+	ruckusWebAuthLocalUserDb	DisplayString,
+	ruckusWebAuthSecureLogin	EnabledStatus,
+	ruckusWebAuthAccounting		EnabledStatus,
+	ruckusWebAuthCaptiveProfile	DisplayString,
+	ruckusWebAuthRedirectName	DisplayString,
+	ruckusWebAuthWebpageRemoveUserId		EnabledStatus,
+	ruckusWebAuthWebpageUsernameLabel		DisplayString,
+	ruckusWebAuthWebpagePasswordLabel	    DisplayString,
+    ruckusWebAuthUpLinkPort                 InterfaceIndexOrZero,
+    ruckusWebAuthWebpageTop                 DisplayString,
+    ruckusWebAuthWebpageBottom              DisplayString,
+    ruckusWebAuthWebpageTitle               DisplayString,
+    ruckusWebAuthWebpageLoginButton         DisplayString
+}		
+
+ruckusWebAuthVlan	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Specifies the VLAN, this configuration entry applies to."
+	::= { ruckusWebAuthEntry 1 }
+
+ruckusWebAuthEnable	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if Web-Auth is enabled or disabled."
+	DEFVAL		{ disabled }
+	::= { ruckusWebAuthEntry 2 }
+
+ruckusWebAuthMode	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				none(1),
+				passcode(2),
+				password(3),
+				captivePortal(4)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the authentication mode used for authenticating
+		 the users.
+
+		 none	  -	no authentication is performed
+		 passcode -	passcode based authentication, where the
+				passcode can be statitically configured or
+				generated dynamically
+		 password  -	username and password based authentication,
+				where local user database or external RADIUS
+				server is used
+		 captivePortal-	external Captive Portal is used through
+				redirection"
+	::= { ruckusWebAuthEntry 3 }
+
+ruckusWebAuthMethod	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				radius(1),
+				local(2),
+				radiusLocal(3),
+				localRadius(4),
+				none(5)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"When the AuthMode is configured as password, this specifies 
+		 the order for performing authentication.
+
+		 radius		- RADIUS server for authentication
+		 local		- Local user DB for authentication
+		 radiusLocal	- RADIUS followed by Local User DB
+		 localRadius	- Local User DB followed by RADIUS
+		 none           - none of these methods."
+	DEFVAL		{ radius }
+	::= { ruckusWebAuthEntry 4 }
+
+ruckusWebAuthMaxHosts	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..8192)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum number of hosts allowed to be
+		 authenticated. Value 0 means no limit."
+	DEFVAL		{ 0 }
+	::= { ruckusWebAuthEntry 5 }
+
+ruckusWebAuthMaxAuthAttempts	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..64)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum number of attempts allowed during the
+		 auth cycle, after which the user is blocked for configured
+		 amount of time, before next authentication. The value of 0
+		 means no limit."
+	DEFVAL		{ 5 }
+	::= { ruckusWebAuthEntry 6 }
+
+ruckusWebAuthReauthTime	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..128000)
+	UNITS		"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the re-authentication time, so the authenticated
+		 users can be periodically reauthenticated after the timeout
+		 specified through this object. Value 0 means no limit"
+	DEFVAL		{ 28800 }
+	::= { ruckusWebAuthEntry 7 }
+
+ruckusWebAuthCycleTime	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..3600)
+	UNITS		"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time of the authentication since the first
+		 attempted user authentication, after which the user is not
+		 allowed to authenticate and must reload the login-page to
+		 start authentication. Value of 0 means no limit."
+	DEFVAL		{ 600 }
+	::= { ruckusWebAuthEntry 8 }
+
+ruckusWebAuthBlockTime	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..12800)
+	UNITS		"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time for blocking the user when successive
+		 attempts have failed resulting in blocking the user. Value of
+		 0 means, the user is blocked permanently."
+	DEFVAL		{ 90 }
+	::= { ruckusWebAuthEntry 9 }
+
+ruckusWebAuthMacAgeTime	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..3600)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the the time which together with mac-age-time of the
+		 switch is considered an inactive time of the authenticated 
+		 host, after which the device is forced to reauthenticate.
+
+		 The value can be 0 meaning no aging, the maximum can be upto 
+		 the specified reauth-time."
+	DEFVAL		{ 3600 }
+	::= { ruckusWebAuthEntry 10 }
+
+ruckusWebAuthPasscode	OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the statically configured passcode used to
+		 authenticate when passcode is used auth-method. The passcode 
+		 is digits only.
+
+		 This can consist of upto 4 passcodes where each entry is seperated
+		 by space or tab."
+	::= { ruckusWebAuthEntry 11 }
+
+ruckusWebAuthLocalUserDb	OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the locally configured User Database for use
+		 in authentication, when the auth-methos is password."
+	::= { ruckusWebAuthEntry 12 }
+
+ruckusWebAuthSecureLogin	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if HTTPS is used for authentication or not."
+	DEFVAL		{ enabled }
+	::= { ruckusWebAuthEntry 13 }
+
+ruckusWebAuthAccounting	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies if accounting is enbled or disabled."
+	DEFVAL		{ disabled }
+	::= { ruckusWebAuthEntry 14 }
+
+ruckusWebAuthCaptiveProfile	OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the name of the configured Captive Portal profile,
+		 which should be used for redirection, if the auth-method is
+		 configured as captivePortal."
+	::= { ruckusWebAuthEntry 15 }
+
+ruckusWebAuthRedirectName		OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the name to be used for URL when internal authentication
+		 is used dusring authentication for prompting username/password
+		 from the users, otherwise switch IP address is used. This must be
+		 valid domain name for the switch."
+	::= { ruckusWebAuthEntry 16 }
+
+
+ruckusWebAuthWebpageRemoveUserId    OBJECT-TYPE
+    SYNTAX      EnabledStatus
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Specifies if user-id field in custom webauth login page is disabled or not, 
+         default value is disable, i.e., user-id field is displayed"
+    DEFVAL      { disabled }
+    ::= { ruckusWebAuthEntry 17 }
+
+ruckusWebAuthWebpageUsernameLabel    OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Specifies the name to be used for user-id label in webauth login page" 
+	::= { ruckusWebAuthEntry 18 }
+
+ruckusWebAuthWebpagePasswordLabel OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Specifies the name to be used for password label in webauth login page" 
+	::= { ruckusWebAuthEntry 19 }
+
+ruckusWebAuthUpLinkPort OBJECT-TYPE
+	SYNTAX	    InterfaceIndexOrZero	
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"Specifies the port to be used as uplink port in network segmentation deployment" 
+	::= { ruckusWebAuthEntry 20 }
+
+ruckusWebAuthWebpageTop    OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+               "Specifies the name to be used for Top of  webauth login page" 
+    ::= { ruckusWebAuthEntry 21 }
+
+ruckusWebAuthWebpageBottom           OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+               "Specifies the name to be used for Bottom of webauth login page" 
+    ::= { ruckusWebAuthEntry 22 }
+
+ruckusWebAuthWebpageTitle               OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS     read-write
+    STATUS         current
+    DESCRIPTION
+               "Specifies the name to be used for Title in webauth login page" 
+    ::= { ruckusWebAuthEntry 23 }
+
+ruckusWebAuthWebpageLoginButton         OBJECT-TYPE
+    SYNTAX          DisplayString
+    MAX-ACCESS      read-write
+    STATUS          current
+    DESCRIPTION
+               "Specifies the name to be used for Login-button in webauth login page" 
+    ::= { ruckusWebAuthEntry 24 }
+
+
+-- ------------------------------------------------------------
+-- WebAuth TrustPort Configuration
+-- This applies for Web authentication at VLAN level
+-- ------------------------------------------------------------
+ruckusWebAuthTrustPortTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthTrustPortEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth Trust
+		 ports which are skipped from authentication in the
+		 given VLAN and are typically uplink ports.
+
+		 An entry exists in this table for every Trust Port
+		 defined on this VLAN."
+	::= { ruckusWebAuthConfig 2 }
+
+ruckusWebAuthTrustPortEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthTrustPortEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in WebAuth Trust Port table."
+	INDEX		{ ruckusWebAuthVlan, ruckusWebAuthTrustPort }
+	::= { ruckusWebAuthTrustPortTable 1 }
+
+RuckusWebAuthTrustPortEntry ::= SEQUENCE {
+	ruckusWebAuthTrustPort	InterfaceIndex
+}
+
+ruckusWebAuthTrustPort	OBJECT-TYPE
+	SYNTAX		InterfaceIndex
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the trusted port or the up-link port, which is
+		 considered secure, so authentication is not performed
+		 on that port. 
+
+		 This port generally provides access to the corporate or
+		 Internet or other network for resource access during 
+		 authentication."
+	::= { ruckusWebAuthTrustPortEntry 1 }
+
+
+-- ------------------------------------------------------------
+-- WebAuth DNS Filter Configuration
+-- This applies for Web authentication at VLAN level
+-- ------------------------------------------------------------
+ruckusWebAuthDnsFilterTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthDnsFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth DNS
+		 filters which are qualified DNS servers and should
+		 be allowed access during authentication for DNS
+		 queries by clients.
+
+		 An entry exists in this table for every DNS filter
+		 defined on this VLAN."
+	::= { ruckusWebAuthConfig 3 }
+
+ruckusWebAuthDnsFilterEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthDnsFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in WebAuth DNS-Filter table."
+	INDEX		{ ruckusWebAuthVlan, ruckusWebAuthDnsFilterId }
+	::= { ruckusWebAuthDnsFilterTable 1 }
+
+RuckusWebAuthDnsFilterEntry ::= SEQUENCE {
+	ruckusWebAuthDnsFilterId	INTEGER,
+	ruckusWebAuthDnsFilterType	InetAddressType,
+	ruckusWebAuthDnsFilterAddr	InetAddress,
+	ruckusWebAuthDnsFilterPrefix	Unsigned32	
+}
+
+ruckusWebAuthDnsFilterId	OBJECT-TYPE
+	SYNTAX          INTEGER
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An index into the DNS filter table."
+	::= { ruckusWebAuthDnsFilterEntry 1 }
+
+ruckusWebAuthDnsFilterType	OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The address type of the this filter entry, a V4 or V6 address."
+	::= { ruckusWebAuthDnsFilterEntry 2 }
+
+ruckusWebAuthDnsFilterAddr	OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The DNS server address, which is a V4 or V6 address."
+	::= { ruckusWebAuthDnsFilterEntry 3 }
+
+ruckusWebAuthDnsFilterPrefix	OBJECT-TYPE
+	SYNTAX          Unsigned32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The DNS server server prefix, which applies to V4/V6 addresses."
+	::= { ruckusWebAuthDnsFilterEntry 4 }
+
+
+-- ------------------------------------------------------------
+-- WebAuth Trusted Server or White List Configuration
+-- This applies for Web authentication only
+-- ------------------------------------------------------------
+ruckusWebAuthWhiteListTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthWhiteListEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth Whitelist
+		 entries which are qualified external servers that should
+		 be allowed access during authentication for various needs
+		 by clients.
+
+		 An entry exists in this table for every Whitelist server
+		 defined on this VLAN."
+	::= { ruckusWebAuthConfig 4 }
+
+ruckusWebAuthWhiteListEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthWhiteListEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in WebAuth Whitelist table."
+	INDEX		{ ruckusWebAuthVlan, ruckusWebAuthWhiteListId }
+	::= { ruckusWebAuthWhiteListTable 1 }
+
+RuckusWebAuthWhiteListEntry ::= SEQUENCE {
+	ruckusWebAuthWhiteListId	INTEGER,
+	ruckusWebAuthWhiteListType	InetAddressType,
+	ruckusWebAuthWhiteListAddr	InetAddress,
+	ruckusWebAuthWhiteListPrefix	Unsigned32	
+}
+
+ruckusWebAuthWhiteListId	OBJECT-TYPE
+	SYNTAX          INTEGER
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An index into the White List Server table."
+	::= { ruckusWebAuthWhiteListEntry 1 }
+
+ruckusWebAuthWhiteListType	OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The address type of the this whitelist entry, a V4 or V6 or DNS name."
+	::= { ruckusWebAuthWhiteListEntry 2 }
+
+ruckusWebAuthWhiteListAddr	OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The whitelist server address, which is a V4 or V6 address or DNS name."
+	::= { ruckusWebAuthWhiteListEntry 3 }
+
+ruckusWebAuthWhiteListPrefix	OBJECT-TYPE
+	SYNTAX          Unsigned32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The whitelist server prefix, which applies to V4/V6 addresses."
+	::= { ruckusWebAuthWhiteListEntry 4 }
+
+-- ------------------------------------------------------------
+-- WebAuth Auth Filter Configuration
+-- This applies for Web authentication at VLAN/port level
+-- ------------------------------------------------------------
+ruckusWebAuthFilterTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth auth-
+		 filters which are applied to statically authenticate 
+		 the clients without the need for authentication.
+
+		 This comes in for help to permit/deny pre-defined
+		 clients and save time in authentication. An entry
+		 exists in this table for every auth-filter defined 
+	 	 on this VLAN."
+	::= { ruckusWebAuthConfig 5 }
+
+ruckusWebAuthFilterEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in WebAuth Auth-Filter table."
+	INDEX		{ ruckusWebAuthVlan, ruckusWebAuthFilterMac }
+	::= { ruckusWebAuthFilterTable 1 }
+
+RuckusWebAuthFilterEntry ::= SEQUENCE {
+	ruckusWebAuthFilterMac		MacAddress,
+	ruckusWebAuthFilterPort		InterfaceIndexOrZero,
+	ruckusWebAuthFilterDuration	Unsigned32,
+	ruckusWebAuthFilterAction 	INTEGER
+}
+
+ruckusWebAuthFilterMac	OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the MAC Address of the filter for matching
+		 the authenticating clients through static authentication."
+	::= { ruckusWebAuthFilterEntry 1 }
+
+ruckusWebAuthFilterPort	OBJECT-TYPE
+	SYNTAX		InterfaceIndexOrZero
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the port in the VLAN, where this filter should
+		 be applied. If the port not valid, the entry applies to 
+		 all ports in VLAN."
+	::= { ruckusWebAuthFilterEntry 2 }
+
+ruckusWebAuthFilterDuration	OBJECT-TYPE
+	SYNTAX		Unsigned32 (0..12800)
+	UNITS		"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the time for blocking or allowing the user when
+		 the filter results in authenticating the user (matches).
+		 Value of 0 means, the user is blocked permanently or 
+		 allowed permanently."
+	::= { ruckusWebAuthFilterEntry 3 }
+
+ruckusWebAuthFilterAction	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				permit(1),
+				deny(2)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be performed when this filter
+		 is applied on the authenticating client when matching
+		 occurs.
+		
+		 permit(1) - 	allow the client in specified VLAN
+		 deny(2)   -	block the client"
+	::= { ruckusWebAuthFilterEntry 4 }
+
+-- ------------------------------------------------------------
+-- WebAuth Captive Portal Configuration
+-- This applies for Web authentication only
+-- ------------------------------------------------------------
+ruckusWebAuthCaptivePortalTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusWebAuthCaptivePortalEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of WebAuth Captive
+		 profiles for various external WebAuth servers. 
+
+		 The rntry provides the server information such as
+		 the DNS name or address, port and login page where
+		 the authenticating client should be redirected to."
+	::= { ruckusWebAuthConfig 6 }
+
+ruckusWebAuthCaptivePortalEntry 	OBJECT-TYPE
+	SYNTAX		RuckusWebAuthCaptivePortalEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry in WebAuth Captive Poratl table."
+	INDEX		{ IMPLIED ruckusWebAuthCaptivePortalName }
+	::= { ruckusWebAuthCaptivePortalTable 1 }
+
+RuckusWebAuthCaptivePortalEntry ::= SEQUENCE {
+	ruckusWebAuthCaptivePortalName		DisplayString,
+	ruckusWebAuthCaptivePortalType		InetAddressType,
+	ruckusWebAuthCaptivePortalAddr		InetAddress,
+	ruckusWebAuthCaptivePortalPort		Unsigned32,
+	ruckusWebAuthCaptivePortalLoginPage	DisplayString
+}
+
+ruckusWebAuthCaptivePortalName	OBJECT-TYPE
+	SYNTAX          DisplayString (SIZE (1..32))
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"Specifies the name of the profile entry."
+	::= { ruckusWebAuthCaptivePortalEntry 1 }
+
+ruckusWebAuthCaptivePortalType	OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the Captive server type - qualified name or IP address."
+	::= { ruckusWebAuthCaptivePortalEntry 2 }
+
+ruckusWebAuthCaptivePortalAddr	OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the Captive server qualified name or IP address."
+	::= { ruckusWebAuthCaptivePortalEntry 3 }
+
+ruckusWebAuthCaptivePortalPort	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the Captive server port for HTTP/HTTPS access."
+	DEFVAL		{ 443 }
+	::= { ruckusWebAuthCaptivePortalEntry 4 }
+
+ruckusWebAuthCaptivePortalLoginPage	OBJECT-TYPE
+	SYNTAX          DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the login page of the Captive server, where the client
+		 should be redirected to."
+	::= { ruckusWebAuthCaptivePortalEntry 5 }
+
+
+
+-- ------------------------------------------------------------
+-- FlexAuth Port Configuration
+-- This applies for Dot1x and MAC authentication at port level
+-- ------------------------------------------------------------
+ruckusAuthPortTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAuthPortEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of FlexAuth, 
+		 including Dot1x and MAC-Auth for a specified port. 
+		 Most objects at the port level oerride the similar 
+		 configured objects at the global level.
+
+		 An entry exists in this table for each configured
+		 with FlexAuth."
+	::= { ruckusAuthPortConfig 1 }
+
+ruckusAuthPortEntry 	OBJECT-TYPE
+	SYNTAX		RuckusAuthPortEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry of FlexAuth port configuration."
+	INDEX			{ ifIndex }
+	::= { ruckusAuthPortTable 1 }
+
+RuckusAuthPortEntry ::= SEQUENCE {
+	ruckusAuthPortEnable		BITS,
+	ruckusAuthPortDot1xControl	INTEGER,	
+	ruckusAuthPortDefaultVlan 	VlanId,
+	ruckusAuthPortVoiceVlan 	VlanId,
+	ruckusAuthPortCriticalVlan 	VlanId,
+	ruckusAuthPortRestrictVlan 	VlanId,
+	ruckusAuthPortMode 		RuckusAuthMode,
+	ruckusAuthPortMethods		RuckusAuthOrder,
+	ruckusAuthPortMaxSessions	Unsigned32,
+	ruckusAuthPortFailAction	RuckusAuthFailAction,
+	ruckusAuthPortTimeoutAction	RuckusAuthTimeoutAction,
+	ruckusAuthPortReauthTimeout	Unsigned32,
+	ruckusAuthPortAging		RuckusAuthAging,
+	ruckusAuthPortAllowTagged	EnabledStatus,
+	ruckusAuthPortSourceGuard	EnabledStatus,
+	ruckusAuthPortDosAttacks	EnabledStatus,
+	ruckusAuthPortDosAttackLimit	Unsigned32
+}		
+
+ruckusAuthPortEnable	OBJECT-TYPE
+	SYNTAX		BITS {
+				dot1x(0),
+				macAuth(1)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies authentication methods that are enabled on
+		 this port. Unless the method is enabled globally,
+		 the same can't be enabled at port level. A bit field
+		 of '1' indicates enabled, otherwise disabled."
+	::= {ruckusAuthPortEntry 1}
+
+ruckusAuthPortDot1xControl		OBJECT-TYPE
+	SYNTAX		INTEGER {
+				forceUnauthorized(1),
+				controlauto(2),
+				forceAuthorized(3),
+				other(4)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the Dot1x operating mode for this port, 
+		 when Dot1x is enabled.
+		
+		 force-unauthorized(1)- port's controlled port is 
+					placed unconditionally in 
+					the unauthorized state
+		 control-auto(2)      - the controlled port is 
+					unauthorized until 
+					authentication takes place
+					between client and server
+		 force-authorized(3)  - the port's controlled port is
+					placed unconditionally in the 
+					authorized state
+		 other(4)             - not initialized"
+	DEFVAL		{ forceAuthorized }
+	::= { ruckusAuthPortEntry 2 }
+
+ruckusAuthPortDefaultVlan OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This default VLAN is used to place this port, so 
+		 this VLAN acts as a VLAN for the clients to belong
+		 to, when authentication server doesn't assign any
+		 VLANs. 
+
+		 A value of zero for this object indicates no default
+		 Vlan is configured for this port on this Ruckus 
+		 device, so the global default VLAN is used." 
+	::= { ruckusAuthPortEntry 3 }
+
+ruckusAuthPortVoiceVlan OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This voice VLAN is used to advertise through
+		 LLDP/CDP on this port, when connected devices are
+		 detected as Phones and authentication server doesn't
+		 assign any Voice VLAN.
+
+		 A value of zero for this object indicates no Voice
+		 Vlan is configured for this port on this Ruckus 
+		 device, so the global Voice VLAN is used." 
+	::= { ruckusAuthPortEntry 4 }
+
+ruckusAuthPortCriticalVlan OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This VLAN is used to place the clients of this port,
+		 when the authentication server times out and the 
+		 port auth-timeout-action is configired as 
+		 'critical', so the clients have limited access. 
+
+		 Refer to ruckusAuthPortTimeoutAction object for
+		 timeout-action choices.
+
+		 A value of zero for this object indicates no
+		 Critical Vlan is configured for this port on this 
+		 Ruckus device, so the global Critical VLAN is used." 
+	::= { ruckusAuthPortEntry 5 }
+
+ruckusAuthPortRestrictVlan OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"This VLAN is used to place the clients of this port,
+		 when the clients fail the authentication and the
+		 auth-failure-action is configured as 'restrict', so
+		 the clients have limited access.
+
+		 Refer to ruckusAuthPortFailAction object for
+		 fail-action choices.
+
+		 A value of zero for this object indicates no 
+		 Restrict Vlan is configured for this port on this 
+		 Ruckus device, so the global Restrict VLAN is used." 
+	::= { ruckusAuthPortEntry 6 }
+
+ruckusAuthPortMode 	OBJECT-TYPE
+	SYNTAX          RuckusAuthMode
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the authentication mode for this port.
+		 This overrides the globally configured value."
+	DEFVAL		{ singleUntagged }
+	::= { ruckusAuthPortEntry 7 }
+
+ruckusAuthPortMethods 	OBJECT-TYPE
+	SYNTAX          RuckusAuthOrder
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies authentication methods to be attempted in 
+		 series of methods for this port. This overrides the
+		 globally configured value."
+	DEFVAL		{ dot1xMauth }
+	::= { ruckusAuthPortEntry 8 }
+
+ruckusAuthPortMaxSessions	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..1024)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum number of authenticated
+		 clients allowed on this port. This doesn't include 
+		 the clients allowed due to authentication failure 
+		 and timeout policies."
+	DEFVAL		{ 2 }
+	::= { ruckusAuthPortEntry 9 }
+
+ruckusAuthPortFailAction	OBJECT-TYPE	
+	SYNTAX		RuckusAuthFailAction
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be taken on this port. This
+		 overrides the globally set value."
+	DEFVAL		{ blockTraffic }
+	::= { ruckusAuthPortEntry 10 }
+
+ruckusAuthPortTimeoutAction	OBJECT-TYPE	
+	SYNTAX		RuckusAuthTimeoutAction
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be taken on this port, when
+		 the authentication server times out for various 
+		 readons like server busy, network access, etc. This
+		 overrides the globally set value."
+	DEFVAL		{ other }
+	::= { ruckusAuthPortEntry 11 }
+
+ruckusAuthPortReauthTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..4294967295)
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"How often to re-authenticates clients of this port,
+		 when the clients were allowed due to authentication
+		 server timeout. Value of 0 disables the
+		 re-authentication."
+	DEFVAL		{ 300 }
+	::= { ruckusAuthPortEntry 12 }
+
+ruckusAuthPortAging	OBJECT-TYPE
+	SYNTAX		RuckusAuthAging
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies, if denied and permitted sessions are
+		 enabled or disabled for aging on this port. This 
+		 overrided the global value."
+	::= { ruckusAuthPortEntry 13 }
+
+ruckusAuthPortAllowTagged	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies, if denied and permitted sessions are
+		 enabled or disabled for aging on this port. A bit 
+		 field of '1' indicates enabled, otherwise disabled."
+	DEFVAL		{ disabled }
+	::= { ruckusAuthPortEntry 14 }
+
+ruckusAuthPortSourceGuard	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Source guard enabling ensures that the client IP
+		 address to be learned and allow the packets matching
+		 that IP address only. This is implied when user ACLs
+		 are applied on the port, so has impact only 
+		 otherwise."
+	DEFVAL		{ disabled }
+	::= { ruckusAuthPortEntry 15 }
+
+ruckusAuthPortDosAttacks	OBJECT-TYPE
+	SYNTAX		EnabledStatus
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies to prevent/allow Denial of Service attacks
+		 on this port. Constantly sending packets from
+		 different clients (MAC addresses) causes DOS, as the
+		 clients are not allowed without authentication,
+		 which may cause exhausing of system resources."
+	DEFVAL		{ disabled }
+	::= { ruckusAuthPortEntry 16 }
+
+ruckusAuthPortDosAttackLimit	OBJECT-TYPE
+	SYNTAX		Unsigned32 (1..65535)
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The maximum number of clients to be allowed at any
+		 time without authentication, and if authentication
+		 pending clients exceed the configured limit (as
+		 specified by this object), the port gets shutdown to
+		 prevent DOS attacks."
+	DEFVAL		{ 512 }
+	::= { ruckusAuthPortEntry 17 }
+
+-- ------------------------------------------------------------
+-- FlexAuth Port Auth Filter Configuration
+-- This applies for Dot1x and MAC authentication at port level
+-- ------------------------------------------------------------
+ruckusAuthFilterTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAuthFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table that allows configuration of FlexAuth auth-
+		 filters which are applied to statically authenticate 
+		 the clients without the need for RADIUS server
+		 authenticator.
+
+		 This comes in for help to permit/deny pre-defined
+		 clients and save time in authentication. An entry
+		 exists in this table for every auth-filter bound 
+	 	 on the port."
+	::= { ruckusAuthFilterConfig 1 }
+
+ruckusAuthFilterEntry 	OBJECT-TYPE
+	SYNTAX		RuckusAuthFilterEntry 
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry of FlexAuth port Auth-Filter configuration."
+	INDEX		{ ifIndex, ruckusAuthFilterId }
+	::= { ruckusAuthFilterTable 1 }
+
+RuckusAuthFilterEntry ::= SEQUENCE {
+	ruckusAuthFilterId	INTEGER,
+	ruckusAuthFilterMac	MacAddress,
+	ruckusAuthFilterMask	MacAddress,
+	ruckusAuthFilterVlan 	VlanId,
+	ruckusAuthFilterAction 	INTEGER
+}
+
+ruckusAuthFilterId	OBJECT-TYPE
+	SYNTAX          INTEGER
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An index into the authe filter table."
+	::= { ruckusAuthFilterEntry 1 }
+
+ruckusAuthFilterMac	OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the MAC Address of the filter for matching
+		 the authenticating clients through static authentication."
+	::= { ruckusAuthFilterEntry 2 }
+
+ruckusAuthFilterMask	OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the Mask of the filter for matching the
+		 incoming clients through static authentication. The mask
+		 is applied on MAC in the filter and client MAC before the
+		 matching decision is made."
+	::= { ruckusAuthFilterEntry 3 }
+
+ruckusAuthFilterVlan 	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the VLAN which should be used to place the
+		 authenticating client after the matching is done. This
+		 VLAN applies only when the action is permit. Denied
+		 clients are always blocked."
+	::= { ruckusAuthFilterEntry 4 }
+
+ruckusAuthFilterAction	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				permit(1),
+				deny(2)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the action to be performed when this filter
+		 is applied on the authenticating client and matching
+		 occurs.
+		
+		 permit(1) - 	allow the client in specified VLAN
+		 deny(2)   -	block the client"
+	::= { ruckusAuthFilterEntry 5 }
+
+-- ------------------------------------------------------------
+-- FlexAuth Sessions
+-- This applies for Dot1x and MAC-Auth sessions at port level
+-- ------------------------------------------------------------
+ruckusAuthSessionTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAuthSessionEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"A table providing information about the FlexAuth
+		 sessions for each client at port level in the
+		 Ruckus device.
+
+		 This table contains entries for all the clients
+		 authenticated or failed on a given port.
+
+		 Entries get created when clients are authenticated
+		 amd cleared when they logoff or timeout."
+	::= { ruckusAuthSessions 1 }
+
+ruckusAuthSessionEntry 	OBJECT-TYPE
+	SYNTAX		RuckusAuthSessionEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry containing information about the FlexAuth
+		 session of a specified client on a port"
+	INDEX		{ ifIndex, ruckusAuthSessionMac }
+	::= { ruckusAuthSessionTable 1 }
+
+RuckusAuthSessionEntry ::=	SEQUENCE {
+	ruckusAuthSessionMac		MacAddress,
+	ruckusAuthSessionVlan		VlanId,
+	ruckusAuthSessionVlanType	INTEGER,
+	ruckusAuthSessionTaggedVlan	VlanId,
+	ruckusAuthSessionUserName	DisplayString,
+	ruckusAuthSessionDeviceType	INTEGER,
+	ruckusAuthSessionMethod		INTEGER,
+	ruckusAuthSessionMode		RuckusAuthMode,
+	ruckusAuthSessionStatus		INTEGER,
+	ruckusAuthSessionDot1xStatus	Dot1xAuthState,
+	ruckusAuthSessionAgingType	INTEGER,
+	ruckusAuthSessionAge		Unsigned32,
+	ruckusAuthSessionTimeout	Unsigned32,
+	ruckusAuthSessionIdleTimeout	Unsigned32,
+	ruckusAuthSessionTime		Unsigned32,
+	ruckusAuthSessionV4IngressAcl	DisplayString,
+	ruckusAuthSessionV4EgressAcl	DisplayString,
+	ruckusAuthSessionV6IngressAcl	DisplayString,
+	ruckusAuthSessionV6EgressAcl	DisplayString,
+	ruckusAuthSessionTxOctets	Counter64,
+	ruckusAuthSessionRxOctets	Counter64,
+	ruckusAuthSessionTxPkts		Counter64,
+	ruckusAuthSessionRxPkts		Counter64,
+	ruckusAuthSessionFailureReason	DisplayString,
+	ruckusAuthSessionFlags		BITS
+}
+
+ruckusAuthSessionMac	OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the MAC Address of the client
+		 (device/host) represented by this session entry"
+	::= { ruckusAuthSessionEntry 1 }
+
+ruckusAuthSessionVlan	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the VLAN, the client (device/host) belongs
+		 to, represented by this session entry.
+
+		 In case of voice-phones, this VLAN is the voice-VLAN
+		 (tagged) and in all other cases, most likely an
+		 untagged VLAN, unless it's a tagged VM client"
+	::= { ruckusAuthSessionEntry 2 }
+
+ruckusAuthSessionVlanType	 OBJECT-TYPE
+	SYNTAX		INTEGER {
+				default(1),
+				retrict(2),
+				critical(3),
+				guest(4),
+				radius(5)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Decribes the type of the VLAN associated with the session.
+		 
+		 default(1)  - Default VLANs as configured on Ruckus device
+		 restrict(2) - Restricted VLAN as authentication failed
+		 critical(3) - Critical VLAN as authentication timed out
+		 guest(4)    - Guest VLAN as client is not Dot1x capable
+		 radius(5)   - RADIUS (auth) server assigned VLAN"
+	::= { ruckusAuthSessionEntry 3 }
+
+ruckusAuthSessionTaggedVlan	OBJECT-TYPE
+	SYNTAX		VlanId
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Tagged VLAN or Voice VLAN sent by the RADIUS server, so
+		 the port gets added to the VLAN, to prepare the device
+		 to send tagged packets in case of phones."
+	::= { ruckusAuthSessionEntry 4 }
+
+ruckusAuthSessionUserName	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Indicates the User name associated with the client, 
+		 represented by this session.
+
+		 In case of Dot1x sessions, it's the username used by
+		 the user to log into the network; whereas in case of
+		 MAC-Auth, it could be MAC address or user name
+		 assigned by RADIUS server in ACCESS-ACCEPT packet
+		 during authentication."
+	::= { ruckusAuthSessionEntry 5 }
+
+ruckusAuthSessionDeviceType	 OBJECT-TYPE
+	SYNTAX		INTEGER {
+				phone(1),
+				wlanAP(2),
+				router(3),
+				bridge(4),
+				other(8)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Decribes the type of the client connnected and
+		 authenticated on this port."
+	::= { ruckusAuthSessionEntry 6 }
+
+ruckusAuthSessionMethod	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				dot1x(1),
+				macAuth(2)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the authentication method that is used for
+		 authenticating the client on this port represented
+		 by this session.
+
+		 It's possible that both authentication methods are
+		 tried, both either succeeded or failed and the
+		 resulting status is generally decided by the last
+		 method."
+	::= { ruckusAuthSessionEntry 7 }
+
+ruckusAuthSessionMode	OBJECT-TYPE
+	SYNTAX		RuckusAuthMode
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Indicates the authentication mode applied for this
+		 client on this port."
+	::= { ruckusAuthSessionEntry 8 }
+
+ruckusAuthSessionStatus	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				allowed(1),
+				blocked(2),
+				restrict(3),
+				critical(4),
+				guest(5),
+				other(6)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The authentication state of the session which can
+		 take the following values.
+
+		 allowed	- client authentication is successful, so
+				  the complete access is granted
+		 blocked	- client failed authentication, so access
+				  is denied
+		 restrict	- client failed authentication, but
+				  allowed restricted access
+		 critical	- client authentication timedout, so
+				  access is limited to critical operations
+		 guest		- client is not Dot1x capable, so allowed
+				  guest role access"
+	::= { ruckusAuthSessionEntry 9 }
+
+ruckusAuthSessionDot1xStatus	OBJECT-TYPE
+	SYNTAX		Dot1xAuthState
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Indicates the state of Dot1x authentication, if the
+		 client is using Dot1x for authentication."
+	::= { ruckusAuthSessionEntry 10 }
+
+ruckusAuthSessionAgingType	OBJECT-TYPE
+	SYNTAX		INTEGER {
+				software(1),
+				hardware(2),
+				enabled(3),
+				disabled(4)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Indicates the aging status of the client session
+		 which can be of the following values.
+
+		 software(1):
+			Client MAC entry is cleared as the entry
+			timedout in hardware for configured inactivity
+			period, so it has entered software aging state
+		 hardware(2):
+			Client MAC has detected the inactivity on the
+			port, so entered the hardware aging state
+		 enabled(3):
+			Aging is enabled and there is no detection of
+			inactivity on the port for this client, so aging
+			has not started
+		 disabled(4):
+			Aging is disabled for this client, so any amount
+			of inactivity period doesn't clear the session
+		 "
+	::= { ruckusAuthSessionEntry 11 }					 
+
+ruckusAuthSessionAge	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"When the aging type is either software or hardware, 
+		 this object indicates the time, the session had been
+		 in that state. When the configured maximum time is
+		 reached, the aging state moves from hardware to 
+		 software or session is cleared."
+	::= { ruckusAuthSessionEntry 12 }
+
+ruckusAuthSessionTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum amount of time, the session
+		 should exit before re-authenticating or terminating
+		 the sessions depending on another RADIUS attribute
+		 'Termination-Action'."
+	::= { ruckusAuthSessionEntry 13 }
+
+ruckusAuthSessionIdleTimeout	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the maximum amount of time after which the
+		 session is cleared when there is no traffic from the
+		 client. A value of 0 means, the sessions never gets
+		 terminated due to inactivity."
+	::= { ruckusAuthSessionEntry 14 }
+
+ruckusAuthSessionTime	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	UNITS       	"seconds"
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Indcates the session UP time since the session had
+		 been up or created."
+	::= { ruckusAuthSessionEntry 15 }
+
+ruckusAuthSessionV4IngressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the User Access List (ACL) applied in the
+		 Ingress direction for the IPv4 traffic for this
+		 client on this port."
+	::= { ruckusAuthSessionEntry 16 }
+
+ruckusAuthSessionV4EgressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the User Access List (ACL) applied in the
+		 Egress direction for the IPv4 traffic for this
+		 client on this port."
+	::= { ruckusAuthSessionEntry 17 }
+
+ruckusAuthSessionV6IngressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the User Access List (ACL) applied in the
+		 Ingress direction for the IPv6 traffic for this
+		 client on this port."
+	::= { ruckusAuthSessionEntry 18 }
+
+ruckusAuthSessionV6EgressAcl	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the User Access List (ACL) applied in the
+		 Egress direction for the IPv6 traffic for this
+		 client on this port."
+	::= { ruckusAuthSessionEntry 19 }
+
+ruckusAuthSessionTxOctets	OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the number bytes sent for this session on the port."
+	::= { ruckusAuthSessionEntry 20 }
+
+ruckusAuthSessionRxOctets	OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the number bytes received for this session on the port."
+	::= { ruckusAuthSessionEntry 21 }
+
+ruckusAuthSessionTxPkts	OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the number bytes sent for this session on the port."
+	::= { ruckusAuthSessionEntry 22 }
+
+ruckusAuthSessionRxPkts	OBJECT-TYPE
+	SYNTAX		Counter64
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the number bytes received for this session on the port."
+	::= { ruckusAuthSessionEntry 23 }
+
+ruckusAuthSessionFailureReason	OBJECT-TYPE
+	SYNTAX		DisplayString
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Specifies the internal failure reason for this
+		 client, such as memory allocation, RADIUS attribute
+		 parsing, RADIUS REJECT, etc."
+	::= { ruckusAuthSessionEntry 24 }
+
+ruckusAuthSessionFlags	OBJECT-TYPE
+	SYNTAX		BITS {
+				staticAuthenticated(0),
+				taggedSession(1),
+				dot1xNonCapable(2),
+				dot1xEnabled(3),
+				masterMacAuth(4),
+				v4AclApplied(5),
+				v6AclApplied(6)
+			}
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"Desacribes various other parameters of client
+		 session, by clubbing them together in one object for
+		 simplicity.
+
+		 staticAuthenticated(0):
+			Client is authenticaticated using configured
+			auth-fileters on the port, instead of normal
+			RADIUS server
+		 taggedSession(1):
+			Client VLAN is tagged, which may indicate the
+			client as Phone or tagged VM
+		 dot1xNonCapable(2):
+			Client is not Dot1x capabale
+		 dot1xEnabled(3):
+			Dot1x should be tried or not, when MAC-Auth
+			succeeds depending on default value (enable),
+			configured value or RADIUS attribute
+		 masterMacAuth(4),
+			Indicates if this session is Master session in
+			case of MAC-Auth session, as there would be
+			multiple sessions for MAC-Auth, whereas there
+			would be only one session visible 
+		 v4AclApplied(5):
+			IPv4 ACL is applied for the client
+		 v6AclApplied(6):
+			IPv6 ACL is applied for the client
+		 "
+	::= { ruckusAuthSessionEntry 25 }
+
+-- ------------------------------------------------------------
+-- FlexAuth Session Address Table
+-- This applies for Dot1x and MAC-Auth sessions at port level
+-- ------------------------------------------------------------
+ruckusAuthSessionAddrTable	OBJECT-TYPE
+	SYNTAX		SEQUENCE OF RuckusAuthSessionAddrEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An address table providing V4/V6 information about
+		 the FlexAuth sessions for each client at port level
+		 in the Ruckus device."
+	::= { ruckusAuthSessions 2 }
+
+ruckusAuthSessionAddrEntry 	OBJECT-TYPE
+	SYNTAX		RuckusAuthSessionAddrEntry
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An entry containing information about the FlexAuth
+		 session address of a specified client on a port"
+	INDEX		{ ifIndex, ruckusAuthSessionMac, ruckusAuthSessionAddrId }
+	::= { ruckusAuthSessionAddrTable 1 }
+
+RuckusAuthSessionAddrEntry ::=	SEQUENCE {
+	ruckusAuthSessionAddrId		INTEGER,
+	ruckusAuthSessionAddrType	InetAddressType,
+	ruckusAuthSessionAddr		InetAddress
+}
+
+ruckusAuthSessionAddrId	OBJECT-TYPE
+	SYNTAX          INTEGER
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"An index into the White List Server table."
+	::= { ruckusAuthSessionAddrEntry 1 }
+
+ruckusAuthSessionAddrType	OBJECT-TYPE
+	SYNTAX          InetAddressType
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The address type of the this address entry, a V4 or V6."
+	::= { ruckusAuthSessionAddrEntry 2 }
+
+ruckusAuthSessionAddr	OBJECT-TYPE
+	SYNTAX          InetAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The address of this session entry, which is a V4 or V6 address."
+	::= { ruckusAuthSessionAddrEntry 3 }
+
+
+-- ------------------------------------------------------------
+-- FlexAuth Session Statistics
+-- This applies for Dot1x and MAC sessions at port level
+-- ------------------------------------------------------------
+ruckusAuthStatsTable	OBJECT-TYPE
+	SYNTAX	     	SEQUENCE OF RuckusAuthStatsEntry
+	MAX-ACCESS	not-accessible	
+	STATUS		current
+	DESCRIPTION
+		"A table that provides information about the summary
+		 of MAC-Auth and Dot1x sessions at port level.
+
+		 An entry exists in this table for every port enabled
+		 for FlexAuth."
+	::= { ruckusAuthStatistics 1 }
+
+ruckusAuthStatsEntry	OBJECT-TYPE
+	 SYNTAX		RuckusAuthStatsEntry
+	 MAX-ACCESS	not-accessible
+	 STATUS		current
+	 DESCRIPTION
+		"An entry of port level FlexAuth session summary
+		 table."
+	 INDEX		{ ifIndex }
+	 ::= { ruckusAuthStatsTable 1 }
+
+RuckusAuthStatsEntry::= SEQUENCE {
+	ruckusDot1xSessionsAttempted		Counter32,
+	ruckusDot1xSessionsAccepted		Counter32,
+	ruckusDot1xSessionsRejected		Counter32,
+	ruckusDot1xSessionsInProgress		Counter32,
+	ruckusDot1xSessionsErrored		Counter32,
+	ruckusMacAuthSessionsAttempted		Counter32,
+	ruckusMacAuthSessionsAccepted		Counter32,
+	ruckusMacAuthSessionsRejected		Counter32,
+	ruckusMacAuthSessionsInProgress		Counter32,
+	ruckusMacAuthSessionsErrored		Counter32
+ }
+
+ruckusDot1xSessionsAttempted	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of Dot1x sessions attempted on this port, 
+		 since the time the stats were cleared."
+	::= { ruckusAuthStatsEntry 1 }
+
+ruckusDot1xSessionsAccepted	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of Dot1x sessions accepted or permited on
+		 this port, since the time the stats were cleared."
+	::= { ruckusAuthStatsEntry 2 }
+
+ruckusDot1xSessionsRejected	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of Dot1x sessions failed or rejected on
+		 this port, since the time the stats were cleared."
+	::= { ruckusAuthStatsEntry 3 }
+
+ruckusDot1xSessionsInProgress	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of Dot1x sessions which are in progress
+		 on this port waiting for authentication to be
+		 completed, since the time the stats were cleared."
+	::= { ruckusAuthStatsEntry 4 }
+
+ruckusDot1xSessionsErrored	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of Dot1x sessions which are neither
+		 accepted or rejected due to conditions like timeout,
+		 resource failure, etc; on this port, since the time
+		 the stats were cleared."
+	::= { ruckusAuthStatsEntry 5 }
+
+ruckusMacAuthSessionsAttempted	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of MAC-Auth sessions attempted on this
+		 port, since the time the stats were cleared."
+	::= { ruckusAuthStatsEntry 6 }
+
+ruckusMacAuthSessionsAccepted	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of MAC-Auth sessions accepted or permited
+		 on this port, since the time the stats were cleared"
+	::= { ruckusAuthStatsEntry 7 }
+
+ruckusMacAuthSessionsRejected	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of MAC-Auth sessions failed or rejected
+		 on this port, since the time the stats were cleared"
+	::= { ruckusAuthStatsEntry 8 }
+
+ruckusMacAuthSessionsInProgress	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of MAC-Auth sessions which are in
+		 progress on this port waiting for authentication to
+		 be completed, since the time the stats were cleared"
+	::= { ruckusAuthStatsEntry 9 }
+
+ruckusMacAuthSessionsErrored	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of MAC-Auth sessions which are neither
+		 accepted or rejected due to conditions like timeout,
+		 resource failure, etc; on this port, since the time
+		 the stats were cleared."
+	::= { ruckusAuthStatsEntry 10 }
+
+
+-- ------------------------------------------------------------
+-- Dot1x Port Statistics
+-- This applies for Dot1x authentication only at port level
+-- ------------------------------------------------------------
+ruckusDot1xAuthStatsTable	OBJECT-TYPE
+	SYNTAX	     	SEQUENCE OF RuckusDot1xAuthStatsEntry
+	MAX-ACCESS	not-accessible	
+	STATUS		current
+	DESCRIPTION
+		"A table that provides information about the Dot1x
+		 Statistics at port level.
+
+		 An entry exists in this table for every port enabled
+		 for Dot1x."
+	::= { ruckusAuthStatistics 2 }
+
+ruckusDot1xAuthStatsEntry	OBJECT-TYPE
+	 SYNTAX		RuckusDot1xAuthStatsEntry
+	 MAX-ACCESS	not-accessible
+	 STATUS		current
+	 DESCRIPTION
+		"An entry of per port Dot1x statistics table."
+	 INDEX		{ ifIndex }
+	 ::= { ruckusDot1xAuthStatsTable 1 }
+
+RuckusDot1xAuthStatsEntry::= SEQUENCE {
+	ruckusDot1xTxEAPFrames			Counter32,
+	ruckusDot1xTxEAPReqIdFrames		Counter32,
+	ruckusDot1xTxEAPReqFrames		Counter32,
+	ruckusDot1xRxEAPFrames			Counter32,
+	ruckusDot1xRxEAPStartFrames		Counter32,
+	ruckusDot1xRxEAPLogOffFrames		Counter32,
+	ruckusDot1xRxEAPRespIdFrames		Counter32,
+	ruckusDot1xRxEAPRespFrames		Counter32,
+	ruckusDot1xRxEAPInvalidFrames		Counter32,
+	ruckusDot1xRxLengthErrorFrames		Integer32,
+	ruckusDot1xRxEAPLastFrameVersion	Unsigned32,
+	ruckusDot1xRxEAPLastFrameSource		MacAddress
+}
+
+ruckusDot1xTxEAPFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of EAPOL frames transmitted on this
+		 port"
+	::= { ruckusDot1xAuthStatsEntry 1 }
+
+ruckusDot1xTxEAPReqIdFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of EAP-Request/Identity frames
+	 	 transmitted on this port"
+	::= { ruckusDot1xAuthStatsEntry 2 }
+
+ruckusDot1xTxEAPReqFrames	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of transmitted EAP request frames that
+		 are not EAP-Request/identify on this port"
+	::= { ruckusDot1xAuthStatsEntry 3 }
+
+ruckusDot1xRxEAPFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The total number of EAPOL frames received on this
+		 port"
+	::= { ruckusDot1xAuthStatsEntry 4 }
+
+ruckusDot1xRxEAPStartFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of EAPOL-Start frames received on this
+		 port"
+	::= { ruckusDot1xAuthStatsEntry 5 }
+
+ruckusDot1xRxEAPLogOffFrames	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of EAPOL-Logoff frames received on this
+		 port"
+	::= { ruckusDot1xAuthStatsEntry 6 }
+
+ruckusDot1xRxEAPRespIdFrames	OBJECT-TYPE
+	SYNTAX		Counter32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of EAP-Response/Identify frames received
+		 on this port"
+	::= { ruckusDot1xAuthStatsEntry 7 }
+
+ruckusDot1xRxEAPRespFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of received EAP-Response frames other
+		 than	 EAP-Response/Identity on this port"
+	::= { ruckusDot1xAuthStatsEntry 8 } 
+
+ruckusDot1xRxEAPInvalidFrames	OBJECT-TYPE
+	SYNTAX		Counter32	
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of invalid EAPOL frames received on this
+		 port"
+	::= { ruckusDot1xAuthStatsEntry 9 }
+
+ruckusDot1xRxLengthErrorFrames	OBJECT-TYPE	
+	SYNTAX		Integer32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The number of EAPOL frames received with incorrect 
+		 length on this port" 
+	::= { ruckusDot1xAuthStatsEntry 10 }
+
+ruckusDot1xRxEAPLastFrameVersion	OBJECT-TYPE
+	SYNTAX		Unsigned32
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The version of last EAP frame received on this port"
+	::= { ruckusDot1xAuthStatsEntry 11 }
+
+ruckusDot1xRxEAPLastFrameSource		OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-only
+	STATUS		current
+	DESCRIPTION
+		"The MAC address of the source from where the last
+		 EAP frame received on this port"
+	::= { ruckusDot1xAuthStatsEntry 12 }
+
+
+-- ------------------------------------------------------------
+-- FlexAuth MIB Notifications (applies for Dot1x and MAC-Auth)
+-- ------------------------------------------------------------
+ruckusAuthPortAuthorizedNotif NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusAuthSessionMac,
+			ruckusAuthSessionVlan,
+			ruckusAuthSessionVlanType
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a 802.1x supplicant
+			 is detected and authenticated successfully with
+			 supplicant getting assigned a VLAN."
+	::= { ruckusAuthNotification 1 }
+
+ruckusAuthPortUnauthorizedNotif NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusAuthSessionMac
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a 802.1x supplicant
+			 had logged off or session is cleared for other reasons."
+	::= { ruckusAuthNotification 2 }
+
+ruckusAuthMacAuthorizedNotif NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusAuthSessionMac,
+			ruckusAuthSessionVlan,
+			ruckusAuthSessionVlanType
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a non-802.1x client is
+			 detected and authenticated successfully with
+			 client/device getting assigned a VLAN."
+	::= { ruckusAuthNotification 3 }
+
+ruckusAuthMacUnauthorizedNotif NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusAuthSessionMac
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a non-802.1x client
+			 had logged off or session is cleared for other reasons."
+	::= { ruckusAuthNotification 4 }
+
+ruckusAuthAclFailNotif NOTIFICATION-TYPE
+	OBJECTS	{
+			ifIndex,
+			ruckusAuthSessionMac,
+			ruckusAuthSessionMethod	
+		}
+	STATUS		current
+	DESCRIPTION	"This notification is sent if a an ACL counldn't be
+			 applied for authenticated client, resulting the client
+			 in authentication failure."
+	::= { ruckusAuthNotification 5 }
+
+
+-- ------------------------------------------------------------
+-- FlexAuth MIB Conformance (applies for Dot1x and MAC-Auth)
+-- ------------------------------------------------------------
+ruckusAuthMIBCompliances	OBJECT IDENTIFIER	::= { ruckusAuthConformance 1 }
+ruckusAuthMIBGroups		OBJECT IDENTIFIER	::= { ruckusAuthConformance 2 }
+
+ruckusAuthCompliance MODULE-COMPLIANCE
+	STATUS          current
+	DESCRIPTION	"The compliance statement for entities which
+		 	 implement RUCKUS-AUTH-MIB."
+	MODULE          -- this module
+	MANDATORY-GROUPS {
+				ruckusAuthConfigGroup,
+				ruckusDot1xAuthConfigGroup,
+				ruckusMacAuthConfigGroup,
+				ruckusWebAuthConfigGroup,
+				ruckusAuthPortConfigGroup,
+				ruckusAuthFilterConfigGroup,
+				ruckusAuthSessionsGroup
+			 }
+	::= { ruckusAuthMIBCompliances 1 }
+
+------------------------
+-- Units of Conformance
+------------------------
+ruckusAuthConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusAuthDefaultVlan,
+			ruckusAuthVoiceVlan,
+			ruckusAuthCriticalVlan,
+			ruckusAuthRestrictVlan,
+			ruckusAuthMode,
+			ruckusAuthMethods,
+			ruckusAuthMaxSessions,
+			ruckusAuthFailAction,
+			ruckusAuthTimeoutAction,
+			ruckusAuthReauthEnable,
+			ruckusAuthReauthPeriod,
+			ruckusAuthReauthTimeout,
+			ruckusAuthIdleTimeout,
+			ruckusAuthDeniedTimeout,
+			ruckusAuthAging,
+			ruckusAuthEnable,
+			ruckusAuthDefaultV4IngressAcl,
+			ruckusAuthDefaultV4EgressAcl,
+			ruckusAuthDefaultV6IngressAcl,
+			ruckusAuthDefaultV6EgressAcl
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide global
+			 configuration of FlexAuth feature, common to both
+			 MAC-Auth and Dot1x."
+	::= { ruckusAuthMIBGroups 1 }
+
+ruckusDot1xAuthConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusDot1xQuietPeriod,
+			ruckusDot1xTxPeriod,
+			ruckusDot1xSuppTimeout,
+			ruckusDot1xMaxReq,
+			ruckusDot1xMaxReauthReq,
+			ruckusDot1xGuestVlan,
+			ruckusDot1xMacAuthOverride
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide global
+			 global configuration of Dot1x sub-feature,
+			 which applies only to Dot1x."
+	::= { ruckusAuthMIBGroups 2 }
+
+ruckusMacAuthConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusMacAuthPasswordFormat,
+			ruckusMacAuthPasswordOverride,
+			ruckusMacAuthDot1xOverride,
+			ruckusMacAuthDot1xEnable
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide global
+			 configuration of MAC-Auth sub-feature, which
+			 applies only to MAC-Auth."
+	::= { ruckusAuthMIBGroups 3 }
+
+ruckusAuthPortConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusAuthPortEnable,
+			ruckusAuthPortDot1xControl,
+			ruckusAuthPortDefaultVlan,
+			ruckusAuthPortVoiceVlan,
+			ruckusAuthPortCriticalVlan,
+			ruckusAuthPortRestrictVlan,
+			ruckusAuthPortMode,
+			ruckusAuthPortMethods,
+			ruckusAuthPortMaxSessions,
+			ruckusAuthPortFailAction,
+			ruckusAuthPortTimeoutAction,
+			ruckusAuthPortReauthTimeout,
+			ruckusAuthPortAging,
+			ruckusAuthPortAllowTagged,
+			ruckusAuthPortSourceGuard,
+			ruckusAuthPortDosAttacks,
+			ruckusAuthPortDosAttackLimit
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide interface
+			 configuration of FlexAuth feature,common to both
+			 MAC-Auth and Dot1x."
+	::= { ruckusAuthMIBGroups 4 }
+
+ruckusAuthFilterConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusAuthFilterMac,
+			ruckusAuthFilterMask,
+			ruckusAuthFilterVlan
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide interface
+			 auth filter configuration of FlexAuth feature,
+			 common to both MAC-Auth and Dot1x."
+	::= { ruckusAuthMIBGroups 5 }
+
+ruckusAuthSessionsGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusAuthSessionVlan,
+			ruckusAuthSessionTaggedVlan,
+			ruckusAuthSessionUserName,
+			ruckusAuthSessionDeviceType,
+			ruckusAuthSessionStatus,
+			ruckusAuthSessionDot1xStatus,
+			ruckusAuthSessionMethod,
+			ruckusAuthSessionMode,
+			ruckusAuthSessionAgingType,
+			ruckusAuthSessionAge,
+			ruckusAuthSessionTimeout,
+			ruckusAuthSessionIdleTimeout,
+			ruckusAuthSessionTime,
+			ruckusAuthSessionV4IngressAcl,
+			ruckusAuthSessionV4EgressAcl,
+			ruckusAuthSessionV6IngressAcl,
+			ruckusAuthSessionV6EgressAcl,
+			ruckusAuthSessionTxOctets,
+			ruckusAuthSessionRxOctets,
+			ruckusAuthSessionTxPkts,
+			ruckusAuthSessionRxPkts,
+			ruckusAuthSessionFailureReason,
+			ruckusAuthSessionFlags,
+			ruckusAuthSessionAddrType,
+			ruckusAuthSessionAddr
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide session
+			 information of a FlexAuth session."
+	::= { ruckusAuthMIBGroups 6 }
+
+ruckusAuthStatsGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusDot1xSessionsAttempted,
+			ruckusDot1xSessionsAccepted,
+			ruckusDot1xSessionsRejected,
+			ruckusDot1xSessionsInProgress,
+			ruckusDot1xSessionsErrored,
+			ruckusMacAuthSessionsAttempted,
+			ruckusMacAuthSessionsAccepted,
+			ruckusMacAuthSessionsRejected,
+			ruckusMacAuthSessionsInProgress,
+			ruckusMacAuthSessionsErrored
+	}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide session
+			 statistics of FlexAuth sessions at port level."
+	::= { ruckusAuthMIBGroups 7 }
+
+ruckusDot1xAuthStatsGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusDot1xTxEAPFrames,
+			ruckusDot1xTxEAPReqIdFrames,
+			ruckusDot1xTxEAPReqFrames,
+			ruckusDot1xRxEAPFrames,
+			ruckusDot1xRxEAPStartFrames,
+			ruckusDot1xRxEAPLogOffFrames,
+			ruckusDot1xRxEAPRespIdFrames,
+			ruckusDot1xRxEAPRespFrames,
+			ruckusDot1xRxEAPInvalidFrames,
+			ruckusDot1xRxLengthErrorFrames,
+			ruckusDot1xRxEAPLastFrameVersion,
+			ruckusDot1xRxEAPLastFrameSource
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide Dot1x
+			 statistics of Dot1x sessions at port level."
+	::= { ruckusAuthMIBGroups 8 }
+
+ruckusWebAuthConfigGroup OBJECT-GROUP
+	OBJECTS	{
+			ruckusWebAuthEnable,
+			ruckusWebAuthTrustPort,
+			ruckusWebAuthMode,
+			ruckusWebAuthMethod,
+			ruckusWebAuthMaxHosts,
+			ruckusWebAuthMaxAuthAttempts,
+			ruckusWebAuthReauthTime,
+			ruckusWebAuthCycleTime,
+			ruckusWebAuthBlockTime,
+			ruckusWebAuthMacAgeTime,
+			ruckusWebAuthPasscode,
+			ruckusWebAuthLocalUserDb,
+			ruckusWebAuthSecureLogin,
+			ruckusWebAuthAccounting,
+			ruckusWebAuthCaptiveProfile,
+			ruckusWebAuthRedirectName,
+			ruckusWebAuthDnsFilterType,
+			ruckusWebAuthDnsFilterAddr,
+			ruckusWebAuthDnsFilterPrefix,
+			ruckusWebAuthWhiteListType,
+			ruckusWebAuthWhiteListAddr,
+			ruckusWebAuthWhiteListPrefix,
+			ruckusWebAuthFilterPort,
+			ruckusWebAuthFilterDuration,
+			ruckusWebAuthFilterAction,
+			ruckusWebAuthCaptivePortalType,
+			ruckusWebAuthCaptivePortalAddr,
+			ruckusWebAuthCaptivePortalPort,
+			ruckusWebAuthCaptivePortalLoginPage
+		}
+	STATUS		current
+	DESCRIPTION	"A collection of objects that provide WebAuth
+			 configuration."
+	::= { ruckusAuthMIBGroups 9 }
+
+END

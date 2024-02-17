@@ -1,0 +1,295 @@
+RUCKUS-NDI-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+	MODULE-IDENTITY, OBJECT-TYPE, Unsigned32, Integer32, IpAddress
+	   FROM SNMPv2-SMI
+	snSwitch
+	   FROM FOUNDRY-SN-SWITCH-GROUP-MIB
+        Ipv6Address
+       	    FROM IPV6-TC			-- [RFC2465]
+	MacAddress, TruthValue, RowStatus, TEXTUAL-CONVENTION
+	   FROM SNMPv2-TC
+	VlanIndex
+	   FROM Q-BRIDGE-MIB
+	InterfaceIndex, ifIndex
+	   FROM IF-MIB;
+	  
+ruckusNdiMIB MODULE-IDENTITY
+	LAST-UPDATED "202006110000Z" -- Jun 11, 2020
+	ORGANIZATION "Ruckus Wireless, Inc."
+	CONTACT-INFO
+		"Technical Support Center
+              350 West Java Drive,
+              Sunnyvale, CA 94089, USA
+              Support URL: https://support.ruckuswireless.com
+              Phone: +1-855-782-5871
+              ROW TF Numbers: https://support.ruckuswireless.com/contact-us"
+	DESCRIPTION
+		"Management Information for configuration of Neighbour Discovery inspection feature. 
+		NDI is a security mechanism which validates all ND packets
+		in a subnet and discard those packets with invalid IPv6 to MAC address bindings.
+			
+		Copyright 1996-2020 Ruckus Wireless, Inc.  
+  		All rights reserved.
+  		This Ruckus Wireless, Inc SNMP Management Information Base Specification
+ 		embodies Ruckus Wireless, Inc' confidential and proprietary
+ 		intellectual property. Ruckus Wireless, Inc retains all
+  		title and ownership in the Specification, including any revisions.
+                                                
+ 		This Specification is supplied AS IS, and Ruckus Wireless, Inc makes
+ 		no warranty, either express or implied, as to the use,
+ 		operation, condition, or performance of the specification, and any unintended 
+ 		consequence it may on the user environment."
+ 		
+   ::= { snSwitch 47}
+
+--
+-- Textual Conventions
+--
+
+NDType ::= TEXTUAL-CONVENTION
+	STATUS	  current
+	DESCRIPTION
+		"Represents type of ND entry to be used."
+	SYNTAX	INTEGER{
+		other(1),
+		static(2),
+		dynamic(3),
+		inspect(4),
+		dhcpv6(5),
+		dynamicDhcpv6(6),
+		staticDhcpv6(7),
+		host(8)
+		}
+		
+NDState ::= TEXTUAL-CONVENTION
+	STATUS	  current
+	DESCRIPTION
+		"Represents state of ND entry to be used."
+	SYNTAX	INTEGER{
+		other(1),
+		valid(2),
+		pend(3)
+		}
+
+ruckusNdiNotify         OBJECT IDENTIFIER  ::=  { ruckusNdiMIB 0 }
+ruckusNdiObjects        OBJECT IDENTIFIER  ::=  { ruckusNdiMIB 1 }
+ruckusNdiConformance    OBJECT IDENTIFIER  ::=  { ruckusNdiMIB 2 }
+
+ruckusNdiVlan  OBJECT IDENTIFIER ::= { ruckusNdiObjects 1 }
+ruckusNdiInterface  OBJECT IDENTIFIER ::= { ruckusNdiObjects 2 }
+ruckusNdiNDInspect OBJECT IDENTIFIER ::= { ruckusNdiObjects 3 }
+
+--
+-- Neighbor Discovery Inspection VLAN configuration table
+-- Only for IPv6
+--
+
+ruckusNdiVlanConfigTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF RuckusNdiVlanConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A table provides the mechanism to control Neighbor Discovery
+		Inspection per VLAN. When a VLAN is created in a device
+		supporting this table, a corresponding entry of this table
+		will be added."
+	::= { ruckusNdiVlan 1 }
+
+ruckusNdiVlanConfigEntry OBJECT-TYPE
+	SYNTAX RuckusNdiVlanConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A row instance contains the configuration to enable
+		or disable Neighbor Discovery Inspection at the existing VLAN."
+	INDEX { ruckusNdiVlanConfigVlanId }
+	::= { ruckusNdiVlanConfigTable 1 }
+
+RuckusNdiVlanConfigEntry ::= SEQUENCE {
+	ruckusNdiVlanConfigVlanId 
+		VlanIndex,
+	ruckusNdiVlanDynNDInspectionEnable 
+		TruthValue
+	}
+
+ruckusNdiVlanConfigVlanId  OBJECT-TYPE
+	SYNTAX		VlanIndex
+	MAX-ACCESS	not-accessible
+	STATUS 		current
+	DESCRIPTION
+		"This object indicates the VLAN number on which Neighbor Discovery
+		Inspection feature is configured."
+	::= { ruckusNdiVlanConfigEntry 1 }
+
+ruckusNdiVlanDynNDInspectionEnable	 OBJECT-TYPE
+	SYNTAX 		TruthValue
+	MAX-ACCESS 	read-write
+	STATUS 		current
+	DESCRIPTION
+		"This object indicates whether Neighbor Discovery Inspection is
+		enabled in this VLAN.
+		If this object is set to 'true', Neighbor Discovery Inspection is enabled.
+		If this object is set to 'false', Neighbor Discovery Inspection is disabled."
+        DEFVAL { false }
+	::= { ruckusNdiVlanConfigEntry 2 }
+
+--
+-- Neighbor Discovery Inspection Interface configuration table
+-- Only for IPv6
+--
+
+ruckusNdInspectIfConfigTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF RuckusNdiIfConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A table provides the mechanism to configure the trust
+		state for Neighbor Discovery Inspection purpose at each physical
+		interface."
+	::= { ruckusNdiInterface 1 }
+
+ruckusNdiIfConfigEntry OBJECT-TYPE
+	SYNTAX RuckusNdiIfConfigEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A row instance contains the configuration to enable or
+		disable trust state for Neighbor Discovery Inspection at each
+		physical interface capable of this feature."
+	INDEX { ifIndex }
+	::= { ruckusNdInspectIfConfigTable 1 }
+
+RuckusNdiIfConfigEntry ::= SEQUENCE {
+	ruckusNdiIfTrustValue 
+		TruthValue
+	}
+
+ruckusNdiIfTrustValue  OBJECT-TYPE
+	SYNTAX		TruthValue
+	MAX-ACCESS	read-write
+	STATUS		current
+	DESCRIPTION
+		"This object indicates whether the interface is trusted for
+		Neighbor Discovery Inspection.
+		If this object is set to 'true', the interface is trusted.
+		ND packets coming to this interface will be forwarded
+		without checking.
+		If this object is set to 'false', the interface is not trusted. 
+		ND packets received on this interface will be subjected 
+		to ND inspection."
+        DEFVAL { false }
+	::= { ruckusNdiIfConfigEntry 1 }
+
+--
+-- Neighbor Discovery Inspection entry table
+-- Use this table to configure and display the inspection ND entries
+--
+
+ruckusNdiStaticNDInspectTable OBJECT-TYPE
+	SYNTAX SEQUENCE OF RuckusNdiStaticNDInspectEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+                "A table provides the mechanism to control Neighbor Discovery
+                 Inspection entries created by the user. When an IP-MAC mapping
+                 entry is created in a device supporting this table, a
+                 corresponding entry of this table will be added."
+	::= { ruckusNdiNDInspect 1 }
+
+ruckusNdiStaticNDInspectEntry OBJECT-TYPE
+	SYNTAX RuckusNdiStaticNDInspectEntry
+	MAX-ACCESS not-accessible
+	STATUS current
+	DESCRIPTION
+		"A row instance contains the configuration to map a device
+		IP address with its MAC address."
+	INDEX { ruckusNdiStaticNDInspectIpv6Addr }
+	::= { ruckusNdiStaticNDInspectTable 1 }
+
+RuckusNdiStaticNDInspectEntry ::= SEQUENCE {
+	ruckusNdiStaticNDInspectIpv6Addr 
+		Ipv6Address,
+	ruckusNdiStaticNDInspectMacAddr 
+		MacAddress,
+	ruckusNdiStaticNDInspectType
+		NDType,
+	ruckusNdiStaticNDInspectState
+		NDState,
+	ruckusNdiStaticNDInspectAge
+		Unsigned32,
+	ruckusNdiStaticNDInspectPort
+		InterfaceIndex,
+	ruckusNdiStaticNDInspectRowStatus 
+		RowStatus
+	}
+
+ruckusNdiStaticNDInspectIpv6Addr  OBJECT-TYPE
+	SYNTAX		Ipv6Address
+	MAX-ACCESS	not-accessible
+	STATUS		current
+	DESCRIPTION
+		"The device IPv6 address."
+	::= { ruckusNdiStaticNDInspectEntry 1}
+
+ruckusNdiStaticNDInspectMacAddr  OBJECT-TYPE
+	SYNTAX		MacAddress
+	MAX-ACCESS	read-create
+	STATUS		current
+	DESCRIPTION
+		"The device MAC address."
+	::= { ruckusNdiStaticNDInspectEntry 2 }
+	
+ruckusNdiStaticNDInspectType OBJECT-TYPE
+	SYNTAX     NDType
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The type of the ND entry"
+	::= { ruckusNdiStaticNDInspectEntry 3 }
+
+ruckusNdiStaticNDInspectState OBJECT-TYPE
+	SYNTAX     NDState
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The state of the ND entry"
+	::= { ruckusNdiStaticNDInspectEntry 4 }
+
+ruckusNdiStaticNDInspectAge OBJECT-TYPE
+	SYNTAX    Unsigned32
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The timer of the ND entry"
+	::= { ruckusNdiStaticNDInspectEntry 5 }
+
+ruckusNdiStaticNDInspectPort OBJECT-TYPE
+	SYNTAX   InterfaceIndex
+	MAX-ACCESS read-only
+	STATUS     current
+	DESCRIPTION
+		"The ifindex vlaue of a port of the ND entry"
+	::= { ruckusNdiStaticNDInspectEntry 6 }
+
+ruckusNdiStaticNDInspectRowStatus  OBJECT-TYPE
+ 	SYNTAX  RowStatus
+ 	MAX-ACCESS  read-create
+ 	STATUS  current
+ 	DESCRIPTION
+ 		"The status of the entry in the table."
+ 	::= { ruckusNdiStaticNDInspectEntry 7 }
+
+-- --------------------------------------------------------------------------------
+-- NDI MIB Conformance
+-- --------------------------------------------------------------------------------
+ruckusNdiCompliances OBJECT IDENTIFIER       ::= { ruckusNdiConformance 1 }
+
+ruckusNdiCompliance	MODULE-COMPLIANCE
+        STATUS          current
+        DESCRIPTION     "The compliance statement for entities which
+                         implement RUCKUS-NDI-MIB."
+        MODULE          -- this module
+        ::= { ruckusNdiCompliances 1 }
+
+   END
