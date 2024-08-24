@@ -8,10 +8,12 @@
       MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
          FROM SNMPv2-CONF
       DisplayString
-         FROM SNMPv2-TC;
+         FROM SNMPv2-TC
+      InetAddress, InetAddressType
+         FROM INET-ADDRESS-MIB;
 
    cambium MODULE-IDENTITY
-      LAST-UPDATED "201212171330Z"
+      LAST-UPDATED "201403041414Z"
       ORGANIZATION "Cambium Networks Ltd."
       CONTACT-INFO
          "Post:  Simon Whitaker
@@ -27,7 +29,19 @@
          Email:  simon.whitaker@cambiumnetworks.com"
       DESCRIPTION
          "MIB for 300Mbps non-line-of-sight (NLOS) wireless ethernet bridge."
-      REVISION "201212171330Z"
+      REVISION "201403041414Z"
+      DESCRIPTION
+         "PTP600-10-07:
+         Reinstated incompatibleRegionCodesTrap.
+         Reinstated incompatibleMasterAndSlaveTrap.
+         Reinstated encryptionEnabledMismatchTrap."
+      REVISION "201309142338Z"
+      DESCRIPTION
+         "PTP600-10-06:
+         Removed incompatibleRegionCodesTrap.
+         Removed incompatibleMasterAndSlaveTrap.
+         Removed encryptionEnabledMismatchTrap."
+      REVISION "201208131812Z"
       DESCRIPTION
          "PTP600-10-04:
          Added ethernetBridgingStatus, ethernetBridgingAvailability.
@@ -103,6 +117,7 @@
    pubStats           OBJECT IDENTIFIER ::= { ptp600 20 }
    encryption         OBJECT IDENTIFIER ::= { ptp600 22 }
    tDDControl         OBJECT IDENTIFIER ::= { ptp600 23 }
+   aAAControl         OBJECT IDENTIFIER ::= { ptp600 25 }
    syslogControl      OBJECT IDENTIFIER ::= { ptp600 24 }
    supplementary      OBJECT IDENTIFIER ::= { ptp600 96 }
    ptpGroups          OBJECT IDENTIFIER ::= { ptp600 98 }
@@ -134,6 +149,7 @@
                           , pubStatsGroup
                           , encryptionGroup
                           , tDDControlGroup
+                          , aAAControlGroup
                           , syslogControlGroup
                           , supplementaryGroup
                           , notificationsGroup
@@ -158,7 +174,7 @@
       ::= { ptpGroups 4 }
 
    configurationGroup OBJECT-GROUP
-      OBJECTS { iPAddress
+      OBJECTS { iPv4Address
               , subnetMask
               , gatewayIPAddress
               , targetMACAddress
@@ -174,6 +190,13 @@
               , siteName
               , accessMethod
               , groupID
+              , iPv6Address
+              , iPVersion
+              , iPv6AutoConfiguredLinkLocalAddress
+              , iPv6PrefixLength
+              , iPv6GatewayAddress
+              , remoteInternetAddressType
+              , remoteInternetAddress
               }
       STATUS  current
       DESCRIPTION "The configuration object group."
@@ -260,6 +283,8 @@
               , hTTPSPortNumber
               , telnetPortNumber
               , hTTPSAccessEnabled
+              , tFTPServerInternetAddressType
+              , tFTPServerInternetAddress
               }
       STATUS  current
       DESCRIPTION "The management object group."
@@ -303,7 +328,6 @@
 
    alarmsGroup OBJECT-GROUP
       OBJECTS { unitOutOfCalibration
-              , encryptionEnabledMismatch
               , incompatibleRegionCodes
               , noWirelessChannelAvailable
               , wirelessLinkDisabledWarning
@@ -330,6 +354,8 @@
               , sMTPSourceEmailAddress
               , sMTPDestinationEmailAddress
               , sMTPEnabledMessages
+              , sMTPServerInternetAddressType
+              , sMTPServerInternetAddress
               }
       STATUS  current
       DESCRIPTION "The smtp object group."
@@ -342,8 +368,12 @@
               , sNMPTrapVersion
               , sNMPEnabledTraps
               , enabledDiagnosticAlarms
+              , sNMPSendAllTrapsAtStartup
               , sNMPTrapIPAddress
               , sNMPTrapPortNumber
+              , sNMPTrapInternetAddressType
+              , sNMPTrapInternetAddress
+              , sNMPTrapReceiverEnabled
               }
       STATUS  current
       DESCRIPTION "The snmpControl object group."
@@ -365,6 +395,8 @@
               , sNTPServerIPAddress
               , sNTPServerPortNumber
               , sNTPServerStatus
+              , sNTPServerInternetAddressType
+              , sNTPServerInternetAddress
               }
       STATUS  current
       DESCRIPTION "The sntp object group."
@@ -415,6 +447,17 @@
       DESCRIPTION "The tDDControl object group."
       ::= { ptpGroups 23 }
 
+   aAAControlGroup OBJECT-GROUP
+      OBJECTS { userTableNumber
+              , userName
+              , userRole
+              , userEnabled
+              , userPassword
+              }
+      STATUS  current
+      DESCRIPTION "The aAAControl object group."
+      ::= { ptpGroups 25 }
+
    syslogControlGroup OBJECT-GROUP
       OBJECTS { syslogClient
               , syslogState
@@ -433,7 +476,7 @@
       ::= { ptpGroups 96 }
 
    notificationsGroup NOTIFICATION-GROUP
-      NOTIFICATIONS { dfsChannelChangeTrap
+      NOTIFICATIONS { channelChangeTrap
                     , dfsImpulsiveInterferenceTrap
                     , dataPortStatusTrap
                     , telecomsChannelAStatusTrap
@@ -444,7 +487,6 @@
                     , installStatusTrap
                     , installArmStateTrap
                     , unitOutOfCalibrationTrap
-                    , encryptionEnabledMismatchTrap
                     , incompatibleRegionCodesTrap
                     , noWirelessChannelAvailableTrap
                     , wirelessLinkDisabledWarningTrap
@@ -586,6 +628,9 @@
       SEQUENCE { sNMPTrapTableIndex INTEGER
                , sNMPTrapIPAddress IpAddress
                , sNMPTrapPortNumber INTEGER
+               , sNMPTrapInternetAddressType INTEGER
+               , sNMPTrapInternetAddress InetAddress
+               , sNMPTrapReceiverEnabled INTEGER
       }
  
    sNMPTrapTable OBJECT-TYPE
@@ -610,6 +655,8 @@
                , sNTPServerIPAddress IpAddress
                , sNTPServerPortNumber INTEGER
                , sNTPServerStatus DisplayString
+               , sNTPServerInternetAddressType INTEGER
+               , sNTPServerInternetAddress InetAddress
       }
  
    sNTPServerTable OBJECT-TYPE
@@ -628,6 +675,31 @@
         "Table SNTPServerTable"
       INDEX { sNTPServerTableIndex }
       ::= { sNTPServerTable 1 }
+ 
+   UserTableEntry ::=
+      SEQUENCE { userTableIndex INTEGER
+               , userName OCTET STRING
+               , userRole INTEGER
+               , userEnabled INTEGER
+               , userPassword OCTET STRING
+      }
+ 
+   userTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF UserTableEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION 
+        " The User Table Control group contains objects specifically for user account management."
+      ::= { aAAControl 2 }
+ 
+   userTableEntry OBJECT-TYPE
+      SYNTAX UserTableEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION 
+        "Table UserTable"
+      INDEX { userTableIndex }
+      ::= { userTable 1 }
  
    -- Dfs group attribute definitions 
    --
@@ -698,14 +770,14 @@
  
    -- Configuration group attribute definitions 
    --
-   iPAddress OBJECT-TYPE
+   iPv4Address OBJECT-TYPE
       SYNTAX IpAddress
       MAX-ACCESS read-write
       STATUS current
       DESCRIPTION
-             "Internet protocol (IP) address. This address is used by 
-             the family of Internet protocols to uniquely identify the 
-             unit on a network. NB: A system reboot is required to 
+             "Internet protocol (IPv4) address. This address is used 
+             by the family of Internet protocols to uniquely identify 
+             the unit on a network. NB: A system reboot is required to 
              activate changes to this attribute."  
       ::= { configuration 1 } 
  
@@ -726,11 +798,11 @@
       MAX-ACCESS read-write
       STATUS current
       DESCRIPTION
-             "The IP address of a computer on the current network that 
-             is currently acting as a network gateway. A gateway acts 
-             as an entrance / exit to packets from / to other 
-             networks. NB: A system reboot is required to activate 
-             changes to this attribute"  
+             "The IPv4 address of a computer on the current network 
+             that is currently acting as an IPv4 network gateway. A 
+             gateway acts as an entrance / exit to packets from / to 
+             other networks. NB: A system reboot is required to 
+             activate changes to this attribute"  
       ::= { configuration 3 } 
  
    targetMACAddress OBJECT-TYPE
@@ -885,6 +957,93 @@
              "When Access Method is set to Group Access, the Group ID 
              identifies all the units belonging to the same group"  
       ::= { configuration 17 } 
+ 
+   iPv6Address OBJECT-TYPE
+      SYNTAX DisplayString (SIZE(0..39))
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "Internet protocol (IPv6) address. This address is used 
+             by the family of Internet protocols to uniquely identify 
+             the unit on a network. NB: A system reboot is required to 
+             activate changes to this attribute."  
+      ::= { configuration 18 } 
+ 
+   iPVersion OBJECT-TYPE
+      SYNTAX INTEGER {
+                       iPv4(0),
+                       iPv6(1),
+                       dualIPv4andIPv6(2)
+                     }
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "IP protocol selection. Choice of IPv4, IPv6 or Dual."  
+      ::= { configuration 20 } 
+ 
+   iPv6AutoConfiguredLinkLocalAddress OBJECT-TYPE
+      SYNTAX DisplayString (SIZE(0..39))
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The auto configured link local IPv6 address"  
+      ::= { configuration 21 } 
+ 
+   iPv6PrefixLength OBJECT-TYPE
+      SYNTAX INTEGER (0..128)
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "IPv6 prefix length"  
+      ::= { configuration 22 } 
+ 
+   iPv6GatewayAddress OBJECT-TYPE
+      SYNTAX DisplayString (SIZE(0..39))
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "The IPv6 address of a computer on the current network 
+             that is currently acting as an IPv6 network gateway. A 
+             gateway acts as an entrance / exit to packets from / to 
+             other networks. Note that it is usual to use the 
+             link-local address of the gateway. NB: A system reboot is 
+             required to activate changes to this attribute"  
+      ::= { configuration 23 } 
+ 
+   remoteInternetAddressType OBJECT-TYPE
+      SYNTAX INTEGER {
+                       unknown(0),
+                       ipv4(1),
+                       ipv6(2),
+                       ipv4z(3),
+                       ipv6z(4),
+                       unknown6(5),
+                       unknown7(6),
+                       unknown8(7),
+                       unknown9(8),
+                       unknown10(9),
+                       unknown11(10),
+                       unknown12(11),
+                       unknown13(12),
+                       unknown14(13),
+                       unknown15(14),
+                       unknown16(15),
+                       dns(16)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The type of Internet address specified by the associated 
+             remoteInternetAddressType."  
+      ::= { configuration 24 } 
+ 
+   remoteInternetAddress OBJECT-TYPE
+      SYNTAX InetAddress
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "INET address used to identify the peer wireless unit"  
+      ::= { configuration 25 } 
  
    -- Ethernet group attribute definitions 
    --
@@ -1753,7 +1912,7 @@
              "Write '1' to this attribute to start the TFTP software 
              upgrade process. The attribute will be reset to 0 when 
              the upgrade process has finished. Continuing with the 
-             software upgrade will cause spectrum management (iDFS) 
+             software upgrade will cause spectrum management (DSO) 
              channel metrics collection to stop. The wireless unit 
              will no longer search for the optimal operational radio 
              channel. The performance of this wireless link may 
@@ -1876,6 +2035,42 @@
              change in this setting will not take effect until the 
              unit has been rebooted. (Factory default = Enabled)"  
       ::= { management 17 } 
+ 
+   tFTPServerInternetAddressType OBJECT-TYPE
+      SYNTAX INTEGER {
+                       unknown(0),
+                       ipv4(1),
+                       ipv6(2),
+                       ipv4z(3),
+                       ipv6z(4),
+                       unknown6(5),
+                       unknown7(6),
+                       unknown8(7),
+                       unknown9(8),
+                       unknown10(9),
+                       unknown11(10),
+                       unknown12(11),
+                       unknown13(12),
+                       unknown14(13),
+                       unknown15(14),
+                       unknown16(15),
+                       dns(16)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The type of Internet address specified by the associated 
+             tFTPServerInternetAddress."  
+      ::= { management 18 } 
+ 
+   tFTPServerInternetAddress OBJECT-TYPE
+      SYNTAX InetAddress
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "INET address of the TFTP Server from which the TFTP 
+             Software Upgrade File Name will be retrieved"  
+      ::= { management 19 } 
  
    -- PhyControl group attribute definitions 
    --
@@ -2235,18 +2430,6 @@
              "The unit is out of calibration"  
       ::= { alarms 1 } 
  
-   encryptionEnabledMismatch OBJECT-TYPE
-      SYNTAX INTEGER {
-                       ok(0),
-                       encryptionEnabledMismatch(1)
-                     }
-      MAX-ACCESS read-only
-      STATUS current
-      DESCRIPTION
-             "Encryption has been enabled on one end of the wireless 
-             link but not the other"  
-      ::= { alarms 3 } 
- 
    incompatibleRegionCodes OBJECT-TYPE
       SYNTAX INTEGER {
                        ok(0),
@@ -2522,7 +2705,7 @@
                     dataPortUpDown(3),
                     enabledDiagnosticAlarms(4),
                     dFSImpulseInterference(5),
-                    dFSChannelChange(6),
+                    channelChange(6),
                     wirelessLinkUpDown(7)
                   }
       MAX-ACCESS read-write
@@ -2530,6 +2713,41 @@
       DESCRIPTION
              "This controls which SMTP messages the unit will send"  
       ::= { smtp 6 } 
+ 
+   sMTPServerInternetAddressType OBJECT-TYPE
+      SYNTAX INTEGER {
+                       unknown(0),
+                       ipv4(1),
+                       ipv6(2),
+                       ipv4z(3),
+                       ipv6z(4),
+                       unknown6(5),
+                       unknown7(6),
+                       unknown8(7),
+                       unknown9(8),
+                       unknown10(9),
+                       unknown11(10),
+                       unknown12(11),
+                       unknown13(12),
+                       unknown14(13),
+                       unknown15(14),
+                       unknown16(15),
+                       dns(16)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The type of Internet address specified by the associated 
+             sMTPServerInternetAddress."  
+      ::= { smtp 7 } 
+ 
+   sMTPServerInternetAddress OBJECT-TYPE
+      SYNTAX InetAddress
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "Internet address of the SMTP server"  
+      ::= { smtp 8 } 
  
    -- SnmpControl group attribute definitions 
    --
@@ -2580,7 +2798,7 @@
                     authenticationFailure(2),
                     enabledDiagnosticAlarms(3),
                     dFSImpulseInterference(4),
-                    dFSChannelChange(5),
+                    channelChange(5),
                     wirelessLinkUpDown(6),
                     coldStart(7),
                     telecomsChannelUpDown(15)
@@ -2606,7 +2824,7 @@
                     dataPortStatus(10),
                     dataPortDisabledWarning(11),
                     wirelessLinkDisabledWarning(12),
-                    sNTPSyncronisationFailed(13),
+                    sNTPSynchronizationFailed(13),
                     noWirelessChannelAvailable(14),
                     dataPortConfigurationMismatch(15),
                     syslogDisabledWarning(16),
@@ -2634,6 +2852,18 @@
              and/or 'SMTP Enabled Messages' attributes"  
       ::= { snmpControl 7 } 
  
+   sNMPSendAllTrapsAtStartup OBJECT-TYPE
+      SYNTAX INTEGER {
+                       disabled(0),
+                       enabled(1)
+                     }
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "Controls whether or not all the enabled traps and alarms 
+             (including cleared alarms) are reported at start-up."  
+      ::= { snmpControl 8 } 
+ 
    -- SNMPTrapTable group attribute definitions 
    --
    sNMPTrapTableIndex OBJECT-TYPE
@@ -2649,8 +2879,7 @@
       MAX-ACCESS read-write
       STATUS current
       DESCRIPTION
-             "The IP address to which all SNMP Traps are sent. An IP 
-             Address of 0.0.0.0 disables all TRAP generation. NB: A 
+             "The IP address to which all SNMP Traps are sent. NB: A 
              system reboot is required to activate changes to this 
              attribute."  
       ::= { sNMPTrapTableEntry 2 } 
@@ -2660,10 +2889,58 @@
       MAX-ACCESS read-write
       STATUS current
       DESCRIPTION
-             "Destination port for SNMP Traps (default=162). A value 
-             of 0 will disable the trap receiver. NB: A system reboot 
-             is required to activate changes to this attribute."  
+             "Destination port for SNMP Traps (default=162). NB: A 
+             system reboot is required to activate changes to this 
+             attribute."  
       ::= { sNMPTrapTableEntry 3 } 
+ 
+   sNMPTrapInternetAddressType OBJECT-TYPE
+      SYNTAX INTEGER {
+                       unknown(0),
+                       ipv4(1),
+                       ipv6(2),
+                       ipv4z(3),
+                       ipv6z(4),
+                       unknown6(5),
+                       unknown7(6),
+                       unknown8(7),
+                       unknown9(8),
+                       unknown10(9),
+                       unknown11(10),
+                       unknown12(11),
+                       unknown13(12),
+                       unknown14(13),
+                       unknown15(14),
+                       unknown16(15),
+                       dns(16)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The type of Internet address specified by the associated 
+             sNMPTrapInternetAddress."  
+      ::= { sNMPTrapTableEntry 4 } 
+ 
+   sNMPTrapInternetAddress OBJECT-TYPE
+      SYNTAX InetAddress
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "The Internet address to which all SNMP Traps are sent."  
+      ::= { sNMPTrapTableEntry 5 } 
+ 
+   sNMPTrapReceiverEnabled OBJECT-TYPE
+      SYNTAX INTEGER {
+                       disabled(0),
+                       enabled(1)
+                     }
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "A value of 0 disables the sending of SNMP trap to 
+             corresponding receiver. A value of 1 enables the sending 
+             of SNMP trap to corresponding receiver."  
+      ::= { sNMPTrapTableEntry 6 } 
  
    -- Sntp group attribute definitions 
    --
@@ -2865,9 +3142,44 @@
       MAX-ACCESS read-only
       STATUS current
       DESCRIPTION
-             "Status message reflecting the state of communications 
-             with the SNTP server"  
+             "Status message reflecting the result of communications 
+             with the SNTP server when last polled"  
       ::= { sNTPServerTableEntry 4 } 
+ 
+   sNTPServerInternetAddressType OBJECT-TYPE
+      SYNTAX INTEGER {
+                       unknown(0),
+                       ipv4(1),
+                       ipv6(2),
+                       ipv4z(3),
+                       ipv6z(4),
+                       unknown6(5),
+                       unknown7(6),
+                       unknown8(7),
+                       unknown9(8),
+                       unknown10(9),
+                       unknown11(10),
+                       unknown12(11),
+                       unknown13(12),
+                       unknown14(13),
+                       unknown15(14),
+                       unknown16(15),
+                       dns(16)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "The type of Internet address specified by the associated 
+             sNTPServerInternetAddress."  
+      ::= { sNTPServerTableEntry 5 } 
+ 
+   sNTPServerInternetAddress OBJECT-TYPE
+      SYNTAX InetAddress
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "The Internet address of a valid SNTP server"  
+      ::= { sNTPServerTableEntry 6 } 
  
    -- Reset group attribute definitions 
    --
@@ -2989,7 +3301,7 @@
                        restrictedBecauseInstallationIsArmed(2),
                        restrictedBecauseOfByteErrorsOnTheWirelessLink(3),
                        restrictedBecauseTheLinkParametersAreUpdating(4),
-                       restrictedBecauseDFSchannelChangeIsInProgress(5),
+                       restrictedBecauseChannelChangeIsInProgress(5),
                        restrictedDueToTheLowEthernetLinkSpeed(6),
                        runningAtMaximumReceiveModeForChannelBandwidth(7),
                        limitedByTheWirelessConditions(8)
@@ -3041,6 +3353,72 @@
       DESCRIPTION
              "TDD Synchronization Mode selection"  
       ::= { tDDControl 1 } 
+ 
+   -- AAAControl group attribute definitions 
+   --
+   userTableNumber OBJECT-TYPE
+      SYNTAX INTEGER (1..10)
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "Number of entries in the userTable"  
+      ::= { aAAControl 1 } 
+ 
+   -- UserTable group attribute definitions 
+   --
+   userTableIndex OBJECT-TYPE
+      SYNTAX INTEGER (1..10)
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+             "used to index values in the userTable."  
+      ::= { userTableEntry 1 } 
+ 
+   userName OBJECT-TYPE
+      SYNTAX OCTET STRING
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "User name which must be entered, along with the 
+             appropriate password, in order to gain access to the 
+             system."  
+      ::= { userTableEntry 2 } 
+ 
+   userRole OBJECT-TYPE
+      SYNTAX INTEGER {
+                       readOnly(0),
+                       systemAdministrator(1),
+                       securityOfficer(2)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "Role of the selected user. A Security Officer has access 
+             to and can modify all settings. A System Administrator 
+             has access to and can modify all non-security settings. A 
+             Read Only user can view settings, but cannot make any 
+             changes."  
+      ::= { userTableEntry 3 } 
+ 
+   userEnabled OBJECT-TYPE
+      SYNTAX INTEGER {
+                       disabled(0),
+                       enabled(1)
+                     }
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+             "Enable / Disable the selected user"  
+      ::= { userTableEntry 4 } 
+ 
+   userPassword OBJECT-TYPE
+      SYNTAX OCTET STRING
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+             "User password, which must be entered in order to gain 
+             access to the system."  
+      ::= { userTableEntry 5 } 
  
    -- SyslogControl group attribute definitions 
    --
@@ -3101,10 +3479,19 @@
    -- Enterprise NOTIFICATION definitions
    --
 
-   dfsChannelChangeTrap NOTIFICATION-TYPE
+   channelChangeTrap NOTIFICATION-TYPE
       OBJECTS { receiveChannel }
       STATUS current
-      DESCRIPTION "DFS channel change event"
+      DESCRIPTION "The PTP radio has changed wireless channel.
+                 This has been caused by either
+                 i) mandatory radar avoidance,
+                    a DFS impulsive interference event will also be
+                    detected,
+                 or
+                 ii) Dynamic Spectrum Optimization, (DSO)
+                     DSO improves link performance by selecting the
+                     most appropriate transmit and receive channels
+                     with the lowest level of interference."
       ::= { ptpTrapPrefix 1 }
 
    dfsImpulsiveInterferenceTrap NOTIFICATION-TYPE
@@ -3207,14 +3594,6 @@
       DESCRIPTION
              "The unit is out of calibration"  
       ::= { ptpTrapPrefix 11 }
-
-   encryptionEnabledMismatchTrap NOTIFICATION-TYPE
-      OBJECTS { encryptionEnabledMismatch }
-      STATUS current
-      DESCRIPTION
-             "Encryption has been enabled on one end of the wireless 
-             link but not the other"  
-      ::= { ptpTrapPrefix 13 }
 
    incompatibleRegionCodesTrap NOTIFICATION-TYPE
       OBJECTS { incompatibleRegionCodes }
