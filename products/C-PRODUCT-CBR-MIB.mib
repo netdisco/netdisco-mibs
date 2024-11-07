@@ -1,0 +1,659 @@
+C-PRODUCT-CBR-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+   cbr			FROM C-PRODUCT-GROUP-MIB
+   portSlot,
+   portNumber,
+   vcpSideId,
+   TimeAndDate		FROM C-PRODUCT-BASE-MIB
+   Counter		FROM RFC1155-SMI
+   OBJECT-TYPE		FROM RFC-1212;
+
+-- Data Types
+
+-- CBR groups
+
+cbrDS1E1CardConfig	OBJECT IDENTIFIER ::= {cbr 1}
+cbrDS1E1PortConfig	OBJECT IDENTIFIER ::= {cbr 2}
+cbrDS1E1VcConfig	OBJECT IDENTIFIER ::= {cbr 3}
+cbrDS1E1ATMStats        OBJECT IDENTIFIER ::= {cbr 4}
+cbrV35PortConfig        OBJECT IDENTIFIER ::= {cbr 5}
+cbrDS1E1NewVcConfig	OBJECT IDENTIFIER ::= {cbr 6}
+cbrDS1E1NewATMStats     OBJECT IDENTIFIER ::= {cbr 7}
+
+-- CBR Card Configuration Group (cbrDS1E1CardConfig)
+
+cbrDS1E1CardConfTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF CbrDS1E1CardEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+        "This object contains the CBR specific card Configuration table.
+        There is one cbrDS1E1CardConfEntry associated for each provisioned
+        CBR interface within the shelf.  This table uses portSlot as an index
+        which is defined in the portBaseTable of the C-PRODUCT BASE MIB.
+        This index value uniquely identifies the CBR interface to which this
+        entry is applicable."
+    ::= {cbrDS1E1CardConfig 1}
+
+cbrDS1E1CardConfEntry OBJECT-TYPE
+    SYNTAX CbrDS1E1CardEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	    "An entry in the CBR specific card Configuration table."
+    INDEX { portSlot }
+    ::= {cbrDS1E1CardConfTable 1}
+
+CbrDS1E1CardEntry ::=
+    SEQUENCE {
+	cbrDS1E1CardRefPort
+	    INTEGER
+    }
+
+cbrDS1E1CardRefPort OBJECT-TYPE
+    SYNTAX INTEGER (1..8)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates which port the receive clock may be selected as
+	the system reference clock source.  The value range starts at 1 and the
+	maximum value is dependent upon the total number of physical ports on
+	the specified CBR interface.  Four and eight port CBR intefaces are
+	supported.  An error is returned if this object is set outside the
+	range of the specified physical card interface.  In addition, an error
+	is returned if this slot has been selected as the system reference 
+	clock and an attempt is made to change to a port not in-service.
+	The default value is port 1 (1)."
+    DEFVAL { 1 }
+    ::= {cbrDS1E1CardConfEntry 1}
+
+-- CBR Port Configuration Group (cbrDS1E1PortConfig)
+
+cbrDS1E1PortConfTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF CbrDS1E1PortEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	"This object contains the CBR specific port Configuration table.
+	There is one cbrDS1E1PortConfEntry associated for each provisioned
+	CBR port interface within the shelf.  This table uses portSlot and
+	portNumber as an index which is defined in the portBaseTable of the
+	C-PRODUCT BASE MIB. This index value uniquely identifies the CBR port
+	interface to which this entry is applicable."
+    ::= {cbrDS1E1PortConfig 1}
+
+cbrDS1E1PortConfEntry OBJECT-TYPE
+    SYNTAX CbrDS1E1PortEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	    "An entry in the CBR specific port Configuration table."
+    INDEX { portSlot, portNumber }
+    ::= { cbrDS1E1PortConfTable 1 }
+
+CbrDS1E1PortEntry ::=
+    SEQUENCE {
+	cbrDS1E1PortConfLBO
+	    INTEGER,
+	cbrDS1E1PortConfLineCode
+	    INTEGER,
+	cbrDS1E1PortConfPortMode
+	    INTEGER, 
+	cbrDS1E1PortConfFraming
+	    INTEGER,
+	cbrDS1E1PortConfTiming
+	    INTEGER,
+	cbrDS1E1PortConfSignaling
+	    INTEGER,
+	cbrDS1E1PortConfCRC-4
+	    INTEGER,
+	cbrDS1E1PortConfDS0Channels
+	    INTEGER,
+	cbrDS1E1PortConfLoopBackType
+	    INTEGER
+    }
+
+cbrDS1E1PortConfLBO OBJECT-TYPE
+    SYNTAX INTEGER {
+	       dsx-0-110ft(1),
+	       dsx-110-220ft(2),
+	       dsx-220-330ft(3),
+	       dsx-330-440ft(4),
+	       dsx-440-550ft(5),
+	       dsx-550-600ft(6),
+	       dsx-GT-600ft(7)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object is applicable to a T1-DSX CBR interface ONLY and 
+	indicates the associated Line Build Out configuration for the
+	designated port.  An error is returned if an access is attempted on
+	a physical interface other than a T1-DSX port interface.  The default
+	value is 330 to 440 feet (4)."
+    DEFVAL { dsx-330-440ft }
+    ::= {cbrDS1E1PortConfEntry 1}
+
+cbrDS1E1PortConfLineCode OBJECT-TYPE
+    SYNTAX INTEGER {
+	       ami(1),
+	       t1-B8ZS(2),
+	       e1-HDB3(3)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the zero code suppression technique
+	configured to the specified T1/E1 port interface.  The bipolar
+	with 8 zero substitution (B8ZS) technique is applicable to T1
+	interfaces ONLY.  The High Density Binary Three (HDB3) is
+	applicable to E1 interfaces ONLY." 
+    ::= {cbrDS1E1PortConfEntry 2}
+
+cbrDS1E1PortConfPortMode OBJECT-TYPE
+    SYNTAX INTEGER {
+	       unstructured(1),
+	       struct-voice(2),
+	       struct-data(3)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the type of service configured to the
+	specified T1/E1 port interface.  Unstructured allows the 
+	application to utilize the entire available bandwidth at a
+	bit rate of 1.544 Mb/s for T1 or 2.048 Mb/s for E1.  T1/E1 Framing
+	is optional in this service mode.  Structured service provides Nx64
+	kbit/s capability where N ranges between 1 and the maximum number of
+	available DS0 channels.  Struct-Voice passes traffic with signaling
+	informaion enabled.  Struct-Data passes traffic with signaling
+	information disabled.  Changing the mode configuration will cause
+	the following parameters to be changed.               
+
+        .                      framing  timing signaling crc-4
+        .                      -------  ------ --------- -----
+	.      T1 unstructured unframed N/A    N/A       N/A
+        .         struct data  ESF      loop*  N/A       N/A
+        .         struct voice ESF      loop*  N/A       N/A 
+        .      E1 unstructured unframed N/A    disable   disable
+        .         struct data  single   loop*  disable   disable
+        .         struct voice multi    loop*  enable    enable
+
+	* timing is converted to loop timing only if timing is previously
+	. configured to be in SRTS or adaptive timing modes
+
+	NOTE:  Changing this object to a different mode will cause all
+	previously associated VCC's to be deleted.  The default value for
+	this object is unstructured (1)."
+    DEFVAL { unstructured }
+    ::= { cbrDS1E1PortConfEntry 3 }
+
+cbrDS1E1PortConfFraming OBJECT-TYPE
+    SYNTAX INTEGER {
+	       unframed(1),
+	       t1-D4(2),
+	       t1-ESF(3),
+	       e1-single-frame(4),
+	       e1-multi-frame(5)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the type of frame organization configured for
+	the specified T1/E1 port interface.  D4 and ESF frame organizations
+	apply to T1 interfaces ONLY. Single-frame and multi-frame organizations
+	pertain to E1 interfaces ONLY.  An error is returned if a set is
+	applied to an inappropriate cardtype (eg. T1-D4 is applied to an E1
+	cardtype).  Unframed is not a valid configuration in a structured mode.
+	The E1 interface will not allow framing to be changed in structured
+	voice mode.  Changing the framing configuration for an E1 interface
+	will cause the following parameters to be changed in unstructured
+	and structured data modes.
+
+        .                             signaling crc-4
+        .                             --------- -----
+        .             E1 unframed     disable   disable
+        .                single-frame disable*  disable
+        .                multi-frame  enable*   enable
+
+	* signaling is automatically changed in unstructured mode only
+
+	The default value is unframed (1)."
+    DEFVAL { unframed }
+    ::= { cbrDS1E1PortConfEntry 4 }
+
+cbrDS1E1PortConfTiming OBJECT-TYPE
+    SYNTAX INTEGER {
+	       system(1),
+	       loop(2),
+	       srts(3),
+	       adaptive(4)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the type of input clock service configured for
+	the specified T1/E1 port interface. Synchronous Residual Time Stamp
+	(SRTS) and Adaptive timing modes are ONLY available in unstructured
+	mode.  System configures the port interface to use the system reference
+	clock within the shelf as a reference for transmitting.  Loop uses
+	the input port Rx clock as the timing source.  An error is returned if
+	an access is attempted to set this object in an inappropriate port
+	mode (eg. SRTS is applied in structured voice mode).  The default value
+	is adaptive (4)."
+    DEFVAL { adaptive }
+    ::= { cbrDS1E1PortConfEntry 5 }
+
+cbrDS1E1PortConfSignaling OBJECT-TYPE
+    SYNTAX INTEGER {
+	       no-signaling(1),
+	       e1-CAS(2)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object is applicable to E1 interfaces ONLY and indicates if
+	signaling information is enabled or disabled.  Signaling information
+        is always disabled in E1 single-frame or unframed mode.  Signaling
+	information is always enabled in structured voice multi-frame mode.
+	An error is returned if a set is applied to an inappropriate cardtype
+	(eg. E1-CAS is applied to a T1 cardtype).  In addition, the crc-4
+	configuration object is automatically disabled if the E1 interface is
+	in unstructured multi-frame mode and signaling is disabled. 
+	
+	NOTE:  This object can ONLY be changed in E1 unstructured multi-frame
+	mode.  The default value is no-signaling (1)."
+    DEFVAL { no-signaling }
+    ::= { cbrDS1E1PortConfEntry 6 }
+
+cbrDS1E1PortConfCRC-4 OBJECT-TYPE
+    SYNTAX INTEGER {
+	       disabled(1),
+	       enabled(2)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object is applicable to E1 interfaces ONLY and indicates if
+	CRC-4 information is enabled or disabled.  CRC-4 information is
+        always disabled in E1 single-frame or unframed mode.  CRC-4 
+        information is always enabled in multi-frame mode with signaling
+        disabled.  NOTE: This object can ONLY be modified in E1 CAS multi-frame
+        mode.  The default value is disabled (1)."
+    DEFVAL { disabled }
+    ::= { cbrDS1E1PortConfEntry 7 }
+
+cbrDS1E1PortConfDS0Channels OBJECT-TYPE
+    SYNTAX INTEGER 
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+        "This object indicates the associated DS0's which have been assigned
+         to the specified physical port interface.  All available DS0 channels
+         are automatically allocated in unstructured mode. In structured mode,
+         the DS0 channels are bit-coded with each bit representing one DS0
+         channel.  The following are some examples:
+ 
+            Value                       Representation
+         0x00000002     DS0-1 has been allocated to this port
+         0x000007f0     DS0-4 to DS0-10 have been allocated to this port
+         0x00027004     DS0-2, DS0-12 to DS0-14, DS0-17 have been allocated
+	 
+	 In E1 structured voice mode, the bit fields correspond to telephone 
+	 channels and are automatically mapped to it's associated DS0
+	 channel. Valid telephone channels range from 1 to 30.
+	 "
+    ::= { cbrDS1E1PortConfEntry 8 }
+
+cbrDS1E1PortConfLoopBackType OBJECT-TYPE
+    SYNTAX INTEGER {
+	       no-loopback(1),
+	       network-line(2),
+	       local-card(3),
+	       network-card(4),
+	       no-response(5)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the type of loopback configured for the
+	specified T1/E1 port interface. Network-line (2) redirects incoming
+	remote traffic back into the network interface at the external edge of
+	the card interface. Network-card (4) regenerates framing information
+	prior to redirecting incoming remote traffic back into the network
+	interface.  Local-card (3) redirects local incoming traffic back into
+	the local system.  The default value is no-loopback (1)."
+    DEFVAL { no-loopback }
+    ::= { cbrDS1E1PortConfEntry 9 }
+
+-- This definition is good only for Lodi 1.4 & 1.5, Use new implementation
+-- If you had to modify anything for Baja & Lodi 2.0
+-- CBR VC Configuration Group (cbrDS1E1VcConfig)
+
+-- CBR ATM Statistics Group (cbrDS1E1ATMStats)
+
+-- For Baja & Lodi 2.0 onwards
+-- CBR New VC Configuration Group (cbrDS1E1NewVcConfig)
+
+cbrDS1E1NewVcConfTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF CbrDS1E1NewVcEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	"This object contains the CBR specific VC Configuration table.
+	There is one cbrDS1E1VcConfEntry associated for each CBR VC connection
+	provisioned within the shelf.  This table uses vcPortSlot, vcPortPort,
+        vcPortTransmitVpi, vcPortTransmitVci, vcPortReceiveVpi, and 
+	vcPortReceiveVci as an index which is defined in the vcBaseTable of
+	the C-PRODUCT BASE MIB. This index value uniquely identifies the CBR
+	VC connection to which this entry is applicable.
+
+        NOTE:  The associated Circuit Emulation Service (CES) MIB defined by
+        the ATM forum restricts the VC index to a single 32-bit scalar value.
+        In support of this MIB, the CES MIB index retains the same indexing
+        information as the enterprise MIB (with the exception of using 
+	vcPortReceiveVpi and vcPortReceiveVci) but has been bit-mapped using
+	the following construction:
+
+           vcPortPort		bit  0..3
+           vcPortSlot   	bit  4..8
+           vcPortTransmitVci    bit  9..23
+           vcPortTransmitVpi    bit 24..31"
+
+    ::= { cbrDS1E1NewVcConfig 1 }
+
+cbrDS1E1NewVcConfEntry OBJECT-TYPE
+    SYNTAX CbrDS1E1NewVcEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	    "An entry in the CBR specific VC Configuration table."
+    INDEX { vcpSideId }
+    ::= { cbrDS1E1NewVcConfTable 1 }
+
+CbrDS1E1NewVcEntry ::=
+    SEQUENCE {
+	cbrDS1E1NewVcConfCDVT
+	    INTEGER,
+	cbrDS1E1NewVcConfIntegPeriod
+	    INTEGER,
+	cbrDS1E1NewVcConfPayloadSize
+	    INTEGER,
+	cbrDS1E1NewVcConfPayloadType
+	    INTEGER, 
+	cbrDS1E1NewVcConfOnHookDetection 
+	    INTEGER,
+	cbrDS1E1NewVcConfSignalingType 
+	    INTEGER,
+	cbrDS1E1NewVcConfDS0Channels
+	    INTEGER 
+    }
+
+cbrDS1E1NewVcConfCDVT OBJECT-TYPE
+    SYNTAX INTEGER (1..31) -- UNITS msecs
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the Cell Delay Variation Tolerance (CDVT)
+         in msecs configured for the specified T1/E1 ATM VC connection.  The
+	 CDVT value specifies the amount of cell delay uncertainty which may
+	 be experienced by any particular cell.  The maximum CDVT value for a
+	 T1 interface is 24.  The maximum CDVT value for an E1 interface is
+	 31.  The default value is 1 msec (1)."
+    DEFVAL { 1 }
+    ::= { cbrDS1E1NewVcConfEntry 1 }
+
+cbrDS1E1NewVcConfIntegPeriod OBJECT-TYPE
+    SYNTAX INTEGER (2000..65535) -- UNITS msecs
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+        "This object indicates the Cell Loss Integration Period in msecs
+         configured for the specified ATM VC connection.  If cell(s) are lost
+         within this period, the ATM Cell Loss Status (ACLS) is set to loss.
+         ACLS is accessible via the Circuit Emulation Service (CES) MIB defined
+         by the ATM forum and/or the VT100 ATM statistics screen.  The default
+         value is 2500 msecs (2500)."
+    DEFVAL { 2500 }
+    ::= { cbrDS1E1NewVcConfEntry 2 }
+
+cbrDS1E1NewVcConfPayloadSize OBJECT-TYPE
+    SYNTAX INTEGER (1..47) -- UNITS bytes
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the actual number of payload octets used per
+         ATM cell size configured for the specified T1/E1 ATM VC connection.
+         The default value is 47 bytes (47)."
+    DEFVAL { 47 }
+    ::= { cbrDS1E1NewVcConfEntry 3 }
+
+cbrDS1E1NewVcConfPayloadType OBJECT-TYPE
+    SYNTAX INTEGER {
+	       none(1),
+	       voice(2),
+	       data(3)
+	   }
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates which payload type has been configured for the 
+	 specified T1/E1 ATM VC connection.  It is reflective upon the T1/E1
+	 port mode configuration (ie. none -> unstructured, voice -> structured
+	 voice, data -> structured data).  The default is none (1)."
+    DEFVAL { none }
+    ::= { cbrDS1E1NewVcConfEntry 4 }
+
+cbrDS1E1NewVcConfOnHookDetection OBJECT-TYPE
+    SYNTAX INTEGER {
+	       disabled(1),
+	       enabled(2) 
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object dynamically reallocates bandwidth based upon the detection
+         of an on-hook condition as specified by the signaling type.  This 
+         object is applicable in structured voice mode ONLY.  The default
+         value is disabled (1)."
+    DEFVAL { disabled }
+    ::= {cbrDS1E1NewVcConfEntry 5}
+
+cbrDS1E1NewVcConfSignalingType OBJECT-TYPE
+    SYNTAX INTEGER {
+               no-signaling(1),
+	       em-plar(2),
+	       fxo-loop-start(3),
+	       fxs-loop-start(4),
+	       fxo-ground-start(5),
+	       fxs-ground-start(6),
+               e1-r2(7)
+	   }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the associated signaling application type. This
+         object defaults to no_signaling in unstructured/structured data modes
+         and cannot be modified in these modes. This object can only be set in 
+         structured voice mode.  All signaling application type values are
+         applicable in this mode except for no-signaling.  An error will result
+         if an attempt is made to set no_signaling in structured voice mode.
+	 In addition, an error will result if an attempt is made to set e1-r2
+	 to a T1 interface.  The default value is no-signaling(1)."
+    DEFVAL { no-signaling }
+    ::= { cbrDS1E1NewVcConfEntry 6 }
+
+cbrDS1E1NewVcConfDS0Channels OBJECT-TYPE
+    SYNTAX INTEGER
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the associated DS0's which have been assigned
+         to the specified ATM VC connection.  All available DS0 channels are
+         automatically allocated in unstructured mode. In structured mode, the
+         DS0 channels are bit-coded with each bit representing one DS0 channel.
+         The following are some examples:
+
+            Value                       Representation
+         0x00000002     DS0-1 has been allocated to this VC
+         0x000007f0     DS0-4 to DS0-10 have been allocated to this VC
+         0x00027004     DS0-2, DS0-12 to DS0-14, DS0-17 have been allocated
+
+         DS0 channels can only be assigned in structured mode.  Channel
+         conflicts within a T1/E1 port interface will result in an error.
+		For CBR V35 Port the valid values are as follows:
+	 Channel Selection 	Value		Data Rate
+	 -----------------	------------    -----------
+	 1			2		64k
+	 1-2			6		128k	
+	 1-3			14		192k		
+	 1-4			30		256k		
+	 1-6			126		384k		
+	 1-8			510		512k		
+	 1-12			8190		768k		
+	 1-16			131070		1024k		
+	 1-24			33554430	1536k			
+	 "
+    ::= { cbrDS1E1NewVcConfEntry 7 }
+
+cbrDS1E1NewATMStatsTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF CbrDS1E1NewATMStatsEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+        "This object contains the CBR specific VC Statistics table.
+        There is one cbrDS1E1ATMStatsEntry associated for each CBR VC connection
+        provisioned within the shelf.  This table uses vcPortSlot, vcPortPort,
+        vcPortTransmitVpi, and vcPortTransmitVci as an index which is defined
+        in the vcBaseTable of the C-PRODUCT BASE MIB. This index value uniquely 
+        identifies the CBR VC connection to which this entry is applicable.
+        Additional VC statistics information is available in the associated
+        Circuit Emulation Service (CES) MIB defined by the ATM forum.
+
+        NOTE:  The associated Circuit Emulation Service (CES) MIB defined by
+        the ATM forum restricts the VC index to a single 32-bit scalar value.
+        In support of this MIB, the CES MIB index retains the same indexing
+        information as the enterprise MIB but has been bit-mapped using the
+        following construction:
+
+           vcPortPort           bit  0..3
+           vcPortSlot           bit  4..8
+           vcPortTransmitVci    bit  9..23
+           vcPortTransmitVpi    bit 24..31"
+
+    ::= { cbrDS1E1NewATMStats 1 }
+
+cbrDS1E1NewATMStatsEntry OBJECT-TYPE
+    SYNTAX CbrDS1E1NewATMStatsEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+	    "An entry in the CBR specific VC Statistics table."
+    INDEX { vcpSideId }
+    ::= { cbrDS1E1NewATMStatsTable 1 }
+
+CbrDS1E1NewATMStatsEntry ::=
+    SEQUENCE {
+	cbrDS1E1NewATMStatsRxCells
+	    Counter,
+	cbrDS1E1NewATMStatsTxCells
+	    Counter,
+	cbrDS1E1NewATMStatsOOSErrors
+	    Counter,
+	cbrDS1E1NewATMStatsCRCErrors
+	    Counter,
+	cbrDS1E1NewATMStatsOAMRxCells
+	    Counter,
+	cbrDS1E1NewATMStatsOAMTxCells
+	    Counter,
+	cbrDS1E1NewATMStatsClearStats
+	    INTEGER,
+	cbrDS1E1NewATMStatsResetTimeDate
+	    TimeAndDate
+    }
+
+cbrDS1E1NewATMStatsRxCells OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of ATM cells received
+	 over the T1/E1 ATM VC connection since the last ATM VC clear
+	 time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 1 }
+
+cbrDS1E1NewATMStatsTxCells OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of ATM cells transmitted
+	 over the T1/E1 ATM VC connection since the last ATM VC clear
+	 time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 2 }
+
+cbrDS1E1NewATMStatsOOSErrors OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of out-of-sequence errors
+	 detected over the specified T1/E1 ATM VC connection since the last
+	 ATM VC clear time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 3 }
+
+cbrDS1E1NewATMStatsCRCErrors OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of CRC errors detected over
+	 the specified T1/E1 ATM VC connection since the last ATM VC clear
+	 time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 4 }
+
+cbrDS1E1NewATMStatsOAMRxCells OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of OAM cells received over
+	 the specified T1/E1 ATM VC connection since the last ATM VC clear
+	 time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 5 }
+
+cbrDS1E1NewATMStatsOAMTxCells OBJECT-TYPE
+    SYNTAX Counter
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the total number of OAM cells transmitted over
+	 the specified T1/E1 ATM VC connection since the last ATM VC clear
+	 time and date."
+    ::= { cbrDS1E1NewATMStatsEntry 6 }
+
+cbrDS1E1NewATMStatsClearStats OBJECT-TYPE
+    SYNTAX INTEGER {
+	       clear (1),
+	       not-applicable (2)
+	      }
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+	"This object will (1) clear the ATM statistics counters and (2)
+	initialize the reset time and date to the current time and date
+	for the specified ATM VC connection.  NOTE:  A value of '2' is
+	returned for any attempted reads of this object." 
+    ::= { cbrDS1E1NewATMStatsEntry 7 }
+
+cbrDS1E1NewATMStatsResetTimeDate OBJECT-TYPE
+    SYNTAX TimeAndDate
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+	"This object indicates the last time and date the ATM statistics
+	were cleared for the specified ATM VC connection."
+    ::= { cbrDS1E1NewATMStatsEntry 8 }
+
+END

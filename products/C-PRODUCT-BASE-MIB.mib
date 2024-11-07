@@ -1,0 +1,1568 @@
+C-PRODUCT-BASE-MIB DEFINITIONS ::= BEGIN
+
+
+IMPORTS
+        sys, shelf, card, port, circuit, fault  FROM C-PRODUCT-GROUP-MIB
+        IpAddress                               FROM RFC1155-SMI
+        DisplayString, PhysAddress              FROM RFC1213-MIB
+        OBJECT-TYPE                             FROM RFC-1212;
+
+
+-- This data type is used to define time and date
+
+TimeAndDate ::= OCTET STRING (SIZE(6..6))
+
+-- It is composed of 6 data bytes defined as follows:
+--
+-- byte 1 - year   (0..99)
+-- byte 2 - month  (1..12)
+-- byte 3 - day    (1..31)
+-- byte 4 - hour   (0..23)
+-- byte 5 - minute (0..59)
+-- byte 6 - second (0..59)
+
+-- This data type is used to define the supported card types
+
+CardType ::= INTEGER { none             (1),   -- no card
+                       mcpu             (2),   -- management cpu card
+                       ds3              (3),   -- ds3 card
+                       ether            (4),   -- ethernet card
+                       ctx              (5),   -- ctx card
+                       oc3              (6),   -- oc3 card
+                       backplane        (7),   -- backplane card (not supported)
+                       hssi             (8),   -- hssi card
+                       cbr-dsx-4        (9),   -- 4 port cbr dsx card
+                       cbr-e1-4         (11),  -- 4 port cbr e1 card
+                       cbr-dsx-8        (12),  -- 8 port cbr dsx card
+                       cbr-e1-8         (14),  -- 8 port cbr e1 card
+                       unknown          (15),  -- undefined card type
+                       v-35-qsim        (16),  -- v.35 serial if module
+                       rs-422-qsim      (17),  -- rs-422 serial if module
+                       hsim             (18),  -- hssi if module
+                       e3               (19),  -- e3 card
+                       ima-dsx-8        (20),  -- 4 port ima dsx card
+                       ima-csu-8        (21),  -- 4 port ima csu card
+                       ima-e1-8         (22),  -- 4 port ima e1 card
+                       ima-dsx-4        (23),  -- 8 port ima dsx card
+                       ima-csu-4        (24),  -- 8 port ima csu card
+                       ima-e1-4         (25),  -- 8 port ima e1 card
+                       fam-csu-8        (26),  -- 8 port ima e1 card
+                       ctx-plus         (27),  -- 8 port ima e1 card
+                       fam-dsx-8        (28),  -- 8 port ima e1 card
+                       fam-e1-8         (29),  -- 8 port ima e1 card
+                       mojave-backplane (30),  -- Mojave backplane
+                       ima-4-9300       (31),  -- AB9300 ima card
+                       cbr-dsx-3-v35    (32),  -- 3 port/V35 cbr dsx card
+                       cbr-csu-3-v35    (33),  -- 3 port/V35 cbr csu card 
+                       cbr-e1-3-v35     (34),  -- 3 port/V35 E1 card
+                       cbr-dsx-4-9300   (35),  -- 4 port cbr dsx card
+                       cbr-csu-4-9300   (36),  -- 4 port cbr csu card 
+                       cbr-e1-4-9300    (37),  -- 4 port E1 card
+                       ctx-9300         (38)   -- AB9300 ctx card
+                     } 
+
+-- This data type is used to define the admin. and oper. status of a hardware
+-- component (e.g. port card, trunk card, power supply, etc.)
+
+AdminStatus ::= INTEGER { out-of-service (1),
+                          in-service     (2) }
+
+PortOperStatus ::= INTEGER { out-of-service (1),
+                             in-service     (2),
+                             no-response    (3),
+                             coming-up      (4),
+                             coming-down    (5),
+                             status-failed  (6) }
+
+CardOperStatus ::= INTEGER { out-of-service (1),
+                             in-service     (2),
+                             failed         (6) }
+ 
+CardShelfState ::= INTEGER { empty          (1),
+                             missing        (2),
+                             match          (3),
+                             mismatch       (4),
+                             invalid        (5),
+                             hwrev-mismatch (6) }
+
+VcpPacketDiscard ::= INTEGER { pkt-no             (1),
+                               pkt-yes            (2) }
+ 
+-- This data type is used to define alarms types
+
+AlarmType ::= INTEGER { los                  (1),  -- loss of signal
+                        oof                  (2),  -- out of frame
+                        ais                  (3),  -- alarm indication signal
+                        idle                 (4),  -- idle signal
+                        ferf                 (5),  -- far end rx failure
+                        lcd                  (6),  -- loss of cell delineation
+                        vp-ais               (7),  -- virtual path ais
+                        vc-ais               (8),  -- virtual channel ais
+                        upload-image-missing (9),  -- no upload image found
+                        card-reconf-ok       (10), -- card reconfig. succeeded
+                        unknown-db-card-type (11), -- unknown card type in DB
+                        card-reconf-fail     (12), -- card reconfig. failed
+                        card-mismatch        (13), -- card type mismatched
+                        new-card-conf-ok     (14), -- new card config. succeeded
+                        card-conf-fail       (15), -- card config. failed
+                        unknown-card-type    (16), -- unknown card type
+                        card-removed         (17), -- card prematurely remvd
+                        download-fail        (18), -- download card image failed
+                        ps1-missing          (19), -- left power supply absent
+                        ps2-missing          (20), -- right power supply absent
+                        ps1-fail             (21), -- left power supply failed
+                        ps2-fail             (22), -- right power supply failed
+                        relay-fuse-fail      (23), -- relay power fuse failed
+                        comm-fail            (24), -- communication failed
+                        fan1-fail            (25), -- fan 1 failed
+                        fan2-fail            (26), -- fan 2 failed
+                        fan3-fail            (27), -- fan 3 failed
+                        fan4-fail            (28), -- fan 4 failed
+                        feac-lpbk            (29), -- feac loopback
+                        ntwk-line-lpbk       (30), -- network line loopback
+                        card-lpbk            (31), -- card loopback
+                        cell-lpbk            (32), -- cell line loopback
+                        card-missing         (33), -- card not installed
+                        card-inited          (34), -- card initialized
+                        cellbus-parity-fail  (35), -- cellbus parity failed
+                        rx-fifo-overflow     (36), -- rx fifo overflow
+                        tx-fifo-overflow     (37), -- tx fifo overflow
+                        lp-cellbus-congest   (38), -- lp cellbus congested
+                        mp-cellbus-congest   (39), -- mp cellbus congested
+                        hp-cellbus-congest   (40), -- hp cellbus congested
+                        prom-checksum-fail   (43), -- prom checksum error
+                        sram-0-fail          (44), -- bank 0 sram failed
+                        sram-1-fail          (45), -- bank 1 sram failed
+                        sar-sram-fail        (46), -- sar sram failed
+                        hdlc-sram-fail       (47), -- hdlc sram failed
+                        mailbox-sram-fail    (48), -- mailbox sram failed
+                        cellbus-xilink-fail  (49), -- cellbus xilinx failed
+                        prt01-xlnk-fail      (50), -- prt01 xlnx prg failed
+                        prt23-xlnk-fail      (51), -- prt23 xlnx prg failed
+                        prt45-xlnk-fail      (52), -- prt45 xlnx prg failed
+                        prt67-xlnk-fail      (53), -- prt67 xlnx prg failed
+                        sar-xlnk-fail        (54), -- sAR xlnk prg failed
+                        port-lpbk-pseudo-fail(55), -- port lpbk pseudo-failure
+                        e1-slot16-ais        (56), -- e1 time slot16 ais
+                        e1-loss-cas-multifrm (57), -- e1 loss of cas multiframe
+                        fe-e1-loss-cas       (58), -- far end e1 loss of cas
+                        port-yellow          (61), -- port yellow
+                        port-ais             (62), -- port ais
+                        vc-rdi               (64), -- vc rdi
+                        local-card-lpbk      (65), -- local card loopback
+                        intern-refclk-fail   (66), -- internal ref. clk. failed
+                        bits-refclk-fail     (67), -- bits ref. clk. failed
+                        cbr-refclk-fail      (68), -- cbr ref. clk. failed
+                        plcp-refclk-fail     (69), -- plcp ref. clk. failed
+                        loss-of-clock        (70), -- loss of clock
+                        remote-lpbk          (71), -- remote loopback
+                        oc3-refclk-missing   (73), -- oc3 ref. clk. failed
+                        power-up             (75), -- system power up
+                        loss-cell-del        (77), -- ima loss Cell Delin    
+                        loss-ima-frame       (78), -- ima loss of IMA Frame
+                        loss-diff-sync       (79), -- ima loss of Diff Sync
+                        dup-id               (80), -- ima Duplicate ID
+                        bad-ima-id           (81), -- ima bad ID
+                        bad-ima-M-value      (82), -- ima bad M value
+                        dup-link-id          (83), -- ima duplicate Link ID
+                        dup-offset           (84), -- ima duplicate offset
+                        test-pattern-fail    (85), -- ima test Pattern failed
+                        bad-link-id          (86), -- ima bad link ID
+                        bad-offset           (87), -- ima bad offset
+                        fe-no-links          (88), -- ima group far End no link
+                        fe-bad-M             (89), -- ima group far End bad M
+                        fe-group-error       (90), -- ima group far End error
+                        fe-los-of-signal     (91), -- ima far end LOS
+                        fe-out-of-frame      (92), -- ima far end OOF
+                        fe-loss-cell-del     (93), -- ima far end LCD
+                        fe-loss-of-frame     (94), -- ima lof
+                        fe-loss-diff-sync    (95), -- ima loss Diff Sync
+                        fe-misconnected      (96), -- ima misconnected
+                        alarm-cleared       (102), -- alarm cleared
+                        history-overflow    (103), -- history overflow
+                        afa-link-removal    (104), -- AFA link removal
+                        lmi-link-down       (105), -- LMI link down
+                        link-delay          (106), -- Excessive Link Delay
+                        group-no-link       (107), -- group no link
+                        group-degraded      (108), -- group Degraded Service
+                        group-sync-failed   (109), -- group Sync Failure 
+                        sar-init-failure    (110) } -- SAR Initialize Failure
+
+-- This data type is used to define VC types supported by the management
+-- CPU and port cards.
+
+VcpLinkType ::= INTEGER { 
+                     vc-invalid(1),        -- Invalid 
+                     vc-regular(2),        -- regular 
+                     vc-multicast(3),      -- Multi cast 
+                     vc-management(4),     -- Management 
+                     vc-leaf(5)            -- Leaf 
+		   }
+
+VcFamilyCardType ::= INTEGER { 
+ 		     cardFamNone(1),       -- No family 
+                     cardFamMCPU(2),       -- MCPU 
+                     cardFamCTX(3),        -- CTX 
+                     cardFamOC3(4),        -- OC3
+                     cardFamDS3(5),        -- DS3  
+                     cardFamE3(6),         -- E3
+                     cardFamQSIM(7),       -- QSIM
+                     cardFamFAM(8),        -- FAM
+                     cardFamENET(9),       -- ENET 
+                     cardFamHSSI(10),      -- HSSI 
+                     cardFamCBR(11),       -- CBR
+                     cardFamIMA(12),       -- IMA
+                     cardFamBackplane(13)  -- backplane 
+	     	  }
+
+
+-- sys (system administration) group
+
+-- general system information
+
+sysGenInfo  OBJECT IDENTIFIER ::= { sys 1 }
+
+sysGenInfoShelfName OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..16))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Name of the managed node."
+    ::= { sysGenInfo 1 }
+
+sysGenInfoCustomerName OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..32))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Name of the organization that uses the managed node."
+    ::= { sysGenInfo 2 }
+
+sysGenInfoPhoneNumber OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..32))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Phone number of the organization that uses
+             the managed node."
+    ::= { sysGenInfo 3 }
+
+sysGenInfoMaintenanceContact OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..32))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Maintenance contact of the managed node."
+    ::= { sysGenInfo 4 }
+
+sysGenInfoLocation OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..32))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Location of the managed node."
+    ::= { sysGenInfo 5 }
+
+sysGenInfoAutoLogoutTime OBJECT-TYPE
+    SYNTAX  INTEGER (1..99)
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "The time a TELNET or VT-100 terminal user can maintain
+             a session with the managed node without any keyboard
+             action.  Unit: minute"
+    DEFVAL  { 10 }
+    ::= { sysGenInfo 6 }
+
+sysGenInfoPassword OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE(0..16))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Password required to access the managed node using
+             VT-100 terminal or TELNET.  A get request always
+             returns a NULL string."
+    DEFVAL  { "password" }
+    ::= { sysGenInfo 7 }
+
+sysGenCurrentCodeRelease OBJECT-TYPE
+    SYNTAX  DisplayString
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Firmware revision of the current code running in the
+             managed node."
+    ::= { sysGenInfo 8 }
+
+
+-- Time and Date
+
+sysTimeAndDate OBJECT-TYPE
+    SYNTAX  TimeAndDate
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Time and date maintained in the managed node."
+    ::= { sys 2 }
+
+-- IP Network Configuration
+
+sysIpConfig  OBJECT IDENTIFIER ::= { sys 3 }
+
+-- local host subgroup
+--
+-- The objects in this subgroup includes the information
+-- required by the SNMP managers or TELENT clients to
+-- communicate with the SNMP agent and TELNET server in
+-- the managed node.
+--
+
+sysIpConfigLocalHost OBJECT IDENTIFIER ::= { sysIpConfig 1 }
+
+sysIpConfigLocalHostCommunityName OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..64))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Community name of the managed node.  A get
+             request always returns a NULL string."
+    DEFVAL  { "private" }
+    ::= { sysIpConfigLocalHost 1 }
+
+sysIpConfigLocalHostIpAddress OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Local host's Ethernet IP address."
+    ::= { sysIpConfigLocalHost 2 }
+
+sysIpConfigLocalHostSubnetMask OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Local host's Ethernet IP subnet mask."
+    ::= { sysIpConfigLocalHost 3 }
+
+sysIpConfigLocalHostMacAddress OBJECT-TYPE
+    SYNTAX  PhysAddress
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Local host's Ethernet MAC-layer address."
+    ::= { sysIpConfigLocalHost 4 }
+
+-- trap gateway subgroup
+--
+-- The objects in this subgroup are required when there
+-- are trap clients not directly reachable by the managed
+-- node.  It requires a trap gateway to route the SNMP
+-- trap messages to the trap clients (SNMP managers).
+--
+
+sysIpConfigTrapGateway OBJECT IDENTIFIER ::= { sysIpConfig 2 }
+
+sysIpConfigTrapGatewayIpAddress OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap gateway's IP address."
+    DEFVAL { '00000000'h }
+    ::= { sysIpConfigTrapGateway 1 }
+
+sysIpConfigTrapGatewaySubnetMask OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap gateway's IP subnet mask."
+    DEFVAL  { '00000000'h }
+    ::= { sysIpConfigTrapGateway 2 }
+
+-- trap client table
+--
+-- Each entry in the table contains the information of an SNMP
+-- trap client which receives SNMP traps from the SNMP agent in
+-- the managed node.
+--
+
+sysIpConfigTrapClientTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF SysIpConfigTrapClientEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap client table has 4 entries"
+    ::= { sysIpConfig 3 }
+
+sysIpConfigTrapClientEntry OBJECT-TYPE
+    SYNTAX  SysIpConfigTrapClientEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Each entry contains IP address and port number of
+             an SNMP manager which receives traps from the
+             managed node."
+    INDEX   { sysIpConfigTrapClientIndex }
+    ::= { sysIpConfigTrapClientTable 1 }
+
+SysIpConfigTrapClientEntry ::=
+    SEQUENCE {
+        sysIpConfigTrapClientIndex
+            INTEGER,
+        sysIpConfigTrapClientIpAddress
+            IpAddress,
+        sysIpConfigTrapClientSubnetMask
+            IpAddress,
+        sysIpConfigTrapClientPortNumber
+            INTEGER
+    }
+
+sysIpConfigTrapClientIndex OBJECT-TYPE
+    SYNTAX  INTEGER (1..4)
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            ""
+    ::= { sysIpConfigTrapClientEntry 1 }
+
+sysIpConfigTrapClientIpAddress OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap client's IP address."
+    DEFVAL  { '00000000'h }
+    ::= { sysIpConfigTrapClientEntry 2 }
+
+sysIpConfigTrapClientSubnetMask OBJECT-TYPE
+    SYNTAX  IpAddress
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap client's IP subnet mask."
+    DEFVAL  { '00000000'h }
+    ::= { sysIpConfigTrapClientEntry 3 }
+
+sysIpConfigTrapClientPortNumber OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Trap client's port number."
+    DEFVAL  { 162 }
+    ::= { sysIpConfigTrapClientEntry 4 }
+
+-- RS232 Ports Configuration
+
+sysRs232Table OBJECT-TYPE
+    SYNTAX  SEQUENCE OF SysRs232Entry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+        "This table contains 2 rows.  The first row shows the physical
+         configuration of the port connected to a VT100 termianl.  The
+         second row is used to configure the port which supports SLIP.
+         Access to the first row is read-only and access to the second
+         row is read-write."
+    ::= { sys 4 }
+
+sysRs232Entry OBJECT-TYPE
+    SYNTAX  SysRs232Entry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Each entry contains the attributes of a serial port."
+    INDEX   { sysRs232Port }
+    ::= { sysRs232Table 1 }
+
+SysRs232Entry ::=
+    SEQUENCE {
+        sysRs232Port
+            INTEGER,
+        sysRs232BaudRate
+            INTEGER,
+        sysRs232Parity
+            INTEGER,
+        sysRs232DataBits
+            INTEGER,
+        sysRs232StopBits
+            INTEGER
+    }
+
+sysRs232Port OBJECT-TYPE
+    SYNTAX  INTEGER { port-1 (1),
+                      port-2 (2) }
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "The managed node has 2 serial ports: port 1 and port 2."
+    ::= { sysRs232Entry 1 }
+
+sysRs232BaudRate OBJECT-TYPE
+    SYNTAX  INTEGER { br-300   (1),
+                      br-1200  (2),
+                      br-2400  (3),
+                      br-4800  (4),
+                      br-9600  (5),
+                      br-19200 (6),
+                      br-38400 (7) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Baud rate.  The instance of this object in port-1
+             is read-only."
+    DEFVAL { br-9600 }
+    ::= { sysRs232Entry 2 }
+
+sysRs232Parity OBJECT-TYPE
+    SYNTAX  INTEGER { none (1),
+                      even (2),
+                      odd  (3) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Parity.  The instance of this object in port-1 is
+             read-only."
+    DEFVAL { none }
+    ::= { sysRs232Entry 3 }
+
+sysRs232DataBits OBJECT-TYPE
+    SYNTAX  INTEGER { db-7 (1),
+                      db-8 (2) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Number of data bits.  The instance of this object
+             in port-1 is read-only."
+    DEFVAL { db-8 }
+    ::= { sysRs232Entry 4 }
+
+sysRs232StopBits OBJECT-TYPE
+    SYNTAX  INTEGER { sb-1 (1),
+                      sb-2 (2) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Number of stop bits.  The instance of this object
+             in port-1 is read-only."
+    DEFVAL { sb-1 }
+    ::= { sysRs232Entry 5 }
+
+-- System Reference Clock
+ 
+sysRefClock OBJECT-TYPE
+    SYNTAX  INTEGER { no-clock         (1),
+                      internal-default (2),
+                      internal         (3),
+                      bits             (4),
+                      slot-3           (5),
+                      slot-4           (6),
+                      slot-5           (7),
+                      slot-6           (8),
+                      slot-7           (9),
+                      slot-8           (10),
+                      slot-9           (11) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "System reference clock maintained in the managed node."
+    ::= { sys 5 }
+ 
+
+sysProductType OBJECT-TYPE
+    SYNTAX  INTEGER { no-product (1),
+                      ab9600     (2),
+                      ab9300     (3),
+                      ab9100     (4),
+                      mojave     (5) }
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "System Product Type contain type of product."
+    ::= { sys 6 }
+
+-- shelf group
+
+shelfSerialNumber OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(10..10))
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Serial number of the shelf." 
+    ::= { shelf 1 }
+
+shelfRevision OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(1..1))
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Hardware revision number of the shelf." 
+    ::= { shelf 2 }
+
+shelfPowerSupplyTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF ShelfPowerSupplyEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "The power supply table in the shelf."
+    ::= { shelf 3 }
+
+shelfPowerSupplyEntry OBJECT-TYPE
+    SYNTAX ShelfPowerSupplyEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Information of the power supply in the shelf."
+    INDEX { shelfPowerSupplySlot }
+    ::= { shelfPowerSupplyTable 1 }
+
+ShelfPowerSupplyEntry ::=
+    SEQUENCE {
+        shelfPowerSupplySlot
+            INTEGER,
+        shelfPowerSupplyAdminStatus
+            AdminStatus,
+        shelfPowerSupplyOperStatus
+            INTEGER
+    }
+
+shelfPowerSupplySlot OBJECT-TYPE
+    SYNTAX INTEGER { slot-1 (1),  -- left power supply
+                     slot-2 (2) } -- right power supply
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Slot number of the power supply." 
+    ::= { shelfPowerSupplyEntry 1 }
+
+shelfPowerSupplyAdminStatus OBJECT-TYPE
+    SYNTAX AdminStatus
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Administrative status."
+    DEFVAL { in-service }
+    ::= { shelfPowerSupplyEntry 2 }
+
+shelfPowerSupplyOperStatus OBJECT-TYPE
+    SYNTAX INTEGER { out-of-service (1),
+                     in-service     (2),
+                     missing        (3) }
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Operational status for Power Supply. In AB9300/AB9100, it
+	     doesn't support any setting value.
+	    "
+    ::= { shelfPowerSupplyEntry 3 }
+
+shelfPartNumber OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(1..1))
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Part number of the shelf."
+    ::= { shelf 4 }
+
+-- card group
+
+-- this group includes the objects common to all supported cards
+
+cardBaseTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF CardBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "A 6 entry card table in the shelf."
+    ::= { card 1 }
+
+cardBaseEntry OBJECT-TYPE
+    SYNTAX CardBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Each card entry contains objects that refer to the
+             card in that entry."
+    INDEX { cardSlot }
+    ::= { cardBaseTable 1}
+
+CardBaseEntry ::=
+    SEQUENCE {
+        cardSlot
+            INTEGER,
+        cardTypeDb
+            CardType,
+        cardTypeHw
+            CardType,
+        cardAdminStatus
+            AdminStatus,
+        cardOperStatus
+            CardOperStatus,
+        cardSerialNumber
+            OCTET STRING,
+        cardRevision
+            OCTET STRING,
+        cardPartNumber
+            DisplayString,
+        cardReset
+            INTEGER,
+        cardShelfState
+            CardShelfState 
+    }
+
+cardSlot OBJECT-TYPE
+    SYNTAX INTEGER (1..6)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Slot number of the card in the shelf.  The assignment of the
+             card slots is as follows:
+                 slot 1  : management cpu,
+                 slot 2  : ctx card,
+                 slot 3  : one of the trunk cards (e.g. ds3/oc3/e3/hssi),
+                 slot 4-6: one of the port cards (e.g. ether/cbr/qsim)."
+    ::= { cardBaseEntry 1 }
+
+cardTypeDb OBJECT-TYPE
+    SYNTAX CardType
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "The configured card type in the slot.  It may differ from
+             the actual card type (cardTypeHw) in the corresponding
+             slot.  A set request will be accepted only when one of the
+             following is true:
+
+             1.  the value of cardTypeHw in this slot is none, or
+             2.  the new value of cardTypeDb is the same as the
+                 corresponding cardTypeHw.
+            "
+    ::= { cardBaseEntry 2 }
+
+cardTypeHw OBJECT-TYPE
+    SYNTAX CardType
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "The actual card type in the slot."
+    ::= { cardBaseEntry 3 }
+
+cardAdminStatus OBJECT-TYPE
+    SYNTAX AdminStatus
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Administrative status of the card.  An error is returned if this
+             slot has been selected as the system reference clock and an
+             attempt is made to change this object to out-of-service.  This
+             object does not apply to management cpu and ctx card."
+    DEFVAL { in-service }
+    ::= { cardBaseEntry 4 }
+
+cardOperStatus OBJECT-TYPE
+    SYNTAX CardOperStatus
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Operational status of the card."
+    ::= { cardBaseEntry 5 }
+
+cardSerialNumber OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(10..10))
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Serial number of the card."
+    ::= { cardBaseEntry 6 }
+
+cardRevision OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(1..1))
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Hardware revision number of the card."
+    ::= { cardBaseEntry 7 }
+
+cardPartNumber OBJECT-TYPE
+    SYNTAX DisplayString
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Part number of the card."
+    ::= { cardBaseEntry 8 }
+
+cardReset OBJECT-TYPE
+    SYNTAX  INTEGER { reset (1) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "This is the command to reset the card at the specified 
+             slot number. A read request always returns 0.
+             Warning: Reseting card will temporarily disrupt traffic on 
+             the specified slot number."
+    ::= { cardBaseEntry 9 }
+
+cardShelfState OBJECT-TYPE
+    SYNTAX CardShelfState
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Operational shelf state of the card."
+    ::= { cardBaseEntry 10 }
+
+-- port group
+
+-- this group includes the objects common to all port/trunk card's ports.
+-- this table does not apply to management cpu and ctx card.
+
+portBaseTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF PortBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "The port information table."
+    ::= { port 1 }
+
+portBaseEntry OBJECT-TYPE
+    SYNTAX PortBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Each port entry contains objects that refer to the
+             port in that entry."
+    INDEX { portSlot, portNumber }
+    ::= { portBaseTable 1 }
+
+PortBaseEntry ::=
+    SEQUENCE {
+        portSlot
+            INTEGER,
+        portNumber
+            INTEGER,
+        portAdminStatus
+            AdminStatus,
+        portOperStatus
+            PortOperStatus,
+        portIfIndex
+            INTEGER
+    }
+
+portSlot OBJECT-TYPE
+    SYNTAX INTEGER (3..6)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Slot Number.  This table does not have objects for
+             management cpu (slot #1) and ctx card (slot #2)."
+    ::= { portBaseEntry 1 }
+
+portNumber OBJECT-TYPE
+    SYNTAX INTEGER
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Port number.  The number of ports in each card
+             depends on the type of card in that slot.  Following
+             is a list of cards and the port range of that cards:
+
+                 card type   port range
+                 ----------- ----------
+                 ds3            1..1
+                 ether          1..2
+                 oc3            1..1
+                 hssi           1..1
+                 cbr-dsx-4      1..4
+                 cbr-e1-4       1..4
+                 cbr-dsx-8      1..8
+                 cbr-e1-8       1..8
+                 v-35-qsim      1..4
+                 rs-422-qsim    1..4
+                 hssi-qsim      1..1
+                 e3             1..1"
+    ::= { portBaseEntry 2 }
+
+portAdminStatus OBJECT-TYPE
+    SYNTAX AdminStatus
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Administrative status of the port.  An error is returned if this
+             port has been selected as the system reference clock and an
+             attempt is made to change this object to out-of-service."
+    DEFVAL { out-of-service }
+    ::= { portBaseEntry 3 }
+
+portOperStatus OBJECT-TYPE
+    SYNTAX PortOperStatus
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Operational status of the port." 
+    ::= { portBaseEntry 4 }
+
+portIfIndex OBJECT-TYPE
+    SYNTAX INTEGER (1..57)
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Currently this object applies to the interface ports
+             in port cards ONLY.  It is pre-assigned as following:
+
+                 slot      range
+
+                   3        1..8
+                   4        9..16
+                   5       17..24
+                   6       25..32
+		   7       33..40
+		   8       41..48
+		   9       49..57
+             "
+    ::= { portBaseEntry 5 }
+
+-- virtual circuit table
+
+-- Multi/Non-multi cast virtual circuit Path table
+
+vcpNextAvailGlobVcSideId OBJECT-TYPE
+     SYNTAX INTEGER (0..2147483647)
+     ACCESS read-only
+     STATUS mandatory
+     DESCRIPTION
+          "This unique value which identified the next available
+           virtual circuit ID.  It is allowed NMS manager to get
+           the next available Virtual Circuit Id before created
+           a new row into Virtual circuit Path Table."
+     ::= { circuit 2 }
+
+vcpBaseTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF VcpBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "The base virtual circuit table contains the common 
+             information for both sides of circuit."
+    ::= { circuit 3 }
+
+vcpBaseEntry OBJECT-TYPE
+    SYNTAX VcpBaseEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Information of the base virtual circuit." 
+    INDEX { vcpSideAId, vcpSideBId }
+    ::= { vcpBaseTable 1 }
+
+VcpBaseEntry ::=
+    SEQUENCE {
+        vcpSideAId
+            INTEGER,
+        vcpSideBId
+            INTEGER,
+        vcpLinkType
+            VcpLinkType,
+        vcpDescription
+            DisplayString,
+        vcpAdminStatus
+            AdminStatus,
+        vcpRowStatus
+            INTEGER
+    }
+
+
+vcpSideAId OBJECT-TYPE
+    SYNTAX INTEGER (0..2147483647)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "A unique value which identifies the SideA of circuit."
+    ::= { vcpBaseEntry 1 }
+
+vcpSideBId OBJECT-TYPE
+    SYNTAX INTEGER (0..2147483647)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "A unique value which identifies the SideB of circuit."
+    ::= { vcpBaseEntry 2 }
+
+vcpLinkType OBJECT-TYPE
+    SYNTAX  VcpLinkType
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Vc Circuit Type indicated whether this circuit is 
+             Regular, Multicast, Management, Unicast, leaf."
+    ::= { vcpBaseEntry 3 }
+
+vcpDescription OBJECT-TYPE
+    SYNTAX  DisplayString (SIZE(0..12))
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "Vc description of circuits."
+    DEFVAL { "" }
+    ::= { vcpBaseEntry 4 }
+
+vcpAdminStatus OBJECT-TYPE
+    SYNTAX AdminStatus
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Vc administrative status."
+    DEFVAL { in-service }
+    ::= { vcpBaseEntry 5 }
+
+vcpRowStatus OBJECT-TYPE
+    SYNTAX  INTEGER { create (1),
+                      delete (2) }
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "This object indicates the action to be taken by a set
+             request."
+    DEFVAL { create }
+    ::= { vcpBaseEntry 6 }
+
+-- Multi/Non-multi cast Side Table circuit table
+
+vcpSideTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF VcpSideEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "The side table contains the Side A or Side B of
+             circuit information."
+    ::= { circuit 4 }
+
+vcpSideEntry OBJECT-TYPE
+    SYNTAX VcpSideEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Information of the base virtual circuit." 
+    INDEX { vcpSideId }
+    ::= { vcpSideTable 1 }
+
+VcpSideEntry ::=
+    SEQUENCE {
+        vcpSideId
+            INTEGER,
+        vcpSideSlot
+            INTEGER,
+        vcpSidePort
+            INTEGER,
+        vcpSideTransmitVpi
+            INTEGER,
+        vcpSideTransmitVci
+            INTEGER,
+        vcpSideReceiveVpi
+            INTEGER,
+        vcpSideReceiveVci
+            INTEGER,
+        vcpSidePriority
+            INTEGER,
+        vcpSidePacketDiscard
+            VcpPacketDiscard
+    }
+
+vcpSideId OBJECT-TYPE
+    SYNTAX INTEGER (0..2147483647)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "unique number associated with virtual circuit."
+    ::= { vcpSideEntry 1 }
+
+vcpSideSlot OBJECT-TYPE
+    SYNTAX INTEGER (1..9)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Slot Number.  This table does not have objects for
+             ctx card (slot #2) and card (slot #3)."
+    ::= { vcpSideEntry 2 }
+
+vcpSidePort OBJECT-TYPE
+    SYNTAX INTEGER
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Port number.  The number of ports in each card
+             depends on the type of card in that slot.  Following
+             is a list of cards and the port range of that cards:
+
+                 card type   port range
+                 ----------- ----------
+                 mcpu           1..1
+                 ds3            1..1
+                 ether          1..2
+                 oc3            1..1
+                 hssi           1..1
+                 cbr-dsx-4      1..4
+                 cbr-csu-4      1..4
+                 cbr-e1-4       1..4
+                 cbr-dsx-8      1..8
+                 cbr-csu-8      1..8
+                 cbr-e1-8       1..8
+                 v-35-qsim      1..4
+                 rs-422-qsim    1..4
+                 hssi-qsim      1..1
+                 e3             1..1"
+    ::= { vcpSideEntry 3 }
+
+vcpSideTransmitVpi OBJECT-TYPE
+    SYNTAX INTEGER (0..255)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Port card transmit vpi."
+    ::= { vcpSideEntry 4 }
+
+vcpSideTransmitVci OBJECT-TYPE
+    SYNTAX INTEGER (0..16383)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Port card transmit vci."
+    ::= { vcpSideEntry 5 }
+
+vcpSideReceiveVpi OBJECT-TYPE
+    SYNTAX INTEGER (0..255)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Port card receive vpi.  The value range 0..255 applies
+             when VPI-only translation is requested.  Otherwise, its
+             range is 0..15.  If the value of an instance of this
+             object is > 15, the value of the corresponding instance
+             of vcPortReceiveVci MUST be 0 (VPI-only translation)."
+    ::= { vcpSideEntry 6 }
+
+vcpSideReceiveVci OBJECT-TYPE
+    SYNTAX INTEGER (0..1023)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Port card receive vci.  If the value of this object is 0,
+             VPI-only translation is requested."
+    ::= { vcpSideEntry 7 }
+
+vcpSidePriority OBJECT-TYPE
+    SYNTAX INTEGER (1..4)
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Priority queue is to prioritize the circuit. The 
+	     smallest number is the highest priority.  The 
+	     largest number is lowest priority.
+	    "
+    ::= { vcpSideEntry 8 }
+
+vcpSidePacketDiscard OBJECT-TYPE
+    SYNTAX VcpPacketDiscard
+    ACCESS read-write
+    STATUS mandatory
+    DESCRIPTION
+            "Packet Discard indicates whether this packet needs
+	     to drop off based on the threshold."
+    DEFVAL { pkt-no }
+    ::= { vcpSideEntry 9 }
+
+-- Multi/Non-multi cast Mapping Side Table table
+
+vcpMappingSideTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF VcpMappingSideEntry
+    ACCESS not-accessible 
+    STATUS mandatory
+    DESCRIPTION
+            "The Mapping side table contains circuit Side information."
+    ::= { circuit 5 }
+
+vcpMappingSideEntry OBJECT-TYPE
+    SYNTAX VcpMappingSideEntry
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Information of the base virtual circuit." 
+    INDEX { vcpMappingSideSlot, vcpMappingSidePort, 
+            vcpMappingSideAId,  vcpMappingSideBId }
+    ::= { vcpMappingSideTable 1 }
+
+VcpMappingSideEntry ::=
+    SEQUENCE {
+        vcpMappingSideSlot
+            INTEGER,
+        vcpMappingSidePort
+            INTEGER,
+        vcpMappingSideAId
+            INTEGER,
+        vcpMappingSideBId
+            INTEGER,
+        vcpMappingCardType
+            CardType,
+        vcpMappingFamCardType
+            VcFamilyCardType,
+        vcpMappingOtherCardType
+            CardType,
+        vcpMappingOtherFamCardType
+           VcFamilyCardType 
+    }
+
+vcpMappingSideSlot OBJECT-TYPE
+    SYNTAX INTEGER (1..9)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Slot Number.  This table does not have objects for
+             ctx card (slot #2) and card (slot #3)."
+    ::= { vcpMappingSideEntry 1 }
+
+vcpMappingSidePort OBJECT-TYPE
+    SYNTAX INTEGER
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "Port number.  The number of ports in each card
+             depends on the type of card in that slot.  Following
+             is a list of cards and the port range of that cards:
+
+                 card type   port range
+                 ----------- ----------
+                 mcpu           1..1
+                 ds3            1..1
+                 ether          1..2
+                 oc3            1..1
+                 hssi           1..1
+                 cbr-dsx-4      1..4
+                 cbr-csu-4      1..4
+                 cbr-e1-4       1..4
+                 cbr-dsx-8      1..8
+                 cbr-csu-8      1..8
+                 cbr-e1-8       1..8
+                 v-35-qsim      1..4
+                 rs-422-qsim    1..4
+                 hssi-qsim      1..1
+                 e3             1..1"
+    ::= { vcpMappingSideEntry 2 }
+
+vcpMappingSideAId OBJECT-TYPE
+    SYNTAX INTEGER (0..2147483647)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "SideA ID is a unique number associated with virtual circuit."
+    ::= { vcpMappingSideEntry 3 }
+
+
+vcpMappingSideBId OBJECT-TYPE
+    SYNTAX INTEGER (0..2147483647)
+    ACCESS not-accessible
+    STATUS mandatory
+    DESCRIPTION
+            "SideB ID is a unique number associated with virtual circuit."
+    ::= { vcpMappingSideEntry 4 }
+
+vcpMappingCardType OBJECT-TYPE
+    SYNTAX CardType
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "card Type associated with mySide of circuit."
+    ::= { vcpMappingSideEntry 5 }
+
+vcpMappingFamCardType OBJECT-TYPE
+    SYNTAX VcFamilyCardType 
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Family Card Type associate with mySide of circuit."
+    ::= { vcpMappingSideEntry 6 }
+
+vcpMappingOtherCardType OBJECT-TYPE
+    SYNTAX CardType
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Other Side of Card Type associate with the circuit."
+    ::= { vcpMappingSideEntry 7 }
+
+
+vcpMappingOtherFamCardType OBJECT-TYPE
+    SYNTAX VcFamilyCardType 
+    ACCESS read-only
+    STATUS mandatory
+    DESCRIPTION
+            "Other Side of Family Card Type associate with the circuit."
+    ::= { vcpMappingSideEntry 8 }
+
+-- fault group
+
+faultClearCurrentAlarms OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "A set request clears all entries in the current
+             alarm table.  A get/get-next request returns 0."
+    ::= { fault 1 }
+
+faultClearHistoryAlarms OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  read-write
+    STATUS  mandatory
+    DESCRIPTION
+            "A set request clears all entries in the history
+             alarm table.  A get/get-next request returns 0."
+    ::= { fault 2 }
+
+
+-- current (active) alarm table
+
+faultCurrentAlarmTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF FaultCurrentAlarmEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Current alarm table."
+    ::= { fault 3 }
+
+faultCurrentAlarmEntry OBJECT-TYPE
+    SYNTAX  FaultCurrentAlarmEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Each entry in the table contains the information of
+             a currently active alarm."
+    INDEX   { faultCurrentAlarmTag }
+    ::= { faultCurrentAlarmTable 1 }
+
+FaultCurrentAlarmEntry ::=
+    SEQUENCE {
+        faultCurrentAlarmTag
+            INTEGER,
+        faultCurrentAlarmAlarmType
+            AlarmType,
+        faultCurrentAlarmSeverity
+            INTEGER,
+        faultCurrentAlarmCardType
+            CardType,
+        faultCurrentAlarmCardNumber
+            INTEGER,
+        faultCurrentAlarmPortNumber
+            INTEGER,
+        faultCurrentAlarmSetTime
+            TimeAndDate,
+        faultCurrentAlarmDescription
+            DisplayString
+    }
+
+faultCurrentAlarmTag OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "The tag of the alarm in the current alarm table."
+    ::= { faultCurrentAlarmEntry 1 }
+
+faultCurrentAlarmAlarmType OBJECT-TYPE
+    SYNTAX  AlarmType 
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Alarm type."
+    ::= { faultCurrentAlarmEntry 2 }
+
+faultCurrentAlarmSeverity OBJECT-TYPE
+    SYNTAX  INTEGER { minor (2),
+                      major (3) }
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Alarm severity."
+    ::= { faultCurrentAlarmEntry 3 }
+
+faultCurrentAlarmCardType OBJECT-TYPE
+    SYNTAX  CardType
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Card type of the card which caused the alarm."
+    ::= { faultCurrentAlarmEntry 4 }
+
+faultCurrentAlarmCardNumber OBJECT-TYPE
+    SYNTAX  INTEGER (1..6)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Slot number of the card which caused the alarm."
+    ::= { faultCurrentAlarmEntry 5 }
+
+faultCurrentAlarmPortNumber OBJECT-TYPE
+    SYNTAX  INTEGER (1..8)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "The port number of the card which caused the alarm."
+    ::= { faultCurrentAlarmEntry 6 }
+
+faultCurrentAlarmSetTime OBJECT-TYPE
+    SYNTAX  TimeAndDate
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "The time when the alarm was set."
+    ::= { faultCurrentAlarmEntry 7 }
+
+faultCurrentAlarmDescription OBJECT-TYPE
+    SYNTAX  DisplayString
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "A readable string which describes the alarm."
+    ::= { faultCurrentAlarmEntry 8 }
+
+
+-- history alarm table
+
+faultHistoryAlarmTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF FaultHistoryAlarmEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "History/Information alarm table."
+    ::= { fault 4 }
+
+faultHistoryAlarmEntry OBJECT-TYPE
+    SYNTAX  FaultHistoryAlarmEntry
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "Each entry in the history alarm table contains either a
+             cleared alarm or an information alarm."
+    INDEX   { faultHistoryAlarmTag }
+    ::= { faultHistoryAlarmTable 1 }
+
+FaultHistoryAlarmEntry ::=
+    SEQUENCE {
+        faultHistoryAlarmTag
+            INTEGER,
+        faultHistoryAlarmAlarmType
+            AlarmType,
+        faultHistoryAlarmSeverity
+            INTEGER,
+        faultHistoryAlarmCardType
+            CardType,
+        faultHistoryAlarmCardNumber
+            INTEGER,
+        faultHistoryAlarmPortNumber
+            INTEGER,
+        faultHistoryAlarmSetTime
+            TimeAndDate,
+        faultHistoryAlarmDescription
+            DisplayString,
+        faultHistoryAlarmClearTime
+            TimeAndDate
+    }
+
+faultHistoryAlarmTag OBJECT-TYPE
+    SYNTAX  INTEGER
+    ACCESS  not-accessible
+    STATUS  mandatory
+    DESCRIPTION
+            "The tag of the alarm in the history alarm table."
+    ::= { faultHistoryAlarmEntry 1 }
+
+faultHistoryAlarmAlarmType OBJECT-TYPE
+    SYNTAX  AlarmType 
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Alarm type."
+    ::= { faultHistoryAlarmEntry 2 }
+
+faultHistoryAlarmSeverity OBJECT-TYPE
+    SYNTAX  INTEGER { info  (1),
+                      minor (2),
+                      major (3) }
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Severity of the alarm."
+    ::= { faultHistoryAlarmEntry 3 }
+
+faultHistoryAlarmCardType OBJECT-TYPE
+    SYNTAX  CardType 
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Card type of the card which caused the alarm."
+    ::= { faultHistoryAlarmEntry 4 }
+
+faultHistoryAlarmCardNumber OBJECT-TYPE
+    SYNTAX  INTEGER (1..6)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Slot number of the card which caused the alarm."
+    ::= { faultHistoryAlarmEntry 5 }
+
+faultHistoryAlarmPortNumber OBJECT-TYPE
+    SYNTAX  INTEGER (1..8)
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "Port number of the card which caused the alarm."
+    ::= { faultHistoryAlarmEntry 6 }
+
+faultHistoryAlarmSetTime OBJECT-TYPE
+    SYNTAX  TimeAndDate
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "The time when the alarm was set."
+    ::= { faultHistoryAlarmEntry 7 }
+
+faultHistoryAlarmDescription OBJECT-TYPE
+    SYNTAX  DisplayString
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "A readable string which describes the alarm."
+    ::= { faultHistoryAlarmEntry 8 }
+
+faultHistoryAlarmClearTime OBJECT-TYPE
+    SYNTAX  TimeAndDate
+    ACCESS  read-only
+    STATUS  mandatory
+    DESCRIPTION
+            "The time when the alarm was cleared."
+    ::= { faultHistoryAlarmEntry 9 }
+
+END
+--
+-- This MIB is used to support the enterprise-specific objects for QSIM, HSIM
+-- and FAM interface cards and QSIM is used to refer to the 3 interface cards.
+--
+-- The following MIB groups are supported by all the interface cards (note:
+-- they all use "qsim" as prefix):
+--
+--    qsimCard, qsimVc, qsimLmi, qsimSdlcVc, qsimDxiVc and qsimFrameRelayVc.
+--
+--    qsimLmi and qsimFrameRelayVc groups are used for ports which support
+--    frame relay protocol.
+--
+--    qsimSdlcVc group is used for ports which support SDLC protocol.
+--
+--    qsimDxiVc group is used for ports which support DXI protocol.
+--
+-- The following MIB groups are specific to each of the interface cards (note:
+-- they use "qsim" or "hsim" as prefix to distinguish the supporting card):
+--
+--    qsimPort group is for QSIM interface card only.
+--
+--    hsimPort group is for HSIM interface card only.
+--
+
