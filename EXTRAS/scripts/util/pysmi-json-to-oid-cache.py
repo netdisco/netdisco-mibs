@@ -15,6 +15,9 @@ module = data['meta']['module']
 for value in data.values():
     if not('name' in value and 'oid' in value):
         continue
+    
     leaf = value['name'].replace('_','-')
+    description = value.get('description', '')
+
     # .1.3.6.1.6.3.10.3.1.1,SNMP-FRAMEWORK-MIB::snmpFrameworkMIBCompliance,,,,,,The description...
-    print(f".{value['oid']},{module}::{leaf},,,,,,{value['description']}")
+    print(f".{value['oid']},{module}::{leaf},,,,,,{description}")
