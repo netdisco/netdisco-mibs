@@ -1,0 +1,544 @@
+-- ****************************************************************
+-- *  Moxa Switching - IGMP Snooping PRIVATE MIB
+-- *
+-- *  Copyright (c) 2019 by Moxa Inc.
+-- *  All rights reserved.
+-- *****************************************************************
+
+MOXA-IGMPSNP-MIB DEFINITIONS ::= BEGIN
+    IMPORTS
+        MODULE-IDENTITY, NOTIFICATION-TYPE, OBJECT-TYPE, IpAddress
+            FROM SNMPv2-SMI
+        TEXTUAL-CONVENTION, DateAndTime, MacAddress, DisplayString, TruthValue, RowStatus
+            FROM SNMPv2-TC
+        VlanIndex, PortList
+            FROM Q-BRIDGE-MIB
+        InetAddress
+            FROM INET-ADDRESS-MIB
+        layer2Multicast
+          FROM MOXA-SWITCHING-MIB;
+
+    mxIgmpSnp MODULE-IDENTITY
+        LAST-UPDATED "202202170000Z"
+        ORGANIZATION "Moxa Inc."
+        CONTACT-INFO
+            "
+            Postal: Moxa Inc.
+            13F., No. 3, Sec. 4, New Taipei Blvd.
+            Xinzhuang Dist., New Taipei City 242032, Taiwan, R.O.C.
+
+            Tel: +866-2-89191230
+            Web: http://www.moxa.com/
+            "
+        DESCRIPTION
+            "The MIB module for Moxa igmp snooping feature."
+
+        REVISION    "202202170000Z"
+        DESCRIPTION "update CONTACT-INFO"
+
+        REVISION    "202011260000Z"
+        DESCRIPTION "Support layer 2 multicast forwarding table related OID node"
+
+        REVISION    "201906300000Z"
+        DESCRIPTION "Initial Revision"
+
+        ::= { layer2Multicast 2 }
+
+-- ------------------------------------------------------------
+-- Textual Conventions
+-- ------------------------------------------------------------
+
+InnerVlanIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS      current
+    DESCRIPTION
+        "A value used to represent the Inner VLAN that might be
+         carried in a packet.
+         A value between 1 and 4094 inclusive, represents
+         a valid vlan and is used only in cases where the
+         switch understands and is capable of handling
+         double tagged packets.
+         A value 0 is used in cases where the switch understands
+         and is capable of handling only single tagged packets."
+    SYNTAX      INTEGER (0..4094)
+
+-- -------------------------------------------------------------
+-- groups in the MOXA-IGMPSNP-MIB MIB
+-- -------------------------------------------------------------
+
+  -- igmpsnpNotification          OBJECT IDENTIFIER ::= { mxIgmpSnp 0 }
+  igmpsnpConfiguration         OBJECT IDENTIFIER ::= { mxIgmpSnp 1 }
+  igmpsnpStatus                OBJECT IDENTIFIER ::= { mxIgmpSnp 2 }
+  -- igmpsnpExtensions            OBJECT IDENTIFIER ::= { mxIgmpSnp 3 }
+
+-- -------------------------------------------------------------
+-- configuration group
+-- -------------------------------------------------------------
+
+  igmpsnpConfigGlobalStatus OBJECT-TYPE
+      SYNTAX TruthValue
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "Enables or disables IGMP snooping in the system.
+           When set to 'enabled', the IGMP Snooping module starts
+           protocol operations.
+           When set to 'disabled', the IGMP Snooping module stops performing
+           protocol operations."
+      ::= { igmpsnpConfiguration 1 }
+
+  igmpsnpConfigVlanTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF IGMPSnpConfigVlanEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains configuration of snooping
+           on specific Vlans. This Table is valid only when VLAN is
+           enabled in the system."
+      ::= { igmpsnpConfiguration 2 }
+
+  igmpsnpConfigVlanEntry OBJECT-TYPE
+      SYNTAX IGMPSnpConfigVlanEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Contains snooping status , version, rule and Query interval
+           configuration for a specific VLAN."
+      INDEX { igmpsnpConfigVlanId }
+      ::= { igmpsnpConfigVlanTable 1 }
+
+  IGMPSnpConfigVlanEntry ::=
+      SEQUENCE {
+          igmpsnpConfigVlanId
+              INTEGER,
+          igmpsnpConfigVlanStatus
+              INTEGER,
+          igmpsnpConfigVlanVersion
+              INTEGER,
+          igmpsnpConfigVlanCfgQuerier
+              INTEGER,
+          igmpsnpConfigVlanQueryInterval
+              INTEGER,
+          igmpsnpConfigVlanRouterPortList
+              PortList,
+          igmpsnpConfigVlanRowStatus
+              RowStatus
+      }
+
+  igmpsnpConfigVlanId OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Instance ID pertaining to VLAN table entry."
+      ::= { igmpsnpConfigVlanEntry 1 }
+
+  igmpsnpConfigVlanStatus OBJECT-TYPE
+      SYNTAX TruthValue
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "Enables or disables IGS on that specific VLAN"
+      ::= { igmpsnpConfigVlanEntry 2 }
+
+  igmpsnpConfigVlanVersion OBJECT-TYPE
+      SYNTAX INTEGER { v1(1), v2(2), v3(3) }
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "Indicates the operating version of the IGS/MLDS switch for
+           a specific VLAN. The default operating mode on a specific VLAN
+           is IGMP version 3 i.e, V3(3) or MLD version 2 i.e., V2(2).
+           The 'fsSnoopVlanCfgOperVersion' should be configured on the
+           basis of the router version present in the VLAN.
+           This configuration should be used only when one router port
+           is existing in the VLAN.
+           This object is deprecated and corresponding functionality is met
+           using fsSnoopRtrPortCfgOperVersion object available in
+           fsSnoopRtrPortTable. If configured, consolidated reports sent
+           on upstream interfaces will use this version."
+      ::= { igmpsnpConfigVlanEntry 3 }
+
+  igmpsnpConfigVlanCfgQuerier OBJECT-TYPE
+      SYNTAX TruthValue
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "The snooping switch can be configured to send IGMP queries
+           when IGMP routers are not present in the VLAN. When set to
+           'enabled' the switch will generate general query messages.
+           The query messages will be suppressed if the switch receives
+           the query message from any other router in the VLAN. Switch
+           should be configured as a querier for a VLAN only when there
+           are no queriers in the network."
+      ::= { igmpsnpConfigVlanEntry 4 }
+
+  igmpsnpConfigVlanQueryInterval OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "This is the interval (in seconds) for which the switch
+           sends general queries in proxy and proxy-reporting mode.
+           In proxy-reporting mode, General queries will be sent
+           on all downstream interfaces with this interval only if
+           the switch is the Querier."
+      ::= { igmpsnpConfigVlanEntry 5 }
+
+  igmpsnpConfigVlanRouterPortList OBJECT-TYPE
+      SYNTAX      PortList
+      MAX-ACCESS  read-write
+      STATUS      current
+      DESCRIPTION
+          "List of ports which are configured statically as router ports.
+           statically. This object may not be sufficient to represent the
+           full set of interfaces in each switch instance in environments
+           where the number of interfaces in the system is scaled to a
+           large value."
+      ::= { igmpsnpConfigVlanEntry 6 }
+
+  igmpsnpConfigVlanRowStatus OBJECT-TYPE
+      SYNTAX      RowStatus
+      MAX-ACCESS  read-create
+      STATUS      current
+      DESCRIPTION
+          "The status of a row in the VLAN filter table. Using this
+           object, new entries can be created in the VLAN filter table
+           and the existing entries can be removed from the
+           VLAN filter table"
+      ::= { igmpsnpConfigVlanEntry 7 }
+
+-- -------------------------------------------------------------
+-- Status group
+-- -------------------------------------------------------------
+
+  igmpsnpStatusVlanTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF IGMPSnpStatusVlanEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains status of snooping on specific Vlans.
+           This Table is valid only when VLAN is  enabled in the system."
+      ::= { igmpsnpStatus 1 }
+
+  igmpsnpStatusVlanEntry OBJECT-TYPE
+      SYNTAX IGMPSnpStatusVlanEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Contains snooping acting rule, startup Query Interval, Startup Query Count,
+           Group Membership Interval and Other Querier Present Interval status
+           for a specific VLAN."
+      INDEX { igmpsnpStatusVlanId }
+      ::= { igmpsnpStatusVlanTable 1 }
+
+  IGMPSnpStatusVlanEntry ::=
+      SEQUENCE {
+          igmpsnpStatusVlanId
+              INTEGER,
+          igmpsnpStatusActQuerier
+              INTEGER,
+          igmpsnpStatusVlanStartupQueryInterval
+              INTEGER,
+          igmpsnpStatusVlanStartupQueryCount
+              INTEGER,
+          igmpsnpStatusVlanGroupMembershipInterval
+              INTEGER,
+          igmpsnpStatusVlanOtherQuerierPresentInterval
+              INTEGER,
+		  igmpsnpStatusVlanRouterPortList
+			  PortList
+      }
+
+  igmpsnpStatusVlanId OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Instance ID pertaining to VLAN table entry."
+      ::= { igmpsnpStatusVlanEntry 1 }
+
+  igmpsnpStatusActQuerier OBJECT-TYPE
+      SYNTAX TruthValue
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "Indicates whether the switch is configured as a querier in the VLAN"
+      ::= { igmpsnpStatusVlanEntry 2 }
+
+  igmpsnpStatusVlanStartupQueryInterval OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "Interval between the general query messages sent by the switch
+           during startup of querier election process."
+      ::= { igmpsnpStatusVlanEntry 3 }
+
+  igmpsnpStatusVlanStartupQueryCount OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "The Startup Query Count is the number of Queries sent out on
+           startup, separated by the Startup Query Interval."
+      ::= { igmpsnpStatusVlanEntry 4 }
+
+  igmpsnpStatusVlanGroupMembershipInterval OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "This is the interval (in seconds) after which a learnt
+           port entry will be purged. For each port on which report
+           has been received,this timer runs for 'PortPurgeInterval'
+           seconds. This timer will be restarted whenever a report
+           message is received from a host on the specific port. If
+           the timer expires, then , the learnt port entry  will
+           be purged from the multicast group."
+      ::= { igmpsnpStatusVlanEntry 5 }
+
+  igmpsnpStatusVlanOtherQuerierPresentInterval OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "The Other Querier Present Interval is the length of time that
+           must pass before a multicast router decides that there is no
+           longer another multicast router which should be the querier."
+      ::= { igmpsnpStatusVlanEntry 6 }
+
+  igmpsnpStatusVlanRouterPortList OBJECT-TYPE
+      SYNTAX      PortList
+      MAX-ACCESS  read-only
+      STATUS      current
+      DESCRIPTION
+          "List of ports which are learnt as router ports.
+           statically. This object may not be sufficient to represent the
+           full set of interfaces in each switch instance in environments
+           where the number of interfaces in the system is scaled to a
+           large value."
+      ::= { igmpsnpStatusVlanEntry 7 }
+
+  igmpsnpStatusVlanGroupMemberTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF IGMPSnpStatusVlanGroupMemberEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains status of snooping on specific Vlans.
+           This Table is valid only when VLAN is  enabled in the system."
+      ::= { igmpsnpStatus 2 }
+
+  igmpsnpStatusVlanGroupMemberEntry OBJECT-TYPE
+      SYNTAX IGMPSnpStatusVlanGroupMemberEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Contains snooping Group Member tble for a specific VLAN."
+      INDEX { igmpsnpStatusVlanGroupVlanId,
+              igmpsnpStatusVlanGroupAddress,
+              igmpsnpStatusVlanInnerId,
+              igmpsnpStatusVlanSourceAddress,
+			  igmpsnpStatusVlanPortIndex}
+      ::= { igmpsnpStatusVlanGroupMemberTable 1 }
+
+  IGMPSnpStatusVlanGroupMemberEntry ::=
+      SEQUENCE {
+          igmpsnpStatusVlanGroupVlanId
+              INTEGER,
+          igmpsnpStatusVlanGroupAddress
+              InetAddress,
+          igmpsnpStatusVlanInnerId
+              InnerVlanIndex,
+          igmpsnpStatusVlanSourceAddress
+              IpAddress,
+          igmpsnpStatusVlanPortIndex
+              INTEGER,
+          igmpsnpStatusFilterMode
+              INTEGER
+      }
+
+  igmpsnpStatusVlanGroupVlanId OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Instance ID pertaining to VLAN table entry."
+      ::= { igmpsnpStatusVlanGroupMemberEntry 1 }
+
+  igmpsnpStatusVlanGroupAddress OBJECT-TYPE
+      SYNTAX InetAddress (SIZE (16))
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "The Multicast group address learnt."
+      ::= { igmpsnpStatusVlanGroupMemberEntry 2 }
+
+  igmpsnpStatusVlanInnerId OBJECT-TYPE
+      SYNTAX InnerVlanIndex
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "The inner vlan id on which the multicast group is learnt."
+      ::= { igmpsnpStatusVlanGroupMemberEntry 3 }
+
+  igmpsnpStatusVlanSourceAddress OBJECT-TYPE
+      SYNTAX IpAddress
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Source IP Address.
+		   Source IP Address of IGMP v2 is 0.0.0.0."
+      ::= { igmpsnpStatusVlanGroupMemberEntry 4 }
+
+  igmpsnpStatusVlanPortIndex OBJECT-TYPE
+	  SYNTAX INTEGER
+	  MAX-ACCESS not-accessible
+	  STATUS current
+	  DESCRIPTION
+          "The list of interfaces on which the group entry is learnt.
+           statically. This object may not be sufficient to represent the
+           full set of interfaces in each switch instance in environments
+           where the number of interfaces in the system is scaled to a
+           large value."
+	  ::= { igmpsnpStatusVlanGroupMemberEntry 5 }
+
+  igmpsnpStatusFilterMode OBJECT-TYPE
+      SYNTAX INTEGER {include(1), exclude(2)}
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "Filter mode of Group table entry."
+      ::= { igmpsnpStatusVlanGroupMemberEntry 6 }
+
+  igmpsnpStatusVlanMulticastForwardTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF IGMPSnpStatusVlanMulticastForwardEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains IP based multicast forwarding
+           information. This information is applicable only if
+           the 'fsSnoopInstMcastForwardingMode' is set to 'ip-based'.
+           This table and all its objects are being deprecated. The
+           fsSnoopVlanIpFwdTable is to be used instead."
+      ::= { igmpsnpStatus 3 }
+
+  igmpsnpStatusVlanMulticastForwardEntry OBJECT-TYPE
+      SYNTAX IGMPSnpStatusVlanMulticastForwardEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains VLAN ID, unicast source address ,
+           multicast group address and the list of ports onto which the
+           multicast data packets for group should be forwarded."
+      INDEX { igmpsnpStatusVlanMulticastForwardVlanId,
+              igmpsnpStatusVlanForwardSourceAddress,
+              igmpsnpStatusVlanForwardGroupAddress }
+      ::= { igmpsnpStatusVlanMulticastForwardTable 1 }
+
+  IGMPSnpStatusVlanMulticastForwardEntry ::=
+      SEQUENCE {
+          igmpsnpStatusVlanMulticastForwardVlanId
+              INTEGER,
+          igmpsnpStatusVlanForwardSourceAddress
+              InetAddress,
+          igmpsnpStatusVlanForwardGroupAddress
+              InetAddress,
+          igmpsnpStatusVlanMulticastForwardPortList
+              PortList
+      }
+
+  igmpsnpStatusVlanMulticastForwardVlanId OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Instance ID pertaining to VLAN table entry."
+      ::= { igmpsnpStatusVlanMulticastForwardEntry 1 }
+
+  igmpsnpStatusVlanForwardSourceAddress OBJECT-TYPE
+      SYNTAX InetAddress (SIZE (16))
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Unicast source address of the data source that sends
+           multicast data for this group"
+      ::= { igmpsnpStatusVlanMulticastForwardEntry 2 }
+
+  igmpsnpStatusVlanForwardGroupAddress OBJECT-TYPE
+      SYNTAX InetAddress (SIZE (16))
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "IP multicast group address"
+      ::= { igmpsnpStatusVlanMulticastForwardEntry 3 }
+
+  igmpsnpStatusVlanMulticastForwardPortList OBJECT-TYPE
+      SYNTAX PortList
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "List of ports onto which the multicast data
+           packets destined for this source and group will be forwarded."
+      ::= { igmpsnpStatusVlanMulticastForwardEntry 4 }
+
+  igmpsnpStatusVlanL2MulticastForwardTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF IGMPSnpStatusVlanL2MulticastForwardEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains MAC based multicast forwarding
+           information. This information is applicable only if
+           the 'fsSnoopInstMcastForwardingMode' is set to 'mac-based'.
+           This table and all its objects are being deprecated. The
+           fsSnoopVlanMacFwdTable is to be used instead."
+      ::= { igmpsnpStatus 4 }
+
+  igmpsnpStatusVlanL2MulticastForwardEntry OBJECT-TYPE
+      SYNTAX IGMPSnpStatusVlanL2MulticastForwardEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "This table contains VLAN ID, multicast group MAC address and
+           the list of ports onto which the multicast data packets for group
+           should be forwarded."
+      INDEX { igmpsnpStatusVlanL2MulticastForwardVlanId,
+              igmpsnpStatusVlanL2ForwardGroupAddress }
+      ::= { igmpsnpStatusVlanL2MulticastForwardTable 1 }
+
+  IGMPSnpStatusVlanL2MulticastForwardEntry ::=
+      SEQUENCE {
+          igmpsnpStatusVlanL2MulticastForwardVlanId
+              INTEGER,
+          igmpsnpStatusVlanL2ForwardGroupAddress
+              MacAddress,
+          igmpsnpStatusVlanL2MulticastForwardPortList
+              PortList
+      }
+
+  igmpsnpStatusVlanL2MulticastForwardVlanId OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Instance ID pertaining to VLAN table entry."
+      ::= { igmpsnpStatusVlanL2MulticastForwardEntry 1 }
+
+  igmpsnpStatusVlanL2ForwardGroupAddress OBJECT-TYPE
+      SYNTAX MacAddress
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "L2 multicast group MAC address"
+      ::= { igmpsnpStatusVlanL2MulticastForwardEntry 2 }
+
+  igmpsnpStatusVlanL2MulticastForwardPortList OBJECT-TYPE
+      SYNTAX PortList
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "List of ports onto which the multicast data
+           packets destined for this source and group will be forwarded."
+      ::= { igmpsnpStatusVlanL2MulticastForwardEntry 3 }
+
+END
