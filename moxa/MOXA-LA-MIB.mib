@@ -1,0 +1,450 @@
+-- ****************************************************************
+-- *  Moxa Switching - LA PRIVATE MIB
+-- *
+-- *  Copyright (c) 2019 by Moxa Inc.
+-- *  All rights reserved.
+-- *****************************************************************
+
+MOXA-LA-MIB DEFINITIONS ::= BEGIN
+    IMPORTS
+        MODULE-IDENTITY, NOTIFICATION-TYPE, OBJECT-TYPE, IpAddress, TimeTicks
+        	FROM SNMPv2-SMI
+        TEXTUAL-CONVENTION, DateAndTime, MacAddress, DisplayString, TruthValue, RowStatus
+        	FROM SNMPv2-TC
+        portInterface
+          FROM MOXA-SWITCHING-MIB;
+
+    mxLa MODULE-IDENTITY
+        LAST-UPDATED "202202170000Z"
+        ORGANIZATION "Moxa Inc."
+        CONTACT-INFO
+            "
+            Postal: Moxa Inc.
+            13F., No. 3, Sec. 4, New Taipei Blvd.
+            Xinzhuang Dist., New Taipei City 242032, Taiwan, R.O.C.
+
+            Tel: +866-2-89191230
+            Web: http://www.moxa.com/
+            "
+        DESCRIPTION
+            "The MIB module defines Moxa LA"
+
+        REVISION    "202202170000Z"
+        DESCRIPTION "update CONTACT-INFO"
+
+        REVISION    "201906300000Z"
+        DESCRIPTION "Initial Revision"
+
+        ::= { portInterface 2 }
+
+-- -------------------------------------------------------------
+-- groups in the MOXA-LA-MIB MIB
+-- -------------------------------------------------------------
+
+  -- laNotification		 OBJECT IDENTIFIER ::= { mxLa 0 }
+  laConfiguration		 OBJECT IDENTIFIER ::= { mxLa 1 }
+  laStatus		   OBJECT IDENTIFIER ::= { mxLa 2 }
+  -- laExtensions		 OBJECT IDENTIFIER ::= { mxLa 3 }
+
+-- -------------------------------------------------------------
+-- configuration group
+-- -------------------------------------------------------------
+  laConfigIfMainTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF LaConfigIfMainEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "A list of all the interface entries in the system. 
+            This table contains objects which are applicable to all
+            types of interfaces in the system. This table is a 
+            proprietary extension to the standard ifTable and 
+            ifXTable. The index to this table has the semantics of
+            the MIB-2 ifIndex."
+      ::= { laConfiguration 1 }
+
+  laConfigIfMainEntry OBJECT-TYPE
+      SYNTAX LaConfigIfMainEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "An entry containing management information applicable
+            to a particular interface."
+      INDEX { laConfigIfMainIndex }
+      ::= { laConfigIfMainTable 1 }
+
+  LaConfigIfMainEntry ::=
+      SEQUENCE {
+          laConfigIfMainIndex
+              INTEGER,
+          laConfigIfMainType
+              INTEGER,
+		  laConfigIfMainRowStatus
+		      RowStatus
+      }
+
+  laConfigIfMainIndex OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "A unique value, greater than zero, for each
+            interface. This object is identical to the ifIndex
+            of the standard MIB-2 ifTable."
+      ::= { laConfigIfMainEntry 1 }
+
+  laConfigIfMainType OBJECT-TYPE
+  	SYNTAX         INTEGER  {rfc877x25(5), -- X.25
+							ethernetCsmacd(6), -- Ethernet/802.3
+							iso88025TokenRing(9), -- Token Ring
+							ppp(23), -- PPP link
+							softwareLoopback(24), -- Loopback Interface
+							frameRelay(32), -- Frame Relay DTE port
+							miox25(38), -- multiprotocol over x.25
+										-- used for X.25 VCs
+							aal5(49), -- AAL5 over ATM
+							propVirtual (53), -- Proprietary Virtual Interface
+							async(84), -- ASYNC
+							frameRelayMPI(92), -- multiprotocol
+											   -- over FR
+											   -- used for FR VCs
+											   -- and sub-interfaces
+							pppMultilinkBundle(108), -- PPP Multilink
+													 -- Bundle
+							ipOverAtm(114), -- IPoA virtual
+							hdlc(118), -- HDLC port
+							tunnel(131), -- Encapsulation interface   
+							atmSubInterface(134), -- VCs under IPoA
+							l3ipvlan(136), -- Layer3 VLAN interface
+							mplsTunnel (150), -- MPLS Tunnel Virtual Interface
+							ieee8023ad(161), -- Link Aggregation Mib
+							mpls (166), -- MPLS
+							teLink (200), -- TE Link Interface
+							brgPort(209), -- Bridge port used for creating virtual
+										  -- ports in PBB and EVB
+							ifPwType (246), -- Pseudowire interface type 
+							ilan(247), -- Internal-lan 
+							pip (248) -- Virtual (Internal) Provider Instance port 
+							}
+  	MAX-ACCESS     read-create
+  	STATUS         current
+  	DESCRIPTION
+        "The type/protocol of interface. Specification of
+            the object is mandatory for all interfaces. This
+            value should be specified after the row creation
+            in the ifMainTable and before setting any other
+            object in this table. Once the type is specified,
+            it cannot be changed - the interface should be
+            deleted for changing the type of the interface.
+
+            The ethernetCsmacd(6), iso88025TokenRing(9), aal5(49),
+            async(84) and hdlc(118) are physical interfaces while
+            all other types are virtual or logical interfaces.
+            
+	    Specific ifIndex ranges are reserved for different interface types.
+	    Creation of different types of interfaces is possible only within 
+	    their corresponding ifIndex range. So the ifMainType should be 
+	    configured corresponding to the  ifIndex range reserved for that 
+	    particular interface type.
+
+            For creation of physical interface types, it is mandatory to
+            specify the handle to the device driver using the ifAlias
+            object of the standard ifXTable before specifying the type.
+            This handle could be something like eth1 or /dev/abcd.
+
+	    pip interface type will be used vritual Provider Instance port in 
+	    PBB bridge mode. physical PIPs can be created using ethernetCsmacd .
+
+	    Following is the mapping of different port types and there ifmaintype values.
+	    
+	    External ports
+	    --------------
+	    Port:	    ifmaintype		Port type
+	    -------------------------------------------------------------------
+	    CNP- Ctagged         6 - customerNetworkPortCtagged   (9)
+	    CNP - Port based	 6 - customerNetworkPortPortBased (2)
+	    CNP- Stagged         6 - customerNetworkPortStagged   (3)
+	    PNP                  6 - providerNetworkPort          (1)
+	    PIP                  6 - providerInstancePort         (11)
+	    CBP                  6 - customerBackbonePort         (12)
+        UAP                  6 - uplinkAccessPort             (13)
+
+ 
+	    Internal ports
+	    --------------
+	    VIP 209 - virtualInstancePort     (10)
+	    PIP 248 - providerInstancePort    (11)
+	    CBP 209 - customerBackbonePort    (12)
+        SBP 209 - stationFacingBridgePort (14)
+	
+	    brgPort will be used to create virtual PBB ports other than PIPs.
+        (ie) brgPort is used to create logical ports VIPs, CBPs and SBPs.
+
+	    The propVirtual type denotes properietary logical interfaces. These
+	    type of interfaces can be associated with a {physical interface, 
+	    switch instance} for the purpose of sharing the physical interface 
+	    to more than one context and thus realising Switch Instance Sharing 
+	    of a physical interface."
+  	::= { laConfigIfMainEntry 2 }
+
+  laConfigIfMainRowStatus OBJECT-TYPE
+  	SYNTAX         RowStatus
+  	MAX-ACCESS     read-create
+  	STATUS         current
+  	DESCRIPTION
+        "A RowStatus variable for addition, deletion and in-activation
+            of the interfaces. Specification of the object is mandatory
+            for all interfaces.
+            
+            When the status is active, the interface is created and
+            ready to use in the respective protocol modules.
+            
+            When the status is notInService, the interface has not been
+            registered with the respective protocol modules and as such
+            those modules are not aware of the existence of the interface
+            - creation is hence, incomplete. Setting an active interface
+            to notInService results in de-registration/deletion of the
+            interface from the respective protocol modules and all the
+            configurations associated with that interface in those modules
+            may be lost.
+            
+            Deletion of an interface, may affect the status of other
+            interfaces which are layered above or below it in the Interface
+            Stack (ifStackTable) and may result in other interfaces being
+            made notReady or notInService."
+  	::= { laConfigIfMainEntry 3 }
+
+
+  laConfigGroupTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF LaConfigGroupEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "A port channel group is created through ifMain table.
+           After the creation of the port channel, corresponding logical
+           interface will be created in the ifMain table. 
+           This port channel group table is indexed through Key values and allows to 
+           configure link selection policy. All other objects in this table 
+		   displays the details of the port channel group"
+      ::= { laConfiguration 2 }
+
+  laConfigGroupEntry OBJECT-TYPE
+      SYNTAX LaConfigGroupEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "There is one entry in this table for each created
+               port channel port."
+      INDEX { laConfigGroupIfIndex }
+      ::= { laConfigGroupTable 1 }
+
+  LaConfigGroupEntry ::=
+      SEQUENCE {
+          laConfigGroupIfIndex
+              INTEGER,
+          laConfigGroupPortChannelGroup
+              INTEGER,			  
+          laGroupSelectionPolicy
+              INTEGER
+      }
+
+  laConfigGroupIfIndex OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "The ifIndex of the port-channel(Aggregator's 
+               interface index)."
+      ::= { laConfigGroupEntry 1 }
+
+  laConfigGroupPortChannelGroup OBJECT-TYPE
+        SYNTAX      INTEGER
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+              "An index that uniquely identifies an entry in this table."
+        ::= { laConfigGroupEntry 2 }
+		
+  laGroupSelectionPolicy OBJECT-TYPE
+  	SYNTAX         INTEGER  {macSrc(1), macDst(2), macSrcDst(3) }
+  	MAX-ACCESS     read-write
+  	STATUS         current
+  	DESCRIPTION
+        "Link selection policy to be used by the port channel. 
+	    Selection policy selection based on Service-instance 
+	    and is applicable only in provider Backbone bridge."
+		::= { laConfigGroupEntry 3 }
+
+  laConfigPortTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF LaConfigPortEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "A table that contains objects to set the port LACP mode
+         of dot3adAggPortTable. "
+      ::= { laConfiguration 3 }
+
+  laConfigPortEntry OBJECT-TYPE
+      SYNTAX LaConfigPortEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "Each entry in this table is for each physical port that participates 
+         in link aggregation which can be either aggregatable or individual.
+         This table is indexed by the PortIndex"
+      INDEX { laConfigPortIndex }
+      ::= { laConfigPortTable 1 }
+
+  LaConfigPortEntry ::=
+      SEQUENCE {
+          laConfigPortIndex
+              INTEGER,
+          laPortMode
+              INTEGER,
+          laPortActorResetAdminState
+              BITS,
+          laLacpWaitTime
+              TimeTicks
+      }
+
+  laConfigPortIndex OBJECT-TYPE
+      SYNTAX INTEGER 
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "The ifIndex of the port."
+      ::= { laConfigPortEntry 1 }
+	  
+  laPortMode OBJECT-TYPE
+      SYNTAX INTEGER {lacp(1), manual(2), disable(3) }
+      MAX-ACCESS read-write
+      STATUS current
+      DESCRIPTION
+          "This object is used to enable LACP, disable LACP or manually
+           aggregate a port. 
+           Keep at least one port that cannot be added to ad port-channel."
+      ::= { laConfigPortEntry 2 }
+
+  laPortActorResetAdminState OBJECT-TYPE
+      SYNTAX BITS {
+           lacpActivity(0),
+           lacpTimeout(1),
+           aggregation(2),
+           synchronization(3),
+           collecting(4),
+           distributing(5),
+           defaulted(6),
+           expired(7)
+          }
+      MAX-ACCESS read-write
+      STATUS     current
+      DESCRIPTION
+      "A string of 8 bits corresponding to the administrative values
+      of Actor_State as transmitted by the actor in LACPDUs.
+      The first bit corresponds to bit 0 of Actor_State (LACP_Activity),
+      the second bit corresponds to bit 1 (LACP_Timeout),the third bit
+      corresponds to bit 2 (Aggregation), the fourth bit corresponds to
+      bit 3 (Synchronization), the fifth bit corresponds to bit 4
+      (Collecting), the sixth bit corresponds to bit 5 (Distributing),
+      the seventh bit corresponds to bit 6 (Defaulted) and the eighth
+      bit corresponds to bit 7 (Expired).
+      This object allows the reset of the values of actor LACP_Activity, 
+      LACP_Timeout and aggregation.
+      Get operation on this object returns the current port state of 
+      the actor."
+      ::={laConfigPortEntry 3 }
+	  
+  laLacpWaitTime OBJECT-TYPE
+      SYNTAX     TimeTicks
+      MAX-ACCESS read-write
+      STATUS     current
+      DESCRIPTION
+            "Duration of the port to attach to the PortChannel."
+      ::={laConfigPortEntry 4 }
+
+-- -------------------------------------------------------------
+-- Status group
+-- -------------------------------------------------------------
+  laStatGroupTable OBJECT-TYPE
+      SYNTAX SEQUENCE OF LaStatGroupEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "A port channel group is created through ifMain table.
+           After the creation of the port channel, corresponding logical
+           interface will be created in the ifMain table. 
+           This port channel group table is indexed through Key values and allows to 
+           configure link selection policy. All other objects in this table 
+		   displays the details of the port channel group"
+      ::= { laStatus 1 }
+
+  laStatGroupEntry OBJECT-TYPE
+      SYNTAX LaStatGroupEntry
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "There is one entry in this table for each created
+               port channel port."
+      INDEX { laStatGroupIfIndex }
+      ::= { laStatGroupTable 1 }
+
+  LaStatGroupEntry ::=
+      SEQUENCE {
+          laStatGroupIfIndex
+              INTEGER,
+          laStatPortChannelGroup
+              INTEGER,
+		  laStatGroupMode
+		      INTEGER,
+		  laStatGroupPortCount
+		      INTEGER,
+		  laStatGroupActivePortCount
+			  INTEGER	  
+		
+      }
+
+  laStatGroupIfIndex OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS not-accessible
+      STATUS current
+      DESCRIPTION
+          "The ifIndex of the port-channel(Aggregator's 
+               interface index)."
+      ::= { laStatGroupEntry 1 }
+	  
+  laStatPortChannelGroup OBJECT-TYPE
+      SYNTAX INTEGER
+      MAX-ACCESS read-only
+      STATUS current
+      DESCRIPTION
+          "An index that uniquely identifies an entry in this table."
+      ::= { laStatGroupEntry 2 }
+
+  laStatGroupMode OBJECT-TYPE
+  	SYNTAX         INTEGER
+  	MAX-ACCESS     read-only
+  	STATUS         current
+  	DESCRIPTION
+        	  "Current Operating Channel Mode of the port
+                     Lacp(1)    - forcing the port to negotiate with the
+                                  partner.
+                     manual(2)  - force the port to enable channeling (Manual).
+                     disable(3) - channeling is disabled."
+  	::= { laStatGroupEntry 3 }
+
+  laStatGroupPortCount OBJECT-TYPE
+        SYNTAX      INTEGER
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+         "The number of ports actually configured to the port-channel."
+         ::= { laStatGroupEntry 4 }
+
+  laStatGroupActivePortCount OBJECT-TYPE
+        SYNTAX      INTEGER
+        MAX-ACCESS  read-only
+        STATUS      current
+        DESCRIPTION
+         "This object will give the number of ports that are attached to the 
+         port-channel and actively carrying data traffic on the link."
+        ::= { laStatGroupEntry 5 }
+END

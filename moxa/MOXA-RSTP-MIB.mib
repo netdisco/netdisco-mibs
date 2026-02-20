@@ -1,0 +1,497 @@
+-- ****************************************************************
+-- *  Moxa Switching - RSTP PRIVATE MIB
+-- *
+-- *  Copyright (c) 2017 by Moxa Inc.
+-- *  All rights reserved.
+-- *****************************************************************
+
+MOXA-RSTP-MIB DEFINITIONS ::= BEGIN
+    IMPORTS
+        MODULE-IDENTITY, NOTIFICATION-TYPE, OBJECT-TYPE, IpAddress,
+        Integer32, Counter32
+            FROM SNMPv2-SMI
+        TEXTUAL-CONVENTION, DateAndTime, MacAddress, DisplayString, TruthValue
+            FROM SNMPv2-TC
+        ieee8021SpanningTreeVersion
+            FROM IEEE8021-SPANNING-TREE-MIB
+        layer2Redundancy, Timeout
+            FROM MOXA-SWITCHING-MIB;
+
+    mxRstp MODULE-IDENTITY
+        LAST-UPDATED "202202170000Z"
+        ORGANIZATION "Moxa Inc."
+        CONTACT-INFO
+            "
+            Postal: Moxa Inc.
+            13F., No. 3, Sec. 4, New Taipei Blvd.
+            Xinzhuang Dist., New Taipei City 242032, Taiwan, R.O.C.
+
+            Tel: +866-2-89191230
+            Web: http://www.moxa.com/
+            "
+        DESCRIPTION
+            "The MIB module for Moxa rstp feature is new created."
+
+        REVISION    "202202170000Z"
+        DESCRIPTION "update CONTACT-INFO"
+
+        REVISION    "201811160000Z"
+        DESCRIPTION "Initial Revision"
+
+        ::= { layer2Redundancy 2 }
+
+-- -------------------------------------------------------------
+-- groups in the MOXA-RSTP-MIB MIB
+-- -------------------------------------------------------------
+
+  rstpNotification      OBJECT IDENTIFIER ::= { mxRstp 0 }
+  rstpConfiguration     OBJECT IDENTIFIER ::= { mxRstp 1 }
+  rstpStatus            OBJECT IDENTIFIER ::= { mxRstp 2 }
+  -- rstpExtensions        OBJECT IDENTIFIER ::= { mxRstp 3 }
+
+-- -------------------------------------------------------------
+-- configuration group
+-- -------------------------------------------------------------
+    rstpConfigEnable OBJECT-TYPE
+        SYNTAX       TruthValue
+        MAX-ACCESS   read-write
+        STATUS       current
+        DESCRIPTION
+            "The administrative module status requested by management for the RSTP
+            Module. This enables or disables RSTP in the system. A value of 'true'
+            (1) indicates that RSTP must be enabled in the device on all the ports.
+            A value of 'false'(2) indicates that RSTP must be disabled in the
+            device on all the ports."
+        ::= { rstpConfiguration 1 }
+
+    rstpConfigErrorRecovery OBJECT-TYPE
+        SYNTAX      Timeout (3000..6553500)
+        UNITS       "centi-seconds"
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "The amount of time to bring the interface out of the
+            error-disabled (err-disabled) state.
+            The range is from 3000 to 6553500 centi-seconds."
+        ::= { rstpConfiguration 2 }
+
+    rstpConfigPortTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF RstpConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The configuration port table."
+        ::= { rstpConfiguration 3 }
+
+    rstpConfigPortEntry OBJECT-TYPE
+        SYNTAX RstpConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The configuration port table entry."
+        INDEX { rstpConfigPortIndex }
+        ::= { rstpConfigPortTable 1 }
+
+    RstpConfigPortEntry ::=
+        SEQUENCE {
+            rstpConfigPortIndex
+                INTEGER,
+            rstpConfigPortAutoEdge
+                TruthValue,
+            rstpConfigPortBpduGuard
+                TruthValue,
+            rstpConfigPortRootGuard
+                TruthValue,
+            rstpConfigPortLoopGuard
+                TruthValue,
+            rstpConfigPortBpduFilter
+                TruthValue
+    }
+
+    rstpConfigPortIndex OBJECT-TYPE
+        SYNTAX INTEGER
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "A unique value, greater than zero, indicating the Port number of port configuration table."
+        ::= { rstpConfigPortEntry 1 }
+
+    rstpConfigPortAutoEdge OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This parameter when true(1) indicates that detection of a port
+            as Edge Port happens automatically and false(2)
+            indicates that this feature is disabled."
+        ::= { rstpConfigPortEntry 2 }
+
+    rstpConfigPortBpduGuard OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This configures the BPDU guard feature on this port.
+            true - prevents temporary loops and applicable to ports and
+            moves the port to bpdu inconsistent state when BPDU is received on this port.
+            false - Disables the Bpdu Guard feature and recovers from bpdu inconsistent state."
+        ::= { rstpConfigPortEntry 3 }
+
+    rstpConfigPortRootGuard OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set by management. If TRUE causes the Port not
+            to be selected as Root Port for the CIST or any MSTI, even it has
+            the best spanning tree priority vector. Such a Port will be selected
+            as an Designated Port after the Root Port has been selected. This
+            parameter should be FALSE by default. If set it can cause lack of
+            spanning tree connectivity. It is set by a network administrator to
+            prevent bridges external to a core region of the network influencing
+            the spanning tree active topology, possibly because those bridges are
+            not under the full control of the administrator."
+        ::= { rstpConfigPortEntry 4 }
+
+    rstpConfigPortLoopGuard OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set by management. If true, then it will not age out
+            the information even if the peer does not send information. If the port
+            continues to receive information through BPDUs the operation
+            on this port will be normal. This will be useful when the neighbor
+            bridge is faulty, i.e. it cannot send BPDUs but continues to send data
+            traffic."
+        ::= { rstpConfigPortEntry 5 }
+
+    rstpConfigPortBpduFilter OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set by management. If true, the BPDUs received on
+        the port are ignored and no BPDUs are transmitted by this port."
+        ::= { rstpConfigPortEntry 6 }
+
+-- -------------------------------------------------------------
+-- status group
+-- -------------------------------------------------------------
+
+    rstpStatPortTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF RstpStatPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The port status table."
+        ::= { rstpStatus 1 }
+
+    rstpStatPortEntry OBJECT-TYPE
+        SYNTAX RstpStatPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The port status table entry."
+        INDEX { rstpStatPortIndex }
+        ::= { rstpStatPortTable 1 }
+
+    RstpStatPortEntry ::=
+        SEQUENCE {
+            rstpStatPortIndex
+                INTEGER,
+            rstpStatPortRole
+                INTEGER,
+            rstpStatPortOperVersion
+                INTEGER,
+            rstpStatPortBpduInconsistency
+                TruthValue,
+            rstpStatPortRootInconsistency
+                TruthValue,
+            rstpStatPortLoopInconsistency
+                TruthValue,
+            rstpStatPortRxRstBpduCount
+                Counter32,
+            rstpStatPortRxConfigBpduCount
+                Counter32,
+            rstpStatPortRxTcnBpduCount
+                Counter32,
+            rstpStatPortTxRstBpduCount
+                Counter32,
+            rstpStatPortTxConfigBpduCount
+                Counter32,
+            rstpStatPortTxTcnBpduCount
+                Counter32,
+            rstpStatPortInvalidRstBpduCount
+                Counter32,
+            rstpStatPortInvalidConfigBpduCount
+                Counter32,
+            rstpStatPortInvalidTcnBpduCount
+                Counter32,
+            rstpStatPortProtocolMigrationCount
+                Counter32,
+            rstpStatPortMigrationType
+                INTEGER,
+            rstpStatPktErrType
+                INTEGER,
+            rstpStatPktErrVal
+                INTEGER,
+            rstpStatNewRoleType
+                INTEGER,
+            rstpStatOldRoleType
+                INTEGER
+    }
+
+    rstpStatPortIndex OBJECT-TYPE
+        SYNTAX INTEGER
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "A unique value, greater than zero, indicating the Port number of port status table."
+        ::= { rstpStatPortEntry 1 }
+
+    rstpStatPortRole OBJECT-TYPE
+        SYNTAX INTEGER {
+            disabledPort(0),
+            alternatePort(1),
+            backupPort(2),
+            rootPort(3),
+            designatedPort(4)
+        }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This indicates the current Port Role assumed by this Port."
+        ::= { rstpStatPortEntry 2 }
+
+    rstpStatPortOperVersion OBJECT-TYPE
+        SYNTAX INTEGER {
+            stpCompatible(0),
+            rstp(2)
+        }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This indicates whether the Port is operationally in the Rstp
+            mode or the Stp-compatible mode i.e., whether the Port is
+            transmitting RST BPDUs or Config/TCN BPDUs."
+        ::= { rstpStatPortEntry 3 }
+
+    rstpStatPortBpduInconsistency OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set indicates the port state goes to disabled / discarding
+            due to the BPDU guard feature enabled on the port and the port receives BPDU on this.
+            A value of TRUE, indicates that the state of this port is moved into an
+            bpduguard-inconsistent state due to BPDU reception.
+            A value of FALSE, indicates that this port is not received the BPDU when BPDU
+            guard is enabled on this port or BPDU guard feature is disabled on that port."
+        ::= { rstpStatPortEntry 4 }
+
+    rstpStatPortRootInconsistency OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set when the designated port receives a superior BPDU trying to transition itself
+            to the Root Port.
+            A value of TRUE, indicates that the state of this port is moved into an root-inconsistent
+            state.A value of  FALSE, indicates that this port is not moved into an root-inconsistent
+            state."
+        ::= { rstpStatPortEntry 5 }
+
+    rstpStatPortLoopInconsistency OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "A value of TRUE, indicates that the state of this port is moved into an loop-inconsistent
+            state.A value of  FALSE, indicates that this port is not moved into an loop-inconsistent
+            state."
+        ::= { rstpStatPortEntry 6 }
+
+    rstpStatPortRxRstBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of RST BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 7 }
+
+    rstpStatPortRxConfigBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of Config BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 8 }
+
+    rstpStatPortRxTcnBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of TCN BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 9 }
+
+    rstpStatPortTxRstBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of RST BPDUs that have been transmitted by this Port."
+        ::= { rstpStatPortEntry 10 }
+
+    rstpStatPortTxConfigBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of Config BPDUs that have been transmitted by this Port."
+        ::= { rstpStatPortEntry 11 }
+
+    rstpStatPortTxTcnBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of TCN BPDUs that have been transmitted by this Port."
+        ::= { rstpStatPortEntry 12 }
+
+    rstpStatPortInvalidRstBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of invalid RST BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 13 }
+
+    rstpStatPortInvalidConfigBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of invalid Config BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 14 }
+
+    rstpStatPortInvalidTcnBpduCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of invalid TCN BPDUs that have been received on this Port."
+        ::= { rstpStatPortEntry 15 }
+
+    rstpStatPortProtocolMigrationCount OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The number of times this Port has migrated from one STP protocol
+       version to another. The relevant protocols are STP-COMPATIBLE and RSTP."
+        ::= { rstpStatPortEntry 16 }
+
+    rstpStatPortMigrationType OBJECT-TYPE
+        SYNTAX INTEGER {
+            sendstp (0),
+            sendrstp (1)
+        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "Port Protocol migration type occurred in the port."
+        ::= { rstpStatPortEntry 17 }
+
+    rstpStatPktErrType OBJECT-TYPE
+        SYNTAX INTEGER {
+            protocolIdErr(0),
+            invalidBpdu(1),
+            configLengthErr(2),
+            tcnLengthErr(3),
+            rstpLengthErr(4),
+            maxAgeErr(5),
+            fwdDelayErr(6),
+            helloTimeErr(7)
+        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "Type of invalid packet received in each of the port."
+        ::= { rstpStatPortEntry 18 }
+
+    rstpStatPktErrVal OBJECT-TYPE
+        SYNTAX INTEGER
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "Packet error value corresponding to the above type."
+        ::= { rstpStatPortEntry 19 }
+
+    rstpStatNewRoleType OBJECT-TYPE
+        SYNTAX INTEGER {
+            disabledPort(0),
+            alternatePort(1),
+            backupPort(2),
+            rootPort(3),
+            designatedPort(4)
+        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "This indicates the Port Role assumed by this Port."
+        ::= { rstpStatPortEntry 20 }
+
+    rstpStatOldRoleType OBJECT-TYPE
+        SYNTAX INTEGER {
+            disabledPort(0),
+            alternatePort(1),
+            backupPort(2),
+            rootPort(3),
+            designatedPort(4)
+        }
+        MAX-ACCESS accessible-for-notify
+        STATUS current
+        DESCRIPTION
+            "This indicates the Port Role assumed by this Port."
+        ::= { rstpStatPortEntry 21 }
+
+-- -------------------------------------------------------------
+-- Notification group
+-- -------------------------------------------------------------
+    rstpNotifyProtocolMigration NOTIFICATION-TYPE
+        OBJECTS {
+            rstpStatPortIndex,
+            ieee8021SpanningTreeVersion,
+            rstpStatPortMigrationType
+        }
+        STATUS current
+        DESCRIPTION
+            "Generated when port protocol migration happens in the port."
+        ::= { rstpNotification 1 }
+
+    rstpNotifyInvalidBpdu NOTIFICATION-TYPE
+        OBJECTS {
+            rstpStatPortIndex,
+            rstpStatPktErrType,
+            rstpStatPktErrVal
+        }
+        STATUS current
+        DESCRIPTION
+            "Generated when the invalid packet is received for
+            bpdu/stp/rstp/maximum age/forward delay/hello time."
+        ::= { rstpNotification 2 }
+
+    rstpNotifyNewPortRole NOTIFICATION-TYPE
+        OBJECTS {
+            rstpStatPortIndex,
+            rstpStatNewRoleType,
+            rstpStatOldRoleType
+        }
+        STATUS current
+        DESCRIPTION
+            "Generated whenever a new role is selected for the port."
+        ::= { rstpNotification 3 }
+
+END
