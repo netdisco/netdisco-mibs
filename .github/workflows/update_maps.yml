@@ -2,6 +2,11 @@ name: Rebuild OID Maps
 on:
   workflow_dispatch:
     inputs:
+      maps_enabled:
+        type: boolean
+        description: 'Update maps (slow)'
+        required: false
+        default:  true
       debug_enabled:
         type: boolean
         description: 'With build debug'
@@ -12,55 +17,56 @@ on:
 #      - master
 jobs:
   update_maps:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.maps_enabled }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        lfs: true
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
 
-    - name: Install dependencies
-      run: |
-        sudo apt install cpanminus
-        cpanm File::Slurper
+      - name: Install dependencies
+        run: |
+          sudo apt install cpanminus
+          cpanm File::Slurper
 
-    - name: genxlate
-      run: |
-        cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
-        export MIBHOME=`pwd`
-        mkdir -p $MIBHOME/EXTRAS/indexes/cert_indexes
-        EXTRAS/scripts/genxlate
+      - name: genxlate
+        run: |
+          cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+          export MIBHOME=`pwd`
+          mkdir -p $MIBHOME/EXTRAS/indexes/cert_indexes
+          EXTRAS/scripts/genxlate
 
-    - name: mkoidmap
-      run: |
-        cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
-        export MIBHOME=`pwd`
-        mkdir -p $MIBHOME/EXTRAS/indexes/cert_indexes
-        EXTRAS/scripts/mkoidmap
+      - name: mkoidmap
+        run: |
+          cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+          export MIBHOME=`pwd`
+          mkdir -p $MIBHOME/EXTRAS/indexes/cert_indexes
+          EXTRAS/scripts/mkoidmap
 
-    - name: mkproductlookup
-      run: |
-        export MIBHOME=`pwd`
-        grep -E '^\.1\.3\.6\.1\.4\.1\.[0-9]+\.' $MIBHOME/EXTRAS/reports/*_oids | \
-          cut -s -d, -f1,2 | \
-          sed -e 's/::/,/' | \
-          cut -d : -f 2 | \
-          cut -d , -f 1,3 | \
-          grep -v '.0,' | \
-          sed -e 's/^\.1\.3\.6\.1\.4\.1\.//' > $MIBHOME/EXTRAS/reports/all_leafs_only
+      - name: mkproductlookup
+        run: |
+          export MIBHOME=`pwd`
+          grep -E '^\.1\.3\.6\.1\.4\.1\.[0-9]+\.' $MIBHOME/EXTRAS/reports/*_oids | \
+            cut -s -d, -f1,2 | \
+            sed -e 's/::/,/' | \
+            cut -d : -f 2 | \
+            cut -d , -f 1,3 | \
+            grep -v '.0,' | \
+            sed -e 's/^\.1\.3\.6\.1\.4\.1\.//' > $MIBHOME/EXTRAS/reports/all_leafs_only
 
-    - name: Commit files
-      run: |
-        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add --all
-        git diff --staged --quiet || git commit -m "Update the OID maps via Github Actions"
+      - name: Commit files
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add --all
+          git diff --staged --quiet || git commit -m "Update the OID maps via Github Actions"
 
-    - name: Push changes
-      uses: ad-m/github-push-action@master
-      if: ${{ github.event_name == 'workflow_dispatch' && ! inputs.debug_enabled }}
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ${{ github.ref }}
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        if: ${{ github.event_name == 'workflow_dispatch' && ! inputs.debug_enabled }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
 
 #    - name: Setup tmate session
 #      uses: mxschmitt/action-tmate@v3
@@ -68,4 +74,78 @@ jobs:
 #      if: always() && ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
 ##      with:
 ##        sudo: true
+
+  build_object_sql:
+    runs-on: ubuntu-latest
+    container:
+      image: 'netdisco/netdisco:latest-backend'
+      options: '--user root --entrypoint /bin/ash'
+      volumes:
+        - '/home/runner/work:/github/workspace'
+        # this allows us to load in the new netdisco-mibs
+        # /home/runner/work/netdisco-mibs/netdisco-mibs contains the files
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install packages
+        run: apk add curl gzip sudo
+
+      - name: Add IP address as trusted source (managed database)
+        uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
+        with:
+          action: "add"
+          database_id: ${{ secrets.DIGITALOCEAN_DEMO_DB_ID }}
+          digitalocean_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Run loadmibs from local netdisco-mibs
+        env:
+          NETDISCO_HOME: /github/workspace/netdisco-mibs
+          NETDISCO_DB_USER: ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
+          NETDISCO_DB_PASS: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
+          NETDISCO_DB_HOST: ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
+          NETDISCO_DB_PORT: ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
+          NETDISCO_DB_NAME: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
+        run: |
+          /home/netdisco/bin/localenv /home/netdisco/bin/netdisco-do loadmibs --debug
+
+      - name: Dump the data
+        env:
+          PGUSER:     ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
+          PGPASSWORD: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
+          PGHOST:     ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
+          PGPORT:     ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
+          PGDATABASE: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
+        run: |
+          psql -c "COPY snmp_object TO '/github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql' WITH (FORMAT CSV, HEADER)"
+          gzip -9 /github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
+
+      - name: Commit files
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add /github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.gz
+          git diff --staged --quiet || git commit -m "Update SNMP Objects SQL"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        if: ${{ github.event_name == 'workflow_dispatch' && ! inputs.debug_enabled }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3.24
+        if: always() && inputs.debug_enabled
+        with:
+          sudo: true
+
+      - name: Remove IP address as trusted source (managed database)
+        uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
+        with:
+          action: "remove"
+          database_id: ${{ secrets.DIGITALOCEAN_DEMO_DB_ID }}
+          digitalocean_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
