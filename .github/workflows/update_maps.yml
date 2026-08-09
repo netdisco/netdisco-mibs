@@ -80,10 +80,10 @@ jobs:
     container:
       image: 'netdisco/netdisco:latest-backend'
       options: '--user root --entrypoint /bin/ash'
-      volumes:
-        - '/home/runner/work:/github/workspace'
-        # this allows us to load in the new netdisco-mibs
-        # /home/runner/work/netdisco-mibs/netdisco-mibs contains the files
+      #volumes:
+      #  - '/home/runner/work:/github/workspace'
+      #  # this allows us to load in the new netdisco-mibs
+      #  # /home/runner/work/netdisco-mibs/netdisco-mibs contains the files
 
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +91,9 @@ jobs:
           lfs: true
 
       - name: Install packages
-        run: apk add curl gzip sudo git git-lfs
+        run: |
+          apk update
+          apk add --no-cache git git-lfs openssh-client nodejs curl gzip sudo
 
       - name: Add IP address as trusted source (managed database)
         uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
@@ -102,7 +104,7 @@ jobs:
 
       - name: Run loadmibs from local netdisco-mibs
         env:
-          NETDISCO_HOME: /github/workspace/netdisco-mibs
+          NETDISCO_HOME: /home/runner/work/netdisco-mibs
           NETDISCO_DB_USER: ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
           NETDISCO_DB_PASS: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
           NETDISCO_DB_HOST: ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
@@ -119,14 +121,14 @@ jobs:
           PGPORT:     ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
           PGDATABASE: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
         run: |
-          psql -c "COPY snmp_object TO '/github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql' WITH (FORMAT CSV, HEADER)"
-          gzip -9 /github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
+          psql -c "COPY snmp_object TO '/home/runner/work/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql' WITH (FORMAT CSV, HEADER)"
+          gzip -9 /home/runner/work/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
 
       - name: Commit files
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add /github/workspace/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.gz
+          git add /home/runner/work/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.gz
           git diff --staged --quiet || git commit -m "Update SNMP Objects SQL"
 
       - name: Push changes
@@ -144,6 +146,7 @@ jobs:
 
       - name: Remove IP address as trusted source (managed database)
         uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
+        if: always()
         with:
           action: "remove"
           database_id: ${{ secrets.DIGITALOCEAN_DEMO_DB_ID }}
