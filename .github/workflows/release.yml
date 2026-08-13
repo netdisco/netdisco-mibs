@@ -54,6 +54,40 @@ jobs:
           cd ..
           tar -czf netdisco-mibs.tar.gz -C netdisco-mibs-${{ env.GH_REF_SHORT }} --transform 's,^,netdisco-mibs-${{ env.GH_REF_SHORT }}/,' .
 
+      - name: Delete existing tarball (if any)
+        id: delete_tarball
+        run: |
+          set -euo pipefail
+          ASSET_NAME="netdisco-mibs.tar.gz"
+          # ensure jq is available
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+          # get release by tag
+          RELEASE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${{ env.GH_REF_SHORT }}")
+
+          RELEASE_ID=$(echo "$RELEASE" | jq -r '.id // empty')
+          if [ -z "$RELEASE_ID" ]; then
+            echo "No release found for tag '${{ env.GH_REF_SHORT }}' — nothing to delete"
+            exit 0
+          fi
+
+          # find asset id
+          ASSET_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" \
+            | jq -r '.[] | select(.name=="'"$ASSET_NAME"'") | .id // empty')
+
+          if [ -n "$ASSET_ID" ]; then
+            echo "Deleting existing asset '$ASSET_NAME' (id: $ASSET_ID)"
+            curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
+          else
+            echo "No existing asset named '$ASSET_NAME' found"
+          fi
+
       - name: Get upload URL
         run: |
           echo UPLOAD_URL=${{ steps.create_release.outputs.upload_url }} | cut -d ' ' -f 1 >> $GITHUB_ENV
