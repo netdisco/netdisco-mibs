@@ -85,6 +85,20 @@ jobs:
       #  # this allows us to load in the new netdisco-mibs
       #  # /home/runner/work/netdisco-mibs/netdisco-mibs contains the files
 
+    # PostgreSQL service container for temporary table
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: netdisco
+          POSTGRES_USER: netdisco
+          POSTGRES_PASSWORD: netdisco
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Install packages
         run: |
@@ -95,21 +109,25 @@ jobs:
         with:
           lfs: true
 
-      - name: Add IP address as trusted source (managed database)
-        uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
-        with:
-          action: "add"
-          database_id: ${{ secrets.DIGITALOCEAN_DEMO_DB_ID }}
-          digitalocean_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Deploy database schema
+        env:
+          NETDISCO_HOME: /__w/netdisco-mibs
+          NETDISCO_DB_USER: netdisco
+          NETDISCO_DB_PASS: netdisco
+          NETDISCO_DB_HOST: postgres
+          NETDISCO_DB_PORT: 5432
+          NETDISCO_DB_NAME: netdisco
+        run: |
+          /home/netdisco/bin/localenv /home/netdisco/bin/netdisco-db-deploy
 
       - name: Run loadmibs from local netdisco-mibs
         env:
           NETDISCO_HOME: /__w/netdisco-mibs
-          NETDISCO_DB_USER: ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
-          NETDISCO_DB_PASS: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
-          NETDISCO_DB_HOST: ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
-          NETDISCO_DB_PORT: ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
-          NETDISCO_DB_NAME: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
+          NETDISCO_DB_USER: netdisco
+          NETDISCO_DB_PASS: netdisco
+          NETDISCO_DB_HOST: postgres
+          NETDISCO_DB_PORT: 5432
+          NETDISCO_DB_NAME: netdisco
         run: |
           mkdir -p /__w/netdisco-mibs/environments
           echo 'loadmibs_timeout: 6000' >> /__w/netdisco-mibs/environments/deployment.yml
@@ -117,11 +135,11 @@ jobs:
 
       - name: Dump the data
         env:
-          PGUSER:     ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
-          PGPASSWORD: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
-          PGHOST:     ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
-          PGPORT:     ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
-          PGDATABASE: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
+          PGUSER:     netdisco
+          PGPASSWORD: netdisco
+          PGHOST:     postgres
+          PGPORT:     5432
+          PGDATABASE: netdisco
         run: |
           mkdir -p /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql
           psql -c "COPY snmp_object TO '/__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql' WITH (FORMAT CSV, HEADER)"
@@ -146,24 +164,15 @@ jobs:
         if: always() && inputs.debug_enabled
         env:
           NETDISCO_HOME: /__w/netdisco-mibs
-          NETDISCO_DB_USER: ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
-          NETDISCO_DB_PASS: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
-          NETDISCO_DB_HOST: ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
-          NETDISCO_DB_PORT: ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
-          NETDISCO_DB_NAME: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
-          PGUSER:     ${{ secrets.DIGITALOCEAN_DEMO_DB_USER }}
-          PGPASSWORD: ${{ secrets.DIGITALOCEAN_DEMO_DB_PASS }}
-          PGHOST:     ${{ secrets.DIGITALOCEAN_DEMO_DB_HOST }}
-          PGPORT:     ${{ secrets.DIGITALOCEAN_DEMO_DB_PORT }}
-          PGDATABASE: ${{ secrets.DIGITALOCEAN_DEMO_DB_NAME }}
+          NETDISCO_DB_USER: netdisco
+          NETDISCO_DB_PASS: netdisco
+          NETDISCO_DB_HOST: postgres
+          NETDISCO_DB_PORT: 5432
+          NETDISCO_DB_NAME: netdisco
+          PGUSER:     netdisco
+          PGPASSWORD: netdisco
+          PGHOST:     postgres
+          PGPORT:     5432
+          PGDATABASE: netdisco
         with:
           sudo: true
-
-      - name: Remove IP address as trusted source (managed database)
-        uses: rachelallyson/add-ip-to-digital-ocean-database@v1.0
-        if: always()
-        with:
-          action: "remove"
-          database_id: ${{ secrets.DIGITALOCEAN_DEMO_DB_ID }}
-          digitalocean_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
