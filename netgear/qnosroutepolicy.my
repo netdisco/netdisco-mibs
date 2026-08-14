@@ -1,0 +1,367 @@
+QNOS-ROUTE-POLICY-MIB DEFINITIONS ::= BEGIN
+
+-- Broadcom Corporation Route-Map MIB
+-- Copyright Broadcom Corporation (200x-2012) All rights reserved.
+
+-- This SNMP Management Information Specification
+-- embodies Broadcom Corporation's confidential and proprietary
+-- intellectual property.  Broadcom Corporation retains all title
+-- and ownership in the Specification including any revisions.
+
+-- This Specification is supplied "AS IS", Broadcom Corporation
+-- makes no warranty, either expressed or implied,
+-- as to the use, operation, condition, or performance of the
+-- Specification.
+
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE,
+    Unsigned32 FROM SNMPv2-SMI
+    TEXTUAL-CONVENTION, TruthValue, RowStatus FROM SNMPv2-TC
+    DisplayString                        FROM RFC1213-MIB
+    ifIndex, InterfaceIndex, InterfaceIndexOrZero
+                                        FROM IF-MIB
+    qNosRouting                      FROM QNOS-ROUTING-MIB;
+
+    qNosRoutePolicy MODULE-IDENTITY
+        LAST-UPDATED "201210010000Z" -- 01 0ctober 2012 12:00:00 GMT
+        ORGANIZATION "Netgear Inc"
+        CONTACT-INFO ""
+        DESCRIPTION
+          "The MIB definitions for Route Policy system."
+   ::= { qNosRouting 20 }
+
+-- Textual Convention
+   QNosRoutePolicyAction ::= TEXTUAL-CONVENTION
+      STATUS current
+      DESCRIPTION
+          "Determines whether a Route Map statement
+           should be permitted or denied."
+      SYNTAX INTEGER {
+          permit(1),
+          deny(2)
+    }
+   QNosRoutePolicyStmtIpPrecedence ::= TEXTUAL-CONVENTION
+      STATUS current
+      DESCRIPTION
+          "Possible values of IP precedence that can be
+           configured in a route-map statement."
+      SYNTAX INTEGER {
+          routine(0),
+          priority(1),
+          immediate(2),
+          flash(3),
+          flash-override(4),
+          critical(5),
+          internet(6),
+          network(7),
+          invalid(8)
+    }
+
+-- dataCenter route policy name table. We create a Route-map statement through this table.
+
+   qNosRoutePolicyNameTable OBJECT-TYPE
+      SYNTAX      SEQUENCE OF QNosRoutePolicyNameEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION
+          "Table to configure or fetch current list of route-map statements"
+   ::= { qNosRoutePolicy  1}
+
+   qNosRoutePolicyNameEntry OBJECT-TYPE
+      SYNTAX      QNosRoutePolicyNameEntry
+      MAX-ACCESS  not-accessible
+      STATUS      current
+      DESCRIPTION
+          "Each entry in this table corresponds to a route-map statement"
+      INDEX {qNosRoutePolicyName,qNosRoutePolicyStmtActionType,qNosRoutePolicySequence}
+    ::= { qNosRoutePolicyNameTable 1 }
+
+   QNosRoutePolicyNameEntry::= SEQUENCE {
+    qNosRoutePolicyName                  DisplayString,
+    qNosRoutePolicyStmtActionType        QNosRoutePolicyAction,
+    qNosRoutePolicySequence              Unsigned32,
+    qNosRoutePolicyNameRowStatus         RowStatus
+   }
+
+  qNosRoutePolicyName OBJECT-TYPE
+     SYNTAX      DisplayString (SIZE(1..32))
+     MAX-ACCESS  read-create
+     STATUS  current
+     DESCRIPTION
+         "The name of a Route Map statement."
+  ::= { qNosRoutePolicyNameEntry 1 }
+
+qNosRoutePolicyStmtActionType OBJECT-TYPE
+    SYNTAX      QNosRoutePolicyAction
+    MAX-ACCESS   read-create
+    STATUS  current
+    DESCRIPTION
+        "The action associated with this route-map statement.
+         This can be either Permit/Deny  "
+    ::= { qNosRoutePolicyNameEntry 2 }
+
+qNosRoutePolicySequence OBJECT-TYPE
+    SYNTAX       Unsigned32 (0..65535)
+    MAX-ACCESS   read-create
+    STATUS  current
+    DESCRIPTION
+        "Route Maps are linked together using sequence numbers.
+         All Route Maps with the same index and with different
+         sequence numbers are linked together and processed in
+         order of increasing sequence number."
+    ::= { qNosRoutePolicyNameEntry 3 }
+
+  qNosRoutePolicyNameRowStatus OBJECT-TYPE
+     SYNTAX      RowStatus
+     MAX-ACCESS  read-create
+     STATUS  current
+     DESCRIPTION
+         "Controls creation and deletion of Row Status entries."
+  ::= { qNosRoutePolicyNameEntry 4 }
+
+
+--*********************************************************************
+--route-map statement table to configure 'match' or 'set' terms
+--*********************************************************************
+  qNosRoutePolicyStamentTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF QNosRoutePolicyStatementEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Table to configure match or set statements in a route-map statement."
+    ::= { qNosRoutePolicy  2 }
+
+qNosRoutePolicyStatementEntry OBJECT-TYPE
+    SYNTAX      QNosRoutePolicyStatementEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Each entry describes match and set terms in a route-map statement if configured"
+    INDEX {qNosRoutePolicyStmtName,qNosRoutePolicyStmtSeqNum,qNosRoutePolicyStmtAction}
+    ::= { qNosRoutePolicyStamentTable 1 }
+
+QNosRoutePolicyStatementEntry::= SEQUENCE {
+    qNosRoutePolicyStmtName                       DisplayString,
+    qNosRoutePolicyStmtSeqNum                     Unsigned32,
+    qNosRoutePolicyStmtAction                     QNosRoutePolicyAction,
+    qNosRoutePolicyStmtMatchIpv4AclList           DisplayString,
+    qNosRoutePolicyStmtMatchIpv4AclDelList        DisplayString,
+    qNosRoutePolicyStmtMatchMacAclList            DisplayString,
+    qNosRoutePolicyStmtMatchMacAclDelList         DisplayString,
+    qNosRoutePolicyStmtMatchPacketLengthRangeMin  Unsigned32,
+    qNosRoutePolicyStmtMatchPacketLengthRangeMax  Unsigned32,
+    qNosRoutePolicyStmtSetIpNextHopList           DisplayString,
+    qNosRoutePolicyStmtSetIpNextHopDelList        DisplayString,
+    qNosRoutePolicyStmtSetDefaultIpNextHopList    DisplayString,
+    qNosRoutePolicyStmtSetDefaultIpNextHopDelList DisplayString,
+    qNosRoutePolicyStmtSetIpPrecedence            QNosRoutePolicyStmtIpPrecedence,
+    qNosRoutePolicyStmtSetIntfNull0               TruthValue
+  }
+
+ qNosRoutePolicyStmtName OBJECT-TYPE
+     SYNTAX      DisplayString (SIZE(1..31))
+     MAX-ACCESS  not-accessible
+     STATUS  current
+     DESCRIPTION
+         "The name of a Route Map."
+  ::= { qNosRoutePolicyStatementEntry 1 }
+
+  qNosRoutePolicyStmtSeqNum OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Route Maps are linked together using sequence numbers.
+         All Route Maps with the same index and with different
+         sequence numbers are linked together and processed in
+         order of increasing sequence number."
+    ::= { qNosRoutePolicyStatementEntry 2 }
+
+  qNosRoutePolicyStmtAction OBJECT-TYPE
+    SYNTAX      QNosRoutePolicyAction
+    MAX-ACCESS  not-accessible
+    STATUS  current
+    DESCRIPTION
+        "The action associated with this route-map statement.
+         This can be either Permit/Deny  "
+    ::= { qNosRoutePolicyStatementEntry 3 }
+
+  qNosRoutePolicyStmtMatchIpv4AclList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of IPv4 ACLs. This
+         list contains either IPV4 standard ACL/IPV4 extended
+         ACL/ named IPv4 ACL. In a single match statement,
+         up to a maximum of 16 IPV4 ACLs can be included. "
+    ::= { qNosRoutePolicyStatementEntry 4 }
+
+  qNosRoutePolicyStmtMatchIpv4AclDelList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of IPv4 ACLs. This
+         list contains either IPV4 standard ACL/IPV4 extended
+         ACL/ named IPv4 ACL. In a single match statement,
+         up to a maximum of 16 IPV4 ACLs can be included.This
+         list is used to delete already configured match list
+         of IPv4 ACLs in route-map statement.Earlier this list
+         should have configured through MIB object
+         qNosRoutePolicyStmtMatchIpv4AclList  "
+    ::= { qNosRoutePolicyStatementEntry 5 }
+
+  qNosRoutePolicyStmtMatchMacAclList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of MAC ACLs. This
+         list contains upto 16 MAC ACL names that can be
+         included in a match statement. "
+    ::= { qNosRoutePolicyStatementEntry 6 }
+
+  qNosRoutePolicyStmtMatchMacAclDelList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of MAC ACLs. This
+         list contains upto 16 MAC ACL names that can be
+         included in a match statement. This MIB object is
+         used to delete MAC ACL lists matched in a route-map
+         statement via qNosRoutePolicyStmtMatchMacAclList. "
+    ::= { qNosRoutePolicyStatementEntry 7 }
+
+  qNosRoutePolicyStmtMatchPacketLengthRangeMin OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "Minimum value in the packet length range in a match
+         length term. A value of zero is used to disable/remove
+         minimum length configuration. "
+    ::= { qNosRoutePolicyStatementEntry 8}
+
+  qNosRoutePolicyStmtMatchPacketLengthRangeMax OBJECT-TYPE
+    SYNTAX      Unsigned32
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "Maximum value in the packet length range in a match
+         length term. A value of zero is used to disable/remove
+         maximum length configuration.  "
+    ::= { qNosRoutePolicyStatementEntry 9 }
+
+  qNosRoutePolicyStmtSetIpNextHopList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of next-hop IP addresses.
+         Upto a maximum of 16 IP addresses can be specified "
+    ::= { qNosRoutePolicyStatementEntry 10 }
+
+  qNosRoutePolicyStmtSetIpNextHopDelList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of next-hop IP addresses.
+         Upto a maximum of 16 IP addresses can be specified.This
+         MIB object is used to delete IP next-hop list configured
+         via qNosRoutePolicyStmtSetIpNextHopList "
+    ::= { qNosRoutePolicyStatementEntry 11 }
+
+  qNosRoutePolicyStmtSetDefaultIpNextHopList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of default next-hop IP addresses.
+         Upto a maximum of 16 IP addresses can be specified "
+    ::= { qNosRoutePolicyStatementEntry 12 }
+
+  qNosRoutePolicyStmtSetDefaultIpNextHopDelList OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "The string containing a list of default next-hop IP addresses.
+         Upto a maximum of 16 IP addresses can be specified.This MIB
+         object is used to delete IP default next-hop list configured
+         via qNosRoutePolicyStmtSetDefaultIpNextHopList "
+    ::= { qNosRoutePolicyStatementEntry 13 }
+
+  qNosRoutePolicyStmtSetIpPrecedence OBJECT-TYPE
+    SYNTAX      QNosRoutePolicyStmtIpPrecedence
+    MAX-ACCESS  read-write
+    STATUS  current
+    DESCRIPTION
+        "IP Precedence value to be remarked. This is specified through
+         set clause in route-map statement. In order to remove configured precedence value,
+         use invalid(8) option. "
+    ::= { qNosRoutePolicyStatementEntry 14 }
+
+   qNosRoutePolicyStmtSetIntfNull0 OBJECT-TYPE
+         SYNTAX      TruthValue
+         MAX-ACCESS  read-write
+         STATUS      current
+         DESCRIPTION
+                     "Specifying null0 as an interface in a route-map
+                      statement"
+   ::= { qNosRoutePolicyStatementEntry 15 }
+
+--******************************************************************************
+--Applying Route Maps to interface
+
+--*******************************************************************************
+qNosRoutePolicyIfTable OBJECT-TYPE
+         SYNTAX      SEQUENCE OF QNosRoutePolicyIfEntry
+         MAX-ACCESS  not-accessible
+         STATUS      current
+         DESCRIPTION
+                     "A table of interfaces on which route-map is applied."
+         ::= { qNosRoutePolicy  3 }
+
+qNosRoutePolicyIfEntry OBJECT-TYPE
+         SYNTAX      QNosRoutePolicyIfEntry
+         MAX-ACCESS  not-accessible
+         STATUS      current
+         DESCRIPTION
+                     ""
+         INDEX       { qNosRoutePolicyIfIndex,qNosRoutePolicyIfName}
+         ::= { qNosRoutePolicyIfTable 1 }
+
+QNosRoutePolicyIfEntry::= SEQUENCE {
+    qNosRoutePolicyIfIndex      InterfaceIndex,
+    qNosRoutePolicyIfName       DisplayString,
+    qNosRoutePolicyIfRowStatus  RowStatus
+  }
+
+  qNosRoutePolicyIfIndex OBJECT-TYPE
+     SYNTAX     InterfaceIndex
+     MAX-ACCESS  read-create
+     STATUS  current
+     DESCRIPTION
+         "Interface to which route-map needs to be applied or Interface from which route-map needs to be removed."
+  ::= { qNosRoutePolicyIfEntry 1 }
+
+  qNosRoutePolicyIfName OBJECT-TYPE
+     SYNTAX      DisplayString (SIZE(1..31))
+     MAX-ACCESS  read-create
+     STATUS  current
+     DESCRIPTION
+         "The name of a Route Map."
+  ::= { qNosRoutePolicyIfEntry 2 }
+
+qNosRoutePolicyIfRowStatus  OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS  current
+    DESCRIPTION
+        "Controls creation and deletion of Row Status entries."
+    ::= { qNosRoutePolicyIfEntry 3 }
+END
