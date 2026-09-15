@@ -1,5 +1,5 @@
---- ArubaOS 8.7.1.0_77203
---- ArubaOS 8.7.1.0_77203
+-- ArubaOS 8.13.3.0_96306
+-- ArubaOS 8.13.3.0_96306
    AI-AP-MIB DEFINITIONS ::= BEGIN
 
    IMPORTS
@@ -33,16 +33,17 @@
                         FROM ARUBA-MIB;
 
    aiMIB MODULE-IDENTITY 
-       LAST-UPDATED "0804160206Z"
-       ORGANIZATION "Aruba Wireless Networks"
+       LAST-UPDATED "202008141745Z"
+       ORGANIZATION "Aruba, a Hewlett Packard Enterprise company"
        CONTACT-INFO
-            "Postal:    1322 Crossman Avenue
-                        Sunnyvale, CA 94089     
-            E-mail:     dl-support@arubanetworks.com
-            Phone:      +1 408 227 4500"
+            "Postal:    3333 Scott Blvd,
+                        Santa Clara, CA 95054
+            E-mail:     aruba-ext-eng-reg@hpe.com
+            Phone:      408 227 4500
+            Fax:        408 752 0626"
        DESCRIPTION
            "This MIB is for managing Aruba Instant WLAN"
-       REVISION        "0804160206Z"
+       REVISION        "202008141745Z"
        DESCRIPTION
            "The initial revision."
        ::= { aiEnterpriseMibModules 1 }
@@ -83,7 +84,8 @@ ArubaPhyType ::= TEXTUAL-CONVENTION
 						dot11b(2),
 						dot11g(3),
 						dot11ag(4),
-						wired(5)
+						wired(5),
+                        dot11ax6ghz(6)
 					  }
         
 ArubaHTMode ::= TEXTUAL-CONVENTION
@@ -94,7 +96,17 @@ ArubaHTMode ::= TEXTUAL-CONVENTION
 	SYNTAX       INTEGER {
 		 				none(1),
 						ht20(2),
-						ht40(3)
+						ht40(3),
+                        vht20(4),
+                        vht40(5),
+                        vht80(6),
+                        vht160(7),
+                        vht80plus80(8),
+                        he20(9),
+                        he40(10),
+                        he80(11),
+                        he160(12),
+                        he80plus80(13)
 					  }
         
 ArubaHTExtChannel ::= TEXTUAL-CONVENTION
@@ -158,9 +170,9 @@ ArubaSwitchRole ::= TEXTUAL-CONVENTION
 	DESCRIPTION
   		" Represents the role of the controller"
 	SYNTAX       INTEGER {
-		 				master(1),
+                                                conductor(1),
 						local(2),
-						backupmaster(3)
+						backupconductor(3)
 					  }
           
 ArubaSupportStatus ::= TEXTUAL-CONVENTION
@@ -559,10 +571,12 @@ ArubaAddressType ::= TEXTUAL-CONVENTION
 		 		 }
 
 ArubaBlackListReason ::= TEXTUAL-CONVENTION
-	STATUS		current
+	STATUS		obsolete
 	DESCRIPTION
 		"
-		Black List Reason. 
+		Black List Reason
+		**NOTE: this textual convention is obsoleted and replaced by
+		ArubaDenyListReason.
 		"
 	SYNTAX       INTEGER {
 		 				userDefined(1),
@@ -881,11 +895,13 @@ ArubaARMChangeReason ::= TEXTUAL-CONVENTION
    }
 
 ArubaAPMasterStatus ::= TEXTUAL-CONVENTION
-	STATUS		current
+	STATUS		obsolete
 	DESCRIPTION
 		"
 		  AP status as seen by the master controller
           (used to indicate a status change).
+                **NOTE: this textual convention is obsoleted and replaced by
+                ArubaAPConductorStatus.
 		"
 	SYNTAX		INTEGER {
 			up(1),
@@ -930,6 +946,38 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
     SYNTAX  INTEGER {
         connectFail(1)
     }
+
+ArubaDenyListReason ::= TEXTUAL-CONVENTION
+        STATUS          current
+        DESCRIPTION
+                "
+                Deny List Reason.
+                "
+        SYNTAX       INTEGER {
+                                                userDefined(1),
+                                                mitmAttack(2),
+                                                authFailure(3),
+                                                pingFlood(4),
+                                                sessionFlood(5),
+                                                synFlood(6),
+                                                sessionDenylist(7),
+                                                ipSpoofing(8),
+                                                esiDenylist(9),
+                                                other(100)
+                                          }
+
+ArubaAPConductorStatus ::= TEXTUAL-CONVENTION
+        STATUS          current
+        DESCRIPTION
+                "
+                  AP status as seen by the conductor controller
+          (used to indicate a status change).
+                "
+        SYNTAX          INTEGER {
+                        up(1),
+                        down(2),
+                        move(3)
+        }
 
    aiInfoGroup                OBJECT IDENTIFIER ::= { aiMIB 1 }
    aiStateGroup               OBJECT IDENTIFIER ::= { aiMIB 2 }
@@ -979,11 +1027,13 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
    aiMasterIPAddress OBJECT-TYPE
        SYNTAX      IpAddress 
        MAX-ACCESS  read-only
-       STATUS      current
+       STATUS      obsolete
        DESCRIPTION
-            "IP Address of AP where virtual controller software is active"
+            "IP Address of AP where virtual controller software is active
+                **NOTE: this object is obsoleted and replaced by
+                aiConductorIPAddress"
        ::= { aiInfoGroup 6 }
-    
+
    aiWlanSSIDTable  OBJECT-TYPE 
          SYNTAX       SEQUENCE OF AiWlanSSIDEntry
          MAX-ACCESS   not-accessible
@@ -1157,6 +1207,15 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
        DESCRIPTION
             "Mesh Relation"
        ::= { aiMeshEntry 9 }
+
+   aiConductorIPAddress OBJECT-TYPE
+       SYNTAX      IpAddress
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+            "IP Address of AP where virtual controller software is active
+            "
+       ::= { aiInfoGroup 16 }
     
    aiAccessPointTable  OBJECT-TYPE
         SYNTAX       SEQUENCE OF AiAccessPointEntry
@@ -1388,12 +1447,10 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
        STATUS       current
        DESCRIPTION
           "
-            Radio channel. First byte contains primary channel and
-            first two bits on second byte contains indicator for secondary
-            channel. If first two bits of second byte is 0, it is a 20MHz
-            channel. If first two bits of second byte is 01, secondary channel is
-            above primary channel, if first two bits of second by is 10, secondary
-            channel is below the primary channel.
+            A display string indicating the current radio channel.
+            if the aiRadioChannel is set to 'above' or 'below' or 'E' or 'S',
+            then the channel number will be appended
+            with '+' or '-' or 'E' or 'S' respectively.
           "
       ::= { aiRadioEntry 4 }
 
@@ -1690,14 +1747,16 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
         aiClientOperatingSystem DisplayString,
         aiClientSNR             Integer32,
         aiClientTxDataFrames    Counter32,
-        aiClientTxDataBytes     Counter32,
+        aiClientTxDataBytes     Counter64,
         aiClientTxRetries       Counter32,
         aiClientTxRate          Integer32,
         aiClientRxDataFrames    Counter32,
-        aiClientRxDataBytes     Counter32,
+        aiClientRxDataBytes     Counter64,
         aiClientRxRetries       Counter32,
         aiClientRxRate          Integer32,
-        aiClientUptime          TimeTicks
+        aiClientUptime          TimeTicks,
+        aiClientPhyType         ArubaPhyType,
+        aiClientHtMode          ArubaHTMode
    }
 
    aiClientMACAddress OBJECT-TYPE
@@ -1766,7 +1825,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
        ::= { aiClientEntry 8 }
 
    aiClientTxDataBytes OBJECT-TYPE
-       SYNTAX      Counter32
+       SYNTAX      Counter64
        MAX-ACCESS  read-only
        STATUS      current
        DESCRIPTION
@@ -1798,7 +1857,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
        ::= { aiClientEntry 12 }
 
    aiClientRxDataBytes OBJECT-TYPE
-       SYNTAX      Counter32
+       SYNTAX      Counter64
        MAX-ACCESS  read-only
        STATUS      current
        DESCRIPTION
@@ -1830,6 +1889,21 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
             0 and uptime gets reset to 0."
        ::= { aiClientEntry 16 }
 
+    aiClientPhyType OBJECT-TYPE
+       SYNTAX      ArubaPhyType
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+            "The wireless PHY type to which the client is associated, or 'wired'"
+       ::= { aiClientEntry 17 }
+
+    aiClientHtMode OBJECT-TYPE
+       SYNTAX      ArubaHTMode
+       MAX-ACCESS  read-only
+       STATUS      current
+       DESCRIPTION
+            "The HT mode of this Client"
+       ::= { aiClientEntry 18 }
 
 --- Begining of voice client location entry       
 
@@ -1998,7 +2072,6 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
          DESCRIPTION
             "Time since last config was applied"
         ::= { aiManagedInfoGroup 1 }
-
 
 -- aiTrapsGroup
 -- This group defines all the traps generated by the switch.
@@ -2378,10 +2451,13 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxTrapStationBlackListReason OBJECT-TYPE
 		SYNTAX		ArubaBlackListReason
 		MAX-ACCESS	accessible-for-notify
-		STATUS		current
+		STATUS		obsolete
 		DESCRIPTION
 			"			
             The Reason for which a station is black listed.
+            **NOTE: this object is obsoleted and replaced by
+            wlsxTrapStationDenyListReason.
+
         			"
 	::= {aiTrapObjectsGroup 34 }
 
@@ -2867,10 +2943,12 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxTrapMasterIp OBJECT-TYPE
 		SYNTAX		IpAddress
 		MAX-ACCESS	accessible-for-notify
-		STATUS		current
+		STATUS		obsolete
 		DESCRIPTION
 			"			
-            This object represents the master IP address. 
+            This object represents the master IP address.
+            **NOTE: this object is obsoleted and replaced by
+            wlsxTrapConductorIp
         			"
 	::= {aiTrapObjectsGroup 82 }
 
@@ -2887,10 +2965,12 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxTrapMasterName OBJECT-TYPE
 		SYNTAX		DisplayString(SIZE(0..64))
 		MAX-ACCESS	accessible-for-notify
-		STATUS		current
+		STATUS		obsolete
 		DESCRIPTION
 			"			
             This object represents the master controller name.
+            **NOTE: this object is obsoleted and replaced by
+            wlsxTrapConductorName
         			"
 	::= {aiTrapObjectsGroup 84 }
 
@@ -3098,10 +3178,12 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxTrapApMasterStatus OBJECT-TYPE
 		SYNTAX		ArubaAPMasterStatus
 		MAX-ACCESS	accessible-for-notify
-		STATUS		current
+		STATUS		obsolete
 		DESCRIPTION
 			"			
             Status of the AP as seen by the master when the status changes.
+            **NOTE: this object is obsoleted and replaced by
+            wlsxTrapApConductorStatus
         			"
 	::= {aiTrapObjectsGroup 105 }
 
@@ -3231,11 +3313,13 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
     wlsxTrapStationBlackListReasonStr OBJECT-TYPE
         SYNTAX          DisplayString(SIZE(0..32))
         MAX-ACCESS      accessible-for-notify
-        STATUS          current
+        STATUS          obsolete
         DESCRIPTION
                     "                       
             This object is used in the traps to indicate the
             type of Blacklist reason.
+            **NOTE: this object is obsoleted and replaced by
+            wlsxTrapStationDenyListReasonStr.
                                 "
     ::= {aiTrapObjectsGroup 144 }
 
@@ -3259,160 +3343,307 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
                                 "
     ::= {aiTrapObjectsGroup 148 }
 
+     wlsxTrapAuthFailureReason OBJECT-TYPE
+         SYNTAX      DisplayString(SIZE(0..64))
+         MAX-ACCESS  accessible-for-notify
+         STATUS      current
+         DESCRIPTION
+                 "
+                 This object represents the reason for the authentication failure.
+                         "
+    ::= {aiTrapObjectsGroup 155 }
+
+    wlsxTrapStationDenyListReason OBJECT-TYPE
+                SYNTAX          ArubaDenyListReason
+                MAX-ACCESS      accessible-for-notify
+                STATUS          current
+                DESCRIPTION
+                        "
+            The Reason for which a station is in deny list.
+                                "
+        ::= {aiTrapObjectsGroup 156 }
+
+    wlsxTrapStationDenyListReasonStr OBJECT-TYPE
+        SYNTAX          DisplayString(SIZE(0..32))
+        MAX-ACCESS      accessible-for-notify
+        STATUS          current
+        DESCRIPTION
+                    "
+            This object is used in the traps to indicate the
+            type of Denylist reason.
+                                "
+        ::= {aiTrapObjectsGroup 157 }
+
+    wlsxTrapConductorIp OBJECT-TYPE
+                SYNTAX          IpAddress
+                MAX-ACCESS      accessible-for-notify
+                STATUS          current
+                DESCRIPTION
+                        "
+            This object represents the conductor IP address.
+                                "
+        ::= {aiTrapObjectsGroup 158 }
+
+    wlsxTrapConductorName OBJECT-TYPE
+                SYNTAX          DisplayString(SIZE(0..64))
+                MAX-ACCESS      accessible-for-notify
+                STATUS          current
+                DESCRIPTION
+                        "
+            This object represents the conductor controller name.
+                                "
+        ::= {aiTrapObjectsGroup 159 }
+
+        wlsxTrapApConductorStatus OBJECT-TYPE
+                SYNTAX          ArubaAPConductorStatus
+                MAX-ACCESS      accessible-for-notify
+                STATUS          current
+                DESCRIPTION
+                        "
+            Status of the AP as seen by the conductor when the status changes.
+                                "
+        ::= {aiTrapObjectsGroup 160 }
+
+        wlsxTrapAPHTMode OBJECT-TYPE
+            SYNTAX      ArubaHTMode
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents HT-Mode Information.
+                "
+        ::= {aiTrapObjectsGroup 161 }
+
+        wlsxTrapAPPhyType OBJECT-TYPE
+            SYNTAX      ArubaPhyType
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents Band Information.
+                    "
+        ::= {aiTrapObjectsGroup 162 }
+
+        wlsxTrapAPPrevHTMode OBJECT-TYPE
+            SYNTAX      ArubaHTMode
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents Previous HT-Mode Information.
+                    "
+        ::= {aiTrapObjectsGroup 163 }
+
+        wlsxTrapAPPrevPhyType OBJECT-TYPE
+            SYNTAX      ArubaPhyType
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents Prev Band Information.
+                    "
+        ::= {aiTrapObjectsGroup 164 }
+
+        wlsxTrapAPSecChannel OBJECT-TYPE
+            SYNTAX      Integer32
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents Secondary Channel.
+                    "
+        ::= {aiTrapObjectsGroup 165 }
+
+	    wlsxTrapAPBand OBJECT-TYPE
+            SYNTAX      DisplayString(SIZE(0..16))
+		    MAX-ACCESS	accessible-for-notify
+		    STATUS		current
+		    DESCRIPTION
+			        "
+            This object represents the radio band on which an AP operates on.
+                                "
+	    ::= {aiTrapObjectsGroup 166 }
+
+        wlsxTrapTargetAPBand OBJECT-TYPE
+            SYNTAX      DisplayString(SIZE(0..16))
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                    "
+            This object represents the radio band on which the target AP operates on.
+                    "
+        ::= {aiTrapObjectsGroup 167 }
+
+        wlsxTrapMatchedIpv6 OBJECT-TYPE
+            SYNTAX      DisplayString(SIZE(0..128))
+            MAX-ACCESS  accessible-for-notify
+            STATUS      current
+            DESCRIPTION
+                "
+                This object is used in the traps to indicate the IPv6 address
+                "
+        ::= {aiTrapObjectsGroup 168 }
+
 -- Definition of traps
 
-	wlsxNodeRateAnomaly NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapFrameType,wlsxTrapNodeMac,
-				wlsxTrapSnr,wlsxTrapAPBSSID,
-				wlsxTrapAPLocation}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNodeRateAnomaly NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapFrameType,wlsxTrapNodeMac,
+                wlsxTrapSnr,wlsxTrapAPBSSID,
+                wlsxTrapAPLocation}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a node is exceeding the threshold set for 
             the frame type.
-        	"
-	::= {aiTrapDefinitionsGroup 1003 }
+            "
+    ::= {aiTrapDefinitionsGroup 1003 }
 
-	wlsxNUserEntryCreated NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNUserEntryCreated NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a new user was created.
-        	"
-	::= {aiTrapDefinitionsGroup 1014 }
+            "
+    ::= {aiTrapDefinitionsGroup 1014 }
 
-	wlsxNUserEntryDeleted NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNUserEntryDeleted NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a user was deleted.
-        	"
-	::= {aiTrapDefinitionsGroup 1015 }
+            "
+    ::= {aiTrapDefinitionsGroup 1015 }
 
-	wlsxNUserEntryAuthenticated NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,
-				wlsxTrapUserName,wlsxTrapUserAuthenticationMethod,
-				wlsxTrapUserRole}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNUserEntryAuthenticated NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,
+                wlsxTrapUserName,wlsxTrapUserAuthenticationMethod,
+                wlsxTrapUserRole}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a user is Authenticated.
-        	"
-	::= {aiTrapDefinitionsGroup 1016 }
+            "
+    ::= {aiTrapDefinitionsGroup 1016 }
 
-	wlsxNUserEntryDeAuthenticated NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNUserEntryDeAuthenticated NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a user is Deauthenticated.
-        	"
-	::= {aiTrapDefinitionsGroup 1017 }
+            "
+    ::= {aiTrapDefinitionsGroup 1017 }
 
-	wlsxNUserAuthenticationFailed NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserName, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,wlsxTrapAuthServerName,wlsxTrapAuthServerAddress,wlsxTrapAPBSSID,wlsxTrapAPName}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNUserAuthenticationFailed NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserName, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,wlsxTrapAuthServerName,wlsxTrapAuthServerAddress,wlsxTrapAPBSSID,wlsxTrapAPName}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that a user authentication has failed.
-        	"
-	::= {aiTrapDefinitionsGroup 1018 }
+            "
+    ::= {aiTrapDefinitionsGroup 1018 }
 
-	wlsxNAuthServerReqTimedOut NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapUserName, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,wlsxTrapAuthServerName,wlsxTrapAuthServerAddress,wlsxTrapAPBSSID,wlsxTrapAPName}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNAuthServerReqTimedOut NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserName, wlsxTrapUserIpAddress,wlsxTrapUserPhyAddress,wlsxTrapAuthServerName,wlsxTrapAuthServerAddress,wlsxTrapAPBSSID,wlsxTrapAPName}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that the authentication server request timed out.
-        	"
-	::= {aiTrapDefinitionsGroup 1019 }
+            "
+    ::= {aiTrapDefinitionsGroup 1019 }
 
-	wlsxNAuthServerTimedOut NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAuthServerName,wlsxTrapAuthServerTimeout}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNAuthServerTimedOut NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAuthServerName,wlsxTrapAuthServerTimeout}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that the authentication server timed out.
-        	"
-	::= {aiTrapDefinitionsGroup 1020 }
+            "
+    ::= {aiTrapDefinitionsGroup 1020 }
 
-	wlsxNAuthServerIsUp NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAuthServerName, wlsxTrapAuthServerAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNAuthServerIsUp NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAuthServerName, wlsxTrapAuthServerAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that an authentication server is up.
-        	"
-	::= {aiTrapDefinitionsGroup 1021 }
+            "
+    ::= {aiTrapDefinitionsGroup 1021 }
 
-	wlsxNAccessPointIsUp NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNAccessPointIsUp NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             A Trap which indicates that an access point up.
-        	"
-	::= {aiTrapDefinitionsGroup 1040 }
+            "
+    ::= {aiTrapDefinitionsGroup 1040 }
 
-	wlsxNAccessPointIsDown NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNAccessPointIsDown NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress}
+        STATUS      current
+        DESCRIPTION
+            "
             A Trap which indicates that an access point down.
-        	"
-	::= {aiTrapDefinitionsGroup 1041 }
+            "
+    ::= {aiTrapDefinitionsGroup 1041 }
 
-	wlsxNChannelChanged NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAPBSSID,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNChannelChanged NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAPBSSID,wlsxTrapAPLocation,
+                wlsxTrapAPChannel}
+        STATUS      current
+        DESCRIPTION
+            "
             This trap indicates that an access point at Location 
             wlsxTrapAPLocation has changed the channel.
-        	"
-	::= {aiTrapDefinitionsGroup 1043 }
+            "
+    ::= {aiTrapDefinitionsGroup 1043 }
 
-	wlsxNStationAddedToBlackList NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapStationBlackListReason,
+    wlsxNStationAddedToBlackList NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapStationBlackListReason,
                                 wlsxTrapStationBlackListReasonStr}
-		STATUS		current
-		DESCRIPTION
-			"			
+        STATUS      obsolete
+        DESCRIPTION
+            "
             This trap indicates that the station is black listed. 
-        	"
-	::= {aiTrapDefinitionsGroup 1044 }
+            **NOTE: this notification is obsoleted and replaced by
+            wlsxNStationAddedToDenyList.
+            "
+    ::= {aiTrapDefinitionsGroup 1044 }
 
-	wlsxNStationRemovedFromBlackList NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNStationRemovedFromBlackList NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapNodeMac}
+        STATUS      obsolete
+        DESCRIPTION
+            "
             This trap indicates that the station is removed from the black list. 
-        	"
-	::= {aiTrapDefinitionsGroup 1045 }
+            **NOTE: this notification is obsoleted and replaced by
+            wlsxNStationRemovedFromDenyList
+            "
+    ::= {aiTrapDefinitionsGroup 1045 }
 
-	wlsxNRadioAttributesChanged NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPIpAddress,wlsxTrapAPChannel,
-				wlsxTrapAPTxPower}
-		STATUS		current
-		DESCRIPTION
-			"			
+    wlsxNRadioAttributesChanged NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
+                wlsxTrapAPIpAddress,wlsxTrapAPChannel,
+                wlsxTrapAPTxPower,wlsxTrapAPSecChannel,
+                wlsxTrapAPPhyType, wlsxTrapAPHTMode}
+        STATUS      current
+        DESCRIPTION
+            "
             A Trap which indicates changes in the Radio attributes of an 
             access point.
-        	"
-	::= {aiTrapDefinitionsGroup 1049 }
+            "
+    ::= {aiTrapDefinitionsGroup 1049 }
 
-	wlsxUnsecureAPDetected NOTIFICATION-TYPE
-		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel,
-				wlsxTrapMatchedMac,wlsxTrapMatchedIp,
-				wlsxTrapRogueInfoURL}
+    wlsxUnsecureAPDetected NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
+                wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
+                wlsxTrapAPLocation,wlsxTrapAPChannel,
+                wlsxTrapMatchedMac,wlsxTrapMatchedIp,
+                wlsxTrapRogueInfoURL,wlsxTrapMatchedIpv6,
+                wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			This trap indicates that an unauthorized access point is connected to the wired network. The access point is declared Rogue because it was matched to a MAC address.  	"
@@ -3421,7 +3652,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxUnsecureAPResolved NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3443,7 +3674,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxReservedChannelViolation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3455,7 +3686,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxValidSSIDViolation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3467,7 +3698,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxChannelMisconfiguration NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3479,7 +3710,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxOUIMisconfiguration NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3491,7 +3722,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxSSIDMisconfiguration NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3515,7 +3746,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxWPAMisconfiguration NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3550,7 +3781,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxStaPolicyViolation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapNodeMac,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3561,7 +3792,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxRepeatWEPIVViolation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3572,7 +3803,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxWeakWEPIVViolation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel, wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3604,7 +3835,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxAPInterferenceDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3615,7 +3846,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxAPInterferenceCleared NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3628,7 +3859,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapNodeMac,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3640,7 +3871,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapNodeMac,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3652,7 +3883,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxFrameRetryRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3663,7 +3894,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxFrameReceiveErrorRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapTargetAPChannel,wlsxTrapAPLocation}
+				wlsxTrapTargetAPChannel,wlsxTrapAPLocation,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3674,7 +3905,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxFrameFragmentationRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapTargetAPChannel,wlsxTrapAPLocation}
+				wlsxTrapTargetAPChannel,wlsxTrapAPLocation,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3686,7 +3917,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3698,7 +3929,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3710,7 +3941,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3744,7 +3975,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxChannelFrameRetryRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3754,7 +3985,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxChannelFrameFragmentationRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3764,7 +3995,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxChannelFrameErrorRateExceeded NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3798,7 +4029,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxChannelRateAnomaly NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapFrameType,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3834,7 +4065,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxEAPRateAnomaly NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3954,7 +4185,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxWEPMisconfiguration NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3966,7 +4197,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3978,7 +4209,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -3990,7 +4221,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapNodeMac,wlsxTrapAPLocation,
-				wlsxTrapAPChannel,wlsxTrapRogueInfoURL}
+				wlsxTrapAPChannel,wlsxTrapRogueInfoURL,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4028,7 +4259,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapAPChannel,
-				wlsxTrapInterferingAPInfoURL}
+				wlsxTrapInterferingAPInfoURL,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4058,7 +4289,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxAPImpersonation NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4080,7 +4311,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapSourceMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4208,7 +4439,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxWindowsBridgeDetectedAP NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4221,7 +4452,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapSourceMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4309,7 +4540,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxHtGreenfieldSupported NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4320,7 +4551,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxHT40MHzIntoleranceAP NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4332,7 +4563,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapSourceMac,wlsxTrapSnr,
 				wlsxTrapAPChannel,wlsxTrapFrameType,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation}
+				wlsxTrapAPLocation,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4353,7 +4584,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapSourceMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4366,7 +4597,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4379,7 +4610,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapSourceMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapTargetAPSSID,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4430,7 +4661,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSpoofedFrameType,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4443,7 +4674,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSpoofedFrameType,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4456,7 +4687,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapSourceMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4469,7 +4700,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapNodeMac,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4481,7 +4712,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4493,7 +4724,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4506,7 +4737,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4518,7 +4749,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4530,7 +4761,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapAPChannel,
-				wlsxTrapSnr}
+				wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4543,7 +4774,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapNodeMac,wlsxTrapAssociationType,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4555,7 +4786,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4567,7 +4798,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4579,7 +4810,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4591,7 +4822,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4602,7 +4833,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxMalformedFrameLargeDurationDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4615,7 +4846,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapTargetAPChannel,wlsxTrapAPChannel,
-				wlsxTrapSnr}
+				wlsxTrapSnr,wlsxTrapAPBand,wlsxTrapTargetAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4627,7 +4858,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4638,7 +4869,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxCTSRateAnomaly NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4649,7 +4880,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxRTSRateAnomaly NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4660,7 +4891,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNRogueAPDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4671,7 +4902,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNRogueAPResolved NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4682,7 +4913,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNeighborAPDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4692,7 +4923,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNInterferingAPDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4703,7 +4934,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNSuspectRogueAPDetected NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel,wlsxTrapConfidenceLevel}
+				wlsxTrapAPChannel,wlsxTrapConfidenceLevel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4715,7 +4946,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 
 	wlsxNSuspectRogueAPResolved NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4729,7 +4960,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
 				wlsxTrapAPLocation,wlsxTrapSourceMac,
 				wlsxTrapReceiverMac,wlsxTrapTargetAPBSSID,
-				wlsxTrapAPChannel,wlsxTrapSnr}
+				wlsxTrapAPChannel,wlsxTrapSnr,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4744,7 +4975,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapAPLocation,wlsxTrapNodeMac,
 				wlsxTrapSourceMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapAPChannel,wlsxTrapSnr,
-				wlsxTrapTargetAPSSID}
+				wlsxTrapTargetAPSSID,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4759,7 +4990,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4772,7 +5003,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4785,7 +5016,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4798,7 +5029,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4811,7 +5042,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4824,7 +5055,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4837,7 +5068,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4850,7 +5081,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 				wlsxTrapReceiverMac,wlsxTrapSignatureName,
 				wlsxTrapSnr,wlsxTrapAPMacAddress,
 				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
-				wlsxTrapAPChannel}
+				wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4861,7 +5092,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxAPDeauthContainment NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapNodeMac,
 				wlsxTrapAPChannel,wlsxTrapAPMacAddress,
-				wlsxTrapAPRadioNumber,wlsxTrapAPLocation}
+				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4872,7 +5103,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxClientDeauthContainment NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapTargetAPBSSID,
 				wlsxTrapAPChannel,wlsxTrapAPMacAddress,
-				wlsxTrapAPRadioNumber,wlsxTrapAPLocation}
+				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4932,7 +5163,8 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapNodeMac,
 				wlsxTrapAPChannel,wlsxTrapTargetAPChannel,
 				wlsxTrapSourceMac,wlsxTrapAPMacAddress,
-				wlsxTrapAPRadioNumber,wlsxTrapAPLocation}
+				wlsxTrapAPRadioNumber,wlsxTrapAPLocation,
+                wlsxTrapAPBand,wlsxTrapTargetAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4944,7 +5176,9 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapAPChannel,wlsxTrapAPChannelSec,
 				wlsxTrapAPPrevChannel,wlsxTrapAPPrevChannelSec,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPARMChangeReason}
+				wlsxTrapAPLocation,wlsxTrapAPARMChangeReason,
+                wlsxTrapAPHTMode,wlsxTrapAPPhyType,
+                wlsxTrapAPPrevHTMode,wlsxTrapAPPrevPhyType}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -4990,7 +5224,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapNodeMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -5001,11 +5235,13 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 	wlsxNAPMasterStatusChange NOTIFICATION-TYPE
 		OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapApControllerIp,
 				wlsxTrapApMasterStatus}
-		STATUS		current
+		STATUS		obsolete
 		DESCRIPTION
 			"			
             This trap indicates that the status of the AP as seen by
             the master controller has changed.
+            **NOTE: this notification is obsoleted and replaced by
+            wlsxNAPConductorStatusChange
         	"
 	::= {aiTrapDefinitionsGroup 1221 }
 
@@ -5013,7 +5249,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
 		OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
 				wlsxTrapSourceMac,wlsxTrapSnr,
 				wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
-				wlsxTrapAPLocation,wlsxTrapAPChannel}
+				wlsxTrapAPLocation,wlsxTrapAPChannel,wlsxTrapAPBand}
 		STATUS		current
 		DESCRIPTION
 			"			
@@ -5098,7 +5334,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
     wlsxWPAFTAttack NOTIFICATION-TYPE
         OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
                 wlsxTrapAPLocation,wlsxTrapNodeMac,
-                wlsxTrapAPChannel,wlsxTrapTargetAPBSSID}
+                wlsxTrapAPChannel,wlsxTrapTargetAPBSSID,wlsxTrapAPBand}
         STATUS      current
         DESCRIPTION
             "
@@ -5112,7 +5348,7 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
         OBJECTS {wlsxTrapTime, wlsxTrapAPLocation,wlsxTrapAPMacAddress,
                 wlsxTrapAPRadioNumber,wlsxTrapSourceMac,
                 wlsxTrapTargetAPBSSID,wlsxTrapAPChannel,
-                wlsxTrapSnr}
+                wlsxTrapSnr,wlsxTrapAPBand}
         STATUS      current
         DESCRIPTION
             "
@@ -5157,5 +5393,83 @@ ArubaPortalServerDownReason ::= TEXTUAL-CONVENTION
             This trap indicates that an USB device is plugged in or out to an AP.
         	"
 	::= {aiTrapDefinitionsGroup 1277 }
+
+    wlsxClientRejectedByMaxClientCount NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserPhyAddress,wlsxTrapAPBSSID,
+                wlsxTrapAPMacAddress,wlsxTrapAPName,
+                wlsxTrapEssid}
+        STATUS      current
+        DESCRIPTION
+            "
+            This trap indicates the client is rejected by the max client count.
+            "
+    ::= {aiTrapDefinitionsGroup 1284 }
+
+    wlsxClientPskAuthenticationFailed NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapUserPhyAddress,wlsxTrapAuthFailureReason,
+                wlsxTrapAPBSSID,wlsxTrapAPMacAddress,wlsxTrapAPName,
+                wlsxTrapEssid}
+        STATUS      current
+        DESCRIPTION
+            "
+            This trap indicates the client PSK Authentication Failed.
+            "
+    ::= {aiTrapDefinitionsGroup 1285 }
+
+        wlsxNStationAddedToDenyList NOTIFICATION-TYPE
+                OBJECTS {wlsxTrapTime, wlsxTrapNodeMac,wlsxTrapStationDenyListReasonStr,
+                                wlsxTrapStationDenyListReason}
+                STATUS          current
+                DESCRIPTION
+                        "
+            This trap indicates that the station is in deny list.
+                "
+        ::= {aiTrapDefinitionsGroup 1286 }
+
+        wlsxNStationRemovedFromDenyList NOTIFICATION-TYPE
+                OBJECTS {wlsxTrapTime, wlsxTrapNodeMac}
+                STATUS          current
+                DESCRIPTION
+                        "
+            This trap indicates that the station is removed from the deny list.
+                "
+        ::= {aiTrapDefinitionsGroup 1287 }
+
+        wlsxNAPConductorStatusChange NOTIFICATION-TYPE
+                OBJECTS {wlsxTrapTime, wlsxTrapAPMacAddress,wlsxTrapApControllerIp,
+                                wlsxTrapApConductorStatus}
+                STATUS          current
+                DESCRIPTION
+                        "
+            This trap indicates that the status of the AP as seen by
+            the conductor controller has changed.
+                "
+        ::= {aiTrapDefinitionsGroup 1288 }
+
+    wlsxPeerAssociatedToWifiDirectGo NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
+                wlsxTrapNodeMac,wlsxTrapSnr,
+                wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
+                wlsxTrapAPLocation,wlsxTrapAPChannel,
+                wlsxTrapAPBand}
+        STATUS		current
+        DESCRIPTION
+            "
+            This trap indicates that an AP detected a wireless client associated to a WIFI-Direct Group Owner.
+            "
+    ::= {aiTrapDefinitionsGroup 1291 }
+
+    wlsxPeerAssociatedToWifiDirectGoContainment NOTIFICATION-TYPE
+        OBJECTS {wlsxTrapTime, wlsxTrapTargetAPBSSID,wlsxTrapTargetAPSSID,
+                wlsxTrapNodeMac,wlsxTrapSnr,
+                wlsxTrapAPMacAddress,wlsxTrapAPRadioNumber,
+                wlsxTrapAPLocation,wlsxTrapAPChannel,
+                wlsxTrapAPBand}
+        STATUS		current
+        DESCRIPTION
+                "
+                This trap indicates that containment is being enforced on a wireless client that is associated to a WIFI-Direct Group Owner.
+                "
+    ::= {aiTrapDefinitionsGroup 1292 }
 
 END
