@@ -1,0 +1,422 @@
+-- ****************************************************************
+-- *  Moxa Switching - Port Security MAC Sticky (PSMS) PRIVATE MIB
+-- *
+-- *  Copyright (c) 2019 by Moxa Inc.
+-- *  All rights reserved.
+-- *****************************************************************
+
+MOXA-PSMS-MIB DEFINITIONS ::= BEGIN
+    IMPORTS
+        MODULE-IDENTITY, NOTIFICATION-TYPE, OBJECT-TYPE, Integer32, Counter32
+            FROM SNMPv2-SMI
+        TEXTUAL-CONVENTION, DateAndTime, MacAddress, DisplayString, TruthValue, RowStatus
+            FROM SNMPv2-TC
+        VlanId,PortList
+            FROM Q-BRIDGE-MIB
+        layer2Security
+          FROM MOXA-SWITCHING-MIB;
+
+    mxPsms MODULE-IDENTITY
+        LAST-UPDATED "202202170000Z"
+        ORGANIZATION "Moxa Inc."
+        CONTACT-INFO
+            "
+            Postal: Moxa Inc.
+            13F., No. 3, Sec. 4, New Taipei Blvd.
+            Xinzhuang Dist., New Taipei City 242032, Taiwan, R.O.C.
+
+            Tel: +866-2-89191230
+            Web: http://www.moxa.com/
+            "
+        DESCRIPTION
+            "The MIB module defines Moxa port security mac sticky"
+
+        REVISION    "202202170000Z"
+        DESCRIPTION "update CONTACT-INFO"
+
+        REVISION    "201906300000Z"
+        DESCRIPTION "Initial Revision"
+
+        ::= { layer2Security 2 }
+
+-- -------------------------------------------------------------
+-- groups in the MOXA-PSMS-MIB MIB
+-- -------------------------------------------------------------
+
+  psmsConfiguration     OBJECT IDENTIFIER ::= { mxPsms 1 }
+  psmsStatus            OBJECT IDENTIFIER ::= { mxPsms 2 }
+  -- psmsExtensions        OBJECT IDENTIFIER ::= { mxPsms 3 }
+  psmsNotification      OBJECT IDENTIFIER ::= { mxPsms 0 }
+
+-- -------------------------------------------------------------
+-- configuration group
+-- -------------------------------------------------------------
+
+    psmsConfigEnable OBJECT-TYPE
+        SYNTAX       TruthValue
+        MAX-ACCESS   read-write
+        STATUS       current
+        DESCRIPTION
+            "The administrative module status requested by management for the MAC
+            Sticky in Port Security Module. This enables or disables Port Security
+            in the system. A value of 'true' (1) indicates that Port Security is
+            allowed to be enabled/disabled in the device on all the ports.
+            A value of 'false'(2) indicates that PSMS must be disabled in the
+            device on all the ports."
+        ::= { psmsConfiguration 1 }
+
+    psmsConfigMode OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        staticPortLock(1),
+                        macSticky(2)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+            "To configure Port Security mode to Static Port Lock (1) or MAC Sticky (2).
+             PSEC port/address table will be reset after mode changed."
+        ::= { psmsConfiguration 2 }
+
+-- Port Table Configuration Start
+
+    psmsConfigPortTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF PsmsConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "A table to store the port specific parameters for MAC sticky
+            like limit value, secure action, etc. And the parameters can be manipulated
+            by administrators."
+        ::= { psmsConfiguration 3 }
+
+    psmsConfigPortEntry OBJECT-TYPE
+        SYNTAX PsmsConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "An entry appears in this Port Table represent port information about
+            Port Security MAC Sticky Mode."
+        INDEX { psmsConfigPortNum }
+        ::= { psmsConfigPortTable 1 }
+
+    PsmsConfigPortEntry ::=
+        SEQUENCE {
+            psmsConfigPortNum
+                Integer32,
+            psmsConfigPortEnable
+                TruthValue,
+            psmsConfigPortLimit
+                Integer32,
+            psmsConfigDbFlush
+                TruthValue,
+            psmsConfigPortSecurityAction
+                INTEGER
+
+    }
+
+    psmsConfigPortNum OBJECT-TYPE
+        SYNTAX Integer32 (1..256)
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "A unique value, greater than zero, indicating the Port number of
+             port configuration table."
+        ::= { psmsConfigPortEntry 1 }
+
+    psmsConfigPortEnable OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This parameter when true(1) indicates that a port is enabled
+            port security and false(2) indicates that this feature is disabled
+            on the port."
+        ::= { psmsConfigPortEntry 2 }
+
+    psmsConfigPortLimit OBJECT-TYPE
+        SYNTAX Integer32 (1..1024)
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This configures the max number of trust addresses on this port.
+             MAC address will be removed on configured port after limit changed."
+        ::= { psmsConfigPortEntry 3 }
+
+    psmsConfigDbFlush OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "If this object is set as 'true', then all the entries in specific port
+            will be removed. After flush, this object is set to 'false'."
+        ::= { psmsConfigPortEntry 4 }
+
+    psmsConfigPortSecurityAction OBJECT-TYPE
+        SYNTAX  INTEGER {
+                    packetDrop(1),
+                    portShutdown(2)
+                }
+        MAX-ACCESS read-write
+        STATUS current
+        DESCRIPTION
+            "This configures the action after violation trigger on the port."
+        ::= { psmsConfigPortEntry 5 }
+
+-- Port  Table Configuration End
+-- Address Table Configuration Start
+
+    psmsConfigAddressTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF PsmsConfigAddressEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "A table to store specific address parameters for MAC sticky
+            like limit MacAddress and VlanId etc."
+        ::= { psmsConfiguration 4}
+
+    psmsConfigAddressEntry OBJECT-TYPE
+        SYNTAX PsmsConfigAddressEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "An entry appears in this Address Table represent port information about
+            Address Security MAC Sticky Mode."
+        INDEX { psmsConfigAddressMac,
+                psmsConfigAddressVlanId }
+        ::= { psmsConfigAddressTable 1 }
+
+    PsmsConfigAddressEntry ::=
+        SEQUENCE {
+           psmsConfigAddressMac
+                MacAddress,
+           psmsConfigAddressVlanId
+                VlanId,
+           psmsConfigAddressPortNum
+                Integer32,
+           psmsConfigAddressRowStatus
+                RowStatus
+        }
+
+    psmsConfigAddressMac OBJECT-TYPE
+        SYNTAX MacAddress
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "To represent MAC address for this entry."
+        ::= { psmsConfigAddressEntry 1 }
+
+    psmsConfigAddressVlanId OBJECT-TYPE
+        SYNTAX VlanId
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "To indicate VLAN ID which the address entry belongs."
+        ::= { psmsConfigAddressEntry 2 }
+
+    psmsConfigAddressPortNum OBJECT-TYPE
+        SYNTAX Integer32 (1..256)
+        MAX-ACCESS read-create
+        STATUS current
+        DESCRIPTION
+            "To indicate port number in which the address entry place."
+        ::= { psmsConfigAddressEntry 3 }
+
+    psmsConfigAddressRowStatus OBJECT-TYPE
+        SYNTAX RowStatus
+        MAX-ACCESS read-create
+        STATUS current
+        DESCRIPTION
+            "This object indicates the status of this entry."
+        ::= { psmsConfigAddressEntry 4 }
+
+--------------------------------------
+-- Address Table Configuration End --
+--------------------------------------
+
+-- -------------------------------------------------------------
+-- Status group
+-- -------------------------------------------------------------
+
+------------
+-- System --
+------------
+
+    psmsStatMaxNumOfAddress OBJECT-TYPE
+        SYNTAX       Counter32
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION
+            "To represent the max number of address in Port Security MAC-Sticky."
+        ::= { psmsStatus 1 }
+
+
+    psmsStatTotalNumOfAddress OBJECT-TYPE
+        SYNTAX       Counter32
+        MAX-ACCESS   read-only
+        STATUS       current
+        DESCRIPTION
+            "To represent the total number of address in Port Security MAC-Sticky."
+        ::= { psmsStatus 2 }
+
+
+----------------
+-- Port Table --
+----------------
+
+    psmsStatPortTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF PsmsStatPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The port status table."
+        ::= { psmsStatus 3 }
+
+    psmsStatPortEntry OBJECT-TYPE
+        SYNTAX PsmsStatPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The port status table entry."
+        INDEX { psmsStatPortIndex }
+        ::= { psmsStatPortTable 1 }
+
+    PsmsStatPortEntry ::=
+        SEQUENCE {
+            psmsStatPortIndex
+                Integer32,
+            psmsStatCurrentNumberOfAddress
+                Counter32,
+            psmsStatConfiguredNumberOfAddress
+                Counter32,
+            psmsStatPortViolation
+                TruthValue
+   }
+
+    psmsStatPortIndex OBJECT-TYPE
+        SYNTAX Integer32 (1..256)
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "The value of this object uniquely identifies this port table entry."
+        ::= { psmsStatPortEntry 1 }
+
+    psmsStatCurrentNumberOfAddress OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This indicates the current number of address on this port."
+        ::= { psmsStatPortEntry 2 }
+
+    psmsStatConfiguredNumberOfAddress OBJECT-TYPE
+        SYNTAX Counter32
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "This indicates the configured number of address on this port."
+        ::= { psmsStatPortEntry 3 }
+
+    psmsStatPortViolation OBJECT-TYPE
+        SYNTAX TruthValue
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "A Boolean value set indicates the port is under violation (TRUE)
+            or not."
+        ::= { psmsStatPortEntry 4 }
+
+-------------------
+-- Address Table --
+-------------------
+
+    psmsStatAddressTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF PsmsStatAddressEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The address table."
+        ::= { psmsStatus 4 }
+
+    psmsStatAddressEntry OBJECT-TYPE
+        SYNTAX PsmsStatAddressEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+            "The address table state entry."
+        INDEX { psmsStatAddressMac,
+                psmsStatAddressVlanId }
+        ::= { psmsStatAddressTable 1 }
+
+    PsmsStatAddressEntry ::=
+        SEQUENCE {
+            psmsStatAddressMac
+                MacAddress,
+            psmsStatAddressVlanId
+                VlanId,
+            psmsStatAddressPortNum
+                Integer32,
+            psmsStatAddressType
+                INTEGER,
+            psmsStatAddressValid
+                TruthValue
+   }
+
+    psmsStatAddressMac OBJECT-TYPE
+        SYNTAX MacAddress
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "To show MAc Address of the entry."
+        ::= { psmsStatAddressEntry 1 }
+
+
+    psmsStatAddressVlanId OBJECT-TYPE
+        SYNTAX VlanId
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "To show Vlan ID of the entry."
+        ::= { psmsStatAddressEntry 2 }
+
+    psmsStatAddressPortNum OBJECT-TYPE
+        SYNTAX Integer32 (1..256)
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "To show port number of the entry."
+        ::= { psmsStatAddressEntry 3 }
+
+    psmsStatAddressType OBJECT-TYPE
+        SYNTAX  INTEGER {
+                    stickyConfigured (1),
+                    stickyDynamic (2)
+                }
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "To indicate the entry type is Sticky-Configured (1) or
+            Sticky-Dynamic (2)."
+        ::= { psmsStatAddressEntry 4 }
+
+    psmsStatAddressValid OBJECT-TYPE
+        SYNTAX  TruthValue
+        MAX-ACCESS read-only
+        STATUS current
+        DESCRIPTION
+            "To indicate the address entry is valid (TRUE) or not (FALSE)."
+        ::= { psmsStatAddressEntry 5 }
+
+-- -------------------------------------------------------------
+-- Notification group
+-- -------------------------------------------------------------
+    psmsNotifyViolationPort NOTIFICATION-TYPE
+        OBJECTS {
+            psmsStatPortIndex
+        }
+        STATUS      current
+        DESCRIPTION
+            "The psmsNotifyViolationPort notification is sent when violation
+            occurs."
+        ::= { psmsNotification 1 }
+
+END
