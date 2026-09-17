@@ -1,6 +1,8 @@
 #!/usr/bin/env perl
 # mkoidmap [vendor|MIB] - run snmptranslate per MIB and save output
-# no param will parse every MIB in every vendor (slooooooow.....)
+# No param parses every MIB in every vendor.
+# MKOIDMAP_PARALLEL_WORKERS defaults to 7; set to 1 for the original serial mode.
+# Parallel mode requires MCE (cpanm MCE); serial mode does not load it.
 
 use strict;
 use warnings;
@@ -19,6 +21,14 @@ use POSIX qw(:sys_wait_h);
 use FindBin;
 use lib catfile($FindBin::Bin, 'lib');
 use Helpers;
+
+my $workers = $ENV{MKOIDMAP_PARALLEL_WORKERS} // 7;
+die "MKOIDMAP_PARALLEL_WORKERS must be a positive integer\n"
+  unless $workers =~ /\A[0-9]+\z/ and $workers > 0;
+if ($workers > 1) {
+  require MCE::Map;
+  MCE::Map->import(max_workers => $workers, chunk_size => 1);
+}
 
 # TODO: arguably rfc:net-snmp should be enough!
 # but it seems cisco, nortel, etc are required. maybe in the future, fix this.
@@ -66,36 +76,65 @@ exit(0);
 
 sub parse_mibs {
   my ($target, @mibs) = @_;
-  my %oidmap = ();
 
   blank();
   print "\N{EYES} Translating $target MIB(s)\n";
 
+  return parse_mib_batch(@mibs) if $workers == 1;
+
+  my @maps = MCE::Map::run(sub {
+    my %map = parse_mib_batch($_);
+    return \%map;
+  }, @mibs);
+
+  # MCE::Map preserves input order, so duplicate OIDs keep their first definition.
+  my %oidmap;
+  for my $map (@maps) {
+    $oidmap{$_} ||= $map->{$_} for keys %$map;
+  }
+  return %oidmap;
+}
+
+sub parse_mib_batch {
+  my @mibs = @_;
+  my %oidmap;
+
   MIB: foreach my $m (@mibs) {
     my $out = File::Temp->new();
     my $err = File::Temp->new();
-    status("Parsing $m");
+    if ($workers > 1) {
+      MCE->say("Parsing $m");
+      system(qq{snmptranslate -m '$m' -On -Td -TB '.1*' 2>'$err' 1>'$out'});
+    } else {
+      status("Parsing $m");
 
-    defined(my $pid = fork) or die "Couldn't fork: $!";
-    if (!$pid) { # Child
-      exec(qq{snmptranslate -m '$m' -On -Td -TB '.1*' 2>'$err' 1>'$out'})
-        or die "Couldn't exec: $!";
-    } else { # Parent
-      my $slept = 0.5;
-      while (! waitpid($pid, WNOHANG)) {
-        status("Parsing $m");
-        sleep 0.05;
-        $slept -= 0.05;
+      defined(my $pid = fork) or die "Couldn't fork: $!";
+      if (!$pid) { # Child
+        exec(qq{snmptranslate -m '$m' -On -Td -TB '.1*' 2>'$err' 1>'$out'})
+          or die "Couldn't exec: $!";
+      } else { # Parent
+        my $slept = 0.5;
+        while (! waitpid($pid, WNOHANG)) {
+          status("Parsing $m");
+          sleep 0.05;
+          $slept -= 0.05;
+        }
+        sleep $slept if $slept > 0;
       }
-      sleep $slept if $slept > 0;
     }
 
     if (-s $err) {
-      blank();
-      print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ',
-        MAGENTA, $m, CYAN, " MIBs\n", RESET;
-      while (<$err>) { print }
-      print "\n";
+      if ($workers > 1) {
+        MCE->print(RED . "\N{HEAVY BALLOT X} " . CYAN . 'Errors from ' .
+          MAGENTA . $m . CYAN . " MIBs\n" . RESET .
+          join('', <$err>) . "\n");
+      } else {
+        blank();
+        print RED, "\N{HEAVY BALLOT X} ", CYAN, 'Errors from ',
+          MAGENTA, $m, CYAN, " MIBs\n", RESET;
+        while (<$err>) { print }
+        print "\n";
+      }
       next MIB;
     }
 
