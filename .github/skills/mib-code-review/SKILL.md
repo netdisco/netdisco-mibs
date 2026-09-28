@@ -40,16 +40,6 @@ moves, and module splits.
 - Investigate report losses even without file deletions: missing imports, parser
   errors, and duplicate definitions can hide coverage.
 
-## Preserve leaf types
-
-Match leaves by full numeric OID, with module/symbol context, not merely a name
-or final OID component. Flag reassigned OIDs and changed effective data types,
-including changes inherited through textual conventions or imported types.
-Equivalent type aliases are not type changes.
-
-Flag incompatible enum meanings, units, ranges/sizes, indexes, or access;
-distinguish compatible additions. Successful loading does not prove compatibility.
-
 ## Vendor notes
 
 Require `<vendor>/README` updates for manual fixes, restored objects, deliberate
@@ -66,3 +56,12 @@ PR-introduced issues and disclose unavailable checks or sources.
 If reproducing validation, use a disposable container or microVM with a separate
 checkout and isolated Git/SNMP configuration; scripts can rewrite files. Do not
 alter the host, commit fixes, open PRs, or run release workflows during review.
+
+## Do only criticize the process of adding MIBS to this repository
+
+netdisco-mibs is a collection of MIB files, and the submitter of PRs typically has no power 
+over the vendor supplying the MIBs.
+
+Do only criticize details inside MIBs if they were manually added by the user trying to submit to the collection, and this is evident from comments or README files.
+
+Poorly written MIBs from upstream vendors are a given, and netdisco-mibs only aims to correct the worst cases that render MIBs unusable in the net-snmp tools.
