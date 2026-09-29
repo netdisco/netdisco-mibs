@@ -1,0 +1,206 @@
+-- ****************************************************************
+-- *  Moxa Switching - VLAN PRIVATE MIB
+-- *
+-- *  Copyright (c) 2019 by Moxa Inc.
+-- *  All rights reserved.
+-- *****************************************************************
+
+MOXA-VLAN-MIB DEFINITIONS ::= BEGIN
+    IMPORTS
+        MODULE-IDENTITY, OBJECT-TYPE
+        	FROM SNMPv2-SMI
+        basicLayer2
+          FROM MOXA-SWITCHING-MIB;
+
+    mxVlan MODULE-IDENTITY
+        LAST-UPDATED "202202170000Z"
+        ORGANIZATION "Moxa Inc."
+        CONTACT-INFO
+            "
+            Postal: Moxa Inc.
+            13F., No. 3, Sec. 4, New Taipei Blvd.
+            Xinzhuang Dist., New Taipei City 242032, Taiwan, R.O.C.
+
+            Tel: +866-2-89191230
+            Web: http://www.moxa.com/
+            "
+        DESCRIPTION
+            "The MIB module defines Moxa vlan"
+
+        REVISION    "202202170000Z"
+        DESCRIPTION "update CONTACT-INFO"
+
+        REVISION    "201906300000Z"
+        DESCRIPTION "Initial Revision"
+
+        ::= { basicLayer2 3 }
+
+-- -------------------------------------------------------------
+-- groups in the MOXA-VLAN-MIB MIB
+-- -------------------------------------------------------------
+
+  -- vlanNotification		 OBJECT IDENTIFIER ::= { mxVlan 0 }
+  vlanConfiguration		 OBJECT IDENTIFIER ::= { mxVlan 1 }
+  -- vlanStatus                     OBJECT IDENTIFIER ::= { mxVlan 2 }
+  -- vlanExtensions		 OBJECT IDENTIFIER ::= { mxVlan 3 }
+
+-- -------------------------------------------------------------
+-- configuration group
+-- -------------------------------------------------------------
+
+    vlanConfigVlanLearningMode OBJECT-TYPE
+        SYNTAX      INTEGER {
+                   ivl(1),
+                   svl(2),
+                   hybrid(3)
+                   }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+              "The Type of VLAN learning mode.
+              When the object value is modified, the static
+              fid-vlan mappings and static unicast entries
+              need to be reconfigured. Static unicast configurations 
+              associated with old fid will get deleted." 
+        ::= { vlanConfiguration 1 }
+        
+    vlanConfigMgmtVlan OBJECT-TYPE
+        SYNTAX     OCTET STRING (SIZE (0..512))
+        MAX-ACCESS read-write
+        STATUS     current
+        DESCRIPTION
+              "A string of octets containing one bit per VLAN. The
+              first octet corresponds to VLANs with VlanId values
+              1 through 8; the second octet to VLANs 9 through
+              16 etc.  The most significant bit of each octet
+              corresponds to the lowest VlanId value in that octet.
+              This is the set of vlans configured by management to associate 
+              with the management interface." 
+        ::= { vlanConfiguration 2 }
+
+    vlanConfigResetMgmtVlan OBJECT-TYPE
+        SYNTAX     OCTET STRING (SIZE (0..512))
+        MAX-ACCESS read-write
+        STATUS     current
+        DESCRIPTION
+              "A string of octets containing one bit per VLAN. The
+              first octet corresponds to VLANs with VlanId values
+              1 through 8; the second octet to VLANs 9 through
+              16 etc.  The most significant bit of each octet
+              corresponds to the lowest VlanId value in that octet.
+              This is the set of vlans configured by management to dis-associate 
+              from the management interface.
+              Get operation is not allowed for this object."
+       ::= { vlanConfiguration 3 }
+           
+    vlanConfigPortTable OBJECT-TYPE
+        SYNTAX SEQUENCE OF VlanConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+              "The configuration port table."
+        ::= { vlanConfiguration 4 }
+    
+    vlanConfigPortEntry OBJECT-TYPE
+        SYNTAX VlanConfigPortEntry
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+              "The configuration port table entry."
+        INDEX { vlanConfigPortIndex }
+        ::= { vlanConfigPortTable 1 }
+    
+    VlanConfigPortEntry ::=
+        SEQUENCE {
+            vlanConfigPortIndex
+                INTEGER,
+            vlanConfigVlanPortType
+                INTEGER,
+      	    vlanConfigFilteringUtilityCriteria 
+      		INTEGER,
+            vlanConfigDot1qPortAcceptableFrameTypes
+      	        INTEGER                   
+        }
+    
+    vlanConfigPortIndex OBJECT-TYPE
+        SYNTAX INTEGER
+        MAX-ACCESS not-accessible
+        STATUS current
+        DESCRIPTION
+              "A unique value, greater than zero, indicating the Port number of port configuration table."
+        ::= { vlanConfigPortEntry 1 }
+    
+    vlanConfigVlanPortType OBJECT-TYPE 
+        SYNTAX      INTEGER { 
+                      accessPort (1), 
+                      trunkPort (2), 
+                      hybridPort (3)
+                   } 
+        MAX-ACCESS  read-write 
+        STATUS      current 
+        DESCRIPTION 
+              "The type of the port is by default hybrid port. 
+              When configured as access port, the port can accept and send 
+              only untagged frames.
+              When configured as a trunk port, port is added as 
+              member of all the existing Vlans and also for any new vlan
+              created. 
+              When configured as hybrid port, the port can send or accept both 
+              tagged and untagged frames."
+        ::= { vlanConfigPortEntry 2 } 
+
+    vlanConfigFilteringUtilityCriteria OBJECT-TYPE 
+        SYNTAX      INTEGER { 
+                      default  (1), 
+                      enhanced (2)
+                   } 
+        MAX-ACCESS  read-write 
+        STATUS      current 
+        DESCRIPTION 
+              "Based on this object, learning on a port is decided.
+          
+              If default filtering utility criteria is selected on a port, then
+              learning of source MAC from a received packet on that port will be
+              done only if there is at least one member port in that VLAN.
+        
+              If enhanced filtering utility criteria is selected on a port, then
+              learning of source MAC from a received packet on that port will be
+              done if the following are satisfied: 
+          
+              -    if at least one VLAN that uses the FID includes the reception
+              port and at least one other Port with a Port State of Learning or
+              Forwarding in its member set, and:
+           
+              o The operPointToPointMAC parameter is false for the reception port; or
+              o Ingress to the VLAN is permitted through a third port.
+           
+              The third port can, but is not required to, be in the member set."
+        ::= { vlanConfigPortEntry 3 } 
+
+    vlanConfigDot1qPortAcceptableFrameTypes OBJECT-TYPE
+        SYNTAX      INTEGER {
+                      admitAll(1),
+                      admitOnlyVlanTagged(2),
+                      admitOnlyUntaggedAndPriorityTagged(3)
+                  }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION
+              "When this is admitOnlyVlanTagged(2), the device will
+              discard untagged frames or Priority-Tagged frames
+              received on this port. When admitAll(1), untagged
+              frames or Priority-Tagged frames received on this port
+              will be accepted and assigned to the PVID for this port.
+              When this is admitOnlyUntaggedAndPriorityTagged the device 
+              will receive only untagged and priority tagged frames on 
+              this port.
+
+              This control does not affect VLAN independent BPDU
+              frames, such as GVRP and STP. It does affect VLAN
+              dependent BPDU frames, such as GMRP."
+        REFERENCE
+              "IEEE 802.1Q/D11 Section 12.10.1.3"
+    
+        ::= { vlanConfigPortEntry 4 }
+
+END
