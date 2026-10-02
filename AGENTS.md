@@ -7,6 +7,7 @@
     isolated environment; use equivalent command-scoped configuration when
     working with native tools.
   - Reiterate the essential workflow and validation steps in the commit message.
+  - add an Assisted-by: [MODEL] [HARNESS] [OTHER...] to the commit
   - On success, create a pull request in https://github.com/netdisco/netdisco-mibs.
 
   ## Development environment
