@@ -1,24 +1,28 @@
 -- =====================================================================
--- Copyright (C) 2003 by H3C TECHNOLOGIES. All rights reserved.
+-- Copyright (c) 2004-2021 New H3C Tech. Co., Ltd. All rights reserved.
 --
--- Description: H3C device link detection protocol (DLDP) MIB.
--- Device Link Detection Protocol is H3C private Layer2 protocol,
+-- Description: Device link detection protocol (DLDP) MIB.
+-- Device Link Detection Protocol is private Layer2 protocol,
 -- which is used for automatically detecting unidirectional link to
 -- prevent a loop communication.
 -- Reference:
--- Version: V1.1
+-- Version: V1.3
 -- History:
 -- V1.0 2004-12-13 created by tangshun
 -- V1.1 2006-11-24 modify SYNTAX and DEFVAL of hh3cDLDPInterval by yubo
+-- V1.2 2011-11-23 modify SYNTAX and DESCRIPTION of
+--                 hh3cDLDPAuthenticationPassword by zhangwei
+-- V1.3 2021-01-06 modify SYNTAX and DESCRIPTION of
+--                 hh3cDLDPUnidirectionalShutdown by wangmeng
 -- =====================================================================
 HH3C-DLDP-MIB DEFINITIONS ::= BEGIN
 IMPORTS
     TruthValue, MacAddress, TEXTUAL-CONVENTION
         FROM SNMPv2-TC
-    MODULE-IDENTITY, OBJECT-TYPE, Counter32, Integer32, NOTIFICATION-TYPE
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, NOTIFICATION-TYPE
         FROM SNMPv2-SMI
     ifIndex
-        FROM RFC1213-MIB
+        FROM IF-MIB
     hh3cCommon
         FROM HH3C-OID-MIB;
 
@@ -29,16 +33,20 @@ IMPORTS
 -- ==================================================================
 hh3cDldp MODULE-IDENTITY
     LAST-UPDATED
-        "200412130000Z"
+        "202101060000Z"
     ORGANIZATION
-        "Hangzhou H3C Tech. Co., Ltd."
+        "New H3C Tech. Co., Ltd."
     CONTACT-INFO
-        "Platform Team Hangzhou H3C Tech. Co., Ltd.
+        "Platform Team New H3C Tech. Co., Ltd.
         Hai-Dian District Beijing P.R. China
         http://www.h3c.com
         Zip:100085
         "
-    DESCRIPTION "H3C DLDP (Device Link Detection Protocol) MIB"
+    DESCRIPTION "DLDP (Device Link Detection Protocol) MIB"
+    REVISION
+        "202101060000Z"
+    DESCRIPTION
+        "Modify hh3cDLDPUnidirectionalShutdown."
     REVISION
         "200412130000Z"
     DESCRIPTION
@@ -155,7 +163,7 @@ hh3cDLDPSystemEnable OBJECT-TYPE
         hh3cDLDPPortDLDPTable.
         If setting it to false, all the fiber ports will disable DLDP
         and the agent automatically destroy the corresponding rows in
-        hh3cDLDPPortDLDPTable"
+        hh3cDLDPPortDLDPTable."
     ::= { hh3cDLDPConfigGroup 2 }
 
 hh3cDLDPSystemReset OBJECT-TYPE
@@ -174,7 +182,7 @@ hh3cDLDPSystemReset OBJECT-TYPE
     ::= { hh3cDLDPConfigGroup 3 }
 
 hh3cDLDPInterval OBJECT-TYPE
-    SYNTAX      INTEGER(1..100)
+    SYNTAX      Integer32(1..100)
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
@@ -200,20 +208,19 @@ hh3cDLDPAuthenticationMode OBJECT-TYPE
     ::= { hh3cDLDPConfigGroup 5 }
 
 hh3cDLDPAuthenticationPassword OBJECT-TYPE
-    SYNTAX      OCTET STRING(SIZE(1..24))
+    SYNTAX      OCTET STRING(SIZE(1..53))
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
         "This is the password for authentication.
-        If the value of hh3cDLDPAuthenticationMode is none,
-        the user can not set this node.
+        If the value of hh3cDLDPAuthenticationMode is null,
+        the user cannot set this node.
         If the value of hh3cDLDPAuthenticationMode is simple or MD5,
         the user must set this node with a string.
 
-        When the user get or walk this node,
-        it displays cipher password if hh3cDLDPAuthenticationMode is MD5
-        or clear password if hh3cDLDPAuthenticationMode is simple
-        or zero length string if hh3cDLDPAuthenticationMode is none.
+        When the user gets or walks this node,
+        it displays a cipher password if hh3cDLDPAuthenticationMode is MD5 or
+        simple or a zero-length string if hh3cDLDPAuthenticationMode is null.
         "
     ::= { hh3cDLDPConfigGroup 6 }
 
@@ -221,17 +228,22 @@ hh3cDLDPUnidirectionalShutdown OBJECT-TYPE
     SYNTAX      INTEGER
         {
             auto(1),
-            manual(2)
+            manual(2),
+            hybird(3)
         }
     MAX-ACCESS  read-write
     STATUS      current
     DESCRIPTION
-        "The mode of unidirectional shutdown.
-        It indicates the shutdown mode when a unidirectional link happened.
-        Auto mode means the port will be shut down automatically
-        when DLDP detects unidirectional link.
-        Manual mode means the port needs to be shut down by
-        the administrator manually when DLDP detects unidirectional link.
+        "The mode of unidirectional shutdown and bidirectional startup.
+        It indicates the port shutdown mode when a link becomes unidirectional
+        and port startup mode when the link becomes bidirectional.
+        In auto mode, DLDP shuts down a port when detecting a unidirectional
+        link and brings up the port when the link becomes bidirectional.
+        In manual mode, a port requires manual shutdown when DLDP detects a
+        unidirectional link and the port requires manual startup when the
+        link becomes bidirectional.In hybrid mode, DLDP shuts down a port when
+        detecting a unidirectional link and the port requires manual startup
+        when the link becomes bidirectional.
         "
     DEFVAL  { auto }
     ::= { hh3cDLDPConfigGroup 7 }
@@ -380,7 +392,7 @@ hh3cDLDPNeighborBridgeMac OBJECT-TYPE
     ::= { hh3cDLDPNeighborEntry 1 }
 
 hh3cDLDPNeighborPortIndex OBJECT-TYPE
-    SYNTAX      Integer32
+    SYNTAX      Integer32(0..2147483647)
     MAX-ACCESS  not-accessible
     STATUS      current
     DESCRIPTION
@@ -400,7 +412,7 @@ hh3cDLDPNeighborAgingTime OBJECT-TYPE
     MAX-ACCESS  read-only
     STATUS      current
     DESCRIPTION
-        "The aging time of a neighbor. unit: second"
+        "The aging time of a neighbor. unit: second."
     ::= { hh3cDLDPNeighborEntry 4 }
 
 --trap--
@@ -416,7 +428,7 @@ hh3cDLDPUnidirectionalPort NOTIFICATION-TYPE
     STATUS      current
     DESCRIPTION
         "It will send a SNMP trap when the state of a port
-        has changed to unidirectional-link ."
+        has changed to unidirectional-link."
     ::= { hh3cDLDPNotification 1 }
 
 END
