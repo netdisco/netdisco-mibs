@@ -1,0 +1,584 @@
+-- =================================================================
+-- Copyright (c) 2004-2023 New H3C Tech. Co., Ltd. All rights reserved.
+--
+-- Description: The MIB is designed to configure the Precision Time Protocol.
+-- Reference:
+-- Version: V1.4
+-- History:
+-- V1.0 2022-06-28, Du Wei, Initial version
+-- V1.1 2022-08-23, Du Wei, Add hh3cPTPTimeOffsetSumSec
+-- V1.2 2022-09-01, Du Wei,
+--    Add hh3cPTPInstanceID,hh3cPTPChassisID, hh3cPTPPortAttrMismatchReason
+--    Add hh3cPTPPortAttrMismatch, hh3cPTPPortAttrMismatchRecover for trap
+--    Add hh3cPTPInstanceID to trap objects for PTP instance.
+-- V1.3 2022-09-01, Du Wei,
+--    Add hh3cPTPSyncSuppress and hh3cPTPSyncSupressResume for trap
+--    Add hh3cPTPTimestampChange and hh3cPTPTimestampUnchange for trap
+--    Adds nodes hh3cPTPSyncTimeOffset and hh3cPTPSyncTimeOffsetThreshold
+-- V1.4 2023-02-20, Du Wei,
+--    Add hh3cPTPPortNonSupport and hh3cPTPPortNonSupportRecover for trap.
+--    Add node hh3cPTPPacketDomain.
+-- =================================================================
+HH3C-PTP-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    Unsigned32, Integer32, OBJECT-TYPE, MODULE-IDENTITY, NOTIFICATION-TYPE
+        FROM SNMPv2-SMI
+    TruthValue
+        FROM SNMPv2-TC
+    CounterBasedGauge64
+        FROM HCNUM-TC
+    hh3cCommon
+        FROM HH3C-OID-MIB;
+
+hh3cPTP MODULE-IDENTITY
+    LAST-UPDATED "202302200000Z"
+    ORGANIZATION
+        "New H3C Tech.  Co., Ltd."
+    CONTACT-INFO
+        "Platform Team New H3C Technologies Co., Ltd.
+        Hai-Dian District Beijing P.R. China
+        http://www.h3c.com
+        Zip:100085"
+    DESCRIPTION
+        "The private MIB file includes the time information of the
+        device. It is to configure the Precision Time Protocol."
+    REVISION "202302200000Z"
+    DESCRIPTION
+        "Add hh3cPTPPortNonSupport and hh3cPTPPortNonSupportRecover for trap.
+         Add node hh3cPTPPacketDomain."
+    REVISION "202212010000Z"
+    DESCRIPTION
+        "Add hh3cPTPSyncSuppress and hh3cPTPSyncSupressResume for trap
+         Add hh3cPTPTimestampChange and hh3cPTPTimestampUnchange for trap
+         Add nodes hh3cPTPSyncTimeOffset and hh3cPTPSyncTimeOffsetThreshold"
+    REVISION "202209010000Z"
+    DESCRIPTION
+        "Add hh3cPTPChassisID, hh3cPTPPortAttrMismatchReason.
+         Add hh3cPTPPortAttrMismatch, hh3cPTPPortAttrMismatchRecover for trap
+         Add hh3cPTPInstanceID to trap objects for PTP instance."
+    REVISION "202208230000Z"
+    DESCRIPTION
+        "Add hh3cPTPTimeOffsetSumSec."
+    REVISION "202206280000Z"
+    DESCRIPTION
+        "The initial revision of this MIB module."
+    ::= { hh3cCommon 235 }
+
+hh3cPTPNotifications OBJECT IDENTIFIER ::= { hh3cPTP 1 }
+
+hh3cPTPNotification OBJECT IDENTIFIER ::= { hh3cPTPNotifications 0 }
+
+hh3cPTPPortStateChange NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPPortName,
+            hh3cPTPPortState,
+            hh3cPTPOldPortState,
+            hh3cPTPInstanceID
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP port status changes."
+    ::= { hh3cPTPNotification 1 }
+
+hh3cPTPClockSourceChange NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPOldMasterClockId,
+            hh3cPTPMasterClockId,
+            hh3cPTPOldSourcePortNum,
+            hh3cPTPSourcePortNum,
+            hh3cPTPPortName,
+            hh3cPTPOldPortName,
+            hh3cPTPInstanceID
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP clock source property changes."
+    ::= { hh3cPTPNotification 2 }
+
+hh3cPTPTimeSyncFaulty NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeSyncStatus, hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP clock loses synchronization."
+    ::= { hh3cPTPNotification 3 }
+
+hh3cPTPTimeSyncFaultyRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeSyncStatus, hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP clock recover synchronization."
+    ::= { hh3cPTPNotification 4 }
+
+hh3cPTPTimeLockFail NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeLockStatus }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP time not in locked state."
+    ::= { hh3cPTPNotification 5 }
+
+hh3cPTPTimeLockFailRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeLockStatus }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP time recovered to locked state."
+    ::= { hh3cPTPNotification 6 }
+
+hh3cPTPExtTimePortLost NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPExtTimePortStatus, hh3cPTPExtTimePortType }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the external time port became lost."
+    ::= { hh3cPTPNotification 7 }
+
+hh3cPTPExtTimePortLostRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPExtTimePortStatus, hh3cPTPExtTimePortType }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the external time port recovered."
+    ::= { hh3cPTPNotification 8 }
+
+hh3cPTPPortBmcInfoChange NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPPortName,
+            hh3cPTPSourcePortClockId,
+            hh3cPTPSourcePortNum,
+            hh3cPTPSourceStepsRemoved,
+            hh3cPTPMasterClockId,
+            hh3cPTPInstanceID
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the bmc information changed."
+    ::= { hh3cPTPNotification 9 }
+
+hh3cPTPSourceClockClassDecline NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the clock source class fell below the threshold"
+    ::= { hh3cPTPNotification 10 }
+
+hh3cPTPSourceClockClassRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the clock source class crossed the threshold."
+    ::= { hh3cPTPNotification 11 }
+
+hh3cPTPPacketLoss NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPPacketType, hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when PTP packets were lost. "
+    ::= { hh3cPTPNotification 12 }
+
+hh3cPTPPacketLossRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPPacketType, hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when PTP packets lost were recovered."
+    ::= { hh3cPTPNotification 13 }
+
+hh3cPTPTimeOffsetExceed NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeOffset, hh3cPTPTimeOffsetThreshold }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the ptp standard time offset is abnormal."
+    ::= { hh3cPTPNotification 14 }
+
+hh3cPTPTimeOffsetRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPTimeOffset, hh3cPTPTimeOffsetThreshold }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the ptp standard time offset is normal."
+    ::= { hh3cPTPNotification 15 }
+
+hh3cPTPTimeOffsetSumExceed NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPTimeOffsetSum,
+            hh3cPTPTimeOffsetSumThrehold,
+            hh3cPTPTimeOffsetSumSec
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the ptp time offset sum is abnormal."
+    ::= { hh3cPTPNotification 16 }
+
+hh3cPTPTimeOffsetSumRecover NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPTimeOffsetSum,
+            hh3cPTPTimeOffsetSumThrehold,
+            hh3cPTPTimeOffsetSumSec
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the ptp time offset sum is normal."
+    ::= { hh3cPTPNotification 17 }
+
+hh3cPTPFrequencyLockFail NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPFreqLockStatus }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP frequency not in locked state."
+    ::= { hh3cPTPNotification 18 }
+
+hh3cPTPFrequencyLockRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPFreqLockStatus }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the PTP frequency recovered to locked state."
+    ::= { hh3cPTPNotification 19 }
+
+hh3cPTPPortAttrMismatch NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPChassisID,
+            hh3cPTPPortName,
+            hh3cPTPPortAttrMismatchReason,
+            hh3cPTPInstanceID,
+            hh3cPTPPacketDomain
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the peer PTP ports mismatch in attributes."
+    ::= { hh3cPTPNotification 20 }
+
+hh3cPTPPortAttrMismatchRecover NOTIFICATION-TYPE
+    OBJECTS
+        {
+            hh3cPTPChassisID,
+            hh3cPTPPortName,
+            hh3cPTPPortAttrMismatchReason,
+            hh3cPTPInstanceID,
+            hh3cPTPPacketDomain
+        }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the peer PTP ports mismatch in attributes."
+    ::= { hh3cPTPNotification 21 }
+
+hh3cPTPSyncSuppress NOTIFICATION-TYPE
+    OBJECTS
+    {
+        hh3cPTPSyncTimeOffset,
+        hh3cPTPSyncTimeOffsetThreshold,
+        hh3cPTPInstanceID
+    }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when PTP time synchronization was suppressed because
+        the PTP time offset between the instance and the master exceeded the threshold."
+    ::= { hh3cPTPNotification 22 }
+
+hh3cPTPSyncSupressResume NOTIFICATION-TYPE
+    OBJECTS
+    {
+        hh3cPTPSyncTimeOffset,
+        hh3cPTPSyncTimeOffsetThreshold,
+        hh3cPTPInstanceID
+    }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when PTP time synchronization resumed
+        because the PTP time offset between the instance and the master
+        fell below the threshold or the maximum suppression counts were reached."
+    ::= { hh3cPTPNotification 23 }
+
+hh3cPTPTimestampUnchange NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the timestamp carried in the received message
+         does not change, and the status of the timestamp is abnormal."
+    ::= { hh3cPTPNotification 24 }
+
+hh3cPTPTimestampChange NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPInstanceID }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the timestamp carried in the received message
+        returns to continuous change, and the timestamp status is normal."
+    ::= { hh3cPTPNotification 25 }
+
+hh3cPTPPortNonSupport NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPChassisID, hh3cPTPPortName }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the port does not support ptp clock synchronization."
+    ::= { hh3cPTPNotification 26 }
+
+hh3cPTPPortNonSupportRecover NOTIFICATION-TYPE
+    OBJECTS { hh3cPTPChassisID, hh3cPTPPortName }
+    STATUS current
+    DESCRIPTION
+        "The trap is generated when the port does not support ptp clock synchronization is recovered."
+    ::= { hh3cPTPNotification 27 }
+
+hh3cPTPNotificationObjects OBJECT IDENTIFIER ::= { hh3cPTPNotifications 1 }
+
+hh3cPTPPortName OBJECT-TYPE
+    SYNTAX OCTET STRING
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP port name."
+    ::= { hh3cPTPNotificationObjects 1 }
+
+hh3cPTPOldPortName OBJECT-TYPE
+    SYNTAX OCTET STRING
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The history PTP port name."
+    ::= { hh3cPTPNotificationObjects 2 }
+
+hh3cPTPPortState OBJECT-TYPE
+    SYNTAX INTEGER
+        {
+        initializing(1),
+        faulty(2),
+        disabled(3),
+        listening(4),
+        premaster(5),
+        master(6),
+        passive(7),
+        uncalibrated(8),
+        slave(9)
+        }
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP port state."
+    ::= { hh3cPTPNotificationObjects 3 }
+
+hh3cPTPOldPortState OBJECT-TYPE
+    SYNTAX INTEGER
+        {
+        initializing(1),
+        faulty(2),
+        disabled(3),
+        listening(4),
+        premaster(5),
+        master(6),
+        passive(7),
+        uncalibrated(8),
+        slave(9)
+        }
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The history PTP port state."
+    ::= { hh3cPTPNotificationObjects 4 }
+
+hh3cPTPMasterClockId OBJECT-TYPE
+    SYNTAX OCTET STRING
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP master clock id."
+    ::= { hh3cPTPNotificationObjects 5 }
+
+hh3cPTPOldMasterClockId OBJECT-TYPE
+    SYNTAX OCTET STRING
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The history PTP master clock id."
+    ::= { hh3cPTPNotificationObjects 6 }
+
+hh3cPTPSourcePortNum OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP source port number."
+    ::= { hh3cPTPNotificationObjects 7 }
+
+hh3cPTPOldSourcePortNum OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The history PTP source port number."
+    ::= { hh3cPTPNotificationObjects 8 }
+
+hh3cPTPTimeSyncStatus OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP time synchronization status."
+    ::= { hh3cPTPNotificationObjects 9 }
+
+hh3cPTPTimeLockStatus OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP time lock status."
+    ::= { hh3cPTPNotificationObjects 10 }
+
+hh3cPTPExtTimePortStatus OBJECT-TYPE
+    SYNTAX INTEGER
+        {
+        up(1),
+        down(2)
+        }
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The external time port status."
+    ::= { hh3cPTPNotificationObjects 11 }
+
+hh3cPTPExtTimePortType OBJECT-TYPE
+    SYNTAX INTEGER
+        {
+        tod0(1),
+        tod1(2)
+        }
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "The external time port type."
+    ::= { hh3cPTPNotificationObjects 12 }
+
+hh3cPTPSourcePortClockId OBJECT-TYPE
+    SYNTAX OCTET STRING
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP source port clock id."
+    ::= { hh3cPTPNotificationObjects 13 }
+
+hh3cPTPSourceStepsRemoved OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Hops from the GM to the device."
+    ::= { hh3cPTPNotificationObjects 14 }
+
+hh3cPTPPacketType OBJECT-TYPE
+    SYNTAX INTEGER
+        {
+        sync(1),
+        pDelayResp(3),
+        delayResp(9),
+        announce(11)
+        }
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP packet type."
+    ::= { hh3cPTPNotificationObjects 15 }
+
+hh3cPTPTimeOffset OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP standard time offset."
+    ::= { hh3cPTPNotificationObjects 16 }
+
+hh3cPTPTimeOffsetThreshold OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP standard time offset threhold."
+    ::= { hh3cPTPNotificationObjects 17 }
+
+hh3cPTPTimeOffsetSum OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Nanosecond part of PTP standard time offset sum."
+    ::= { hh3cPTPNotificationObjects 18 }
+
+hh3cPTPTimeOffsetSumThrehold OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP standard time offset sum threhold."
+    ::= { hh3cPTPNotificationObjects 19 }
+
+hh3cPTPFreqLockStatus OBJECT-TYPE
+    SYNTAX TruthValue
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP frequency lock status."
+    ::= { hh3cPTPNotificationObjects 20 }
+
+hh3cPTPTimeOffsetSumSec OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Second part of PTP standard time offset sum."
+    ::= { hh3cPTPNotificationObjects 21 }
+
+hh3cPTPInstanceID OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP instance ID."
+    ::= { hh3cPTPNotificationObjects 22 }
+
+hh3cPTPChassisID OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Chassis ID. If the value is 65535, the device is
+        not a device in an IRF fabric."
+    ::= { hh3cPTPNotificationObjects 23 }
+
+hh3cPTPPortAttrMismatchReason OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Attribute in which the peer PTP ports mismatch. The values include:
+          0, unspecified
+          1, delay mechanism
+          2, packet encapsulation
+          3, domain number
+          4, source port ID"
+    ::= { hh3cPTPNotificationObjects 24 }
+
+hh3cPTPSyncTimeOffset OBJECT-TYPE
+    SYNTAX CounterBasedGauge64
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "PTP time offset between the instance and the master."
+    ::= { hh3cPTPNotificationObjects 25 }
+
+
+hh3cPTPSyncTimeOffsetThreshold OBJECT-TYPE
+    SYNTAX CounterBasedGauge64
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Threshold of PTP time offset between instance and the master."
+    ::= { hh3cPTPNotificationObjects 26 }
+
+hh3cPTPPacketDomain OBJECT-TYPE
+    SYNTAX Integer32 (0..255)
+    MAX-ACCESS accessible-for-notify
+    STATUS current
+    DESCRIPTION
+        "Domain number in the received ptp packet."
+    ::= { hh3cPTPNotificationObjects 27 }
+
+END
