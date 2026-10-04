@@ -13,7 +13,7 @@ use Term::ANSIColor qw(:constants);
 use Try::Tiny;
 
 use Exporter 'import';
-our @EXPORT = qw(status blank build_index mkindex);
+our @EXPORT = qw(status blank build_index mkindex netsnmp_version netsnmp_version_at_least);
 
 if (!defined $ENV{MIBHOME}) {
   print "error: must define \$MIBHOME (where the MIB dirs live)\n";
@@ -155,6 +155,26 @@ sub status {
   blank();
   select((select(STDOUT), $|=1)[0]);
   print YELLOW, "$i ", CYAN, $note, RESET;
+}
+
+# version of the snmptranslate first on PATH, or undef if there is none
+sub netsnmp_version {
+  my $output = qx(snmptranslate -V 2>&1) // '';
+  return ($output =~ m/NET-SNMP version:\s*(\d+(?:\.\w+)*)/) ? $1 : undef;
+}
+
+# compare dotted numeric versions; a trailing non-numeric part such as
+# ".pre1" is ignored, so 5.9.4.pre1 counts as 5.9.4
+sub netsnmp_version_at_least {
+  my ($have, $want) = @_;
+  return 0 unless defined $have;
+  my @have = grep { /^\d+$/ } split /\./, $have;
+  my @want = split /\./, $want;
+  while (@want) {
+    my ($h, $w) = (shift(@have) // -1, shift @want);
+    return ($h > $w) if $h != $w;
+  }
+  return 1;
 }
 
 1;
