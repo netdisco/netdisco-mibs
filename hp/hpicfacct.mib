@@ -1,3 +1,12 @@
+-- Copyright (C) 2000-2014, 2016-2017 Hewlett-Packard Enterprise Development LP
+
+-- **************************************************************************
+-- The contents of this software are proprietary and confidential to the
+-- Hewlett-Packard Development Company, L.P.  No part of this program may be
+-- photocopied, reproduced, or translated into another programming language
+-- without prior written consent of the Hewlett-Packard Development Co., L.P.
+-- **************************************************************************
+
 HP-ACCT-MIB DEFINITIONS ::= BEGIN
 
     IMPORTS
@@ -11,7 +20,7 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
             FROM HP-ICF-OID;
 
     hpSwitchAccountingMIB MODULE-IDENTITY
-        LAST-UPDATED "201103050000Z"  --   March 05, 2011
+        LAST-UPDATED "201909260000Z"  --   Sep 26, 2019
         ORGANIZATION "HP Networking"
         CONTACT-INFO "Hewlett Packard Company
                       8000 Foothills Blvd.
@@ -19,6 +28,18 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION  "This MIB module describes objects for managing
                      the Accounting service features of devices in the HP
                      Integrated Communication Facility product line."
+
+        REVISION     "201909260000Z"  --   Sep 26, 2019
+        DESCRIPTION  "Updated 'hpSwitchAccountingConfig' with
+                      'hpSwitchAcctSessIdIncSwitchIdentity' object."
+
+        REVISION     "201711220000Z"  --   Nov 22, 2017
+        DESCRIPTION  "Updated 'hpSwitchAcctServiceIndex' object
+                     with 'restUri' value."
+
+        REVISION     "201408040000Z"  --   August 04, 2014
+        DESCRIPTION  "Updated 'hpSwitchAcctServiceMethod' object
+                      with 'tacacs' value and updated the description."
 
         REVISION     "201103050000Z"  --   March 05, 2011
         DESCRIPTION  "Updated 'hpSwitchAcctServiceMethod' object
@@ -36,7 +57,7 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         DESCRIPTION  "Initial version of this MIB module."
 
         ::= { hpSwitch 17 }
-            
+
 -- ------------------------------------------------------------
    -- Configuration support for Accounting
 -- ------------------------------------------------------------
@@ -48,7 +69,7 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         SYNTAX      Integer32 (0..525600)
         MAX-ACCESS  read-write
         STATUS      current
-        DESCRIPTION "Defines periodic intervals to send accounting 
+        DESCRIPTION "Defines periodic intervals to send accounting
                     update records (in minutes)."
         ::= { hpSwitchAccountingConfig 1 }
 
@@ -83,7 +104,23 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
                              to the accounting service type that generates
                              the records within the session."
         DEFVAL      { unique }
-        ::= { hpSwitchAccountingConfig 3 } 
+        ::= { hpSwitchAccountingConfig 3 }
+
+    hpSwitchAcctSessIdIncSwitchIdentity OBJECT-TYPE
+        SYNTAX      INTEGER {
+                        enable(1),
+                        disable(2)
+                    }
+        MAX-ACCESS  read-write
+        STATUS      current
+        DESCRIPTION "Include switch-identity in accounting session ID to make it
+                     unique across the switches.
+
+                     enable  - If enabled, session ID will include switch-identity
+                               to make it unique across switches.
+                     disable - If disabled, the session ID will not include switch-identity."
+        DEFVAL      { disable }
+        ::= { hpSwitchAccountingConfig 4 }
 
     hpSwitchAcctServiceTable OBJECT-TYPE
         SYNTAX      SEQUENCE OF HpSwitchAcctServiceEntry
@@ -94,7 +131,7 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
                      sessions should be initiated or terminated."
         ::= { hpSwitchAccountingMIB 2 }
 
-    hpSwitchAcctServiceEntry OBJECT-TYPE 
+    hpSwitchAcctServiceEntry OBJECT-TYPE
         SYNTAX      HpSwitchAcctServiceEntry
         MAX-ACCESS  not-accessible
         STATUS      current
@@ -115,11 +152,12 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
                         network(1),
                         exec(2),
                         system(3),
-                        commands(4)
+                        commands(4),
+                        restUri(5)
                     }
         MAX-ACCESS  not-accessible
         STATUS      current
-        DESCRIPTION "Specifies the accounting service type configured on 
+        DESCRIPTION "Specifies the accounting service type configured on
                      the switch."
         ::= {hpSwitchAcctServiceEntry 1}
 
@@ -127,11 +165,21 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         SYNTAX      INTEGER {
                         none(1),
                         radius(2),
-                        syslog(3)
+                        syslog(3),
+                        tacacs(4)
                     }
         MAX-ACCESS  read-write
         STATUS      current
-        DESCRIPTION "Specifies the method used for accounting."
+        DESCRIPTION "The method used for accounting.
+
+                     A value of none (1) indicates that accounting is not
+                     performed.
+                     A value of radius (2) indicates that accounting is performed
+                     using RADIUS.
+                     A value of syslog (3) indicates that accounting is performed
+                     using SYSLOG.
+                     A value of tacacs (4) indicates that accounting is performed
+                     using TACACS+."
         ::= { hpSwitchAcctServiceEntry 2 }
 
     hpSwitchAcctServiceMode OBJECT-TYPE
@@ -143,8 +191,18 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
                     }
         MAX-ACCESS  read-write
         STATUS      current
-        DESCRIPTION "Specifies how the progress of accounting session will
-                    be reported."
+        DESCRIPTION "The mode of sending accounting messages to the server.
+                     A value of none (1) indicates that no accounting messages are
+                     sent to the server.
+                     A value of startStop (2) indicates that a start accounting
+                     message is sent to the server at the beginning of an event and
+                     a stop accounting message is sent at the end of the event.
+                     A value of stopOnly (3) indicates that a stop accounting
+                     message is sent at the end of an event.
+                     A value of interim update (4) indicates that an accounting
+                     message is sent to the server after the command is executed.
+                     This option can be set only if the value of hpSwitchAcctServiceIndex
+                     is set to 'commands."
         ::= { hpSwitchAcctServiceEntry 3 }
 
     hpSwitchAcctServiceServerGroupName OBJECT-TYPE
@@ -157,7 +215,7 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         ::= { hpSwitchAcctServiceEntry 4 }
 
 -- ------------------------------------------------------------
--- Conformance   
+-- Conformance
 -- ------------------------------------------------------------
 
     hpSwitchAccountingMIBConformance
@@ -170,24 +228,46 @@ HP-ACCT-MIB DEFINITIONS ::= BEGIN
         OBJECT IDENTIFIER ::= { hpSwitchAccountingMIBConformance 2}
 
 
-    hpSwitchAccountingMIBCompliance MODULE-COMPLIANCE 
-        STATUS      current
+    hpSwitchAccountingMIBCompliance MODULE-COMPLIANCE
+        STATUS      deprecated
         DESCRIPTION "The compliance statement for devices implementing the
                      HP Accounting Mib."
         MODULE
             MANDATORY-GROUPS { hpSwitchAccountingConfigGroup }
         ::= { hpSwitchAccountingMIBCompliances 1 }
 
+    hpSwitchAccountingMIBCompliance1 MODULE-COMPLIANCE
+        STATUS      current
+        DESCRIPTION "The compliance statement for devices implementing the
+                     HP Accounting Mib."
+        MODULE
+            MANDATORY-GROUPS { hpSwitchAccountingConfigGroup1 }
+        ::= { hpSwitchAccountingMIBCompliances 2 }
+
     hpSwitchAccountingConfigGroup OBJECT-GROUP
         OBJECTS     { hpSwitchAcctUpdateInterval,
                       hpSwitchAcctSuppressNullUserName,
                       hpSwitchAcctSessionIdentification,
-            	      hpSwitchAcctServiceMethod,
+                      hpSwitchAcctServiceMethod,
                       hpSwitchAcctServiceMode,
                       hpSwitchAcctServiceServerGroupName
+                    }
+        STATUS      deprecated
+        DESCRIPTION "A collection of objects for configuring the
+                    accounting features."
+        ::= { hpSwitchAccountingMIBGroups 1 }
+
+    hpSwitchAccountingConfigGroup1 OBJECT-GROUP
+        OBJECTS     { hpSwitchAcctUpdateInterval,
+                      hpSwitchAcctSuppressNullUserName,
+                      hpSwitchAcctSessionIdentification,
+                      hpSwitchAcctServiceMethod,
+                      hpSwitchAcctServiceMode,
+                      hpSwitchAcctServiceServerGroupName,
+                      hpSwitchAcctSessIdIncSwitchIdentity
                     }
         STATUS      current
         DESCRIPTION "A collection of objects for configuring the
                     accounting features."
-        ::= { hpSwitchAccountingMIBGroups 1 }
+        ::= { hpSwitchAccountingMIBGroups 2 }
 END
