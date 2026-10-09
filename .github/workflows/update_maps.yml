@@ -143,6 +143,23 @@ jobs:
           echo 'DELETE FROM "snmp_object";' >> /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
           echo 'COPY snmp_object (oid, oid_parts, mib, leaf, "type", "access", "index", num_children, status, enum, descr) FROM stdin;' >> /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
           sudo PGPASSWORD=netdisco psql -h postgres -U netdisco -d netdisco  -c "\copy snmp_object TO '/__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.new'"
+          # Netdisco runs this file's DELETE unconditionally, so an empty or
+          # truncated dump would wipe snmp_object on every install.
+          SQLDIR=/__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql
+          NEW_ROWS=$(wc -l < $SQLDIR/netdisco-mibs-snmp-object.sql.new)
+          OLD_ROWS=0
+          if gzip -t $SQLDIR/netdisco-mibs-snmp-object.sql.gz 2>/dev/null; then
+            OLD_ROWS=$(( $(gzip -dc $SQLDIR/netdisco-mibs-snmp-object.sql.gz | wc -l) - 3 ))
+          fi
+          echo "snmp_object rows: $NEW_ROWS, previously committed: $OLD_ROWS"
+          if [ "$NEW_ROWS" -eq 0 ]; then
+            echo "::error::loadmibsfromoids produced no snmp_object rows; check that EXTRAS/reports/*_oids are real files and not git-lfs pointers. Refusing to commit SQL that would empty snmp_object."
+            exit 1
+          fi
+          if [ $(( NEW_ROWS * 10 )) -lt $(( OLD_ROWS * 9 )) ]; then
+            echo "::error::snmp_object shrank by more than 10% ($OLD_ROWS -> $NEW_ROWS rows); check the loadmibsfromoids output above. If the drop is intended, lower this threshold in the same commit as the change that causes it."
+            exit 1
+          fi
           cat /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.new >> /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
           rm /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql.new
           echo '\.' >> /__w/netdisco-mibs/netdisco-mibs/EXTRAS/sql/netdisco-mibs-snmp-object.sql
