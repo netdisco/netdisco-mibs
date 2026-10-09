@@ -133,6 +133,23 @@ sub mkindex {
   return ($mib_for_file, $mib_files, $vendor_mibs, $mib_vendors);
 }
 
+# net-snmp 5.9.5+ reports duplicate definitions within a module but keeps
+# parsing, so they must not cost the module its output. Returns the
+# snmptranslate stderr split into (warnings, errors).
+sub split_parser_warnings {
+  my $stderr = shift // '';
+  my ($warnings, $errors) = ('', '');
+  foreach my $line (split /^/, $stderr) {
+    if ($line =~ m/^Duplicate (?:Object|enum label|TEXTUAL-CONVENTION) '/) {
+      $warnings .= $line;
+    }
+    else {
+      $errors .= $line;
+    }
+  }
+  return ($warnings, $errors);
+}
+
 sub blank {
   select((select(STDOUT), $|=1)[0]);
   print "\r\e[K"; # blank line
